@@ -1597,7 +1597,7 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 
 - **Message:** "recipient lacks one of the required key halves for the dispatched cipher-suite"
 - **Context:** `{ cipher_codepoint: u16, missing_half: &'static str }` (e.g. `cipher_codepoint: 0x647a` + `missing_half: "ml-kem-768"`)
-- **Fix:** Per CLAUDE.md baked-in #5 (codepoint-dispatched cipher-suite agility) + RATIFIED-S&C 2026-05-21 G-CORE-3a F-3 typed-arm contract: the hybrid X-Wing suite at `0x647a` (X25519⊕ML-KEM-768) requires the recipient to hold BOTH key halves to unwrap an encrypted key. A recipient presenting only the classical X25519 half (e.g. a legacy classical-only `RecipientKeypair` handed a hybrid-codepoint `WrappedKey`) fails closed with this typed code rather than silently falling back to a classical-only unwrap — that fallback would be a silent downgrade vector + would silently mis-decrypt. Fix at the call site: either (a) provision the recipient with the full hybrid keypair via `CipherSuite::generate_recipient_keypair_for_test(&hybrid_suite)` / the production keypair generator, or (b) route the wrap through a classical-only suite at codepoint `0x6400` so both wrap and unwrap agree on the codepoint. NEVER catch this error and retry with a different (lower-security) codepoint — that pattern is the silent-downgrade vector this typed arm exists to prevent.
+- **Fix:** Per CLAUDE.md baked-in #5 (codepoint-dispatched cipher-suite agility) + RATIFIED-S&C 2026-05-21 G-CORE-3a F-3 typed-arm contract: the hybrid MLKEM768-X25519 suite at `0x647a` (X25519⊕ML-KEM-768) requires the recipient to hold BOTH key halves to unwrap an encrypted key. A recipient presenting only the classical X25519 half (e.g. a legacy classical-only `RecipientKeypair` handed a hybrid-codepoint `WrappedKey`) fails closed with this typed code rather than silently falling back to a classical-only unwrap — that fallback would be a silent downgrade vector + would silently mis-decrypt. Fix at the call site: either (a) provision the recipient with the full hybrid keypair via `CipherSuite::generate_recipient_keypair_for_test(&hybrid_suite)` / the production keypair generator, or (b) route the wrap through a classical-only suite at codepoint `0x6400` so both wrap and unwrap agree on the codepoint. NEVER catch this error and retry with a different (lower-security) codepoint — that pattern is the silent-downgrade vector this typed arm exists to prevent.
 - **Thrown at:** `crates/benten-crypto-suite/src/cipher_suite.rs::CipherSuite::wrap_key_material` + `::unwrap_key_material` (G-CORE-3a CANARY, Phase 4-Meta-Core) — surfaces as `AeadError::RecipientLacksKeysForSuite` at the cipher-suite boundary; the boundary-lift into `benten-errors::ErrorCode::RecipientLacksKeysForSuite` for the engine-wide catalog surface lands at G-CORE-3b (caps + UCAN-bound recipient resolution where the typed-arm threads through the cap-policy path) — at G-CORE-3a the ErrorCode variant is reserved + the AeadError variant is the live production typed-arm. The drift-detector's `reachability: ignore` annotation below names this reservation; G-CORE-3b removes it when the wire-up lands.
 - **Phase:** 4-Meta-Core G-CORE-3a (F-3 W1 spec-gap closure)
 
@@ -1816,6 +1816,22 @@ Per CLAUDE.md baked-in #18 four-identity-concepts model + `docs/PLUGIN-MANIFEST.
 - **Fix:** The DSL handler subgraph does not terminate with a RESPOND primitive. Per CLAUDE.md commitment #1 + #4 (12 operation primitives + DAGs only + RESPOND-terminated handlers), the DSL compiler's `emit` build-phase pass refuses to emit a handler missing RESPOND. Add a trailing `.respond(...)` call to the handler chain (or its DSL-method equivalent). Phase-4-Meta-Core R6 R2 FP integration (Row D-19 G-COMP-1 wave Cohort 8) mints the first-class catalog mirror for the pre-existing `pub const benten_dsl_compiler::E_DSL_MISSING_RESPOND` wire-string constant + `CompileError::Build(_)` variant (post-#790 rename from `CompileError::Emit`).
 - **Thrown at:** `crates/benten-dsl-compiler/src/lib.rs::build` (the post-AST build-phase pass) — `CompileError::Build(_)` variant arm in `CompileError::code()`.
 - **Phase:** 4-Meta-Core R6 R2 FP integration (Row D-19 G-COMP-1 wave Cohort 8; CATALOG_VARIANT_COUNT 196 → 197). Routes to `ON_ERROR`.
+
+### E_ROLE_STALE_AT_VERIFY
+
+- **Message:** "a stanza sealed under a stale role_assignments_generation was rejected at verify"
+- **Context:** `{ sealed_role_assignments_generation: u32, current_generation: u32 }`
+- **Fix:** A MembershipSet group stanza was sealed under a `role_assignments_generation` that is now STALE — the membership set has advanced its role-assignments generation since the stanza was sealed. The generation counter is the 11th field of the `0x6610` BLINDED group AAD (the BLINDED 11-field set per R0.7 §3.10/§4.1), so a stanza sealed at generation `G` fails AEAD-open / verify once the set advances to `G+1`. Re-seal the stanza under the CURRENT `role_assignments_generation`.
+- **Thrown at:** `crates/benten-membership-set/src/verify.rs::verify_stanza` — returns `RoleStaleError { code: "E_ROLE_STALE_AT_VERIFY" }` when `stanza.sealed_role_assignments_generation < current_generation`.
+- **Phase:** 4-Meta-Core F-full Wave w-ms-canary (R5 MembershipSet primitive; F-MS-8 / BC-5 / F4-031; CATALOG_VARIANT_COUNT 197 → 198). Routes to `ON_ERROR`.
+
+### E_KV_TARGET_NOT_IMMUTABLE
+
+- **Message:** "K(V) derivation target is not an immutable Version-Node-CID (Inv-19)"
+- **Context:** `{ target_kind: "MutableAnchor" }`
+- **Fix:** A K(V) (membership version-node key) derivation was requested against a MUTABLE Anchor CID. Inv-19 forbids binding key material to a `benten_core::version::Anchor` CID: the Anchor's CURRENT pointer moves across an `append_version`, so a key bound to an Anchor would silently re-target as the chain advances. Derive K(V) against an immutable Version-Node-CID (or a MembershipSet identity) instead.
+- **Thrown at:** `crates/benten-membership-set/src/keying_kv.rs::derive_kv` — returns `KvError::TargetNotImmutable` when the `CidTarget` is `MutableAnchor`.
+- **Phase:** 4-Meta-Core F-full Wave w-gov-audit (R5 MembershipSet TIER-2; F-INV19-1 / Inv-19; CATALOG_VARIANT_COUNT 198 → 199). Routes to `ON_ERROR`.
 
 <!-- reachability: ignore -->
 

@@ -176,6 +176,14 @@ pub mod handshake;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod handshake_wire;
 
+// F-full §3.9 / NQ-D1 — the liveness-only `GossipTransport` surface (iroh-free
+// trait sig). The BLINDED rendezvous topic is a keying-derived value owned by
+// the membership-set keying glue; this module carries only the opaque `[u8;32]`
+// topic across the transport. gossip = liveness ONLY; convergence rides the MST
+// anti-entropy backstop ([`mst`]), NEVER gossip (M-10).
+#[cfg(not(target_arch = "wasm32"))]
+pub mod gossip_transport;
+
 // G16-C wave-6b: light-client verification API + Merkle proof
 // construction + verification against published roots. Distinct
 // deliverable from MST diff per ROADMAP-2 — works WITHOUT full
@@ -246,3 +254,10 @@ pub mod ucan_blobs_protocol;
 // store for `iroh_blobs::FsStore` at the named ciphertext_bytes seam.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod two_cid_store;
+
+// F-full §3.9 / Compromise #53 — `TransportConfig`: the transport-selection
+// codepoint reserve. `GossipPlusBlobs` (iroh-gossip + iroh-blobs) SHIPS at
+// v1-beta; Willow / iroh-roq / iroh-live are reserved-and-typed-rejected
+// (additive codepoints — no wire-break when added). Conservative-fallback
+// per NQ-A1: never a silent accept, never a silent fallback to gossip.
+pub mod transport_config;

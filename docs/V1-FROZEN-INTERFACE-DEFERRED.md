@@ -1292,6 +1292,46 @@ Row D-15's audit-readiness concern.
   + the 9-item WIRE-NOW batch ratified for PR #1356 (item 4 = Path G
   AttributionFrame slot population).
 
+### Row D-28 — Compute-marketplace wire types (`PeerResource` / `ResourceKind` / `OwnerRef`) — PHASE-LATER-DEFER
+
+- **Deferred surface:** the compute-marketplace wire types — `PeerResource`
+  graph Nodes, `ResourceKind { Compute | Storage | Bandwidth | Availability }`,
+  `OwnerRef { Member | Community | ThirdParty }` — are **ABSENT from the frozen
+  wire at v1-beta** (F-FREEZE-1 PIN 5 asserts the absence). They are
+  **PHASE-LATER-DEFER** to Phase-5+ (the compute / economics pillar).
+
+- **Why deferred (and free to defer):** the compute marketplace is NOT
+  v1-beta-gating (it adds ZERO frozen wire field — §4.4 O-8) and is
+  **graph-native when activated** (`PeerResource` is an ordinary signed graph
+  Node), so activating it is an additive application-layer build on the frozen
+  v1 substrate, never a wire-format break.
+
+- **Destination doc:** `docs/future/compute-marketplace.md` (R0.7 §2.8 CE-1 +
+  §4.3) carries the full Phase-5+ design.
+
+- **v1-beta posture:** absent from the frozen wire; minted as a named deferral
+  here so the deferral is registry-discoverable (the §3.12 R7-equivalent audit
+  walk + the F-FREEZE-1 / F-DISC-2 doc-coupling gates).
+
+### Row D-29 — Economic-policy composition surface (`CommunityEconomicPolicy`; `economic_policy` DROPPED) — PHASE-LATER-DEFER
+
+- **Deferred surface:** the economic-policy composition surface —
+  the signed **`CommunityEconomicPolicy`** Node + the Credits-ledger-as-graph
+  + UCAN-caveat composition. **PHASE-LATER-DEFER** to Phase-5+.
+
+- **`economic_policy` reserve DROPPED (CE-1 H2):** there is **ZERO economic
+  freeze hook** on `MembershipSetPolicy` — the `economic_policy: Option<opaque>`
+  reserve is DROPPED because economics COMPOSES from { UCAN caveats +
+  Credits-ledger-as-graph + signed `CommunityEconomicPolicy` Node } with ZERO
+  MembershipSet wire field (F-FREEZE-1 PIN 1 asserts `MembershipSetPolicy`
+  carries no `economic_policy` field). "local-free" is a default `local_rate`
+  policy-field, not a hard engine rule.
+
+- **Destination doc:** `docs/future/compute-marketplace.md` (§2.8 / §4.3).
+
+- **v1-beta posture:** ZERO frozen hook; graph-native when activated; minted as
+  a named deferral here for registry-discoverability.
+
 ---
 
 ## Update discipline

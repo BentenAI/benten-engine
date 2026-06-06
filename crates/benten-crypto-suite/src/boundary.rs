@@ -5,7 +5,7 @@
 //! crypto-primitive call site. The runtime-enforceable property is the
 //! Cargo direct-dep tree: only `benten-crypto-suite/Cargo.toml` may name
 //! `ed25519-dalek` / `ml-dsa` / `slh-dsa` / `x25519-dalek` / `ml-kem` /
-//! `chacha20poly1305` / `hkdf` as a direct dep.
+//! `chacha20poly1305` / `hkdf` / `argon2` as a direct dep.
 //!
 //! This module scans the workspace at audit-time. The TF-2 grep-pin
 //! drives this and assertions on
@@ -26,6 +26,9 @@ const FORBIDDEN_DIRECT_DEPS: &[&str] = &[
     "ml-kem",
     "chacha20poly1305",
     "hkdf",
+    // F-full Layer-A: the Argon2id DAK primitive (F-VA-2) — wrapped HERE, the
+    // ONLY call site (crypto-agility-contract:6; never-fork-primitives #5).
+    "argon2",
 ];
 
 /// The name of THE integration crate that legitimately direct-deps the

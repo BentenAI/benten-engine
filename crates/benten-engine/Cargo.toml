@@ -54,10 +54,21 @@ iteration-budget-test-grade = []
 # R6 R2 batch-A Item 2 also enables `benten-platform-foundation/testing`
 # so the install-consent adapter integration test can reach the
 # `noop_replay_check()` helper.
+# F-full Layer-D (f_ld_4 device-link key-wrap) also enables
+# `benten-crypto-suite/testing` so the device-link round-trip test can reach
+# `CipherSuite::generate_recipient_keypair_for_test` (the hybrid
+# X25519+ML-KEM-768 recipient-keypair generator that mints device B's fresh
+# device-encryption keypair). Routed through `test-helpers` rather than a
+# `[dev-dependencies]` entry so the `testing` feature is NOT unioned into the
+# production/default feature graph (Production keypair-gen routes through the
+# principal-DID infrastructure, not this test-only helper — the `device_link`
+# PRODUCTION module consumes a `RecipientPublic`/`RecipientSecret`, it does not
+# generate one.)
 test-helpers = [
     "iteration-budget-test-grade",
     "benten-caps/testing",
     "benten-platform-foundation/testing",
+    "benten-crypto-suite/testing",
 ]
 # Phase-2a R3's original `phase_2a_stubs` feature was removed at R4
 # fix-pass (cov-1) — the R3 consolidation stubs made the gate obsolete
@@ -282,6 +293,23 @@ serde_ipld_dagcbor = { workspace = true }
 # `Engine::register_module_bytes`.
 wat = { workspace = true }
 blake3 = { workspace = true }
+
+# Phase-4-Meta-Core F-full Wave w-gov-audit (R5 MembershipSet TIER-2): the
+# `benten-engine/tests/` Group-B gov-audit corpus (f_audit_1..4, f_gov_1,
+# f_inv19_1, f_nat_1, f_nat_2) un-ignores against the real
+# `benten_membership_set::{audit, governance, privacy, keying, member}`
+# surface. The dep is dev-only (no benten-engine PRODUCTION code references
+# membership-set — `git grep` over `src/` = 0 hits), so the engine's runtime
+# dep-set + the v1-frozen-interface surface are unchanged. ACYCLIC per the
+# w-gov-audit plan §1.4: membership-set's transitive closure is
+# {crypto-suite, core, caps, id, graph, sync, errors} — none reaches back to
+# benten-engine. Placed under `cfg(not(wasm32))` because membership-set is
+# native-only (CLAUDE.md baked-in #17; it `compile_error!`s on wasm32) — same
+# discipline as the native-only PRODUCTION deps above (benten-sync /
+# benten-id / benten-crypto-suite live under the analogous cfg-gated
+# `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]` table).
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+benten-membership-set = { path = "../benten-membership-set", features = ["testing"] }
 
 # Phase-3 G19-C2 wave-7 (§7.1) — SANDBOX execution-metrics propagation
 # tests. The `describe_sandbox_node_for_handler` accessor lives behind

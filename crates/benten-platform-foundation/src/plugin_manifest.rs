@@ -578,7 +578,8 @@ impl InstallRecord {
         let plugin_did_bytes = self.plugin_did.as_str().as_bytes();
         let mut out = Vec::with_capacity(36 + 8 + self.nonce.len() + plugin_did_bytes.len());
         out.extend_from_slice(self.manifest_cid.as_bytes());
-        out.extend_from_slice(&self.timestamp_stub_nanos.to_le_bytes());
+        // M-19: timestamp BIG-ENDIAN (migrated from LE at F-full Wave-0).
+        out.extend_from_slice(&self.timestamp_stub_nanos.to_be_bytes());
         out.extend_from_slice(&self.nonce);
         out.extend_from_slice(plugin_did_bytes);
         out

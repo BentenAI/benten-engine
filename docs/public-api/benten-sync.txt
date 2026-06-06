@@ -11,9 +11,9 @@ impl benten_sync::crdt::CrdtError
 pub fn benten_sync::crdt::CrdtError::code(&self) -> benten_errors::ErrorCode
 impl core::error::Error for benten_sync::crdt::CrdtError
 impl core::fmt::Debug for benten_sync::crdt::CrdtError
-pub fn benten_sync::crdt::CrdtError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::crdt::CrdtError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_sync::crdt::CrdtError
-pub fn benten_sync::crdt::CrdtError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::crdt::CrdtError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::crdt::CrdtError
 impl core::marker::Send for benten_sync::crdt::CrdtError
 impl core::marker::Sync for benten_sync::crdt::CrdtError
@@ -29,18 +29,18 @@ impl core::clone::Clone for benten_sync::crdt::HlcWire
 pub fn benten_sync::crdt::HlcWire::clone(&self) -> benten_sync::crdt::HlcWire
 impl core::cmp::Eq for benten_sync::crdt::HlcWire
 impl core::cmp::PartialEq for benten_sync::crdt::HlcWire
-pub fn benten_sync::crdt::HlcWire::eq(&self, other: &benten_sync::crdt::HlcWire) -> bool
+pub fn benten_sync::crdt::HlcWire::eq(&self, &benten_sync::crdt::HlcWire) -> bool
 impl core::convert::From<benten_core::hlc::BentenHlc> for benten_sync::crdt::HlcWire
-pub fn benten_sync::crdt::HlcWire::from(h: benten_core::hlc::BentenHlc) -> Self
+pub fn benten_sync::crdt::HlcWire::from(benten_core::hlc::BentenHlc) -> Self
 impl core::convert::From<benten_sync::crdt::HlcWire> for benten_core::hlc::BentenHlc
-pub fn benten_core::hlc::BentenHlc::from(w: benten_sync::crdt::HlcWire) -> Self
+pub fn benten_core::hlc::BentenHlc::from(benten_sync::crdt::HlcWire) -> Self
 impl core::fmt::Debug for benten_sync::crdt::HlcWire
-pub fn benten_sync::crdt::HlcWire::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::crdt::HlcWire::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_sync::crdt::HlcWire
 impl serde_core::ser::Serialize for benten_sync::crdt::HlcWire
-pub fn benten_sync::crdt::HlcWire::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_sync::crdt::HlcWire::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_sync::crdt::HlcWire
-pub fn benten_sync::crdt::HlcWire::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_sync::crdt::HlcWire::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_sync::crdt::HlcWire
 impl core::marker::Send for benten_sync::crdt::HlcWire
 impl core::marker::Sync for benten_sync::crdt::HlcWire
@@ -51,28 +51,28 @@ impl core::panic::unwind_safe::UnwindSafe for benten_sync::crdt::HlcWire
 pub struct benten_sync::crdt::LoroDoc
 impl benten_sync::crdt::LoroDoc
 pub fn benten_sync::crdt::LoroDoc::all_writes(&self) -> alloc::vec::Vec<(alloc::string::String, benten_sync::crdt::StampedValue)>
-pub fn benten_sync::crdt::LoroDoc::apply_remote_update(&self, bytes: &[u8]) -> benten_sync::crdt::CrdtResult<()>
+pub fn benten_sync::crdt::LoroDoc::apply_remote_update(&self, &[u8]) -> benten_sync::crdt::CrdtResult<()>
 pub fn benten_sync::crdt::LoroDoc::compact_property_history(&self) -> benten_sync::crdt::CrdtResult<usize>
 pub fn benten_sync::crdt::LoroDoc::export_update(&self) -> benten_sync::crdt::CrdtResult<alloc::vec::Vec<u8>>
-pub fn benten_sync::crdt::LoroDoc::from_canonical_bytes(bytes: &[u8]) -> benten_sync::crdt::CrdtResult<Self>
-pub fn benten_sync::crdt::LoroDoc::get_property(&self, key: &str) -> core::option::Option<alloc::string::String>
-pub fn benten_sync::crdt::LoroDoc::get_stamped(&self, key: &str) -> core::option::Option<benten_sync::crdt::StampedValue>
-pub fn benten_sync::crdt::LoroDoc::list(&self, name: &str) -> loro::LoroList
-pub fn benten_sync::crdt::LoroDoc::map(&self, name: &str) -> loro::LoroMap
-pub fn benten_sync::crdt::LoroDoc::merge(&self, remote: &benten_sync::crdt::LoroDoc) -> benten_sync::crdt::CrdtResult<()>
+pub fn benten_sync::crdt::LoroDoc::from_canonical_bytes(&[u8]) -> benten_sync::crdt::CrdtResult<Self>
+pub fn benten_sync::crdt::LoroDoc::get_property(&self, &str) -> core::option::Option<alloc::string::String>
+pub fn benten_sync::crdt::LoroDoc::get_stamped(&self, &str) -> core::option::Option<benten_sync::crdt::StampedValue>
+pub fn benten_sync::crdt::LoroDoc::list(&self, &str) -> loro::LoroList
+pub fn benten_sync::crdt::LoroDoc::map(&self, &str) -> loro::LoroMap
+pub fn benten_sync::crdt::LoroDoc::merge(&self, &benten_sync::crdt::LoroDoc) -> benten_sync::crdt::CrdtResult<()>
 pub fn benten_sync::crdt::LoroDoc::new() -> Self
 pub fn benten_sync::crdt::LoroDoc::op_count(&self) -> usize
 pub fn benten_sync::crdt::LoroDoc::op_log_targets(&self) -> alloc::vec::Vec<benten_sync::crdt::OpLogTarget>
-pub fn benten_sync::crdt::LoroDoc::set_property(&self, key: &str, value: impl core::convert::Into<alloc::string::String>, hlc: benten_core::hlc::BentenHlc) -> benten_sync::crdt::CrdtResult<()>
+pub fn benten_sync::crdt::LoroDoc::set_property(&self, &str, impl core::convert::Into<alloc::string::String>, benten_core::hlc::BentenHlc) -> benten_sync::crdt::CrdtResult<()>
 pub fn benten_sync::crdt::LoroDoc::to_canonical_bytes(&self) -> benten_sync::crdt::CrdtResult<alloc::vec::Vec<u8>>
 pub fn benten_sync::crdt::LoroDoc::winning_attribution(&self) -> alloc::collections::btree::set::BTreeSet<u64>
-pub fn benten_sync::crdt::LoroDoc::with_peer_id(peer_id: u64) -> core::option::Option<Self>
+pub fn benten_sync::crdt::LoroDoc::with_peer_id(u64) -> core::option::Option<Self>
 impl core::clone::Clone for benten_sync::crdt::LoroDoc
 pub fn benten_sync::crdt::LoroDoc::clone(&self) -> Self
 impl core::default::Default for benten_sync::crdt::LoroDoc
 pub fn benten_sync::crdt::LoroDoc::default() -> Self
 impl core::fmt::Debug for benten_sync::crdt::LoroDoc
-pub fn benten_sync::crdt::LoroDoc::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::crdt::LoroDoc::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::crdt::LoroDoc
 impl core::marker::Send for benten_sync::crdt::LoroDoc
 impl core::marker::Sync for benten_sync::crdt::LoroDoc
@@ -86,9 +86,9 @@ impl core::clone::Clone for benten_sync::crdt::OpLogTarget
 pub fn benten_sync::crdt::OpLogTarget::clone(&self) -> benten_sync::crdt::OpLogTarget
 impl core::cmp::Eq for benten_sync::crdt::OpLogTarget
 impl core::cmp::PartialEq for benten_sync::crdt::OpLogTarget
-pub fn benten_sync::crdt::OpLogTarget::eq(&self, other: &benten_sync::crdt::OpLogTarget) -> bool
+pub fn benten_sync::crdt::OpLogTarget::eq(&self, &benten_sync::crdt::OpLogTarget) -> bool
 impl core::fmt::Debug for benten_sync::crdt::OpLogTarget
-pub fn benten_sync::crdt::OpLogTarget::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::crdt::OpLogTarget::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_sync::crdt::OpLogTarget
 impl core::marker::Freeze for benten_sync::crdt::OpLogTarget
 impl core::marker::Send for benten_sync::crdt::OpLogTarget
@@ -104,14 +104,14 @@ impl core::clone::Clone for benten_sync::crdt::StampedValue
 pub fn benten_sync::crdt::StampedValue::clone(&self) -> benten_sync::crdt::StampedValue
 impl core::cmp::Eq for benten_sync::crdt::StampedValue
 impl core::cmp::PartialEq for benten_sync::crdt::StampedValue
-pub fn benten_sync::crdt::StampedValue::eq(&self, other: &benten_sync::crdt::StampedValue) -> bool
+pub fn benten_sync::crdt::StampedValue::eq(&self, &benten_sync::crdt::StampedValue) -> bool
 impl core::fmt::Debug for benten_sync::crdt::StampedValue
-pub fn benten_sync::crdt::StampedValue::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::crdt::StampedValue::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_sync::crdt::StampedValue
 impl serde_core::ser::Serialize for benten_sync::crdt::StampedValue
-pub fn benten_sync::crdt::StampedValue::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_sync::crdt::StampedValue::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_sync::crdt::StampedValue
-pub fn benten_sync::crdt::StampedValue::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_sync::crdt::StampedValue::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_sync::crdt::StampedValue
 impl core::marker::Send for benten_sync::crdt::StampedValue
 impl core::marker::Sync for benten_sync::crdt::StampedValue
@@ -119,7 +119,7 @@ impl core::marker::Unpin for benten_sync::crdt::StampedValue
 impl core::marker::UnsafeUnpin for benten_sync::crdt::StampedValue
 impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::crdt::StampedValue
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::crdt::StampedValue
-pub fn benten_sync::crdt::hlc_lww_winner(a: &benten_sync::crdt::HlcWire, b: &benten_sync::crdt::HlcWire) -> core::cmp::Ordering
+pub fn benten_sync::crdt::hlc_lww_winner(&benten_sync::crdt::HlcWire, &benten_sync::crdt::HlcWire) -> core::cmp::Ordering
 pub type benten_sync::crdt::CrdtResult<T> = core::result::Result<T, benten_sync::crdt::CrdtError>
 pub mod benten_sync::errors
 #[non_exhaustive] pub enum benten_sync::errors::AtriumTransportError
@@ -137,12 +137,12 @@ pub benten_sync::errors::AtriumTransportError::TransportDegraded::reason: alloc:
 impl benten_sync::errors::AtriumTransportError
 pub fn benten_sync::errors::AtriumTransportError::code(&self) -> benten_errors::ErrorCode
 impl core::convert::From<benten_sync::errors::AtriumTransportError> for benten_sync::handshake::HandshakeError
-pub fn benten_sync::handshake::HandshakeError::from(source: benten_sync::errors::AtriumTransportError) -> Self
+pub fn benten_sync::handshake::HandshakeError::from(benten_sync::errors::AtriumTransportError) -> Self
 impl core::error::Error for benten_sync::errors::AtriumTransportError
 impl core::fmt::Debug for benten_sync::errors::AtriumTransportError
-pub fn benten_sync::errors::AtriumTransportError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::errors::AtriumTransportError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_sync::errors::AtriumTransportError
-pub fn benten_sync::errors::AtriumTransportError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::errors::AtriumTransportError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::errors::AtriumTransportError
 impl core::marker::Send for benten_sync::errors::AtriumTransportError
 impl core::marker::Sync for benten_sync::errors::AtriumTransportError
@@ -151,6 +151,33 @@ impl core::marker::UnsafeUnpin for benten_sync::errors::AtriumTransportError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::errors::AtriumTransportError
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::errors::AtriumTransportError
 pub type benten_sync::errors::AtriumTransportResult<T> = core::result::Result<T, benten_sync::errors::AtriumTransportError>
+pub mod benten_sync::gossip_transport
+pub struct benten_sync::gossip_transport::MockGossipTransport
+impl benten_sync::gossip_transport::MockGossipTransport
+pub fn benten_sync::gossip_transport::MockGossipTransport::new() -> Self
+impl benten_sync::gossip_transport::GossipTransport for benten_sync::gossip_transport::MockGossipTransport
+pub fn benten_sync::gossip_transport::MockGossipTransport::notify(&mut self, [u8; 32])
+pub fn benten_sync::gossip_transport::MockGossipTransport::subscribe(&mut self, [u8; 32])
+pub fn benten_sync::gossip_transport::MockGossipTransport::would_deliver(&self, [u8; 32]) -> bool
+impl core::default::Default for benten_sync::gossip_transport::MockGossipTransport
+pub fn benten_sync::gossip_transport::MockGossipTransport::default() -> benten_sync::gossip_transport::MockGossipTransport
+impl core::fmt::Debug for benten_sync::gossip_transport::MockGossipTransport
+pub fn benten_sync::gossip_transport::MockGossipTransport::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_sync::gossip_transport::MockGossipTransport
+impl core::marker::Send for benten_sync::gossip_transport::MockGossipTransport
+impl core::marker::Sync for benten_sync::gossip_transport::MockGossipTransport
+impl core::marker::Unpin for benten_sync::gossip_transport::MockGossipTransport
+impl core::marker::UnsafeUnpin for benten_sync::gossip_transport::MockGossipTransport
+impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::gossip_transport::MockGossipTransport
+impl core::panic::unwind_safe::UnwindSafe for benten_sync::gossip_transport::MockGossipTransport
+pub trait benten_sync::gossip_transport::GossipTransport
+pub fn benten_sync::gossip_transport::GossipTransport::notify(&mut self, [u8; 32])
+pub fn benten_sync::gossip_transport::GossipTransport::subscribe(&mut self, [u8; 32])
+pub fn benten_sync::gossip_transport::GossipTransport::would_deliver(&self, [u8; 32]) -> bool
+impl benten_sync::gossip_transport::GossipTransport for benten_sync::gossip_transport::MockGossipTransport
+pub fn benten_sync::gossip_transport::MockGossipTransport::notify(&mut self, [u8; 32])
+pub fn benten_sync::gossip_transport::MockGossipTransport::subscribe(&mut self, [u8; 32])
+pub fn benten_sync::gossip_transport::MockGossipTransport::would_deliver(&self, [u8; 32]) -> bool
 pub mod benten_sync::handshake
 #[non_exhaustive] pub enum benten_sync::handshake::HandshakeError
 pub benten_sync::handshake::HandshakeError::AudienceMismatch
@@ -168,13 +195,13 @@ pub benten_sync::handshake::HandshakeError::WireFormat(benten_sync::errors::Atri
 impl benten_sync::handshake::HandshakeError
 pub fn benten_sync::handshake::HandshakeError::code(&self) -> benten_errors::ErrorCode
 impl core::convert::From<benten_sync::errors::AtriumTransportError> for benten_sync::handshake::HandshakeError
-pub fn benten_sync::handshake::HandshakeError::from(source: benten_sync::errors::AtriumTransportError) -> Self
+pub fn benten_sync::handshake::HandshakeError::from(benten_sync::errors::AtriumTransportError) -> Self
 impl core::error::Error for benten_sync::handshake::HandshakeError
 pub fn benten_sync::handshake::HandshakeError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for benten_sync::handshake::HandshakeError
-pub fn benten_sync::handshake::HandshakeError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::handshake::HandshakeError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_sync::handshake::HandshakeError
-pub fn benten_sync::handshake::HandshakeError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::handshake::HandshakeError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::handshake::HandshakeError
 impl core::marker::Send for benten_sync::handshake::HandshakeError
 impl core::marker::Sync for benten_sync::handshake::HandshakeError
@@ -199,11 +226,11 @@ pub benten_sync::handshake::HandshakePayload::Respond::signature: alloc::vec::Ve
 impl core::clone::Clone for benten_sync::handshake::HandshakePayload
 pub fn benten_sync::handshake::HandshakePayload::clone(&self) -> benten_sync::handshake::HandshakePayload
 impl core::fmt::Debug for benten_sync::handshake::HandshakePayload
-pub fn benten_sync::handshake::HandshakePayload::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::handshake::HandshakePayload::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl serde_core::ser::Serialize for benten_sync::handshake::HandshakePayload
-pub fn benten_sync::handshake::HandshakePayload::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_sync::handshake::HandshakePayload::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_sync::handshake::HandshakePayload
-pub fn benten_sync::handshake::HandshakePayload::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_sync::handshake::HandshakePayload::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_sync::handshake::HandshakePayload
 impl core::marker::Send for benten_sync::handshake::HandshakePayload
 impl core::marker::Sync for benten_sync::handshake::HandshakePayload
@@ -218,21 +245,21 @@ impl core::clone::Clone for benten_sync::handshake::MessageKind
 pub fn benten_sync::handshake::MessageKind::clone(&self) -> benten_sync::handshake::MessageKind
 impl core::cmp::Eq for benten_sync::handshake::MessageKind
 impl core::cmp::Ord for benten_sync::handshake::MessageKind
-pub fn benten_sync::handshake::MessageKind::cmp(&self, other: &benten_sync::handshake::MessageKind) -> core::cmp::Ordering
+pub fn benten_sync::handshake::MessageKind::cmp(&self, &benten_sync::handshake::MessageKind) -> core::cmp::Ordering
 impl core::cmp::PartialEq for benten_sync::handshake::MessageKind
-pub fn benten_sync::handshake::MessageKind::eq(&self, other: &benten_sync::handshake::MessageKind) -> bool
+pub fn benten_sync::handshake::MessageKind::eq(&self, &benten_sync::handshake::MessageKind) -> bool
 impl core::cmp::PartialOrd for benten_sync::handshake::MessageKind
-pub fn benten_sync::handshake::MessageKind::partial_cmp(&self, other: &benten_sync::handshake::MessageKind) -> core::option::Option<core::cmp::Ordering>
+pub fn benten_sync::handshake::MessageKind::partial_cmp(&self, &benten_sync::handshake::MessageKind) -> core::option::Option<core::cmp::Ordering>
 impl core::fmt::Debug for benten_sync::handshake::MessageKind
-pub fn benten_sync::handshake::MessageKind::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::handshake::MessageKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::hash::Hash for benten_sync::handshake::MessageKind
-pub fn benten_sync::handshake::MessageKind::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+pub fn benten_sync::handshake::MessageKind::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::Copy for benten_sync::handshake::MessageKind
 impl core::marker::StructuralPartialEq for benten_sync::handshake::MessageKind
 impl serde_core::ser::Serialize for benten_sync::handshake::MessageKind
-pub fn benten_sync::handshake::MessageKind::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_sync::handshake::MessageKind::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_sync::handshake::MessageKind
-pub fn benten_sync::handshake::MessageKind::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_sync::handshake::MessageKind::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_sync::handshake::MessageKind
 impl core::marker::Send for benten_sync::handshake::MessageKind
 impl core::marker::Sync for benten_sync::handshake::MessageKind
@@ -240,16 +267,38 @@ impl core::marker::Unpin for benten_sync::handshake::MessageKind
 impl core::marker::UnsafeUnpin for benten_sync::handshake::MessageKind
 impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::handshake::MessageKind
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::handshake::MessageKind
+#[non_exhaustive] pub enum benten_sync::handshake::NonceCacheError
+pub benten_sync::handshake::NonceCacheError::ReplayedNonce
+impl benten_sync::handshake::NonceCacheError
+pub fn benten_sync::handshake::NonceCacheError::code(&self) -> benten_errors::ErrorCode
+impl core::clone::Clone for benten_sync::handshake::NonceCacheError
+pub fn benten_sync::handshake::NonceCacheError::clone(&self) -> benten_sync::handshake::NonceCacheError
+impl core::cmp::Eq for benten_sync::handshake::NonceCacheError
+impl core::cmp::PartialEq for benten_sync::handshake::NonceCacheError
+pub fn benten_sync::handshake::NonceCacheError::eq(&self, &benten_sync::handshake::NonceCacheError) -> bool
+impl core::error::Error for benten_sync::handshake::NonceCacheError
+impl core::fmt::Debug for benten_sync::handshake::NonceCacheError
+pub fn benten_sync::handshake::NonceCacheError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_sync::handshake::NonceCacheError
+pub fn benten_sync::handshake::NonceCacheError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_sync::handshake::NonceCacheError
+impl core::marker::Freeze for benten_sync::handshake::NonceCacheError
+impl core::marker::Send for benten_sync::handshake::NonceCacheError
+impl core::marker::Sync for benten_sync::handshake::NonceCacheError
+impl core::marker::Unpin for benten_sync::handshake::NonceCacheError
+impl core::marker::UnsafeUnpin for benten_sync::handshake::NonceCacheError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::handshake::NonceCacheError
+impl core::panic::unwind_safe::UnwindSafe for benten_sync::handshake::NonceCacheError
 pub struct benten_sync::handshake::EffectiveCapSet
 impl benten_sync::handshake::EffectiveCapSet
 pub fn benten_sync::handshake::EffectiveCapSet::caps(&self) -> &[benten_id::ucan::Capability]
-pub fn benten_sync::handshake::EffectiveCapSet::includes_cap(&self, resource: &str, ability: &str) -> bool
+pub fn benten_sync::handshake::EffectiveCapSet::includes_cap(&self, &str, &str) -> bool
 pub fn benten_sync::handshake::EffectiveCapSet::intersection_validates_against_ucan_chain(&self) -> bool
 pub fn benten_sync::handshake::EffectiveCapSet::is_authenticated(&self) -> bool
 impl core::clone::Clone for benten_sync::handshake::EffectiveCapSet
 pub fn benten_sync::handshake::EffectiveCapSet::clone(&self) -> benten_sync::handshake::EffectiveCapSet
 impl core::fmt::Debug for benten_sync::handshake::EffectiveCapSet
-pub fn benten_sync::handshake::EffectiveCapSet::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::handshake::EffectiveCapSet::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::handshake::EffectiveCapSet
 impl core::marker::Send for benten_sync::handshake::EffectiveCapSet
 impl core::marker::Sync for benten_sync::handshake::EffectiveCapSet
@@ -259,10 +308,10 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::handshake::Effecti
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::handshake::EffectiveCapSet
 pub struct benten_sync::handshake::Handshake
 impl benten_sync::handshake::Handshake
-pub fn benten_sync::handshake::Handshake::finalise(local_kp: &benten_id::keypair::Keypair, outbound_initiate_nonce: &[u8; 32], local_grant_to_remote: core::option::Option<benten_id::ucan::Ucan>, local_revocation_set: alloc::vec::Vec<benten_sync::handshake::RevocationEntry>, response_frame: &benten_sync::handshake_wire::HandshakeFrame) -> benten_sync::handshake::HandshakeResult<benten_sync::handshake::Session>
-pub fn benten_sync::handshake::Handshake::initiate(local_kp: &benten_id::keypair::Keypair, audience_did: benten_id::did::Did, grant: core::option::Option<benten_id::ucan::Ucan>, revocation_set: alloc::vec::Vec<benten_sync::handshake::RevocationEntry>) -> benten_sync::handshake::HandshakeResult<benten_sync::handshake_wire::HandshakeFrame>
-pub fn benten_sync::handshake::Handshake::respond(local_kp: &benten_id::keypair::Keypair, initiate_frame: &benten_sync::handshake_wire::HandshakeFrame, local_grant_to_remote: core::option::Option<benten_id::ucan::Ucan>, local_revocation_set: alloc::vec::Vec<benten_sync::handshake::RevocationEntry>) -> benten_sync::handshake::HandshakeResult<(benten_sync::handshake_wire::HandshakeFrame, benten_sync::handshake::Session)>
-pub fn benten_sync::handshake::Handshake::respond_with_window(local_kp: &benten_id::keypair::Keypair, initiate_frame: &benten_sync::handshake_wire::HandshakeFrame, local_grant_to_remote: core::option::Option<benten_id::ucan::Ucan>, local_revocation_set: alloc::vec::Vec<benten_sync::handshake::RevocationEntry>, replay_window_ms: u64) -> benten_sync::handshake::HandshakeResult<(benten_sync::handshake_wire::HandshakeFrame, benten_sync::handshake::Session)>
+pub fn benten_sync::handshake::Handshake::finalise(&benten_id::keypair::Keypair, &[u8; 32], core::option::Option<benten_id::ucan::Ucan>, alloc::vec::Vec<benten_sync::handshake::RevocationEntry>, &benten_sync::handshake_wire::HandshakeFrame) -> benten_sync::handshake::HandshakeResult<benten_sync::handshake::Session>
+pub fn benten_sync::handshake::Handshake::initiate(&benten_id::keypair::Keypair, benten_id::did::Did, core::option::Option<benten_id::ucan::Ucan>, alloc::vec::Vec<benten_sync::handshake::RevocationEntry>) -> benten_sync::handshake::HandshakeResult<benten_sync::handshake_wire::HandshakeFrame>
+pub fn benten_sync::handshake::Handshake::respond(&benten_id::keypair::Keypair, &benten_sync::handshake_wire::HandshakeFrame, core::option::Option<benten_id::ucan::Ucan>, alloc::vec::Vec<benten_sync::handshake::RevocationEntry>) -> benten_sync::handshake::HandshakeResult<(benten_sync::handshake_wire::HandshakeFrame, benten_sync::handshake::Session)>
+pub fn benten_sync::handshake::Handshake::respond_with_window(&benten_id::keypair::Keypair, &benten_sync::handshake_wire::HandshakeFrame, core::option::Option<benten_id::ucan::Ucan>, alloc::vec::Vec<benten_sync::handshake::RevocationEntry>, u64) -> benten_sync::handshake::HandshakeResult<(benten_sync::handshake_wire::HandshakeFrame, benten_sync::handshake::Session)>
 impl core::marker::Freeze for benten_sync::handshake::Handshake
 impl core::marker::Send for benten_sync::handshake::Handshake
 impl core::marker::Sync for benten_sync::handshake::Handshake
@@ -270,25 +319,42 @@ impl core::marker::Unpin for benten_sync::handshake::Handshake
 impl core::marker::UnsafeUnpin for benten_sync::handshake::Handshake
 impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::handshake::Handshake
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::handshake::Handshake
+pub struct benten_sync::handshake::JtiNonceCache
+impl benten_sync::handshake::JtiNonceCache
+pub fn benten_sync::handshake::JtiNonceCache::admit(&mut self, [u8; 32], u64) -> core::result::Result<(), benten_sync::handshake::NonceCacheError>
+pub fn benten_sync::handshake::JtiNonceCache::durable_snapshot(&self) -> std::collections::hash::set::HashSet<[u8; 32]>
+pub fn benten_sync::handshake::JtiNonceCache::from_durable(std::collections::hash::set::HashSet<[u8; 32]>) -> Self
+pub fn benten_sync::handshake::JtiNonceCache::new(bool) -> Self
+impl core::clone::Clone for benten_sync::handshake::JtiNonceCache
+pub fn benten_sync::handshake::JtiNonceCache::clone(&self) -> benten_sync::handshake::JtiNonceCache
+impl core::fmt::Debug for benten_sync::handshake::JtiNonceCache
+pub fn benten_sync::handshake::JtiNonceCache::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_sync::handshake::JtiNonceCache
+impl core::marker::Send for benten_sync::handshake::JtiNonceCache
+impl core::marker::Sync for benten_sync::handshake::JtiNonceCache
+impl core::marker::Unpin for benten_sync::handshake::JtiNonceCache
+impl core::marker::UnsafeUnpin for benten_sync::handshake::JtiNonceCache
+impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::handshake::JtiNonceCache
+impl core::panic::unwind_safe::UnwindSafe for benten_sync::handshake::JtiNonceCache
 pub struct benten_sync::handshake::RevocationEntry
 pub benten_sync::handshake::RevocationEntry::path: alloc::string::String
 pub benten_sync::handshake::RevocationEntry::target_peer_did: benten_id::did::Did
 impl benten_sync::handshake::RevocationEntry
-pub fn benten_sync::handshake::RevocationEntry::new(target_peer_did: benten_id::did::Did, path: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn benten_sync::handshake::RevocationEntry::new(benten_id::did::Did, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn benten_sync::handshake::RevocationEntry::path(&self) -> &str
 pub fn benten_sync::handshake::RevocationEntry::target_peer_did(&self) -> &benten_id::did::Did
 impl core::clone::Clone for benten_sync::handshake::RevocationEntry
 pub fn benten_sync::handshake::RevocationEntry::clone(&self) -> benten_sync::handshake::RevocationEntry
 impl core::cmp::Eq for benten_sync::handshake::RevocationEntry
 impl core::cmp::PartialEq for benten_sync::handshake::RevocationEntry
-pub fn benten_sync::handshake::RevocationEntry::eq(&self, other: &benten_sync::handshake::RevocationEntry) -> bool
+pub fn benten_sync::handshake::RevocationEntry::eq(&self, &benten_sync::handshake::RevocationEntry) -> bool
 impl core::fmt::Debug for benten_sync::handshake::RevocationEntry
-pub fn benten_sync::handshake::RevocationEntry::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::handshake::RevocationEntry::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_sync::handshake::RevocationEntry
 impl serde_core::ser::Serialize for benten_sync::handshake::RevocationEntry
-pub fn benten_sync::handshake::RevocationEntry::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_sync::handshake::RevocationEntry::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_sync::handshake::RevocationEntry
-pub fn benten_sync::handshake::RevocationEntry::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_sync::handshake::RevocationEntry::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_sync::handshake::RevocationEntry
 impl core::marker::Send for benten_sync::handshake::RevocationEntry
 impl core::marker::Sync for benten_sync::handshake::RevocationEntry
@@ -310,7 +376,7 @@ pub fn benten_sync::handshake::Session::synchronized_revocations_for_local_peer(
 impl core::clone::Clone for benten_sync::handshake::Session
 pub fn benten_sync::handshake::Session::clone(&self) -> benten_sync::handshake::Session
 impl core::fmt::Debug for benten_sync::handshake::Session
-pub fn benten_sync::handshake::Session::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::handshake::Session::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::handshake::Session
 impl core::marker::Send for benten_sync::handshake::Session
 impl core::marker::Sync for benten_sync::handshake::Session
@@ -319,8 +385,9 @@ impl core::marker::UnsafeUnpin for benten_sync::handshake::Session
 impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::handshake::Session
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::handshake::Session
 pub const benten_sync::handshake::DEFAULT_REPLAY_WINDOW_MS: u64
-pub fn benten_sync::handshake::initiate_nonce(frame: &benten_sync::handshake_wire::HandshakeFrame) -> benten_sync::handshake::HandshakeResult<[u8; 32]>
-pub fn benten_sync::handshake::sync_hydrate_consume_recheck_outcome(outcome: benten_errors::ErrorCode, zone: &str, key: &str) -> benten_sync::handshake::HandshakeResult<()>
+pub const benten_sync::handshake::LAYER_D_BUCKET_SECS: u64
+pub fn benten_sync::handshake::initiate_nonce(&benten_sync::handshake_wire::HandshakeFrame) -> benten_sync::handshake::HandshakeResult<[u8; 32]>
+pub fn benten_sync::handshake::sync_hydrate_consume_recheck_outcome(benten_errors::ErrorCode, &str, &str) -> benten_sync::handshake::HandshakeResult<()>
 pub type benten_sync::handshake::HandshakeResult<T> = core::result::Result<T, benten_sync::handshake::HandshakeError>
 pub mod benten_sync::handshake_wire
 pub struct benten_sync::handshake_wire::HandshakeFrame
@@ -331,20 +398,20 @@ pub benten_sync::handshake_wire::HandshakeFrame::protocol_payload: alloc::vec::V
 pub benten_sync::handshake_wire::HandshakeFrame::version: u8
 impl benten_sync::handshake_wire::HandshakeFrame
 pub fn benten_sync::handshake_wire::HandshakeFrame::builder() -> benten_sync::handshake_wire::HandshakeFrameBuilder<benten_sync::handshake_wire::NoPeerDid, benten_sync::handshake_wire::NoDeviceDid, benten_sync::handshake_wire::NoPeerId>
-pub fn benten_sync::handshake_wire::HandshakeFrame::from_canonical_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_sync::errors::AtriumTransportError>
+pub fn benten_sync::handshake_wire::HandshakeFrame::from_canonical_bytes(&[u8]) -> core::result::Result<Self, benten_sync::errors::AtriumTransportError>
 pub fn benten_sync::handshake_wire::HandshakeFrame::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_sync::errors::AtriumTransportError>
 impl core::clone::Clone for benten_sync::handshake_wire::HandshakeFrame
 pub fn benten_sync::handshake_wire::HandshakeFrame::clone(&self) -> benten_sync::handshake_wire::HandshakeFrame
 impl core::cmp::Eq for benten_sync::handshake_wire::HandshakeFrame
 impl core::cmp::PartialEq for benten_sync::handshake_wire::HandshakeFrame
-pub fn benten_sync::handshake_wire::HandshakeFrame::eq(&self, other: &benten_sync::handshake_wire::HandshakeFrame) -> bool
+pub fn benten_sync::handshake_wire::HandshakeFrame::eq(&self, &benten_sync::handshake_wire::HandshakeFrame) -> bool
 impl core::fmt::Debug for benten_sync::handshake_wire::HandshakeFrame
-pub fn benten_sync::handshake_wire::HandshakeFrame::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::handshake_wire::HandshakeFrame::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_sync::handshake_wire::HandshakeFrame
 impl serde_core::ser::Serialize for benten_sync::handshake_wire::HandshakeFrame
-pub fn benten_sync::handshake_wire::HandshakeFrame::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_sync::handshake_wire::HandshakeFrame::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_sync::handshake_wire::HandshakeFrame
-pub fn benten_sync::handshake_wire::HandshakeFrame::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_sync::handshake_wire::HandshakeFrame::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_sync::handshake_wire::HandshakeFrame
 impl core::marker::Send for benten_sync::handshake_wire::HandshakeFrame
 impl core::marker::Sync for benten_sync::handshake_wire::HandshakeFrame
@@ -356,16 +423,16 @@ pub struct benten_sync::handshake_wire::HandshakeFrameBuilder<P, D, K>
 impl benten_sync::handshake_wire::HandshakeFrameBuilder<benten_sync::handshake_wire::WithPeerDid, benten_sync::handshake_wire::WithDeviceDid, benten_sync::handshake_wire::WithPeerId>
 pub fn benten_sync::handshake_wire::HandshakeFrameBuilder<benten_sync::handshake_wire::WithPeerDid, benten_sync::handshake_wire::WithDeviceDid, benten_sync::handshake_wire::WithPeerId>::build(self) -> benten_sync::handshake_wire::HandshakeFrame
 impl<D, K> benten_sync::handshake_wire::HandshakeFrameBuilder<benten_sync::handshake_wire::NoPeerDid, D, K>
-pub fn benten_sync::handshake_wire::HandshakeFrameBuilder<benten_sync::handshake_wire::NoPeerDid, D, K>::peer_did(self, did: benten_id::did::Did) -> benten_sync::handshake_wire::HandshakeFrameBuilder<benten_sync::handshake_wire::WithPeerDid, D, K>
+pub fn benten_sync::handshake_wire::HandshakeFrameBuilder<benten_sync::handshake_wire::NoPeerDid, D, K>::peer_did(self, benten_id::did::Did) -> benten_sync::handshake_wire::HandshakeFrameBuilder<benten_sync::handshake_wire::WithPeerDid, D, K>
 impl<P, D, K> benten_sync::handshake_wire::HandshakeFrameBuilder<P, D, K>
-pub fn benten_sync::handshake_wire::HandshakeFrameBuilder<P, D, K>::protocol_payload(self, payload: alloc::vec::Vec<u8>) -> Self
-pub fn benten_sync::handshake_wire::HandshakeFrameBuilder<P, D, K>::version(self, version: u8) -> Self
+pub fn benten_sync::handshake_wire::HandshakeFrameBuilder<P, D, K>::protocol_payload(self, alloc::vec::Vec<u8>) -> Self
+pub fn benten_sync::handshake_wire::HandshakeFrameBuilder<P, D, K>::version(self, u8) -> Self
 impl<P, D> benten_sync::handshake_wire::HandshakeFrameBuilder<P, D, benten_sync::handshake_wire::NoPeerId>
-pub fn benten_sync::handshake_wire::HandshakeFrameBuilder<P, D, benten_sync::handshake_wire::NoPeerId>::peer_id(self, peer_id: benten_sync::peer_id::PeerId) -> benten_sync::handshake_wire::HandshakeFrameBuilder<P, D, benten_sync::handshake_wire::WithPeerId>
+pub fn benten_sync::handshake_wire::HandshakeFrameBuilder<P, D, benten_sync::handshake_wire::NoPeerId>::peer_id(self, benten_sync::peer_id::PeerId) -> benten_sync::handshake_wire::HandshakeFrameBuilder<P, D, benten_sync::handshake_wire::WithPeerId>
 impl<P, K> benten_sync::handshake_wire::HandshakeFrameBuilder<P, benten_sync::handshake_wire::NoDeviceDid, K>
-pub fn benten_sync::handshake_wire::HandshakeFrameBuilder<P, benten_sync::handshake_wire::NoDeviceDid, K>::device_did(self, did: benten_id::did::Did) -> benten_sync::handshake_wire::HandshakeFrameBuilder<P, benten_sync::handshake_wire::WithDeviceDid, K>
+pub fn benten_sync::handshake_wire::HandshakeFrameBuilder<P, benten_sync::handshake_wire::NoDeviceDid, K>::device_did(self, benten_id::did::Did) -> benten_sync::handshake_wire::HandshakeFrameBuilder<P, benten_sync::handshake_wire::WithDeviceDid, K>
 impl<P: core::fmt::Debug, D: core::fmt::Debug, K: core::fmt::Debug> core::fmt::Debug for benten_sync::handshake_wire::HandshakeFrameBuilder<P, D, K>
-pub fn benten_sync::handshake_wire::HandshakeFrameBuilder<P, D, K>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::handshake_wire::HandshakeFrameBuilder<P, D, K>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl<P, D, K> core::marker::Freeze for benten_sync::handshake_wire::HandshakeFrameBuilder<P, D, K> where P: core::marker::Freeze, D: core::marker::Freeze, K: core::marker::Freeze
 impl<P, D, K> core::marker::Send for benten_sync::handshake_wire::HandshakeFrameBuilder<P, D, K> where P: core::marker::Send, D: core::marker::Send, K: core::marker::Send
 impl<P, D, K> core::marker::Sync for benten_sync::handshake_wire::HandshakeFrameBuilder<P, D, K> where P: core::marker::Sync, D: core::marker::Sync, K: core::marker::Sync
@@ -377,7 +444,7 @@ pub struct benten_sync::handshake_wire::NoDeviceDid
 impl core::default::Default for benten_sync::handshake_wire::NoDeviceDid
 pub fn benten_sync::handshake_wire::NoDeviceDid::default() -> benten_sync::handshake_wire::NoDeviceDid
 impl core::fmt::Debug for benten_sync::handshake_wire::NoDeviceDid
-pub fn benten_sync::handshake_wire::NoDeviceDid::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::handshake_wire::NoDeviceDid::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::handshake_wire::NoDeviceDid
 impl core::marker::Send for benten_sync::handshake_wire::NoDeviceDid
 impl core::marker::Sync for benten_sync::handshake_wire::NoDeviceDid
@@ -389,7 +456,7 @@ pub struct benten_sync::handshake_wire::NoPeerDid
 impl core::default::Default for benten_sync::handshake_wire::NoPeerDid
 pub fn benten_sync::handshake_wire::NoPeerDid::default() -> benten_sync::handshake_wire::NoPeerDid
 impl core::fmt::Debug for benten_sync::handshake_wire::NoPeerDid
-pub fn benten_sync::handshake_wire::NoPeerDid::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::handshake_wire::NoPeerDid::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::handshake_wire::NoPeerDid
 impl core::marker::Send for benten_sync::handshake_wire::NoPeerDid
 impl core::marker::Sync for benten_sync::handshake_wire::NoPeerDid
@@ -401,7 +468,7 @@ pub struct benten_sync::handshake_wire::NoPeerId
 impl core::default::Default for benten_sync::handshake_wire::NoPeerId
 pub fn benten_sync::handshake_wire::NoPeerId::default() -> benten_sync::handshake_wire::NoPeerId
 impl core::fmt::Debug for benten_sync::handshake_wire::NoPeerId
-pub fn benten_sync::handshake_wire::NoPeerId::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::handshake_wire::NoPeerId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::handshake_wire::NoPeerId
 impl core::marker::Send for benten_sync::handshake_wire::NoPeerId
 impl core::marker::Sync for benten_sync::handshake_wire::NoPeerId
@@ -411,7 +478,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::handshake_wire::No
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::handshake_wire::NoPeerId
 pub struct benten_sync::handshake_wire::WithDeviceDid(_)
 impl core::fmt::Debug for benten_sync::handshake_wire::WithDeviceDid
-pub fn benten_sync::handshake_wire::WithDeviceDid::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::handshake_wire::WithDeviceDid::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::handshake_wire::WithDeviceDid
 impl core::marker::Send for benten_sync::handshake_wire::WithDeviceDid
 impl core::marker::Sync for benten_sync::handshake_wire::WithDeviceDid
@@ -421,7 +488,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::handshake_wire::Wi
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::handshake_wire::WithDeviceDid
 pub struct benten_sync::handshake_wire::WithPeerDid(_)
 impl core::fmt::Debug for benten_sync::handshake_wire::WithPeerDid
-pub fn benten_sync::handshake_wire::WithPeerDid::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::handshake_wire::WithPeerDid::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::handshake_wire::WithPeerDid
 impl core::marker::Send for benten_sync::handshake_wire::WithPeerDid
 impl core::marker::Sync for benten_sync::handshake_wire::WithPeerDid
@@ -431,7 +498,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::handshake_wire::Wi
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::handshake_wire::WithPeerDid
 pub struct benten_sync::handshake_wire::WithPeerId(_)
 impl core::fmt::Debug for benten_sync::handshake_wire::WithPeerId
-pub fn benten_sync::handshake_wire::WithPeerId::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::handshake_wire::WithPeerId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::handshake_wire::WithPeerId
 impl core::marker::Send for benten_sync::handshake_wire::WithPeerId
 impl core::marker::Sync for benten_sync::handshake_wire::WithPeerId
@@ -451,15 +518,15 @@ pub benten_sync::light_client::LightClientError::ProofKeyMismatch::proof_key: al
 pub benten_sync::light_client::LightClientError::ProofKeyMismatch::requested_key: alloc::string::String
 impl core::cmp::Eq for benten_sync::light_client::LightClientError
 impl core::cmp::PartialEq for benten_sync::light_client::LightClientError
-pub fn benten_sync::light_client::LightClientError::eq(&self, other: &benten_sync::light_client::LightClientError) -> bool
+pub fn benten_sync::light_client::LightClientError::eq(&self, &benten_sync::light_client::LightClientError) -> bool
 impl core::convert::From<benten_sync::mst::MstError> for benten_sync::light_client::LightClientError
-pub fn benten_sync::light_client::LightClientError::from(source: benten_sync::mst::MstError) -> Self
+pub fn benten_sync::light_client::LightClientError::from(benten_sync::mst::MstError) -> Self
 impl core::error::Error for benten_sync::light_client::LightClientError
 pub fn benten_sync::light_client::LightClientError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for benten_sync::light_client::LightClientError
-pub fn benten_sync::light_client::LightClientError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::light_client::LightClientError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_sync::light_client::LightClientError
-pub fn benten_sync::light_client::LightClientError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::light_client::LightClientError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_sync::light_client::LightClientError
 impl core::marker::Freeze for benten_sync::light_client::LightClientError
 impl core::marker::Send for benten_sync::light_client::LightClientError
@@ -470,16 +537,16 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::light_client::Ligh
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::light_client::LightClientError
 pub struct benten_sync::light_client::BandwidthBudget
 impl benten_sync::light_client::BandwidthBudget
-pub fn benten_sync::light_client::BandwidthBudget::limit_bytes(limit_bytes: usize) -> Self
+pub fn benten_sync::light_client::BandwidthBudget::limit_bytes(usize) -> Self
 impl core::clone::Clone for benten_sync::light_client::BandwidthBudget
 pub fn benten_sync::light_client::BandwidthBudget::clone(&self) -> benten_sync::light_client::BandwidthBudget
 impl core::cmp::Eq for benten_sync::light_client::BandwidthBudget
 impl core::cmp::PartialEq for benten_sync::light_client::BandwidthBudget
-pub fn benten_sync::light_client::BandwidthBudget::eq(&self, other: &benten_sync::light_client::BandwidthBudget) -> bool
+pub fn benten_sync::light_client::BandwidthBudget::eq(&self, &benten_sync::light_client::BandwidthBudget) -> bool
 impl core::default::Default for benten_sync::light_client::BandwidthBudget
 pub fn benten_sync::light_client::BandwidthBudget::default() -> Self
 impl core::fmt::Debug for benten_sync::light_client::BandwidthBudget
-pub fn benten_sync::light_client::BandwidthBudget::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::light_client::BandwidthBudget::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for benten_sync::light_client::BandwidthBudget
 impl core::marker::StructuralPartialEq for benten_sync::light_client::BandwidthBudget
 impl core::marker::Freeze for benten_sync::light_client::BandwidthBudget
@@ -493,12 +560,12 @@ pub struct benten_sync::light_client::LightClient
 impl benten_sync::light_client::LightClient
 pub fn benten_sync::light_client::LightClient::bytes_consumed(&self) -> usize
 pub fn benten_sync::light_client::LightClient::new() -> Self
-pub fn benten_sync::light_client::LightClient::verify(&self, published_root: &benten_sync::mst::MstCid, path: &str, proof: &benten_sync::mst::MerkleProof) -> core::result::Result<benten_sync::light_client::VerificationResult, benten_sync::light_client::LightClientError>
-pub fn benten_sync::light_client::LightClient::with_budget(budget: benten_sync::light_client::BandwidthBudget) -> Self
+pub fn benten_sync::light_client::LightClient::verify(&self, &benten_sync::mst::MstCid, &str, &benten_sync::mst::MerkleProof) -> core::result::Result<benten_sync::light_client::VerificationResult, benten_sync::light_client::LightClientError>
+pub fn benten_sync::light_client::LightClient::with_budget(benten_sync::light_client::BandwidthBudget) -> Self
 impl core::default::Default for benten_sync::light_client::LightClient
 pub fn benten_sync::light_client::LightClient::default() -> Self
 impl core::fmt::Debug for benten_sync::light_client::LightClient
-pub fn benten_sync::light_client::LightClient::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::light_client::LightClient::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl !core::marker::Freeze for benten_sync::light_client::LightClient
 impl core::marker::Send for benten_sync::light_client::LightClient
 impl core::marker::Sync for benten_sync::light_client::LightClient
@@ -515,9 +582,9 @@ impl core::clone::Clone for benten_sync::light_client::VerificationResult
 pub fn benten_sync::light_client::VerificationResult::clone(&self) -> benten_sync::light_client::VerificationResult
 impl core::cmp::Eq for benten_sync::light_client::VerificationResult
 impl core::cmp::PartialEq for benten_sync::light_client::VerificationResult
-pub fn benten_sync::light_client::VerificationResult::eq(&self, other: &benten_sync::light_client::VerificationResult) -> bool
+pub fn benten_sync::light_client::VerificationResult::eq(&self, &benten_sync::light_client::VerificationResult) -> bool
 impl core::fmt::Debug for benten_sync::light_client::VerificationResult
-pub fn benten_sync::light_client::VerificationResult::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::light_client::VerificationResult::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_sync::light_client::VerificationResult
 impl core::marker::Freeze for benten_sync::light_client::VerificationResult
 impl core::marker::Send for benten_sync::light_client::VerificationResult
@@ -542,14 +609,14 @@ pub benten_sync::mst::MstError::ProofRootMismatch::expected: benten_sync::mst::M
 pub benten_sync::mst::MstError::ProofRootMismatch::got: benten_sync::mst::MstCid
 impl core::cmp::Eq for benten_sync::mst::MstError
 impl core::cmp::PartialEq for benten_sync::mst::MstError
-pub fn benten_sync::mst::MstError::eq(&self, other: &benten_sync::mst::MstError) -> bool
+pub fn benten_sync::mst::MstError::eq(&self, &benten_sync::mst::MstError) -> bool
 impl core::convert::From<benten_sync::mst::MstError> for benten_sync::light_client::LightClientError
-pub fn benten_sync::light_client::LightClientError::from(source: benten_sync::mst::MstError) -> Self
+pub fn benten_sync::light_client::LightClientError::from(benten_sync::mst::MstError) -> Self
 impl core::error::Error for benten_sync::mst::MstError
 impl core::fmt::Debug for benten_sync::mst::MstError
-pub fn benten_sync::mst::MstError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::mst::MstError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_sync::mst::MstError
-pub fn benten_sync::mst::MstError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::mst::MstError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_sync::mst::MstError
 impl core::marker::Freeze for benten_sync::mst::MstError
 impl core::marker::Send for benten_sync::mst::MstError
@@ -570,14 +637,14 @@ impl core::clone::Clone for benten_sync::mst::MerkleProof
 pub fn benten_sync::mst::MerkleProof::clone(&self) -> benten_sync::mst::MerkleProof
 impl core::cmp::Eq for benten_sync::mst::MerkleProof
 impl core::cmp::PartialEq for benten_sync::mst::MerkleProof
-pub fn benten_sync::mst::MerkleProof::eq(&self, other: &benten_sync::mst::MerkleProof) -> bool
+pub fn benten_sync::mst::MerkleProof::eq(&self, &benten_sync::mst::MerkleProof) -> bool
 impl core::fmt::Debug for benten_sync::mst::MerkleProof
-pub fn benten_sync::mst::MerkleProof::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::mst::MerkleProof::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_sync::mst::MerkleProof
 impl serde_core::ser::Serialize for benten_sync::mst::MerkleProof
-pub fn benten_sync::mst::MerkleProof::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_sync::mst::MerkleProof::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_sync::mst::MerkleProof
-pub fn benten_sync::mst::MerkleProof::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_sync::mst::MerkleProof::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_sync::mst::MerkleProof
 impl core::marker::Send for benten_sync::mst::MerkleProof
 impl core::marker::Sync for benten_sync::mst::MerkleProof
@@ -587,11 +654,11 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::mst::MerkleProof
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::mst::MerkleProof
 pub struct benten_sync::mst::Mst
 impl benten_sync::mst::Mst
-pub fn benten_sync::mst::Mst::apply_entries<I: core::iter::traits::collect::IntoIterator<Item = benten_sync::mst::MstEntry>>(&mut self, entries: I) -> core::result::Result<usize, benten_sync::mst::MstError>
-pub fn benten_sync::mst::Mst::insert(&mut self, entry: benten_sync::mst::MstEntry)
+pub fn benten_sync::mst::Mst::apply_entries<I: core::iter::traits::collect::IntoIterator<Item = benten_sync::mst::MstEntry>>(&mut self, I) -> core::result::Result<usize, benten_sync::mst::MstError>
+pub fn benten_sync::mst::Mst::insert(&mut self, benten_sync::mst::MstEntry)
 pub fn benten_sync::mst::Mst::is_empty(&self) -> bool
 pub fn benten_sync::mst::Mst::len(&self) -> usize
-pub fn benten_sync::mst::Mst::merkle_proof_for(&self, key: &str) -> core::option::Option<benten_sync::mst::MerkleProof>
+pub fn benten_sync::mst::Mst::merkle_proof_for(&self, &str) -> core::option::Option<benten_sync::mst::MerkleProof>
 pub fn benten_sync::mst::Mst::new() -> Self
 pub fn benten_sync::mst::Mst::root_cid(&self) -> benten_sync::mst::MstCid
 impl core::clone::Clone for benten_sync::mst::Mst
@@ -599,7 +666,7 @@ pub fn benten_sync::mst::Mst::clone(&self) -> benten_sync::mst::Mst
 impl core::default::Default for benten_sync::mst::Mst
 pub fn benten_sync::mst::Mst::default() -> benten_sync::mst::Mst
 impl core::fmt::Debug for benten_sync::mst::Mst
-pub fn benten_sync::mst::Mst::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::mst::Mst::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::mst::Mst
 impl core::marker::Send for benten_sync::mst::Mst
 impl core::marker::Sync for benten_sync::mst::Mst
@@ -609,30 +676,30 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::mst::Mst
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::mst::Mst
 pub struct benten_sync::mst::MstCid(pub [u8; 32])
 impl benten_sync::mst::MstCid
-pub fn benten_sync::mst::MstCid::from_blake3_digest(digest: [u8; 32]) -> Self
-pub fn benten_sync::mst::MstCid::from_bytes(bytes: &[u8]) -> Self
+pub fn benten_sync::mst::MstCid::from_blake3_digest([u8; 32]) -> Self
+pub fn benten_sync::mst::MstCid::from_bytes(&[u8]) -> Self
 pub fn benten_sync::mst::MstCid::to_hex(&self) -> alloc::string::String
 impl core::clone::Clone for benten_sync::mst::MstCid
 pub fn benten_sync::mst::MstCid::clone(&self) -> benten_sync::mst::MstCid
 impl core::cmp::Eq for benten_sync::mst::MstCid
 impl core::cmp::Ord for benten_sync::mst::MstCid
-pub fn benten_sync::mst::MstCid::cmp(&self, other: &benten_sync::mst::MstCid) -> core::cmp::Ordering
+pub fn benten_sync::mst::MstCid::cmp(&self, &benten_sync::mst::MstCid) -> core::cmp::Ordering
 impl core::cmp::PartialEq for benten_sync::mst::MstCid
-pub fn benten_sync::mst::MstCid::eq(&self, other: &benten_sync::mst::MstCid) -> bool
+pub fn benten_sync::mst::MstCid::eq(&self, &benten_sync::mst::MstCid) -> bool
 impl core::cmp::PartialOrd for benten_sync::mst::MstCid
-pub fn benten_sync::mst::MstCid::partial_cmp(&self, other: &benten_sync::mst::MstCid) -> core::option::Option<core::cmp::Ordering>
+pub fn benten_sync::mst::MstCid::partial_cmp(&self, &benten_sync::mst::MstCid) -> core::option::Option<core::cmp::Ordering>
 impl core::fmt::Debug for benten_sync::mst::MstCid
-pub fn benten_sync::mst::MstCid::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::mst::MstCid::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_sync::mst::MstCid
-pub fn benten_sync::mst::MstCid::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::mst::MstCid::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::hash::Hash for benten_sync::mst::MstCid
-pub fn benten_sync::mst::MstCid::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+pub fn benten_sync::mst::MstCid::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::Copy for benten_sync::mst::MstCid
 impl core::marker::StructuralPartialEq for benten_sync::mst::MstCid
 impl serde_core::ser::Serialize for benten_sync::mst::MstCid
-pub fn benten_sync::mst::MstCid::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_sync::mst::MstCid::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_sync::mst::MstCid
-pub fn benten_sync::mst::MstCid::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_sync::mst::MstCid::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_sync::mst::MstCid
 impl core::marker::Send for benten_sync::mst::MstCid
 impl core::marker::Sync for benten_sync::mst::MstCid
@@ -644,16 +711,16 @@ pub struct benten_sync::mst::MstDiff
 pub benten_sync::mst::MstDiff::missing_in_a: alloc::vec::Vec<benten_sync::mst::MstEntry>
 pub benten_sync::mst::MstDiff::missing_in_b: alloc::vec::Vec<benten_sync::mst::MstEntry>
 impl benten_sync::mst::MstDiff
-pub fn benten_sync::mst::MstDiff::between(a: &benten_sync::mst::Mst, b: &benten_sync::mst::Mst) -> Self
+pub fn benten_sync::mst::MstDiff::between(&benten_sync::mst::Mst, &benten_sync::mst::Mst) -> Self
 impl core::clone::Clone for benten_sync::mst::MstDiff
 pub fn benten_sync::mst::MstDiff::clone(&self) -> benten_sync::mst::MstDiff
 impl core::cmp::Eq for benten_sync::mst::MstDiff
 impl core::cmp::PartialEq for benten_sync::mst::MstDiff
-pub fn benten_sync::mst::MstDiff::eq(&self, other: &benten_sync::mst::MstDiff) -> bool
+pub fn benten_sync::mst::MstDiff::eq(&self, &benten_sync::mst::MstDiff) -> bool
 impl core::default::Default for benten_sync::mst::MstDiff
 pub fn benten_sync::mst::MstDiff::default() -> benten_sync::mst::MstDiff
 impl core::fmt::Debug for benten_sync::mst::MstDiff
-pub fn benten_sync::mst::MstDiff::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::mst::MstDiff::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_sync::mst::MstDiff
 impl core::marker::Freeze for benten_sync::mst::MstDiff
 impl core::marker::Send for benten_sync::mst::MstDiff
@@ -667,19 +734,19 @@ pub benten_sync::mst::MstEntry::cid: benten_sync::mst::MstCid
 pub benten_sync::mst::MstEntry::key: alloc::string::String
 pub benten_sync::mst::MstEntry::payload: alloc::vec::Vec<u8>
 impl benten_sync::mst::MstEntry
-pub fn benten_sync::mst::MstEntry::from_payload(key: impl core::convert::Into<alloc::string::String>, payload: alloc::vec::Vec<u8>) -> Self
+pub fn benten_sync::mst::MstEntry::from_payload(impl core::convert::Into<alloc::string::String>, alloc::vec::Vec<u8>) -> Self
 impl core::clone::Clone for benten_sync::mst::MstEntry
 pub fn benten_sync::mst::MstEntry::clone(&self) -> benten_sync::mst::MstEntry
 impl core::cmp::Eq for benten_sync::mst::MstEntry
 impl core::cmp::PartialEq for benten_sync::mst::MstEntry
-pub fn benten_sync::mst::MstEntry::eq(&self, other: &benten_sync::mst::MstEntry) -> bool
+pub fn benten_sync::mst::MstEntry::eq(&self, &benten_sync::mst::MstEntry) -> bool
 impl core::fmt::Debug for benten_sync::mst::MstEntry
-pub fn benten_sync::mst::MstEntry::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::mst::MstEntry::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_sync::mst::MstEntry
 impl serde_core::ser::Serialize for benten_sync::mst::MstEntry
-pub fn benten_sync::mst::MstEntry::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_sync::mst::MstEntry::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_sync::mst::MstEntry
-pub fn benten_sync::mst::MstEntry::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_sync::mst::MstEntry::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_sync::mst::MstEntry
 impl core::marker::Send for benten_sync::mst::MstEntry
 impl core::marker::Sync for benten_sync::mst::MstEntry
@@ -687,32 +754,32 @@ impl core::marker::Unpin for benten_sync::mst::MstEntry
 impl core::marker::UnsafeUnpin for benten_sync::mst::MstEntry
 impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::mst::MstEntry
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::mst::MstEntry
-pub fn benten_sync::mst::run_mst_diff_to_convergence(mst_a: &mut benten_sync::mst::Mst, mst_b: &mut benten_sync::mst::Mst) -> core::result::Result<usize, benten_sync::mst::MstError>
+pub fn benten_sync::mst::run_mst_diff_to_convergence(&mut benten_sync::mst::Mst, &mut benten_sync::mst::Mst) -> core::result::Result<usize, benten_sync::mst::MstError>
 pub mod benten_sync::mst_proto
 #[non_exhaustive] #[repr(u8)] pub enum benten_sync::mst_proto::MessageKind
 pub benten_sync::mst_proto::MessageKind::Data = 1
 pub benten_sync::mst_proto::MessageKind::Revocation = 0
 impl benten_sync::mst_proto::MessageKind
-pub fn benten_sync::mst_proto::MessageKind::from_u8(b: u8) -> core::result::Result<Self, benten_sync::errors::AtriumTransportError>
+pub fn benten_sync::mst_proto::MessageKind::from_u8(u8) -> core::result::Result<Self, benten_sync::errors::AtriumTransportError>
 impl core::clone::Clone for benten_sync::mst_proto::MessageKind
 pub fn benten_sync::mst_proto::MessageKind::clone(&self) -> benten_sync::mst_proto::MessageKind
 impl core::cmp::Eq for benten_sync::mst_proto::MessageKind
 impl core::cmp::Ord for benten_sync::mst_proto::MessageKind
-pub fn benten_sync::mst_proto::MessageKind::cmp(&self, other: &benten_sync::mst_proto::MessageKind) -> core::cmp::Ordering
+pub fn benten_sync::mst_proto::MessageKind::cmp(&self, &benten_sync::mst_proto::MessageKind) -> core::cmp::Ordering
 impl core::cmp::PartialEq for benten_sync::mst_proto::MessageKind
-pub fn benten_sync::mst_proto::MessageKind::eq(&self, other: &benten_sync::mst_proto::MessageKind) -> bool
+pub fn benten_sync::mst_proto::MessageKind::eq(&self, &benten_sync::mst_proto::MessageKind) -> bool
 impl core::cmp::PartialOrd for benten_sync::mst_proto::MessageKind
-pub fn benten_sync::mst_proto::MessageKind::partial_cmp(&self, other: &benten_sync::mst_proto::MessageKind) -> core::option::Option<core::cmp::Ordering>
+pub fn benten_sync::mst_proto::MessageKind::partial_cmp(&self, &benten_sync::mst_proto::MessageKind) -> core::option::Option<core::cmp::Ordering>
 impl core::fmt::Debug for benten_sync::mst_proto::MessageKind
-pub fn benten_sync::mst_proto::MessageKind::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::mst_proto::MessageKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::hash::Hash for benten_sync::mst_proto::MessageKind
-pub fn benten_sync::mst_proto::MessageKind::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+pub fn benten_sync::mst_proto::MessageKind::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::Copy for benten_sync::mst_proto::MessageKind
 impl core::marker::StructuralPartialEq for benten_sync::mst_proto::MessageKind
 impl serde_core::ser::Serialize for benten_sync::mst_proto::MessageKind
-pub fn benten_sync::mst_proto::MessageKind::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_sync::mst_proto::MessageKind::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_sync::mst_proto::MessageKind
-pub fn benten_sync::mst_proto::MessageKind::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_sync::mst_proto::MessageKind::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_sync::mst_proto::MessageKind
 impl core::marker::Send for benten_sync::mst_proto::MessageKind
 impl core::marker::Sync for benten_sync::mst_proto::MessageKind
@@ -725,22 +792,22 @@ pub benten_sync::mst_proto::MstDiffFrame::messages: alloc::vec::Vec<benten_sync:
 pub benten_sync::mst_proto::MstDiffFrame::round: u32
 pub benten_sync::mst_proto::MstDiffFrame::version: u8
 impl benten_sync::mst_proto::MstDiffFrame
-pub fn benten_sync::mst_proto::MstDiffFrame::from_canonical_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_sync::errors::AtriumTransportError>
-pub fn benten_sync::mst_proto::MstDiffFrame::new(round: u32) -> Self
-pub fn benten_sync::mst_proto::MstDiffFrame::push(&mut self, msg: benten_sync::mst_proto::MstDiffMessage)
+pub fn benten_sync::mst_proto::MstDiffFrame::from_canonical_bytes(&[u8]) -> core::result::Result<Self, benten_sync::errors::AtriumTransportError>
+pub fn benten_sync::mst_proto::MstDiffFrame::new(u32) -> Self
+pub fn benten_sync::mst_proto::MstDiffFrame::push(&mut self, benten_sync::mst_proto::MstDiffMessage)
 pub fn benten_sync::mst_proto::MstDiffFrame::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_sync::errors::AtriumTransportError>
 impl core::clone::Clone for benten_sync::mst_proto::MstDiffFrame
 pub fn benten_sync::mst_proto::MstDiffFrame::clone(&self) -> benten_sync::mst_proto::MstDiffFrame
 impl core::cmp::Eq for benten_sync::mst_proto::MstDiffFrame
 impl core::cmp::PartialEq for benten_sync::mst_proto::MstDiffFrame
-pub fn benten_sync::mst_proto::MstDiffFrame::eq(&self, other: &benten_sync::mst_proto::MstDiffFrame) -> bool
+pub fn benten_sync::mst_proto::MstDiffFrame::eq(&self, &benten_sync::mst_proto::MstDiffFrame) -> bool
 impl core::fmt::Debug for benten_sync::mst_proto::MstDiffFrame
-pub fn benten_sync::mst_proto::MstDiffFrame::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::mst_proto::MstDiffFrame::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_sync::mst_proto::MstDiffFrame
 impl serde_core::ser::Serialize for benten_sync::mst_proto::MstDiffFrame
-pub fn benten_sync::mst_proto::MstDiffFrame::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_sync::mst_proto::MstDiffFrame::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_sync::mst_proto::MstDiffFrame
-pub fn benten_sync::mst_proto::MstDiffFrame::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_sync::mst_proto::MstDiffFrame::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_sync::mst_proto::MstDiffFrame
 impl core::marker::Send for benten_sync::mst_proto::MstDiffFrame
 impl core::marker::Sync for benten_sync::mst_proto::MstDiffFrame
@@ -753,22 +820,22 @@ pub benten_sync::mst_proto::MstDiffMessage::cid: benten_sync::mst::MstCid
 pub benten_sync::mst_proto::MstDiffMessage::kind: benten_sync::mst_proto::MessageKind
 pub benten_sync::mst_proto::MstDiffMessage::payload: alloc::vec::Vec<u8>
 impl benten_sync::mst_proto::MstDiffMessage
-pub fn benten_sync::mst_proto::MstDiffMessage::data(cid: benten_sync::mst::MstCid, payload: alloc::vec::Vec<u8>) -> Self
-pub fn benten_sync::mst_proto::MstDiffMessage::from_canonical_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_sync::errors::AtriumTransportError>
-pub fn benten_sync::mst_proto::MstDiffMessage::revocation(cid: benten_sync::mst::MstCid, reason: impl core::convert::Into<alloc::vec::Vec<u8>>) -> Self
+pub fn benten_sync::mst_proto::MstDiffMessage::data(benten_sync::mst::MstCid, alloc::vec::Vec<u8>) -> Self
+pub fn benten_sync::mst_proto::MstDiffMessage::from_canonical_bytes(&[u8]) -> core::result::Result<Self, benten_sync::errors::AtriumTransportError>
+pub fn benten_sync::mst_proto::MstDiffMessage::revocation(benten_sync::mst::MstCid, impl core::convert::Into<alloc::vec::Vec<u8>>) -> Self
 pub fn benten_sync::mst_proto::MstDiffMessage::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_sync::errors::AtriumTransportError>
 impl core::clone::Clone for benten_sync::mst_proto::MstDiffMessage
 pub fn benten_sync::mst_proto::MstDiffMessage::clone(&self) -> benten_sync::mst_proto::MstDiffMessage
 impl core::cmp::Eq for benten_sync::mst_proto::MstDiffMessage
 impl core::cmp::PartialEq for benten_sync::mst_proto::MstDiffMessage
-pub fn benten_sync::mst_proto::MstDiffMessage::eq(&self, other: &benten_sync::mst_proto::MstDiffMessage) -> bool
+pub fn benten_sync::mst_proto::MstDiffMessage::eq(&self, &benten_sync::mst_proto::MstDiffMessage) -> bool
 impl core::fmt::Debug for benten_sync::mst_proto::MstDiffMessage
-pub fn benten_sync::mst_proto::MstDiffMessage::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::mst_proto::MstDiffMessage::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_sync::mst_proto::MstDiffMessage
 impl serde_core::ser::Serialize for benten_sync::mst_proto::MstDiffMessage
-pub fn benten_sync::mst_proto::MstDiffMessage::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_sync::mst_proto::MstDiffMessage::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_sync::mst_proto::MstDiffMessage
-pub fn benten_sync::mst_proto::MstDiffMessage::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_sync::mst_proto::MstDiffMessage::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_sync::mst_proto::MstDiffMessage
 impl core::marker::Send for benten_sync::mst_proto::MstDiffMessage
 impl core::marker::Sync for benten_sync::mst_proto::MstDiffMessage
@@ -779,15 +846,15 @@ impl core::panic::unwind_safe::UnwindSafe for benten_sync::mst_proto::MstDiffMes
 pub struct benten_sync::mst_proto::MstDiffSession
 impl benten_sync::mst_proto::MstDiffSession
 pub fn benten_sync::mst_proto::MstDiffSession::drain(&mut self) -> alloc::vec::Vec<benten_sync::mst_proto::MstDiffMessage>
-pub fn benten_sync::mst_proto::MstDiffSession::enqueue(&mut self, msg: benten_sync::mst_proto::MstDiffMessage)
-pub fn benten_sync::mst_proto::MstDiffSession::enqueue_frame(&mut self, frame: benten_sync::mst_proto::MstDiffFrame)
+pub fn benten_sync::mst_proto::MstDiffSession::enqueue(&mut self, benten_sync::mst_proto::MstDiffMessage)
+pub fn benten_sync::mst_proto::MstDiffSession::enqueue_frame(&mut self, benten_sync::mst_proto::MstDiffFrame)
 pub fn benten_sync::mst_proto::MstDiffSession::new() -> Self
 pub fn benten_sync::mst_proto::MstDiffSession::pending_data(&self) -> usize
 pub fn benten_sync::mst_proto::MstDiffSession::pending_revocations(&self) -> usize
 impl core::default::Default for benten_sync::mst_proto::MstDiffSession
 pub fn benten_sync::mst_proto::MstDiffSession::default() -> benten_sync::mst_proto::MstDiffSession
 impl core::fmt::Debug for benten_sync::mst_proto::MstDiffSession
-pub fn benten_sync::mst_proto::MstDiffSession::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::mst_proto::MstDiffSession::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::mst_proto::MstDiffSession
 impl core::marker::Send for benten_sync::mst_proto::MstDiffSession
 impl core::marker::Sync for benten_sync::mst_proto::MstDiffSession
@@ -802,16 +869,16 @@ pub benten_sync::peer_discovery::BootstrapMode::CustomPeerList(alloc::vec::Vec<i
 pub benten_sync::peer_discovery::BootstrapMode::DefaultRelay
 pub benten_sync::peer_discovery::BootstrapMode::Disabled
 impl benten_sync::peer_discovery::BootstrapMode
-pub fn benten_sync::peer_discovery::BootstrapMode::custom_peer_list_from_strs(urls: &[&str]) -> benten_sync::errors::AtriumTransportResult<Self>
+pub fn benten_sync::peer_discovery::BootstrapMode::custom_peer_list_from_strs(&[&str]) -> benten_sync::errors::AtriumTransportResult<Self>
 pub fn benten_sync::peer_discovery::BootstrapMode::operator_observability_disclosure(&self) -> &'static str
 pub fn benten_sync::peer_discovery::BootstrapMode::to_iroh_relay_mode(&self) -> iroh::endpoint::RelayMode
 impl core::clone::Clone for benten_sync::peer_discovery::BootstrapMode
 pub fn benten_sync::peer_discovery::BootstrapMode::clone(&self) -> benten_sync::peer_discovery::BootstrapMode
 impl core::cmp::Eq for benten_sync::peer_discovery::BootstrapMode
 impl core::cmp::PartialEq for benten_sync::peer_discovery::BootstrapMode
-pub fn benten_sync::peer_discovery::BootstrapMode::eq(&self, other: &benten_sync::peer_discovery::BootstrapMode) -> bool
+pub fn benten_sync::peer_discovery::BootstrapMode::eq(&self, &benten_sync::peer_discovery::BootstrapMode) -> bool
 impl core::fmt::Debug for benten_sync::peer_discovery::BootstrapMode
-pub fn benten_sync::peer_discovery::BootstrapMode::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::peer_discovery::BootstrapMode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_sync::peer_discovery::BootstrapMode
 impl core::marker::Freeze for benten_sync::peer_discovery::BootstrapMode
 impl core::marker::Send for benten_sync::peer_discovery::BootstrapMode
@@ -823,13 +890,13 @@ impl core::panic::unwind_safe::UnwindSafe for benten_sync::peer_discovery::Boots
 pub struct benten_sync::peer_discovery::PeerDiscoveryConfig
 pub benten_sync::peer_discovery::PeerDiscoveryConfig::bootstrap: benten_sync::peer_discovery::BootstrapMode
 impl benten_sync::peer_discovery::PeerDiscoveryConfig
-pub fn benten_sync::peer_discovery::PeerDiscoveryConfig::custom_peer_list(urls: alloc::vec::Vec<iroh_base::relay_url::RelayUrl>) -> Self
+pub fn benten_sync::peer_discovery::PeerDiscoveryConfig::custom_peer_list(alloc::vec::Vec<iroh_base::relay_url::RelayUrl>) -> Self
 pub fn benten_sync::peer_discovery::PeerDiscoveryConfig::default_relay() -> Self
 pub fn benten_sync::peer_discovery::PeerDiscoveryConfig::disabled() -> Self
 impl core::clone::Clone for benten_sync::peer_discovery::PeerDiscoveryConfig
 pub fn benten_sync::peer_discovery::PeerDiscoveryConfig::clone(&self) -> benten_sync::peer_discovery::PeerDiscoveryConfig
 impl core::fmt::Debug for benten_sync::peer_discovery::PeerDiscoveryConfig
-pub fn benten_sync::peer_discovery::PeerDiscoveryConfig::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::peer_discovery::PeerDiscoveryConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::peer_discovery::PeerDiscoveryConfig
 impl core::marker::Send for benten_sync::peer_discovery::PeerDiscoveryConfig
 impl core::marker::Sync for benten_sync::peer_discovery::PeerDiscoveryConfig
@@ -837,14 +904,14 @@ impl core::marker::Unpin for benten_sync::peer_discovery::PeerDiscoveryConfig
 impl core::marker::UnsafeUnpin for benten_sync::peer_discovery::PeerDiscoveryConfig
 impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::peer_discovery::PeerDiscoveryConfig
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::peer_discovery::PeerDiscoveryConfig
-pub async fn benten_sync::peer_discovery::bind_atrium_peer(keypair: &benten_id::keypair::Keypair, config: &benten_sync::peer_discovery::PeerDiscoveryConfig) -> benten_sync::errors::AtriumTransportResult<benten_sync::transport::Endpoint>
+pub async fn benten_sync::peer_discovery::bind_atrium_peer(&benten_id::keypair::Keypair, &benten_sync::peer_discovery::PeerDiscoveryConfig) -> benten_sync::errors::AtriumTransportResult<benten_sync::transport::Endpoint>
 pub mod benten_sync::peer_id
 pub struct benten_sync::peer_id::PeerId
 impl benten_sync::peer_id::PeerId
 pub fn benten_sync::peer_id::PeerId::as_bytes(&self) -> &[u8; 32]
-pub fn benten_sync::peer_id::PeerId::from_bytes(bytes: [u8; 32]) -> Self
-pub fn benten_sync::peer_id::PeerId::from_dag_cbor_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_sync::peer_id::PeerIdDecodeError>
-pub fn benten_sync::peer_id::PeerId::from_public_key(pk: &benten_id::keypair::PublicKey) -> Self
+pub fn benten_sync::peer_id::PeerId::from_bytes([u8; 32]) -> Self
+pub fn benten_sync::peer_id::PeerId::from_dag_cbor_bytes(&[u8]) -> core::result::Result<Self, benten_sync::peer_id::PeerIdDecodeError>
+pub fn benten_sync::peer_id::PeerId::from_public_key(&benten_id::keypair::PublicKey) -> Self
 pub fn benten_sync::peer_id::PeerId::to_bytes(&self) -> [u8; 32]
 pub fn benten_sync::peer_id::PeerId::to_canonical_bytes(&self) -> alloc::vec::Vec<u8>
 pub fn benten_sync::peer_id::PeerId::to_dag_cbor_bytes(&self) -> alloc::vec::Vec<u8>
@@ -852,21 +919,21 @@ impl core::clone::Clone for benten_sync::peer_id::PeerId
 pub fn benten_sync::peer_id::PeerId::clone(&self) -> benten_sync::peer_id::PeerId
 impl core::cmp::Eq for benten_sync::peer_id::PeerId
 impl core::cmp::Ord for benten_sync::peer_id::PeerId
-pub fn benten_sync::peer_id::PeerId::cmp(&self, other: &benten_sync::peer_id::PeerId) -> core::cmp::Ordering
+pub fn benten_sync::peer_id::PeerId::cmp(&self, &benten_sync::peer_id::PeerId) -> core::cmp::Ordering
 impl core::cmp::PartialEq for benten_sync::peer_id::PeerId
-pub fn benten_sync::peer_id::PeerId::eq(&self, other: &benten_sync::peer_id::PeerId) -> bool
+pub fn benten_sync::peer_id::PeerId::eq(&self, &benten_sync::peer_id::PeerId) -> bool
 impl core::cmp::PartialOrd for benten_sync::peer_id::PeerId
-pub fn benten_sync::peer_id::PeerId::partial_cmp(&self, other: &benten_sync::peer_id::PeerId) -> core::option::Option<core::cmp::Ordering>
+pub fn benten_sync::peer_id::PeerId::partial_cmp(&self, &benten_sync::peer_id::PeerId) -> core::option::Option<core::cmp::Ordering>
 impl core::fmt::Debug for benten_sync::peer_id::PeerId
-pub fn benten_sync::peer_id::PeerId::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::peer_id::PeerId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::hash::Hash for benten_sync::peer_id::PeerId
-pub fn benten_sync::peer_id::PeerId::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+pub fn benten_sync::peer_id::PeerId::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::Copy for benten_sync::peer_id::PeerId
 impl core::marker::StructuralPartialEq for benten_sync::peer_id::PeerId
 impl serde_core::ser::Serialize for benten_sync::peer_id::PeerId
-pub fn benten_sync::peer_id::PeerId::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_sync::peer_id::PeerId::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_sync::peer_id::PeerId
-pub fn benten_sync::peer_id::PeerId::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_sync::peer_id::PeerId::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_sync::peer_id::PeerId
 impl core::marker::Send for benten_sync::peer_id::PeerId
 impl core::marker::Sync for benten_sync::peer_id::PeerId
@@ -878,9 +945,9 @@ pub struct benten_sync::peer_id::PeerIdDecodeError
 pub benten_sync::peer_id::PeerIdDecodeError::reason: alloc::string::String
 impl core::error::Error for benten_sync::peer_id::PeerIdDecodeError
 impl core::fmt::Debug for benten_sync::peer_id::PeerIdDecodeError
-pub fn benten_sync::peer_id::PeerIdDecodeError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::peer_id::PeerIdDecodeError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_sync::peer_id::PeerIdDecodeError
-pub fn benten_sync::peer_id::PeerIdDecodeError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::peer_id::PeerIdDecodeError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::peer_id::PeerIdDecodeError
 impl core::marker::Send for benten_sync::peer_id::PeerIdDecodeError
 impl core::marker::Sync for benten_sync::peer_id::PeerIdDecodeError
@@ -897,9 +964,9 @@ impl core::clone::Clone for benten_sync::transport::TransportKind
 pub fn benten_sync::transport::TransportKind::clone(&self) -> benten_sync::transport::TransportKind
 impl core::cmp::Eq for benten_sync::transport::TransportKind
 impl core::cmp::PartialEq for benten_sync::transport::TransportKind
-pub fn benten_sync::transport::TransportKind::eq(&self, other: &benten_sync::transport::TransportKind) -> bool
+pub fn benten_sync::transport::TransportKind::eq(&self, &benten_sync::transport::TransportKind) -> bool
 impl core::fmt::Debug for benten_sync::transport::TransportKind
-pub fn benten_sync::transport::TransportKind::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::transport::TransportKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for benten_sync::transport::TransportKind
 impl core::marker::StructuralPartialEq for benten_sync::transport::TransportKind
 impl core::marker::Freeze for benten_sync::transport::TransportKind
@@ -921,9 +988,9 @@ impl core::clone::Clone for benten_sync::transport::TransportStatus
 pub fn benten_sync::transport::TransportStatus::clone(&self) -> benten_sync::transport::TransportStatus
 impl core::cmp::Eq for benten_sync::transport::TransportStatus
 impl core::cmp::PartialEq for benten_sync::transport::TransportStatus
-pub fn benten_sync::transport::TransportStatus::eq(&self, other: &benten_sync::transport::TransportStatus) -> bool
+pub fn benten_sync::transport::TransportStatus::eq(&self, &benten_sync::transport::TransportStatus) -> bool
 impl core::fmt::Debug for benten_sync::transport::TransportStatus
-pub fn benten_sync::transport::TransportStatus::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::transport::TransportStatus::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_sync::transport::TransportStatus
 impl core::marker::Freeze for benten_sync::transport::TransportStatus
 impl core::marker::Send for benten_sync::transport::TransportStatus
@@ -937,16 +1004,16 @@ impl benten_sync::transport::Connection
 pub fn benten_sync::transport::Connection::close(self)
 pub async fn benten_sync::transport::Connection::recv_bytes(&self) -> benten_sync::errors::AtriumTransportResult<alloc::vec::Vec<u8>>
 pub fn benten_sync::transport::Connection::remote_peer(&self) -> benten_sync::peer_id::PeerId
-pub async fn benten_sync::transport::Connection::send_bytes(&self, payload: &[u8]) -> benten_sync::errors::AtriumTransportResult<()>
+pub async fn benten_sync::transport::Connection::send_bytes(&self, &[u8]) -> benten_sync::errors::AtriumTransportResult<()>
 pub fn benten_sync::transport::Connection::transport_kind(&self) -> benten_sync::transport::TransportKind
 impl benten_sync::transport_trait::TransportConnection for benten_sync::transport::Connection
 pub fn benten_sync::transport::Connection::close(self)
 pub async fn benten_sync::transport::Connection::recv_bytes(&self) -> benten_sync::errors::AtriumTransportResult<alloc::vec::Vec<u8>>
 pub fn benten_sync::transport::Connection::remote_peer(&self) -> benten_sync::peer_id::PeerId
-pub async fn benten_sync::transport::Connection::send_bytes(&self, payload: &[u8]) -> benten_sync::errors::AtriumTransportResult<()>
+pub async fn benten_sync::transport::Connection::send_bytes(&self, &[u8]) -> benten_sync::errors::AtriumTransportResult<()>
 pub fn benten_sync::transport::Connection::transport_kind(&self) -> benten_sync::transport::TransportKind
 impl core::fmt::Debug for benten_sync::transport::Connection
-pub fn benten_sync::transport::Connection::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::transport::Connection::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::transport::Connection
 impl core::marker::Send for benten_sync::transport::Connection
 impl core::marker::Sync for benten_sync::transport::Connection
@@ -958,30 +1025,30 @@ pub struct benten_sync::transport::Endpoint
 impl benten_sync::transport::Endpoint
 pub async fn benten_sync::transport::Endpoint::accept_next(&self) -> benten_sync::errors::AtriumTransportResult<benten_sync::transport::Connection>
 pub async fn benten_sync::transport::Endpoint::bind_loopback() -> benten_sync::errors::AtriumTransportResult<Self>
-pub async fn benten_sync::transport::Endpoint::bind_loopback_with_keypair(keypair: &benten_id::keypair::Keypair) -> benten_sync::errors::AtriumTransportResult<Self>
-pub async fn benten_sync::transport::Endpoint::bind_with_keypair(keypair: &benten_id::keypair::Keypair) -> benten_sync::errors::AtriumTransportResult<Self>
-pub async fn benten_sync::transport::Endpoint::bind_with_relay_url(keypair: &benten_id::keypair::Keypair, relay_url: &str) -> benten_sync::errors::AtriumTransportResult<Self>
+pub async fn benten_sync::transport::Endpoint::bind_loopback_with_keypair(&benten_id::keypair::Keypair) -> benten_sync::errors::AtriumTransportResult<Self>
+pub async fn benten_sync::transport::Endpoint::bind_with_keypair(&benten_id::keypair::Keypair) -> benten_sync::errors::AtriumTransportResult<Self>
+pub async fn benten_sync::transport::Endpoint::bind_with_relay_url(&benten_id::keypair::Keypair, &str) -> benten_sync::errors::AtriumTransportResult<Self>
 pub async fn benten_sync::transport::Endpoint::close(self)
-pub async fn benten_sync::transport::Endpoint::connect(&self, remote: benten_sync::peer_id::PeerId) -> benten_sync::errors::AtriumTransportResult<benten_sync::transport::Connection>
-pub async fn benten_sync::transport::Endpoint::connect_to_addr(&self, remote_addr: iroh_base::endpoint_addr::EndpointAddr) -> benten_sync::errors::AtriumTransportResult<benten_sync::transport::Connection>
-pub fn benten_sync::transport::Endpoint::from_iroh_parts(inner: iroh::endpoint::Endpoint, peer_id: benten_sync::peer_id::PeerId, bootstrap: &benten_sync::peer_discovery::BootstrapMode) -> Self
+pub async fn benten_sync::transport::Endpoint::connect(&self, benten_sync::peer_id::PeerId) -> benten_sync::errors::AtriumTransportResult<benten_sync::transport::Connection>
+pub async fn benten_sync::transport::Endpoint::connect_to_addr(&self, iroh_base::endpoint_addr::EndpointAddr) -> benten_sync::errors::AtriumTransportResult<benten_sync::transport::Connection>
+pub fn benten_sync::transport::Endpoint::from_iroh_parts(iroh::endpoint::Endpoint, benten_sync::peer_id::PeerId, &benten_sync::peer_discovery::BootstrapMode) -> Self
 pub fn benten_sync::transport::Endpoint::loopback_addr(&self) -> benten_sync::errors::AtriumTransportResult<iroh_base::endpoint_addr::EndpointAddr>
-pub async fn benten_sync::transport::Endpoint::mark_degraded(&self, reason: impl core::convert::Into<alloc::string::String>)
+pub async fn benten_sync::transport::Endpoint::mark_degraded(&self, impl core::convert::Into<alloc::string::String>)
 pub fn benten_sync::transport::Endpoint::peer_id(&self) -> benten_sync::peer_id::PeerId
-pub async fn benten_sync::transport::Endpoint::simulate_packet_loss(&self, fraction: f32)
+pub async fn benten_sync::transport::Endpoint::simulate_packet_loss(&self, f32)
 pub async fn benten_sync::transport::Endpoint::transport_status(&self) -> benten_sync::transport::TransportStatus
 impl benten_sync::transport_trait::TransportEndpoint for benten_sync::transport::Endpoint
 pub type benten_sync::transport::Endpoint::Addr = iroh_base::endpoint_addr::EndpointAddr
 pub type benten_sync::transport::Endpoint::Connection = benten_sync::transport::Connection
 pub async fn benten_sync::transport::Endpoint::accept_next(&self) -> benten_sync::errors::AtriumTransportResult<Self::Connection>
 pub async fn benten_sync::transport::Endpoint::close(self)
-pub async fn benten_sync::transport::Endpoint::connect(&self, remote: benten_sync::peer_id::PeerId) -> benten_sync::errors::AtriumTransportResult<Self::Connection>
-pub async fn benten_sync::transport::Endpoint::connect_to_addr(&self, remote_addr: Self::Addr) -> benten_sync::errors::AtriumTransportResult<Self::Connection>
+pub async fn benten_sync::transport::Endpoint::connect(&self, benten_sync::peer_id::PeerId) -> benten_sync::errors::AtriumTransportResult<Self::Connection>
+pub async fn benten_sync::transport::Endpoint::connect_to_addr(&self, Self::Addr) -> benten_sync::errors::AtriumTransportResult<Self::Connection>
 pub fn benten_sync::transport::Endpoint::loopback_addr(&self) -> benten_sync::errors::AtriumTransportResult<Self::Addr>
 pub fn benten_sync::transport::Endpoint::peer_id(&self) -> benten_sync::peer_id::PeerId
 pub async fn benten_sync::transport::Endpoint::transport_status(&self) -> benten_sync::transport::TransportStatus
 impl core::fmt::Debug for benten_sync::transport::Endpoint
-pub fn benten_sync::transport::Endpoint::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::transport::Endpoint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::transport::Endpoint
 impl core::marker::Send for benten_sync::transport::Endpoint
 impl core::marker::Sync for benten_sync::transport::Endpoint
@@ -991,6 +1058,48 @@ impl !core::panic::unwind_safe::RefUnwindSafe for benten_sync::transport::Endpoi
 impl !core::panic::unwind_safe::UnwindSafe for benten_sync::transport::Endpoint
 pub const benten_sync::transport::ATRIUM_ALPN: &[u8]
 pub async fn benten_sync::transport::wait_briefly_for_home()
+pub mod benten_sync::transport_config
+#[non_exhaustive] pub enum benten_sync::transport_config::TransportConfig
+pub benten_sync::transport_config::TransportConfig::GossipPlusBlobs
+pub benten_sync::transport_config::TransportConfig::IrohLive
+pub benten_sync::transport_config::TransportConfig::IrohRoq
+pub benten_sync::transport_config::TransportConfig::Willow
+impl benten_sync::transport_config::TransportConfig
+pub fn benten_sync::transport_config::TransportConfig::select(self) -> core::result::Result<&'static str, benten_sync::transport_config::TransportError>
+pub const fn benten_sync::transport_config::TransportConfig::ships_at_v1_beta(self) -> bool
+impl core::clone::Clone for benten_sync::transport_config::TransportConfig
+pub fn benten_sync::transport_config::TransportConfig::clone(&self) -> benten_sync::transport_config::TransportConfig
+impl core::cmp::Eq for benten_sync::transport_config::TransportConfig
+impl core::cmp::PartialEq for benten_sync::transport_config::TransportConfig
+pub fn benten_sync::transport_config::TransportConfig::eq(&self, &benten_sync::transport_config::TransportConfig) -> bool
+impl core::fmt::Debug for benten_sync::transport_config::TransportConfig
+pub fn benten_sync::transport_config::TransportConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_sync::transport_config::TransportConfig
+impl core::marker::StructuralPartialEq for benten_sync::transport_config::TransportConfig
+impl core::marker::Freeze for benten_sync::transport_config::TransportConfig
+impl core::marker::Send for benten_sync::transport_config::TransportConfig
+impl core::marker::Sync for benten_sync::transport_config::TransportConfig
+impl core::marker::Unpin for benten_sync::transport_config::TransportConfig
+impl core::marker::UnsafeUnpin for benten_sync::transport_config::TransportConfig
+impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::transport_config::TransportConfig
+impl core::panic::unwind_safe::UnwindSafe for benten_sync::transport_config::TransportConfig
+#[non_exhaustive] pub enum benten_sync::transport_config::TransportError
+pub benten_sync::transport_config::TransportError::TransportReservedAtV1Beta(&'static str)
+impl core::clone::Clone for benten_sync::transport_config::TransportError
+pub fn benten_sync::transport_config::TransportError::clone(&self) -> benten_sync::transport_config::TransportError
+impl core::cmp::Eq for benten_sync::transport_config::TransportError
+impl core::cmp::PartialEq for benten_sync::transport_config::TransportError
+pub fn benten_sync::transport_config::TransportError::eq(&self, &benten_sync::transport_config::TransportError) -> bool
+impl core::fmt::Debug for benten_sync::transport_config::TransportError
+pub fn benten_sync::transport_config::TransportError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_sync::transport_config::TransportError
+impl core::marker::Freeze for benten_sync::transport_config::TransportError
+impl core::marker::Send for benten_sync::transport_config::TransportError
+impl core::marker::Sync for benten_sync::transport_config::TransportError
+impl core::marker::Unpin for benten_sync::transport_config::TransportError
+impl core::marker::UnsafeUnpin for benten_sync::transport_config::TransportError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::transport_config::TransportError
+impl core::panic::unwind_safe::UnwindSafe for benten_sync::transport_config::TransportError
 pub mod benten_sync::transport_trait
 pub struct benten_sync::transport_trait::IrohTransport
 impl benten_sync::transport_trait::Transport for benten_sync::transport_trait::IrohTransport
@@ -1001,7 +1110,7 @@ pub fn benten_sync::transport_trait::IrohTransport::clone(&self) -> benten_sync:
 impl core::default::Default for benten_sync::transport_trait::IrohTransport
 pub fn benten_sync::transport_trait::IrohTransport::default() -> benten_sync::transport_trait::IrohTransport
 impl core::fmt::Debug for benten_sync::transport_trait::IrohTransport
-pub fn benten_sync::transport_trait::IrohTransport::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::transport_trait::IrohTransport::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for benten_sync::transport_trait::IrohTransport
 impl core::marker::Freeze for benten_sync::transport_trait::IrohTransport
 impl core::marker::Send for benten_sync::transport_trait::IrohTransport
@@ -1020,21 +1129,21 @@ pub trait benten_sync::transport_trait::TransportConnection: core::marker::Send 
 pub fn benten_sync::transport_trait::TransportConnection::close(self) where Self: core::marker::Sized
 pub async fn benten_sync::transport_trait::TransportConnection::recv_bytes(&self) -> benten_sync::errors::AtriumTransportResult<alloc::vec::Vec<u8>>
 pub fn benten_sync::transport_trait::TransportConnection::remote_peer(&self) -> benten_sync::peer_id::PeerId
-pub async fn benten_sync::transport_trait::TransportConnection::send_bytes(&self, payload: &[u8]) -> benten_sync::errors::AtriumTransportResult<()>
+pub async fn benten_sync::transport_trait::TransportConnection::send_bytes(&self, &[u8]) -> benten_sync::errors::AtriumTransportResult<()>
 pub fn benten_sync::transport_trait::TransportConnection::transport_kind(&self) -> benten_sync::transport::TransportKind
 impl benten_sync::transport_trait::TransportConnection for benten_sync::transport::Connection
 pub fn benten_sync::transport::Connection::close(self)
 pub async fn benten_sync::transport::Connection::recv_bytes(&self) -> benten_sync::errors::AtriumTransportResult<alloc::vec::Vec<u8>>
 pub fn benten_sync::transport::Connection::remote_peer(&self) -> benten_sync::peer_id::PeerId
-pub async fn benten_sync::transport::Connection::send_bytes(&self, payload: &[u8]) -> benten_sync::errors::AtriumTransportResult<()>
+pub async fn benten_sync::transport::Connection::send_bytes(&self, &[u8]) -> benten_sync::errors::AtriumTransportResult<()>
 pub fn benten_sync::transport::Connection::transport_kind(&self) -> benten_sync::transport::TransportKind
 pub trait benten_sync::transport_trait::TransportEndpoint: core::marker::Send + core::marker::Sync
 pub type benten_sync::transport_trait::TransportEndpoint::Addr: core::marker::Send + 'static
 pub type benten_sync::transport_trait::TransportEndpoint::Connection: benten_sync::transport_trait::TransportConnection
 pub async fn benten_sync::transport_trait::TransportEndpoint::accept_next(&self) -> benten_sync::errors::AtriumTransportResult<Self::Connection>
 pub async fn benten_sync::transport_trait::TransportEndpoint::close(self) where Self: core::marker::Sized
-pub async fn benten_sync::transport_trait::TransportEndpoint::connect(&self, remote: benten_sync::peer_id::PeerId) -> benten_sync::errors::AtriumTransportResult<Self::Connection>
-pub async fn benten_sync::transport_trait::TransportEndpoint::connect_to_addr(&self, remote_addr: Self::Addr) -> benten_sync::errors::AtriumTransportResult<Self::Connection>
+pub async fn benten_sync::transport_trait::TransportEndpoint::connect(&self, benten_sync::peer_id::PeerId) -> benten_sync::errors::AtriumTransportResult<Self::Connection>
+pub async fn benten_sync::transport_trait::TransportEndpoint::connect_to_addr(&self, Self::Addr) -> benten_sync::errors::AtriumTransportResult<Self::Connection>
 pub fn benten_sync::transport_trait::TransportEndpoint::loopback_addr(&self) -> benten_sync::errors::AtriumTransportResult<Self::Addr>
 pub fn benten_sync::transport_trait::TransportEndpoint::peer_id(&self) -> benten_sync::peer_id::PeerId
 pub async fn benten_sync::transport_trait::TransportEndpoint::transport_status(&self) -> benten_sync::transport::TransportStatus
@@ -1043,25 +1152,78 @@ pub type benten_sync::transport::Endpoint::Addr = iroh_base::endpoint_addr::Endp
 pub type benten_sync::transport::Endpoint::Connection = benten_sync::transport::Connection
 pub async fn benten_sync::transport::Endpoint::accept_next(&self) -> benten_sync::errors::AtriumTransportResult<Self::Connection>
 pub async fn benten_sync::transport::Endpoint::close(self)
-pub async fn benten_sync::transport::Endpoint::connect(&self, remote: benten_sync::peer_id::PeerId) -> benten_sync::errors::AtriumTransportResult<Self::Connection>
-pub async fn benten_sync::transport::Endpoint::connect_to_addr(&self, remote_addr: Self::Addr) -> benten_sync::errors::AtriumTransportResult<Self::Connection>
+pub async fn benten_sync::transport::Endpoint::connect(&self, benten_sync::peer_id::PeerId) -> benten_sync::errors::AtriumTransportResult<Self::Connection>
+pub async fn benten_sync::transport::Endpoint::connect_to_addr(&self, Self::Addr) -> benten_sync::errors::AtriumTransportResult<Self::Connection>
 pub fn benten_sync::transport::Endpoint::loopback_addr(&self) -> benten_sync::errors::AtriumTransportResult<Self::Addr>
 pub fn benten_sync::transport::Endpoint::peer_id(&self) -> benten_sync::peer_id::PeerId
 pub async fn benten_sync::transport::Endpoint::transport_status(&self) -> benten_sync::transport::TransportStatus
 pub type benten_sync::transport_trait::TransportAddr = <benten_sync::transport::Endpoint as benten_sync::transport_trait::TransportEndpoint>::Addr
 pub mod benten_sync::two_cid_store
+pub enum benten_sync::two_cid_store::GenError
+pub benten_sync::two_cid_store::GenError::StaleKPrincipalGeneration
+pub benten_sync::two_cid_store::GenError::StaleKPrincipalGeneration::current: u32
+pub benten_sync::two_cid_store::GenError::StaleKPrincipalGeneration::stanza: u32
+pub benten_sync::two_cid_store::GenError::StaleRecipientKeyGeneration
+pub benten_sync::two_cid_store::GenError::StaleRecipientKeyGeneration::current: u32
+pub benten_sync::two_cid_store::GenError::StaleRecipientKeyGeneration::stanza: u32
+impl core::clone::Clone for benten_sync::two_cid_store::GenError
+pub fn benten_sync::two_cid_store::GenError::clone(&self) -> benten_sync::two_cid_store::GenError
+impl core::cmp::Eq for benten_sync::two_cid_store::GenError
+impl core::cmp::PartialEq for benten_sync::two_cid_store::GenError
+pub fn benten_sync::two_cid_store::GenError::eq(&self, &benten_sync::two_cid_store::GenError) -> bool
+impl core::fmt::Debug for benten_sync::two_cid_store::GenError
+pub fn benten_sync::two_cid_store::GenError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_sync::two_cid_store::GenError
+impl core::marker::Freeze for benten_sync::two_cid_store::GenError
+impl core::marker::Send for benten_sync::two_cid_store::GenError
+impl core::marker::Sync for benten_sync::two_cid_store::GenError
+impl core::marker::Unpin for benten_sync::two_cid_store::GenError
+impl core::marker::UnsafeUnpin for benten_sync::two_cid_store::GenError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::two_cid_store::GenError
+impl core::panic::unwind_safe::UnwindSafe for benten_sync::two_cid_store::GenError
+pub struct benten_sync::two_cid_store::DualCidStore
+impl benten_sync::two_cid_store::DualCidStore
+pub fn benten_sync::two_cid_store::DualCidStore::local_cid(&self, &benten_sync::two_cid_store::DualCid) -> core::option::Option<benten_sync::two_cid_store::DualCid>
+pub fn benten_sync::two_cid_store::DualCidStore::new() -> Self
+pub fn benten_sync::two_cid_store::DualCidStore::put_dual(&mut self, benten_sync::two_cid_store::DualCid, benten_sync::two_cid_store::DualCid, benten_sync::two_cid_store::DualCid)
+pub fn benten_sync::two_cid_store::DualCidStore::resolve_blob(&self, &benten_sync::two_cid_store::DualCid) -> core::option::Option<benten_sync::two_cid_store::DualCid>
+impl core::default::Default for benten_sync::two_cid_store::DualCidStore
+pub fn benten_sync::two_cid_store::DualCidStore::default() -> benten_sync::two_cid_store::DualCidStore
+impl core::fmt::Debug for benten_sync::two_cid_store::DualCidStore
+pub fn benten_sync::two_cid_store::DualCidStore::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_sync::two_cid_store::DualCidStore
+impl core::marker::Send for benten_sync::two_cid_store::DualCidStore
+impl core::marker::Sync for benten_sync::two_cid_store::DualCidStore
+impl core::marker::Unpin for benten_sync::two_cid_store::DualCidStore
+impl core::marker::UnsafeUnpin for benten_sync::two_cid_store::DualCidStore
+impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::two_cid_store::DualCidStore
+impl core::panic::unwind_safe::UnwindSafe for benten_sync::two_cid_store::DualCidStore
+pub struct benten_sync::two_cid_store::Stanza
+pub benten_sync::two_cid_store::Stanza::k_principal_generation: u32
+pub benten_sync::two_cid_store::Stanza::recipient_key_generation: u32
+impl core::clone::Clone for benten_sync::two_cid_store::Stanza
+pub fn benten_sync::two_cid_store::Stanza::clone(&self) -> benten_sync::two_cid_store::Stanza
+impl core::fmt::Debug for benten_sync::two_cid_store::Stanza
+pub fn benten_sync::two_cid_store::Stanza::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_sync::two_cid_store::Stanza
+impl core::marker::Send for benten_sync::two_cid_store::Stanza
+impl core::marker::Sync for benten_sync::two_cid_store::Stanza
+impl core::marker::Unpin for benten_sync::two_cid_store::Stanza
+impl core::marker::UnsafeUnpin for benten_sync::two_cid_store::Stanza
+impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::two_cid_store::Stanza
+impl core::panic::unwind_safe::UnwindSafe for benten_sync::two_cid_store::Stanza
 pub struct benten_sync::two_cid_store::TwoCidStore
 impl benten_sync::two_cid_store::TwoCidStore
-pub fn benten_sync::two_cid_store::TwoCidStore::ciphertext_bytes(&self, ciphertext_cid: &benten_core::Cid) -> core::option::Option<alloc::vec::Vec<u8>>
+pub fn benten_sync::two_cid_store::TwoCidStore::ciphertext_bytes(&self, &benten_core::Cid) -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn benten_sync::two_cid_store::TwoCidStore::is_empty(&self) -> bool
 pub fn benten_sync::two_cid_store::TwoCidStore::len(&self) -> usize
 pub fn benten_sync::two_cid_store::TwoCidStore::new() -> Self
-pub fn benten_sync::two_cid_store::TwoCidStore::put(&self, plaintext_cid: benten_core::Cid, ciphertext_cid: benten_core::Cid, ciphertext_bytes: alloc::vec::Vec<u8>)
-pub fn benten_sync::two_cid_store::TwoCidStore::resolve_plaintext_to_ciphertext(&self, plaintext_cid: &benten_core::Cid) -> core::option::Option<benten_core::Cid>
+pub fn benten_sync::two_cid_store::TwoCidStore::put(&self, benten_core::Cid, benten_core::Cid, alloc::vec::Vec<u8>)
+pub fn benten_sync::two_cid_store::TwoCidStore::resolve_plaintext_to_ciphertext(&self, &benten_core::Cid) -> core::option::Option<benten_core::Cid>
 impl core::default::Default for benten_sync::two_cid_store::TwoCidStore
 pub fn benten_sync::two_cid_store::TwoCidStore::default() -> benten_sync::two_cid_store::TwoCidStore
 impl core::fmt::Debug for benten_sync::two_cid_store::TwoCidStore
-pub fn benten_sync::two_cid_store::TwoCidStore::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::two_cid_store::TwoCidStore::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl !core::marker::Freeze for benten_sync::two_cid_store::TwoCidStore
 impl core::marker::Send for benten_sync::two_cid_store::TwoCidStore
 impl core::marker::Sync for benten_sync::two_cid_store::TwoCidStore
@@ -1069,6 +1231,12 @@ impl core::marker::Unpin for benten_sync::two_cid_store::TwoCidStore
 impl core::marker::UnsafeUnpin for benten_sync::two_cid_store::TwoCidStore
 impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::two_cid_store::TwoCidStore
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::two_cid_store::TwoCidStore
+pub fn benten_sync::two_cid_store::all_wire_serialization_surfaces(&benten_sync::two_cid_store::DualCid) -> alloc::vec::Vec<alloc::vec::Vec<u8>>
+pub fn benten_sync::two_cid_store::blind_set_cid(&benten_sync::two_cid_store::DualCid, &[u8; 32]) -> benten_sync::two_cid_store::DualCid
+pub fn benten_sync::two_cid_store::plaintext_cid(&[u8]) -> benten_sync::two_cid_store::DualCid
+pub fn benten_sync::two_cid_store::reseal(&[u8], u8) -> (benten_sync::two_cid_store::DualCid, benten_sync::two_cid_store::DualCid)
+pub fn benten_sync::two_cid_store::verify_stanza_generation(&benten_sync::two_cid_store::Stanza, u32, u32) -> core::result::Result<(), benten_sync::two_cid_store::GenError>
+pub type benten_sync::two_cid_store::DualCid = [u8; 32]
 pub mod benten_sync::ucan_blobs_protocol
 #[non_exhaustive] pub enum benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError
 pub benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError::BindingSigInvalid
@@ -1095,9 +1263,9 @@ pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError::error_code(&self
 impl core::error::Error for benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError
 pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError
-pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError
-pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError
 impl core::marker::Send for benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError
 impl core::marker::Sync for benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError
@@ -1109,7 +1277,7 @@ pub struct benten_sync::ucan_blobs_protocol::EndpointIdBytes(pub [u8; 32])
 impl core::clone::Clone for benten_sync::ucan_blobs_protocol::EndpointIdBytes
 pub fn benten_sync::ucan_blobs_protocol::EndpointIdBytes::clone(&self) -> benten_sync::ucan_blobs_protocol::EndpointIdBytes
 impl core::fmt::Debug for benten_sync::ucan_blobs_protocol::EndpointIdBytes
-pub fn benten_sync::ucan_blobs_protocol::EndpointIdBytes::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::ucan_blobs_protocol::EndpointIdBytes::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for benten_sync::ucan_blobs_protocol::EndpointIdBytes
 impl core::marker::Freeze for benten_sync::ucan_blobs_protocol::EndpointIdBytes
 impl core::marker::Send for benten_sync::ucan_blobs_protocol::EndpointIdBytes
@@ -1120,13 +1288,13 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::ucan_blobs_protoco
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::ucan_blobs_protocol::EndpointIdBytes
 pub struct benten_sync::ucan_blobs_protocol::UcanBlobsHandler
 impl benten_sync::ucan_blobs_protocol::UcanBlobsHandler
-pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::endpoint_id_from_public_key_no_parsing(public_key: &benten_id::keypair::PublicKey) -> benten_sync::ucan_blobs_protocol::EndpointIdBytes
-pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::new(handler_keypair: &benten_id::keypair::Keypair) -> Self
-pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::new_with_clock(handler_keypair: &benten_id::keypair::Keypair, now_secs: u64) -> Self
-pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::validate_request(&self, request: &benten_sync::ucan_blobs_protocol::UcanBlobsRequest) -> core::result::Result<(), benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError>
-pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::validate_request_for_connection(&self, request: &benten_sync::ucan_blobs_protocol::UcanBlobsRequest, connection_endpoint_id: &benten_id::keypair::PublicKey) -> core::result::Result<(), benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError>
+pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::endpoint_id_from_public_key_no_parsing(&benten_id::keypair::PublicKey) -> benten_sync::ucan_blobs_protocol::EndpointIdBytes
+pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::new(&benten_id::keypair::Keypair) -> Self
+pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::new_with_clock(&benten_id::keypair::Keypair, u64) -> Self
+pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::validate_request(&self, &benten_sync::ucan_blobs_protocol::UcanBlobsRequest) -> core::result::Result<(), benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError>
+pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::validate_request_for_connection(&self, &benten_sync::ucan_blobs_protocol::UcanBlobsRequest, &benten_id::keypair::PublicKey) -> core::result::Result<(), benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError>
 impl core::fmt::Debug for benten_sync::ucan_blobs_protocol::UcanBlobsHandler
-pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::ucan_blobs_protocol::UcanBlobsHandler::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl !core::marker::Freeze for benten_sync::ucan_blobs_protocol::UcanBlobsHandler
 impl core::marker::Send for benten_sync::ucan_blobs_protocol::UcanBlobsHandler
 impl core::marker::Sync for benten_sync::ucan_blobs_protocol::UcanBlobsHandler
@@ -1140,7 +1308,7 @@ pub benten_sync::ucan_blobs_protocol::UcanBlobsRequest::grant: benten_caps::auth
 impl core::clone::Clone for benten_sync::ucan_blobs_protocol::UcanBlobsRequest
 pub fn benten_sync::ucan_blobs_protocol::UcanBlobsRequest::clone(&self) -> benten_sync::ucan_blobs_protocol::UcanBlobsRequest
 impl core::fmt::Debug for benten_sync::ucan_blobs_protocol::UcanBlobsRequest
-pub fn benten_sync::ucan_blobs_protocol::UcanBlobsRequest::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::ucan_blobs_protocol::UcanBlobsRequest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::ucan_blobs_protocol::UcanBlobsRequest
 impl core::marker::Send for benten_sync::ucan_blobs_protocol::UcanBlobsRequest
 impl core::marker::Sync for benten_sync::ucan_blobs_protocol::UcanBlobsRequest
@@ -1153,7 +1321,7 @@ pub benten_sync::ucan_blobs_protocol::UcanBlobsResponse::ciphertext_hash: benten
 impl core::clone::Clone for benten_sync::ucan_blobs_protocol::UcanBlobsResponse
 pub fn benten_sync::ucan_blobs_protocol::UcanBlobsResponse::clone(&self) -> benten_sync::ucan_blobs_protocol::UcanBlobsResponse
 impl core::fmt::Debug for benten_sync::ucan_blobs_protocol::UcanBlobsResponse
-pub fn benten_sync::ucan_blobs_protocol::UcanBlobsResponse::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_sync::ucan_blobs_protocol::UcanBlobsResponse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_sync::ucan_blobs_protocol::UcanBlobsResponse
 impl core::marker::Send for benten_sync::ucan_blobs_protocol::UcanBlobsResponse
 impl core::marker::Sync for benten_sync::ucan_blobs_protocol::UcanBlobsResponse
@@ -1162,6 +1330,6 @@ impl core::marker::UnsafeUnpin for benten_sync::ucan_blobs_protocol::UcanBlobsRe
 impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::ucan_blobs_protocol::UcanBlobsResponse
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::ucan_blobs_protocol::UcanBlobsResponse
 pub const benten_sync::ucan_blobs_protocol::UCAN_BLOBS_ALPN: &[u8]
-pub fn benten_sync::ucan_blobs_protocol::endpoint_id_to_verifying_key(endpoint_id: &benten_sync::ucan_blobs_protocol::EndpointIdBytes) -> core::option::Option<ed25519_dalek::verifying::VerifyingKey>
-pub fn benten_sync::ucan_blobs_protocol::verifying_key_to_endpoint_id(vk: &ed25519_dalek::verifying::VerifyingKey) -> benten_sync::ucan_blobs_protocol::EndpointIdBytes
+pub fn benten_sync::ucan_blobs_protocol::endpoint_id_to_verifying_key(&benten_sync::ucan_blobs_protocol::EndpointIdBytes) -> core::option::Option<ed25519_dalek::verifying::VerifyingKey>
+pub fn benten_sync::ucan_blobs_protocol::verifying_key_to_endpoint_id(&ed25519_dalek::verifying::VerifyingKey) -> benten_sync::ucan_blobs_protocol::EndpointIdBytes
 pub type benten_sync::TransportAddr = <benten_sync::transport::Endpoint as benten_sync::transport_trait::TransportEndpoint>::Addr

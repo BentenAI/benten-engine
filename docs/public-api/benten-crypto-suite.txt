@@ -6,13 +6,13 @@ pub benten_crypto_suite::aead::AeadError::MalformedEnvelope(&'static str)
 pub benten_crypto_suite::aead::AeadError::RecipientLacksKeysForSuite
 pub benten_crypto_suite::aead::AeadError::Unsupported(benten_crypto_suite::error::UnsupportedAlgorithm)
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::aead::AeadError
-pub fn benten_crypto_suite::aead::AeadError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::aead::AeadError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::error::Error for benten_crypto_suite::aead::AeadError
 pub fn benten_crypto_suite::aead::AeadError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for benten_crypto_suite::aead::AeadError
-pub fn benten_crypto_suite::aead::AeadError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::aead::AeadError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_crypto_suite::aead::AeadError
-pub fn benten_crypto_suite::aead::AeadError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::aead::AeadError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::aead::AeadError
 impl core::marker::Send for benten_crypto_suite::aead::AeadError
 impl core::marker::Sync for benten_crypto_suite::aead::AeadError
@@ -26,12 +26,12 @@ pub benten_crypto_suite::aead::AeadEnvelope::ciphertext: alloc::vec::Vec<u8>
 pub benten_crypto_suite::aead::AeadEnvelope::format_version: u8
 pub benten_crypto_suite::aead::AeadEnvelope::nonce: alloc::vec::Vec<u8>
 impl benten_crypto_suite::aead::AeadEnvelope
-pub fn benten_crypto_suite::aead::AeadEnvelope::from_wire_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_crypto_suite::aead::AeadError>
+pub fn benten_crypto_suite::aead::AeadEnvelope::from_wire_bytes(&[u8]) -> core::result::Result<Self, benten_crypto_suite::aead::AeadError>
 pub fn benten_crypto_suite::aead::AeadEnvelope::to_wire_bytes(&self) -> alloc::vec::Vec<u8>
 impl core::clone::Clone for benten_crypto_suite::aead::AeadEnvelope
 pub fn benten_crypto_suite::aead::AeadEnvelope::clone(&self) -> benten_crypto_suite::aead::AeadEnvelope
 impl core::fmt::Debug for benten_crypto_suite::aead::AeadEnvelope
-pub fn benten_crypto_suite::aead::AeadEnvelope::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::aead::AeadEnvelope::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::aead::AeadEnvelope
 impl core::marker::Send for benten_crypto_suite::aead::AeadEnvelope
 impl core::marker::Sync for benten_crypto_suite::aead::AeadEnvelope
@@ -44,7 +44,7 @@ pub benten_crypto_suite::aead::AeadKeyMaterial::codepoint: benten_crypto_suite::
 impl benten_crypto_suite::aead::AeadKeyMaterial
 pub fn benten_crypto_suite::aead::AeadKeyMaterial::as_bytes(&self) -> &[u8]
 pub const fn benten_crypto_suite::aead::AeadKeyMaterial::codepoint(&self) -> benten_crypto_suite::codepoint::CipherSuiteCodepoint
-pub fn benten_crypto_suite::aead::AeadKeyMaterial::from_raw_bytes(codepoint: benten_crypto_suite::codepoint::CipherSuiteCodepoint, bytes: &[u8]) -> Self
+pub fn benten_crypto_suite::aead::AeadKeyMaterial::from_raw_bytes(benten_crypto_suite::codepoint::CipherSuiteCodepoint, &[u8]) -> Self
 impl core::clone::Clone for benten_crypto_suite::aead::AeadKeyMaterial
 pub fn benten_crypto_suite::aead::AeadKeyMaterial::clone(&self) -> benten_crypto_suite::aead::AeadKeyMaterial
 impl core::ops::drop::Drop for benten_crypto_suite::aead::AeadKeyMaterial
@@ -60,11 +60,11 @@ pub const benten_crypto_suite::aead::ENVELOPE_FORMAT_VERSION_V1: u8
 pub const benten_crypto_suite::aead::ENVELOPE_MAGIC: u8
 pub const benten_crypto_suite::aead::IROH_BLOCK_SIZE: usize
 pub const benten_crypto_suite::aead::WHOLE_CONTENT_AEAD_THRESHOLD: usize
-pub fn benten_crypto_suite::aead::aad_per_chunk(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32) -> alloc::vec::Vec<u8>
-pub fn benten_crypto_suite::aead::aad_per_recipe(plaintext_cid: &[u8], recipe_index: u32, total_recipes: u32) -> alloc::vec::Vec<u8>
-pub fn benten_crypto_suite::aead::aad_whole_content(plaintext_cid: &[u8]) -> alloc::vec::Vec<u8>
-pub fn benten_crypto_suite::aead::unwrap(envelope: &benten_crypto_suite::aead::AeadEnvelope, key: &benten_crypto_suite::aead::AeadKeyMaterial, aad: &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_crypto_suite::aead::AeadError>
-pub fn benten_crypto_suite::aead::wrap(plaintext: &[u8], key: &benten_crypto_suite::aead::AeadKeyMaterial, aad: &[u8]) -> core::result::Result<benten_crypto_suite::aead::AeadEnvelope, benten_crypto_suite::aead::AeadError>
+pub fn benten_crypto_suite::aead::aad_per_chunk(&[u8], u64, u32) -> alloc::vec::Vec<u8>
+pub fn benten_crypto_suite::aead::aad_per_recipe(&[u8], u32, u32) -> alloc::vec::Vec<u8>
+pub fn benten_crypto_suite::aead::aad_whole_content(&[u8]) -> alloc::vec::Vec<u8>
+pub fn benten_crypto_suite::aead::unwrap(&benten_crypto_suite::aead::AeadEnvelope, &benten_crypto_suite::aead::AeadKeyMaterial, &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_crypto_suite::aead::AeadError>
+pub fn benten_crypto_suite::aead::wrap(&[u8], &benten_crypto_suite::aead::AeadKeyMaterial, &[u8]) -> core::result::Result<benten_crypto_suite::aead::AeadEnvelope, benten_crypto_suite::aead::AeadError>
 pub mod benten_crypto_suite::boundary
 pub struct benten_crypto_suite::boundary::CryptoPrimitiveCallSiteAudit
 impl benten_crypto_suite::boundary::CryptoPrimitiveCallSiteAudit
@@ -87,9 +87,9 @@ impl core::clone::Clone for benten_crypto_suite::boundary::ForbiddenDirectUse
 pub fn benten_crypto_suite::boundary::ForbiddenDirectUse::clone(&self) -> benten_crypto_suite::boundary::ForbiddenDirectUse
 impl core::cmp::Eq for benten_crypto_suite::boundary::ForbiddenDirectUse
 impl core::cmp::PartialEq for benten_crypto_suite::boundary::ForbiddenDirectUse
-pub fn benten_crypto_suite::boundary::ForbiddenDirectUse::eq(&self, other: &benten_crypto_suite::boundary::ForbiddenDirectUse) -> bool
+pub fn benten_crypto_suite::boundary::ForbiddenDirectUse::eq(&self, &benten_crypto_suite::boundary::ForbiddenDirectUse) -> bool
 impl core::fmt::Debug for benten_crypto_suite::boundary::ForbiddenDirectUse
-pub fn benten_crypto_suite::boundary::ForbiddenDirectUse::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::boundary::ForbiddenDirectUse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_crypto_suite::boundary::ForbiddenDirectUse
 impl core::marker::Freeze for benten_crypto_suite::boundary::ForbiddenDirectUse
 impl core::marker::Send for benten_crypto_suite::boundary::ForbiddenDirectUse
@@ -102,14 +102,15 @@ pub mod benten_crypto_suite::cipher_suite
 pub struct benten_crypto_suite::cipher_suite::CipherSuite
 impl benten_crypto_suite::cipher_suite::CipherSuite
 pub const fn benten_crypto_suite::cipher_suite::CipherSuite::codepoint(&self) -> benten_crypto_suite::codepoint::CipherSuiteCodepoint
+pub fn benten_crypto_suite::cipher_suite::CipherSuite::generate_recipient_keypair_deterministic(&self, &[u8; 32]) -> benten_crypto_suite::cipher_suite::RecipientKeypair
 pub fn benten_crypto_suite::cipher_suite::CipherSuite::is_hybrid_default(&self) -> bool
-pub fn benten_crypto_suite::cipher_suite::CipherSuite::open_aead(&self, k_root: &[u8], envelope: &benten_crypto_suite::aead::AeadEnvelope, plaintext_cid: &[u8]) -> core::result::Result<benten_crypto_suite::cipher_suite::DecryptedPlaintext, benten_crypto_suite::aead::AeadError>
-pub fn benten_crypto_suite::cipher_suite::CipherSuite::resolve(codepoint: benten_crypto_suite::codepoint::CipherSuiteCodepoint) -> core::result::Result<Self, benten_crypto_suite::error::UnsupportedAlgorithm>
-pub fn benten_crypto_suite::cipher_suite::CipherSuite::resolve_for_wrapped_key(wrapped: &benten_crypto_suite::cipher_suite::WrappedKey) -> core::result::Result<Self, benten_crypto_suite::error::UnsupportedAlgorithm>
-pub fn benten_crypto_suite::cipher_suite::CipherSuite::seal_aead(&self, k_root: &[u8], plaintext: &[u8], plaintext_cid: &[u8]) -> core::result::Result<benten_crypto_suite::aead::AeadEnvelope, benten_crypto_suite::aead::AeadError>
-pub fn benten_crypto_suite::cipher_suite::CipherSuite::unwrap_key_material(&self, recipient_sec: &benten_crypto_suite::cipher_suite::RecipientSecret, wrapped: &benten_crypto_suite::cipher_suite::WrappedKey) -> core::result::Result<benten_crypto_suite::cipher_suite::UnwrappedKey, benten_crypto_suite::aead::AeadError>
+pub fn benten_crypto_suite::cipher_suite::CipherSuite::open_aead(&self, &[u8], &benten_crypto_suite::aead::AeadEnvelope, &[u8]) -> core::result::Result<benten_crypto_suite::cipher_suite::DecryptedPlaintext, benten_crypto_suite::aead::AeadError>
+pub fn benten_crypto_suite::cipher_suite::CipherSuite::resolve(benten_crypto_suite::codepoint::CipherSuiteCodepoint) -> core::result::Result<Self, benten_crypto_suite::error::UnsupportedAlgorithm>
+pub fn benten_crypto_suite::cipher_suite::CipherSuite::resolve_for_wrapped_key(&benten_crypto_suite::cipher_suite::WrappedKey) -> core::result::Result<Self, benten_crypto_suite::error::UnsupportedAlgorithm>
+pub fn benten_crypto_suite::cipher_suite::CipherSuite::seal_aead(&self, &[u8], &[u8], &[u8]) -> core::result::Result<benten_crypto_suite::aead::AeadEnvelope, benten_crypto_suite::aead::AeadError>
+pub fn benten_crypto_suite::cipher_suite::CipherSuite::unwrap_key_material(&self, &benten_crypto_suite::cipher_suite::RecipientSecret, &benten_crypto_suite::cipher_suite::WrappedKey) -> core::result::Result<benten_crypto_suite::cipher_suite::UnwrappedKey, benten_crypto_suite::aead::AeadError>
 pub const fn benten_crypto_suite::cipher_suite::CipherSuite::v1_default_codepoint() -> benten_crypto_suite::codepoint::CipherSuiteCodepoint
-pub fn benten_crypto_suite::cipher_suite::CipherSuite::wrap_key_material(&self, recipient_pub: &benten_crypto_suite::cipher_suite::RecipientPublic, k_root: &[u8]) -> core::result::Result<benten_crypto_suite::cipher_suite::WrappedKey, benten_crypto_suite::aead::AeadError>
+pub fn benten_crypto_suite::cipher_suite::CipherSuite::wrap_key_material(&self, &benten_crypto_suite::cipher_suite::RecipientPublic, &[u8]) -> core::result::Result<benten_crypto_suite::cipher_suite::WrappedKey, benten_crypto_suite::aead::AeadError>
 impl core::marker::Freeze for benten_crypto_suite::cipher_suite::CipherSuite
 impl core::marker::Send for benten_crypto_suite::cipher_suite::CipherSuite
 impl core::marker::Sync for benten_crypto_suite::cipher_suite::CipherSuite
@@ -124,18 +125,18 @@ pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::HYBRID_MLKEM768_
 pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::HYBRID_X25519_MLKEM768: Self
 pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::NONE_PLAINTEXT: Self
 pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY: Self
-pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::from_raw(raw: u16) -> Self
+pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::from_raw(u16) -> Self
 pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::raw(self) -> u16
 pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::resolve(self) -> core::result::Result<(), benten_crypto_suite::error::UnsupportedAlgorithm>
 impl core::clone::Clone for benten_crypto_suite::codepoint::CipherSuiteCodepoint
 pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::clone(&self) -> benten_crypto_suite::codepoint::CipherSuiteCodepoint
 impl core::cmp::Eq for benten_crypto_suite::codepoint::CipherSuiteCodepoint
 impl core::cmp::PartialEq for benten_crypto_suite::codepoint::CipherSuiteCodepoint
-pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::eq(&self, other: &benten_crypto_suite::codepoint::CipherSuiteCodepoint) -> bool
+pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::eq(&self, &benten_crypto_suite::codepoint::CipherSuiteCodepoint) -> bool
 impl core::fmt::Debug for benten_crypto_suite::codepoint::CipherSuiteCodepoint
-pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::hash::Hash for benten_crypto_suite::codepoint::CipherSuiteCodepoint
-pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::Copy for benten_crypto_suite::codepoint::CipherSuiteCodepoint
 impl core::marker::StructuralPartialEq for benten_crypto_suite::codepoint::CipherSuiteCodepoint
 impl core::marker::Freeze for benten_crypto_suite::codepoint::CipherSuiteCodepoint
@@ -191,7 +192,7 @@ pub struct benten_crypto_suite::cipher_suite::UnwrappedKey
 impl benten_crypto_suite::cipher_suite::UnwrappedKey
 pub fn benten_crypto_suite::cipher_suite::UnwrappedKey::as_bytes(&self) -> &[u8]
 impl core::fmt::Debug for benten_crypto_suite::cipher_suite::UnwrappedKey
-pub fn benten_crypto_suite::cipher_suite::UnwrappedKey::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::cipher_suite::UnwrappedKey::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::cipher_suite::UnwrappedKey
 impl core::marker::Send for benten_crypto_suite::cipher_suite::UnwrappedKey
 impl core::marker::Sync for benten_crypto_suite::cipher_suite::UnwrappedKey
@@ -213,7 +214,63 @@ impl core::marker::Unpin for benten_crypto_suite::cipher_suite::WrappedKey
 impl core::marker::UnsafeUnpin for benten_crypto_suite::cipher_suite::WrappedKey
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::cipher_suite::WrappedKey
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::cipher_suite::WrappedKey
+pub const benten_crypto_suite::cipher_suite::X_WING_LABEL: [u8; 6]
+pub fn benten_crypto_suite::cipher_suite::classical_combine(&[u8], &[u8], &[u8]) -> [u8; 32]
+pub fn benten_crypto_suite::cipher_suite::combine_x_wing(&[u8], &[u8], &[u8], &[u8]) -> [u8; 32]
+pub fn benten_crypto_suite::cipher_suite::x_wing_combiner_preimage(&[u8], &[u8], &[u8], &[u8]) -> alloc::vec::Vec<u8>
 pub mod benten_crypto_suite::codepoint
+pub enum benten_crypto_suite::codepoint::CodepointLifecycle
+pub benten_crypto_suite::codepoint::CodepointLifecycle::Burned
+pub benten_crypto_suite::codepoint::CodepointLifecycle::Deprecated
+pub benten_crypto_suite::codepoint::CodepointLifecycle::Live
+pub benten_crypto_suite::codepoint::CodepointLifecycle::Quarantined
+impl benten_crypto_suite::codepoint::CodepointLifecycle
+pub fn benten_crypto_suite::codepoint::CodepointLifecycle::dispatch(self) -> core::result::Result<(), benten_crypto_suite::error::UnsupportedAlgorithm>
+impl core::clone::Clone for benten_crypto_suite::codepoint::CodepointLifecycle
+pub fn benten_crypto_suite::codepoint::CodepointLifecycle::clone(&self) -> benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::cmp::Eq for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::cmp::PartialEq for benten_crypto_suite::codepoint::CodepointLifecycle
+pub fn benten_crypto_suite::codepoint::CodepointLifecycle::eq(&self, &benten_crypto_suite::codepoint::CodepointLifecycle) -> bool
+impl core::fmt::Debug for benten_crypto_suite::codepoint::CodepointLifecycle
+pub fn benten_crypto_suite::codepoint::CodepointLifecycle::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_crypto_suite::codepoint::CodepointLifecycle
+pub fn benten_crypto_suite::codepoint::CodepointLifecycle::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::marker::StructuralPartialEq for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::marker::Freeze for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::marker::Send for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::marker::Sync for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::marker::Unpin for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::marker::UnsafeUnpin for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::codepoint::CodepointLifecycle
+#[non_exhaustive] pub enum benten_crypto_suite::codepoint::ReservedCodepoint
+pub benten_crypto_suite::codepoint::ReservedCodepoint::ChainedStateTlv
+pub benten_crypto_suite::codepoint::ReservedCodepoint::ExecuteWorkflow
+pub benten_crypto_suite::codepoint::ReservedCodepoint::RecoveryArtifact
+pub benten_crypto_suite::codepoint::ReservedCodepoint::RotatingGroupKeyChainedMode
+pub benten_crypto_suite::codepoint::ReservedCodepoint::SubsetRef
+impl benten_crypto_suite::codepoint::ReservedCodepoint
+pub const fn benten_crypto_suite::codepoint::ReservedCodepoint::band_base(self) -> core::option::Option<u16>
+pub fn benten_crypto_suite::codepoint::ReservedCodepoint::resolve(self) -> core::result::Result<(), benten_crypto_suite::error::UnsupportedAlgorithm>
+impl core::clone::Clone for benten_crypto_suite::codepoint::ReservedCodepoint
+pub fn benten_crypto_suite::codepoint::ReservedCodepoint::clone(&self) -> benten_crypto_suite::codepoint::ReservedCodepoint
+impl core::cmp::Eq for benten_crypto_suite::codepoint::ReservedCodepoint
+impl core::cmp::PartialEq for benten_crypto_suite::codepoint::ReservedCodepoint
+pub fn benten_crypto_suite::codepoint::ReservedCodepoint::eq(&self, &benten_crypto_suite::codepoint::ReservedCodepoint) -> bool
+impl core::fmt::Debug for benten_crypto_suite::codepoint::ReservedCodepoint
+pub fn benten_crypto_suite::codepoint::ReservedCodepoint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_crypto_suite::codepoint::ReservedCodepoint
+pub fn benten_crypto_suite::codepoint::ReservedCodepoint::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for benten_crypto_suite::codepoint::ReservedCodepoint
+impl core::marker::StructuralPartialEq for benten_crypto_suite::codepoint::ReservedCodepoint
+impl core::marker::Freeze for benten_crypto_suite::codepoint::ReservedCodepoint
+impl core::marker::Send for benten_crypto_suite::codepoint::ReservedCodepoint
+impl core::marker::Sync for benten_crypto_suite::codepoint::ReservedCodepoint
+impl core::marker::Unpin for benten_crypto_suite::codepoint::ReservedCodepoint
+impl core::marker::UnsafeUnpin for benten_crypto_suite::codepoint::ReservedCodepoint
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::codepoint::ReservedCodepoint
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::codepoint::ReservedCodepoint
 #[non_exhaustive] pub enum benten_crypto_suite::codepoint::UnsupportedAlgorithm
 pub benten_crypto_suite::codepoint::UnsupportedAlgorithm::CipherSuite
 pub benten_crypto_suite::codepoint::UnsupportedAlgorithm::CipherSuite::codepoint: u16
@@ -225,20 +282,20 @@ impl core::clone::Clone for benten_crypto_suite::error::UnsupportedAlgorithm
 pub fn benten_crypto_suite::error::UnsupportedAlgorithm::clone(&self) -> benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::cmp::Eq for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::cmp::PartialEq for benten_crypto_suite::error::UnsupportedAlgorithm
-pub fn benten_crypto_suite::error::UnsupportedAlgorithm::eq(&self, other: &benten_crypto_suite::error::UnsupportedAlgorithm) -> bool
+pub fn benten_crypto_suite::error::UnsupportedAlgorithm::eq(&self, &benten_crypto_suite::error::UnsupportedAlgorithm) -> bool
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::aead::AeadError
-pub fn benten_crypto_suite::aead::AeadError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::aead::AeadError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::error::CryptoError
-pub fn benten_crypto_suite::error::CryptoError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::error::CryptoError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::error::VerifyError
-pub fn benten_crypto_suite::error::VerifyError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::error::VerifyError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::swap_matrix::SwapMatrixError
-pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::error::Error for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::fmt::Debug for benten_crypto_suite::error::UnsupportedAlgorithm
-pub fn benten_crypto_suite::error::UnsupportedAlgorithm::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::error::UnsupportedAlgorithm::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_crypto_suite::error::UnsupportedAlgorithm
-pub fn benten_crypto_suite::error::UnsupportedAlgorithm::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::error::UnsupportedAlgorithm::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::marker::Freeze for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::marker::Send for benten_crypto_suite::error::UnsupportedAlgorithm
@@ -254,18 +311,18 @@ pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::HYBRID_MLKEM768_
 pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::HYBRID_X25519_MLKEM768: Self
 pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::NONE_PLAINTEXT: Self
 pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY: Self
-pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::from_raw(raw: u16) -> Self
+pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::from_raw(u16) -> Self
 pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::raw(self) -> u16
 pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::resolve(self) -> core::result::Result<(), benten_crypto_suite::error::UnsupportedAlgorithm>
 impl core::clone::Clone for benten_crypto_suite::codepoint::CipherSuiteCodepoint
 pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::clone(&self) -> benten_crypto_suite::codepoint::CipherSuiteCodepoint
 impl core::cmp::Eq for benten_crypto_suite::codepoint::CipherSuiteCodepoint
 impl core::cmp::PartialEq for benten_crypto_suite::codepoint::CipherSuiteCodepoint
-pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::eq(&self, other: &benten_crypto_suite::codepoint::CipherSuiteCodepoint) -> bool
+pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::eq(&self, &benten_crypto_suite::codepoint::CipherSuiteCodepoint) -> bool
 impl core::fmt::Debug for benten_crypto_suite::codepoint::CipherSuiteCodepoint
-pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::hash::Hash for benten_crypto_suite::codepoint::CipherSuiteCodepoint
-pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::Copy for benten_crypto_suite::codepoint::CipherSuiteCodepoint
 impl core::marker::StructuralPartialEq for benten_crypto_suite::codepoint::CipherSuiteCodepoint
 impl core::marker::Freeze for benten_crypto_suite::codepoint::CipherSuiteCodepoint
@@ -280,18 +337,18 @@ impl benten_crypto_suite::codepoint::HashCodepoint
 pub const benten_crypto_suite::codepoint::HashCodepoint::BLAKE3: Self
 pub const benten_crypto_suite::codepoint::HashCodepoint::SHA2_512_256: Self
 pub const benten_crypto_suite::codepoint::HashCodepoint::SHA3_256: Self
-pub const fn benten_crypto_suite::codepoint::HashCodepoint::from_raw(raw: u64) -> Self
+pub const fn benten_crypto_suite::codepoint::HashCodepoint::from_raw(u64) -> Self
 pub const fn benten_crypto_suite::codepoint::HashCodepoint::raw(self) -> u64
 pub fn benten_crypto_suite::codepoint::HashCodepoint::resolve(self) -> core::result::Result<(), benten_crypto_suite::error::UnsupportedAlgorithm>
 impl core::clone::Clone for benten_crypto_suite::codepoint::HashCodepoint
 pub fn benten_crypto_suite::codepoint::HashCodepoint::clone(&self) -> benten_crypto_suite::codepoint::HashCodepoint
 impl core::cmp::Eq for benten_crypto_suite::codepoint::HashCodepoint
 impl core::cmp::PartialEq for benten_crypto_suite::codepoint::HashCodepoint
-pub fn benten_crypto_suite::codepoint::HashCodepoint::eq(&self, other: &benten_crypto_suite::codepoint::HashCodepoint) -> bool
+pub fn benten_crypto_suite::codepoint::HashCodepoint::eq(&self, &benten_crypto_suite::codepoint::HashCodepoint) -> bool
 impl core::fmt::Debug for benten_crypto_suite::codepoint::HashCodepoint
-pub fn benten_crypto_suite::codepoint::HashCodepoint::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::codepoint::HashCodepoint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::hash::Hash for benten_crypto_suite::codepoint::HashCodepoint
-pub fn benten_crypto_suite::codepoint::HashCodepoint::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+pub fn benten_crypto_suite::codepoint::HashCodepoint::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::Copy for benten_crypto_suite::codepoint::HashCodepoint
 impl core::marker::StructuralPartialEq for benten_crypto_suite::codepoint::HashCodepoint
 impl core::marker::Freeze for benten_crypto_suite::codepoint::HashCodepoint
@@ -306,7 +363,7 @@ impl benten_crypto_suite::codepoint::SigCodepoint
 pub const benten_crypto_suite::codepoint::SigCodepoint::CLASSICAL_ED25519: Self
 pub const benten_crypto_suite::codepoint::SigCodepoint::HYBRID_ED25519_MLDSA65: Self
 pub const benten_crypto_suite::codepoint::SigCodepoint::HYBRID_MLDSA65_SLHDSA: Self
-pub const fn benten_crypto_suite::codepoint::SigCodepoint::from_raw(raw: u16) -> Self
+pub const fn benten_crypto_suite::codepoint::SigCodepoint::from_raw(u16) -> Self
 pub const fn benten_crypto_suite::codepoint::SigCodepoint::is_classical_only(self) -> bool
 pub const fn benten_crypto_suite::codepoint::SigCodepoint::is_hybrid_default(self) -> bool
 pub const fn benten_crypto_suite::codepoint::SigCodepoint::raw(self) -> u16
@@ -315,11 +372,11 @@ impl core::clone::Clone for benten_crypto_suite::codepoint::SigCodepoint
 pub fn benten_crypto_suite::codepoint::SigCodepoint::clone(&self) -> benten_crypto_suite::codepoint::SigCodepoint
 impl core::cmp::Eq for benten_crypto_suite::codepoint::SigCodepoint
 impl core::cmp::PartialEq for benten_crypto_suite::codepoint::SigCodepoint
-pub fn benten_crypto_suite::codepoint::SigCodepoint::eq(&self, other: &benten_crypto_suite::codepoint::SigCodepoint) -> bool
+pub fn benten_crypto_suite::codepoint::SigCodepoint::eq(&self, &benten_crypto_suite::codepoint::SigCodepoint) -> bool
 impl core::fmt::Debug for benten_crypto_suite::codepoint::SigCodepoint
-pub fn benten_crypto_suite::codepoint::SigCodepoint::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::codepoint::SigCodepoint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::hash::Hash for benten_crypto_suite::codepoint::SigCodepoint
-pub fn benten_crypto_suite::codepoint::SigCodepoint::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+pub fn benten_crypto_suite::codepoint::SigCodepoint::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::Copy for benten_crypto_suite::codepoint::SigCodepoint
 impl core::marker::StructuralPartialEq for benten_crypto_suite::codepoint::SigCodepoint
 impl core::marker::Freeze for benten_crypto_suite::codepoint::SigCodepoint
@@ -329,6 +386,12 @@ impl core::marker::Unpin for benten_crypto_suite::codepoint::SigCodepoint
 impl core::marker::UnsafeUnpin for benten_crypto_suite::codepoint::SigCodepoint
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::codepoint::SigCodepoint
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::codepoint::SigCodepoint
+pub fn benten_crypto_suite::codepoint::chained_state_tlv_aad_binding(bool) -> alloc::vec::Vec<u8>
+pub mod benten_crypto_suite::conformance
+pub mod benten_crypto_suite::conformance::endianness
+pub const fn benten_crypto_suite::conformance::endianness::ascii_label_excluded() -> bool
+pub const fn benten_crypto_suite::conformance::endianness::info_tag_ascii_flagged() -> bool
+pub fn benten_crypto_suite::conformance::endianness::wire_path_le_survivor_count() -> usize
 pub mod benten_crypto_suite::discharge
 pub enum benten_crypto_suite::discharge::DischargeDisposition
 pub benten_crypto_suite::discharge::DischargeDisposition::CratePrivate
@@ -340,9 +403,9 @@ impl core::clone::Clone for benten_crypto_suite::discharge::DischargeDisposition
 pub fn benten_crypto_suite::discharge::DischargeDisposition::clone(&self) -> benten_crypto_suite::discharge::DischargeDisposition
 impl core::cmp::Eq for benten_crypto_suite::discharge::DischargeDisposition
 impl core::cmp::PartialEq for benten_crypto_suite::discharge::DischargeDisposition
-pub fn benten_crypto_suite::discharge::DischargeDisposition::eq(&self, other: &benten_crypto_suite::discharge::DischargeDisposition) -> bool
+pub fn benten_crypto_suite::discharge::DischargeDisposition::eq(&self, &benten_crypto_suite::discharge::DischargeDisposition) -> bool
 impl core::fmt::Debug for benten_crypto_suite::discharge::DischargeDisposition
-pub fn benten_crypto_suite::discharge::DischargeDisposition::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::discharge::DischargeDisposition::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for benten_crypto_suite::discharge::DischargeDisposition
 impl core::marker::StructuralPartialEq for benten_crypto_suite::discharge::DischargeDisposition
 impl core::marker::Freeze for benten_crypto_suite::discharge::DischargeDisposition
@@ -363,20 +426,103 @@ impl core::marker::Unpin for benten_crypto_suite::discharge::Issue835Discharge
 impl core::marker::UnsafeUnpin for benten_crypto_suite::discharge::Issue835Discharge
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::discharge::Issue835Discharge
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::discharge::Issue835Discharge
+pub mod benten_crypto_suite::envelope
+#[non_exhaustive] pub enum benten_crypto_suite::envelope::BindingContext
+pub benten_crypto_suite::envelope::BindingContext::Recipient
+pub benten_crypto_suite::envelope::BindingContext::Recipient::audience_did: alloc::vec::Vec<u8>
+pub benten_crypto_suite::envelope::BindingContext::Recipient::body_cid: alloc::vec::Vec<u8>
+pub benten_crypto_suite::envelope::BindingContext::Recipient::recipient_key_generation: u32
+pub benten_crypto_suite::envelope::BindingContext::Vault
+pub benten_crypto_suite::envelope::BindingContext::Vault::vault_version: u8
+pub benten_crypto_suite::envelope::BindingContext::WholeContent
+pub benten_crypto_suite::envelope::BindingContext::WholeContent::plaintext_cid: alloc::vec::Vec<u8>
+impl benten_crypto_suite::envelope::BindingContext
+pub fn benten_crypto_suite::envelope::BindingContext::strict_decode(&self, &Self) -> core::result::Result<(), benten_crypto_suite::envelope::EnvelopeError>
+impl core::clone::Clone for benten_crypto_suite::envelope::BindingContext
+pub fn benten_crypto_suite::envelope::BindingContext::clone(&self) -> benten_crypto_suite::envelope::BindingContext
+impl core::cmp::Eq for benten_crypto_suite::envelope::BindingContext
+impl core::cmp::PartialEq for benten_crypto_suite::envelope::BindingContext
+pub fn benten_crypto_suite::envelope::BindingContext::eq(&self, &benten_crypto_suite::envelope::BindingContext) -> bool
+impl core::fmt::Debug for benten_crypto_suite::envelope::BindingContext
+pub fn benten_crypto_suite::envelope::BindingContext::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_crypto_suite::envelope::BindingContext
+impl core::marker::Freeze for benten_crypto_suite::envelope::BindingContext
+impl core::marker::Send for benten_crypto_suite::envelope::BindingContext
+impl core::marker::Sync for benten_crypto_suite::envelope::BindingContext
+impl core::marker::Unpin for benten_crypto_suite::envelope::BindingContext
+impl core::marker::UnsafeUnpin for benten_crypto_suite::envelope::BindingContext
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::envelope::BindingContext
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::envelope::BindingContext
+#[non_exhaustive] pub enum benten_crypto_suite::envelope::EnvelopeError
+pub benten_crypto_suite::envelope::EnvelopeError::BadMagic
+pub benten_crypto_suite::envelope::EnvelopeError::BadMagic::got: u8
+pub benten_crypto_suite::envelope::EnvelopeError::CrossVariantBinding
+pub benten_crypto_suite::envelope::EnvelopeError::HostileLengthPrefix
+pub benten_crypto_suite::envelope::EnvelopeError::HostileLengthPrefix::bound: usize
+pub benten_crypto_suite::envelope::EnvelopeError::HostileLengthPrefix::declared: usize
+pub benten_crypto_suite::envelope::EnvelopeError::Truncated
+pub benten_crypto_suite::envelope::EnvelopeError::UnsupportedVersion
+pub benten_crypto_suite::envelope::EnvelopeError::UnsupportedVersion::got: u8
+impl core::clone::Clone for benten_crypto_suite::envelope::EnvelopeError
+pub fn benten_crypto_suite::envelope::EnvelopeError::clone(&self) -> benten_crypto_suite::envelope::EnvelopeError
+impl core::cmp::Eq for benten_crypto_suite::envelope::EnvelopeError
+impl core::cmp::PartialEq for benten_crypto_suite::envelope::EnvelopeError
+pub fn benten_crypto_suite::envelope::EnvelopeError::eq(&self, &benten_crypto_suite::envelope::EnvelopeError) -> bool
+impl core::error::Error for benten_crypto_suite::envelope::EnvelopeError
+impl core::fmt::Debug for benten_crypto_suite::envelope::EnvelopeError
+pub fn benten_crypto_suite::envelope::EnvelopeError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_crypto_suite::envelope::EnvelopeError
+pub fn benten_crypto_suite::envelope::EnvelopeError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_crypto_suite::envelope::EnvelopeError
+impl core::marker::Freeze for benten_crypto_suite::envelope::EnvelopeError
+impl core::marker::Send for benten_crypto_suite::envelope::EnvelopeError
+impl core::marker::Sync for benten_crypto_suite::envelope::EnvelopeError
+impl core::marker::Unpin for benten_crypto_suite::envelope::EnvelopeError
+impl core::marker::UnsafeUnpin for benten_crypto_suite::envelope::EnvelopeError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::envelope::EnvelopeError
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::envelope::EnvelopeError
+pub struct benten_crypto_suite::envelope::EncryptedEnvelope
+pub benten_crypto_suite::envelope::EncryptedEnvelope::aad_binding: benten_crypto_suite::envelope::BindingContext
+pub benten_crypto_suite::envelope::EncryptedEnvelope::cipher_codepoint: u16
+pub benten_crypto_suite::envelope::EncryptedEnvelope::ciphertext: alloc::vec::Vec<u8>
+pub benten_crypto_suite::envelope::EncryptedEnvelope::format_version: u8
+pub benten_crypto_suite::envelope::EncryptedEnvelope::nonce: alloc::vec::Vec<u8>
+impl benten_crypto_suite::envelope::EncryptedEnvelope
+pub fn benten_crypto_suite::envelope::EncryptedEnvelope::decode_nonce_bounded(&[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_crypto_suite::envelope::EnvelopeError>
+pub fn benten_crypto_suite::envelope::EncryptedEnvelope::from_wire_bytes(&[u8]) -> core::result::Result<Self, benten_crypto_suite::envelope::EnvelopeError>
+pub fn benten_crypto_suite::envelope::EncryptedEnvelope::to_wire_bytes(&self) -> alloc::vec::Vec<u8>
+impl core::clone::Clone for benten_crypto_suite::envelope::EncryptedEnvelope
+pub fn benten_crypto_suite::envelope::EncryptedEnvelope::clone(&self) -> benten_crypto_suite::envelope::EncryptedEnvelope
+impl core::fmt::Debug for benten_crypto_suite::envelope::EncryptedEnvelope
+pub fn benten_crypto_suite::envelope::EncryptedEnvelope::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_crypto_suite::envelope::EncryptedEnvelope
+impl core::marker::Send for benten_crypto_suite::envelope::EncryptedEnvelope
+impl core::marker::Sync for benten_crypto_suite::envelope::EncryptedEnvelope
+impl core::marker::Unpin for benten_crypto_suite::envelope::EncryptedEnvelope
+impl core::marker::UnsafeUnpin for benten_crypto_suite::envelope::EncryptedEnvelope
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::envelope::EncryptedEnvelope
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::envelope::EncryptedEnvelope
+pub const benten_crypto_suite::envelope::ENVELOPE_FORMAT_VERSION_V1: u8
+pub const benten_crypto_suite::envelope::ENVELOPE_FORMAT_VERSION_V2: u8
+pub const benten_crypto_suite::envelope::ENVELOPE_MAGIC: u8
+pub const benten_crypto_suite::envelope::MAX_NONCE_LEN: usize
+pub fn benten_crypto_suite::envelope::canonical_tlv_encode(u16, &benten_crypto_suite::envelope::BindingContext) -> alloc::vec::Vec<u8>
+pub const fn benten_crypto_suite::envelope::layer_c_and_d_share_one_hpke_primitive() -> bool
+pub fn benten_crypto_suite::envelope::lift_from_aead_envelope(&benten_crypto_suite::aead::AeadEnvelope, benten_crypto_suite::envelope::BindingContext) -> benten_crypto_suite::envelope::EncryptedEnvelope
 pub mod benten_crypto_suite::error
 #[non_exhaustive] pub enum benten_crypto_suite::error::CryptoError
 pub benten_crypto_suite::error::CryptoError::Unsupported(benten_crypto_suite::error::UnsupportedAlgorithm)
 pub benten_crypto_suite::error::CryptoError::Verify(benten_crypto_suite::error::VerifyError)
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::error::CryptoError
-pub fn benten_crypto_suite::error::CryptoError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::error::CryptoError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::convert::From<benten_crypto_suite::error::VerifyError> for benten_crypto_suite::error::CryptoError
-pub fn benten_crypto_suite::error::CryptoError::from(source: benten_crypto_suite::error::VerifyError) -> Self
+pub fn benten_crypto_suite::error::CryptoError::from(benten_crypto_suite::error::VerifyError) -> Self
 impl core::error::Error for benten_crypto_suite::error::CryptoError
 pub fn benten_crypto_suite::error::CryptoError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for benten_crypto_suite::error::CryptoError
-pub fn benten_crypto_suite::error::CryptoError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::error::CryptoError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_crypto_suite::error::CryptoError
-pub fn benten_crypto_suite::error::CryptoError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::error::CryptoError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::error::CryptoError
 impl core::marker::Send for benten_crypto_suite::error::CryptoError
 impl core::marker::Sync for benten_crypto_suite::error::CryptoError
@@ -395,20 +541,20 @@ impl core::clone::Clone for benten_crypto_suite::error::UnsupportedAlgorithm
 pub fn benten_crypto_suite::error::UnsupportedAlgorithm::clone(&self) -> benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::cmp::Eq for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::cmp::PartialEq for benten_crypto_suite::error::UnsupportedAlgorithm
-pub fn benten_crypto_suite::error::UnsupportedAlgorithm::eq(&self, other: &benten_crypto_suite::error::UnsupportedAlgorithm) -> bool
+pub fn benten_crypto_suite::error::UnsupportedAlgorithm::eq(&self, &benten_crypto_suite::error::UnsupportedAlgorithm) -> bool
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::aead::AeadError
-pub fn benten_crypto_suite::aead::AeadError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::aead::AeadError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::error::CryptoError
-pub fn benten_crypto_suite::error::CryptoError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::error::CryptoError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::error::VerifyError
-pub fn benten_crypto_suite::error::VerifyError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::error::VerifyError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::swap_matrix::SwapMatrixError
-pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::error::Error for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::fmt::Debug for benten_crypto_suite::error::UnsupportedAlgorithm
-pub fn benten_crypto_suite::error::UnsupportedAlgorithm::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::error::UnsupportedAlgorithm::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_crypto_suite::error::UnsupportedAlgorithm
-pub fn benten_crypto_suite::error::UnsupportedAlgorithm::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::error::UnsupportedAlgorithm::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::marker::Freeze for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::marker::Send for benten_crypto_suite::error::UnsupportedAlgorithm
@@ -427,17 +573,17 @@ pub benten_crypto_suite::error::VerifyError::PqVerifyFailed
 pub benten_crypto_suite::error::VerifyError::StripResistanceViolated(&'static str)
 pub benten_crypto_suite::error::VerifyError::Unsupported(benten_crypto_suite::error::UnsupportedAlgorithm)
 impl core::cmp::PartialEq for benten_crypto_suite::error::VerifyError
-pub fn benten_crypto_suite::error::VerifyError::eq(&self, other: &Self) -> bool
+pub fn benten_crypto_suite::error::VerifyError::eq(&self, &Self) -> bool
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::error::VerifyError
-pub fn benten_crypto_suite::error::VerifyError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::error::VerifyError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::convert::From<benten_crypto_suite::error::VerifyError> for benten_crypto_suite::error::CryptoError
-pub fn benten_crypto_suite::error::CryptoError::from(source: benten_crypto_suite::error::VerifyError) -> Self
+pub fn benten_crypto_suite::error::CryptoError::from(benten_crypto_suite::error::VerifyError) -> Self
 impl core::error::Error for benten_crypto_suite::error::VerifyError
 pub fn benten_crypto_suite::error::VerifyError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for benten_crypto_suite::error::VerifyError
-pub fn benten_crypto_suite::error::VerifyError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::error::VerifyError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_crypto_suite::error::VerifyError
-pub fn benten_crypto_suite::error::VerifyError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::error::VerifyError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::error::VerifyError
 impl core::marker::Send for benten_crypto_suite::error::VerifyError
 impl core::marker::Sync for benten_crypto_suite::error::VerifyError
@@ -450,11 +596,11 @@ pub struct benten_crypto_suite::hash::HashSeam
 impl benten_crypto_suite::hash::HashSeam
 pub const fn benten_crypto_suite::hash::HashSeam::codepoint(&self) -> benten_crypto_suite::codepoint::HashCodepoint
 pub const fn benten_crypto_suite::hash::HashSeam::default_codepoint() -> benten_crypto_suite::codepoint::HashCodepoint
-pub fn benten_crypto_suite::hash::HashSeam::digest(&self, input: &[u8]) -> alloc::vec::Vec<u8>
-pub fn benten_crypto_suite::hash::HashSeam::for_codepoint(codepoint: benten_crypto_suite::codepoint::HashCodepoint) -> core::result::Result<Self, benten_crypto_suite::error::UnsupportedAlgorithm>
+pub fn benten_crypto_suite::hash::HashSeam::digest(&self, &[u8]) -> alloc::vec::Vec<u8>
+pub fn benten_crypto_suite::hash::HashSeam::for_codepoint(benten_crypto_suite::codepoint::HashCodepoint) -> core::result::Result<Self, benten_crypto_suite::error::UnsupportedAlgorithm>
 pub fn benten_crypto_suite::hash::HashSeam::output_byte_len(&self) -> usize
 impl core::fmt::Debug for benten_crypto_suite::hash::HashSeam
-pub fn benten_crypto_suite::hash::HashSeam::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::hash::HashSeam::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::hash::HashSeam
 impl core::marker::Send for benten_crypto_suite::hash::HashSeam
 impl core::marker::Sync for benten_crypto_suite::hash::HashSeam
@@ -462,12 +608,44 @@ impl core::marker::Unpin for benten_crypto_suite::hash::HashSeam
 impl core::marker::UnsafeUnpin for benten_crypto_suite::hash::HashSeam
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::hash::HashSeam
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::hash::HashSeam
+pub mod benten_crypto_suite::hpke
+pub const fn benten_crypto_suite::hpke::one_primitive_across_layers() -> bool
+pub fn benten_crypto_suite::hpke::unwrap_key_from_recipient(&benten_crypto_suite::cipher_suite::RecipientSecret, &benten_crypto_suite::cipher_suite::WrappedKey) -> core::result::Result<alloc::vec::Vec<u8>, benten_crypto_suite::aead::AeadError>
+pub fn benten_crypto_suite::hpke::wrap_key_to_recipient(&benten_crypto_suite::cipher_suite::RecipientPublic, &[u8]) -> core::result::Result<benten_crypto_suite::cipher_suite::WrappedKey, benten_crypto_suite::aead::AeadError>
 pub mod benten_crypto_suite::primitives
 pub use benten_crypto_suite::primitives::blake3
 pub use benten_crypto_suite::primitives::ed25519_dalek
 pub use benten_crypto_suite::primitives::ml_dsa
 pub use benten_crypto_suite::primitives::sha2
 pub use benten_crypto_suite::primitives::sha3
+pub mod benten_crypto_suite::registry
+pub const benten_crypto_suite::registry::BENTEN_ENVELOPE_RANGE: core::ops::range::RangeInclusive<u16>
+pub const benten_crypto_suite::registry::BIRD_OF_PREY_BASE: u16
+pub const benten_crypto_suite::registry::CGKA_COMMIT_BASE: u16
+pub const benten_crypto_suite::registry::CIPHER_CLASSICAL_X25519: u16
+pub const benten_crypto_suite::registry::CIPHER_HYBRID_MLKEM768_HQC: u16
+pub const benten_crypto_suite::registry::CIPHER_HYBRID_X25519_MLKEM768: u16
+pub const benten_crypto_suite::registry::CIPHER_PURE_PQ_MLKEM768_ONLY: u16
+pub const benten_crypto_suite::registry::DEVICE_LINK_BAND_BASE: u16
+pub const benten_crypto_suite::registry::DRAFT_PRABEL_BASE: u16
+pub const benten_crypto_suite::registry::DROP_TO_RECIPIENT_SEALED_SENDER: u16
+pub const benten_crypto_suite::registry::EXPERIMENTAL_BASE: u16
+pub const benten_crypto_suite::registry::EXTENDED_CODEPOINT_ESCAPE: u16
+pub const benten_crypto_suite::registry::LAYER_C_DROP: u16
+pub const benten_crypto_suite::registry::LAYER_C_DROP_MULTI_RECIPIENT: u16
+pub const benten_crypto_suite::registry::LIFECYCLE_BAND_BASE: u16
+pub const benten_crypto_suite::registry::MEMBERSHIP_SET_ENCRYPTION: u16
+pub const benten_crypto_suite::registry::MEMBERSHIP_SET_GROUP_MULTI_STANZA: u16
+pub const benten_crypto_suite::registry::MEMBERSHIP_SET_SUBSET_REF: u16
+pub const benten_crypto_suite::registry::MLS_APPLICATION_BASE: u16
+pub const benten_crypto_suite::registry::MLS_WELCOME_BASE: u16
+pub const benten_crypto_suite::registry::REMOTE_PERMISSION_BAND_BASE: u16
+pub const benten_crypto_suite::registry::SYMMETRIC_AEAD_12B: u16
+pub const benten_crypto_suite::registry::VAULT_ENVELOPE: u16
+pub fn benten_crypto_suite::registry::detects_collision(&[u16]) -> bool
+pub fn benten_crypto_suite::registry::iana_hpke_reserved_ranges() -> alloc::vec::Vec<core::ops::range::RangeInclusive<u16>>
+pub fn benten_crypto_suite::registry::in_iana_hpke_range(u16) -> bool
+pub fn benten_crypto_suite::registry::registered_envelope_codepoints() -> alloc::vec::Vec<u16>
 pub mod benten_crypto_suite::sig
 #[non_exhaustive] pub enum benten_crypto_suite::sig::VerifyError
 pub benten_crypto_suite::sig::VerifyError::ClassicalVerifyFailed
@@ -479,17 +657,17 @@ pub benten_crypto_suite::sig::VerifyError::PqVerifyFailed
 pub benten_crypto_suite::sig::VerifyError::StripResistanceViolated(&'static str)
 pub benten_crypto_suite::sig::VerifyError::Unsupported(benten_crypto_suite::error::UnsupportedAlgorithm)
 impl core::cmp::PartialEq for benten_crypto_suite::error::VerifyError
-pub fn benten_crypto_suite::error::VerifyError::eq(&self, other: &Self) -> bool
+pub fn benten_crypto_suite::error::VerifyError::eq(&self, &Self) -> bool
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::error::VerifyError
-pub fn benten_crypto_suite::error::VerifyError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::error::VerifyError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::convert::From<benten_crypto_suite::error::VerifyError> for benten_crypto_suite::error::CryptoError
-pub fn benten_crypto_suite::error::CryptoError::from(source: benten_crypto_suite::error::VerifyError) -> Self
+pub fn benten_crypto_suite::error::CryptoError::from(benten_crypto_suite::error::VerifyError) -> Self
 impl core::error::Error for benten_crypto_suite::error::VerifyError
 pub fn benten_crypto_suite::error::VerifyError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for benten_crypto_suite::error::VerifyError
-pub fn benten_crypto_suite::error::VerifyError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::error::VerifyError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_crypto_suite::error::VerifyError
-pub fn benten_crypto_suite::error::VerifyError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::error::VerifyError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::error::VerifyError
 impl core::marker::Send for benten_crypto_suite::error::VerifyError
 impl core::marker::Sync for benten_crypto_suite::error::VerifyError
@@ -507,9 +685,9 @@ impl core::clone::Clone for benten_crypto_suite::sig::HybridSignature
 pub fn benten_crypto_suite::sig::HybridSignature::clone(&self) -> benten_crypto_suite::sig::HybridSignature
 impl core::cmp::Eq for benten_crypto_suite::sig::HybridSignature
 impl core::cmp::PartialEq for benten_crypto_suite::sig::HybridSignature
-pub fn benten_crypto_suite::sig::HybridSignature::eq(&self, other: &benten_crypto_suite::sig::HybridSignature) -> bool
+pub fn benten_crypto_suite::sig::HybridSignature::eq(&self, &benten_crypto_suite::sig::HybridSignature) -> bool
 impl core::fmt::Debug for benten_crypto_suite::sig::HybridSignature
-pub fn benten_crypto_suite::sig::HybridSignature::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::sig::HybridSignature::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_crypto_suite::sig::HybridSignature
 impl core::marker::Freeze for benten_crypto_suite::sig::HybridSignature
 impl core::marker::Send for benten_crypto_suite::sig::HybridSignature
@@ -544,14 +722,14 @@ pub struct benten_crypto_suite::sig::SignatureSuite
 impl benten_crypto_suite::sig::SignatureSuite
 pub const fn benten_crypto_suite::sig::SignatureSuite::default_codepoint(&self) -> benten_crypto_suite::codepoint::SigCodepoint
 pub const fn benten_crypto_suite::sig::SignatureSuite::exposes_static_size_constant() -> bool
-pub const fn benten_crypto_suite::sig::SignatureSuite::from_config(config: benten_crypto_suite::sig::SuiteConfig) -> Self
+pub const fn benten_crypto_suite::sig::SignatureSuite::from_config(benten_crypto_suite::sig::SuiteConfig) -> Self
 pub fn benten_crypto_suite::sig::SignatureSuite::generate_keypair(&self) -> benten_crypto_suite::sig::Keypair
 pub const fn benten_crypto_suite::sig::SignatureSuite::is_hybrid(&self) -> bool
-pub fn benten_crypto_suite::sig::SignatureSuite::resolve_codepoint(codepoint: benten_crypto_suite::codepoint::SigCodepoint) -> core::result::Result<Self, benten_crypto_suite::error::UnsupportedAlgorithm>
-pub fn benten_crypto_suite::sig::SignatureSuite::sign(&self, kp: &benten_crypto_suite::sig::Keypair, msg: &[u8]) -> benten_crypto_suite::sig::HybridSignature
-pub fn benten_crypto_suite::sig::SignatureSuite::signature_byte_len_for(&self, codepoint: benten_crypto_suite::codepoint::SigCodepoint) -> usize
+pub fn benten_crypto_suite::sig::SignatureSuite::resolve_codepoint(benten_crypto_suite::codepoint::SigCodepoint) -> core::result::Result<Self, benten_crypto_suite::error::UnsupportedAlgorithm>
+pub fn benten_crypto_suite::sig::SignatureSuite::sign(&self, &benten_crypto_suite::sig::Keypair, &[u8]) -> benten_crypto_suite::sig::HybridSignature
+pub fn benten_crypto_suite::sig::SignatureSuite::signature_byte_len_for(&self, benten_crypto_suite::codepoint::SigCodepoint) -> usize
 pub const fn benten_crypto_suite::sig::SignatureSuite::v1_default() -> Self
-pub fn benten_crypto_suite::sig::SignatureSuite::verify(&self, pk: benten_crypto_suite::sig::PublicKey, msg: &[u8], sig: &benten_crypto_suite::sig::HybridSignature) -> core::result::Result<(), benten_crypto_suite::error::VerifyError>
+pub fn benten_crypto_suite::sig::SignatureSuite::verify(&self, benten_crypto_suite::sig::PublicKey, &[u8], &benten_crypto_suite::sig::HybridSignature) -> core::result::Result<(), benten_crypto_suite::error::VerifyError>
 impl core::marker::Freeze for benten_crypto_suite::sig::SignatureSuite
 impl core::marker::Send for benten_crypto_suite::sig::SignatureSuite
 impl core::marker::Sync for benten_crypto_suite::sig::SignatureSuite
@@ -563,16 +741,16 @@ pub struct benten_crypto_suite::sig::SuiteConfig
 impl benten_crypto_suite::sig::SuiteConfig
 pub const fn benten_crypto_suite::sig::SuiteConfig::classical_only() -> Self
 pub const fn benten_crypto_suite::sig::SuiteConfig::codepoint(self) -> benten_crypto_suite::codepoint::SigCodepoint
-pub fn benten_crypto_suite::sig::SuiteConfig::is_distinct_from(&self, other: &Self) -> bool
+pub fn benten_crypto_suite::sig::SuiteConfig::is_distinct_from(&self, &Self) -> bool
 pub const fn benten_crypto_suite::sig::SuiteConfig::is_hybrid(self) -> bool
 pub const fn benten_crypto_suite::sig::SuiteConfig::v1_default() -> Self
 impl core::clone::Clone for benten_crypto_suite::sig::SuiteConfig
 pub fn benten_crypto_suite::sig::SuiteConfig::clone(&self) -> benten_crypto_suite::sig::SuiteConfig
 impl core::cmp::Eq for benten_crypto_suite::sig::SuiteConfig
 impl core::cmp::PartialEq for benten_crypto_suite::sig::SuiteConfig
-pub fn benten_crypto_suite::sig::SuiteConfig::eq(&self, other: &benten_crypto_suite::sig::SuiteConfig) -> bool
+pub fn benten_crypto_suite::sig::SuiteConfig::eq(&self, &benten_crypto_suite::sig::SuiteConfig) -> bool
 impl core::fmt::Debug for benten_crypto_suite::sig::SuiteConfig
-pub fn benten_crypto_suite::sig::SuiteConfig::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::sig::SuiteConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for benten_crypto_suite::sig::SuiteConfig
 impl core::marker::StructuralPartialEq for benten_crypto_suite::sig::SuiteConfig
 impl core::marker::Freeze for benten_crypto_suite::sig::SuiteConfig
@@ -585,9 +763,9 @@ impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::sig::SuiteCon
 pub mod benten_crypto_suite::sizes
 pub struct benten_crypto_suite::sizes::RedbSigHandle
 impl benten_crypto_suite::sizes::RedbSigHandle
-pub fn benten_crypto_suite::sizes::RedbSigHandle::get_signature(&self, k: &str) -> core::option::Option<benten_crypto_suite::sig::HybridSignature>
+pub fn benten_crypto_suite::sizes::RedbSigHandle::get_signature(&self, &str) -> core::option::Option<benten_crypto_suite::sig::HybridSignature>
 pub fn benten_crypto_suite::sizes::RedbSigHandle::new() -> Self
-pub fn benten_crypto_suite::sizes::RedbSigHandle::put_signature(&self, k: &str, sig: &benten_crypto_suite::sig::HybridSignature)
+pub fn benten_crypto_suite::sizes::RedbSigHandle::put_signature(&self, &str, &benten_crypto_suite::sig::HybridSignature)
 impl core::default::Default for benten_crypto_suite::sizes::RedbSigHandle
 pub fn benten_crypto_suite::sizes::RedbSigHandle::default() -> Self
 impl core::marker::Freeze for benten_crypto_suite::sizes::RedbSigHandle
@@ -599,12 +777,12 @@ impl !core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::sizes::Re
 impl !core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::sizes::RedbSigHandle
 pub struct benten_crypto_suite::sizes::SizeTouchingSurfaces
 impl benten_crypto_suite::sizes::SizeTouchingSurfaces
-pub fn benten_crypto_suite::sizes::SizeTouchingSurfaces::cid_over_signed_bytes(sig: &benten_crypto_suite::sig::HybridSignature) -> alloc::vec::Vec<u8>
-pub fn benten_crypto_suite::sizes::SizeTouchingSurfaces::dag_cbor_decode(bytes: &[u8]) -> benten_crypto_suite::sig::HybridSignature
-pub fn benten_crypto_suite::sizes::SizeTouchingSurfaces::dag_cbor_encode(sig: &benten_crypto_suite::sig::HybridSignature) -> alloc::vec::Vec<u8>
-pub fn benten_crypto_suite::sizes::SizeTouchingSurfaces::load_signature_fixture(name: &str) -> benten_crypto_suite::sizes::SyntheticVector
-pub fn benten_crypto_suite::sizes::SizeTouchingSurfaces::napi_marshal(sig: &benten_crypto_suite::sig::HybridSignature) -> alloc::vec::Vec<u8>
-pub fn benten_crypto_suite::sizes::SizeTouchingSurfaces::napi_unmarshal(bytes: &[u8]) -> benten_crypto_suite::sig::HybridSignature
+pub fn benten_crypto_suite::sizes::SizeTouchingSurfaces::cid_over_signed_bytes(&benten_crypto_suite::sig::HybridSignature) -> alloc::vec::Vec<u8>
+pub fn benten_crypto_suite::sizes::SizeTouchingSurfaces::dag_cbor_decode(&[u8]) -> benten_crypto_suite::sig::HybridSignature
+pub fn benten_crypto_suite::sizes::SizeTouchingSurfaces::dag_cbor_encode(&benten_crypto_suite::sig::HybridSignature) -> alloc::vec::Vec<u8>
+pub fn benten_crypto_suite::sizes::SizeTouchingSurfaces::load_signature_fixture(&str) -> benten_crypto_suite::sizes::SyntheticVector
+pub fn benten_crypto_suite::sizes::SizeTouchingSurfaces::napi_marshal(&benten_crypto_suite::sig::HybridSignature) -> alloc::vec::Vec<u8>
+pub fn benten_crypto_suite::sizes::SizeTouchingSurfaces::napi_unmarshal(&[u8]) -> benten_crypto_suite::sig::HybridSignature
 impl core::marker::Freeze for benten_crypto_suite::sizes::SizeTouchingSurfaces
 impl core::marker::Send for benten_crypto_suite::sizes::SizeTouchingSurfaces
 impl core::marker::Sync for benten_crypto_suite::sizes::SizeTouchingSurfaces
@@ -632,7 +810,7 @@ pub mod benten_crypto_suite::structural_kdf
 pub struct benten_crypto_suite::structural_kdf::StructuralKdfKey(_)
 impl benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub fn benten_crypto_suite::structural_kdf::StructuralKdfKey::as_bytes(&self) -> [u8; 32]
-pub fn benten_crypto_suite::structural_kdf::StructuralKdfKey::from_bytes_for_test(bytes: &[u8]) -> Self
+pub fn benten_crypto_suite::structural_kdf::StructuralKdfKey::from_bytes_for_test(&[u8]) -> Self
 impl core::clone::Clone for benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub fn benten_crypto_suite::structural_kdf::StructuralKdfKey::clone(&self) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
 impl core::ops::drop::Drop for benten_crypto_suite::structural_kdf::StructuralKdfKey
@@ -644,8 +822,8 @@ impl core::marker::Unpin for benten_crypto_suite::structural_kdf::StructuralKdfK
 impl core::marker::UnsafeUnpin for benten_crypto_suite::structural_kdf::StructuralKdfKey
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::structural_kdf::StructuralKdfKey
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::structural_kdf::StructuralKdfKey
-pub fn benten_crypto_suite::structural_kdf::derive_root(k_principal: &benten_crypto_suite::structural_kdf::StructuralKdfKey, root_cid: &[u8], cipher_suite_codepoint: u16) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
-pub fn benten_crypto_suite::structural_kdf::derive_step(predecessor: &benten_crypto_suite::structural_kdf::StructuralKdfKey, edge_label: &[u8], node_cid: &[u8]) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
+pub fn benten_crypto_suite::structural_kdf::derive_root(&benten_crypto_suite::structural_kdf::StructuralKdfKey, &[u8], u16) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
+pub fn benten_crypto_suite::structural_kdf::derive_step(&benten_crypto_suite::structural_kdf::StructuralKdfKey, &[u8], &[u8]) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub mod benten_crypto_suite::swap_matrix
 pub enum benten_crypto_suite::swap_matrix::SwapKeypair
 pub benten_crypto_suite::swap_matrix::SwapKeypair::Hybrid(alloc::boxed::Box<benten_crypto_suite::sig::Keypair>)
@@ -669,13 +847,13 @@ pub benten_crypto_suite::swap_matrix::SwapMatrixError::ConfigMismatch::detail: &
 pub benten_crypto_suite::swap_matrix::SwapMatrixError::Signature(&'static str)
 pub benten_crypto_suite::swap_matrix::SwapMatrixError::Unsupported(benten_crypto_suite::error::UnsupportedAlgorithm)
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::swap_matrix::SwapMatrixError
-pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::error::Error for benten_crypto_suite::swap_matrix::SwapMatrixError
 pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for benten_crypto_suite::swap_matrix::SwapMatrixError
-pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_crypto_suite::swap_matrix::SwapMatrixError
-pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::swap_matrix::SwapMatrixError
 impl core::marker::Send for benten_crypto_suite::swap_matrix::SwapMatrixError
 impl core::marker::Sync for benten_crypto_suite::swap_matrix::SwapMatrixError
@@ -875,7 +1053,7 @@ pub struct benten_crypto_suite::swap_matrix::SwapDecrypted
 impl benten_crypto_suite::swap_matrix::SwapDecrypted
 pub fn benten_crypto_suite::swap_matrix::SwapDecrypted::as_slice(&self) -> &[u8]
 impl core::fmt::Debug for benten_crypto_suite::swap_matrix::SwapDecrypted
-pub fn benten_crypto_suite::swap_matrix::SwapDecrypted::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::swap_matrix::SwapDecrypted::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::swap_matrix::SwapDecrypted
 impl core::marker::Send for benten_crypto_suite::swap_matrix::SwapDecrypted
 impl core::marker::Sync for benten_crypto_suite::swap_matrix::SwapDecrypted
@@ -907,18 +1085,18 @@ pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::encryption_is_pq_hybr
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::is_pure_pq_sole_trust_path(&self) -> bool
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::no_encryption_public_class() -> Self
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::non_pq_encryption() -> Self
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::open_and_verify(&self, recipient_secret: &benten_crypto_suite::swap_matrix::SwapRecipientSecret<'_>, sender_pub: &benten_crypto_suite::swap_matrix::SwapPublicKey, envelope: &benten_crypto_suite::swap_matrix::SwapEnvelope) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapDecrypted, benten_crypto_suite::swap_matrix::SwapMatrixError>
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::sign_and_seal(&self, kp: &benten_crypto_suite::swap_matrix::SwapKeypair, recipient: &benten_crypto_suite::swap_matrix::SwapRecipientPublic<'_>, payload: &[u8]) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapEnvelope, benten_crypto_suite::swap_matrix::SwapMatrixError>
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::sign_only(&self, kp: &benten_crypto_suite::swap_matrix::SwapKeypair, payload: &[u8]) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapEnvelope, benten_crypto_suite::swap_matrix::SwapMatrixError>
+pub fn benten_crypto_suite::swap_matrix::SwapMatrix::open_and_verify(&self, &benten_crypto_suite::swap_matrix::SwapRecipientSecret<'_>, &benten_crypto_suite::swap_matrix::SwapPublicKey, &benten_crypto_suite::swap_matrix::SwapEnvelope) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapDecrypted, benten_crypto_suite::swap_matrix::SwapMatrixError>
+pub fn benten_crypto_suite::swap_matrix::SwapMatrix::sign_and_seal(&self, &benten_crypto_suite::swap_matrix::SwapKeypair, &benten_crypto_suite::swap_matrix::SwapRecipientPublic<'_>, &[u8]) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapEnvelope, benten_crypto_suite::swap_matrix::SwapMatrixError>
+pub fn benten_crypto_suite::swap_matrix::SwapMatrix::sign_only(&self, &benten_crypto_suite::swap_matrix::SwapKeypair, &[u8]) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapEnvelope, benten_crypto_suite::swap_matrix::SwapMatrixError>
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::signature_codepoint(&self) -> benten_crypto_suite::codepoint::SigCodepoint
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::signature_is_hybrid(&self) -> bool
 pub fn benten_crypto_suite::swap_matrix::SwapMatrix::try_pure_pq_sole_trust_path() -> core::result::Result<Self, benten_crypto_suite::swap_matrix::SwapMatrixError>
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::v1_beta_default() -> Self
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::verify_only(&self, sender_pub: &benten_crypto_suite::swap_matrix::SwapPublicKey, envelope: &benten_crypto_suite::swap_matrix::SwapEnvelope) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapDecrypted, benten_crypto_suite::swap_matrix::SwapMatrixError>
+pub fn benten_crypto_suite::swap_matrix::SwapMatrix::verify_only(&self, &benten_crypto_suite::swap_matrix::SwapPublicKey, &benten_crypto_suite::swap_matrix::SwapEnvelope) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapDecrypted, benten_crypto_suite::swap_matrix::SwapMatrixError>
 impl benten_crypto_suite::swap_matrix::SwapMatrix
 pub fn benten_crypto_suite::swap_matrix::SwapMatrix::pure_pq_nf1_signature_arm() -> benten_crypto_suite::swap_matrix::PurePqNf1SignatureArm
 impl core::fmt::Debug for benten_crypto_suite::swap_matrix::SwapMatrix
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::swap_matrix::SwapMatrix::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::swap_matrix::SwapMatrix
 impl core::marker::Send for benten_crypto_suite::swap_matrix::SwapMatrix
 impl core::marker::Sync for benten_crypto_suite::swap_matrix::SwapMatrix
@@ -940,12 +1118,12 @@ pub benten_crypto_suite::varsig::VarsigError::UnsupportedVersion
 pub benten_crypto_suite::varsig::VarsigError::UnsupportedVersion::got: u8
 impl core::cmp::Eq for benten_crypto_suite::varsig::VarsigError
 impl core::cmp::PartialEq for benten_crypto_suite::varsig::VarsigError
-pub fn benten_crypto_suite::varsig::VarsigError::eq(&self, other: &benten_crypto_suite::varsig::VarsigError) -> bool
+pub fn benten_crypto_suite::varsig::VarsigError::eq(&self, &benten_crypto_suite::varsig::VarsigError) -> bool
 impl core::error::Error for benten_crypto_suite::varsig::VarsigError
 impl core::fmt::Debug for benten_crypto_suite::varsig::VarsigError
-pub fn benten_crypto_suite::varsig::VarsigError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::varsig::VarsigError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_crypto_suite::varsig::VarsigError
-pub fn benten_crypto_suite::varsig::VarsigError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::varsig::VarsigError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_crypto_suite::varsig::VarsigError
 impl core::marker::Freeze for benten_crypto_suite::varsig::VarsigError
 impl core::marker::Send for benten_crypto_suite::varsig::VarsigError
@@ -959,7 +1137,7 @@ impl benten_crypto_suite::varsig::DecodedVarsig
 pub const fn benten_crypto_suite::varsig::DecodedVarsig::codepoint(&self) -> benten_crypto_suite::codepoint::SigCodepoint
 pub fn benten_crypto_suite::varsig::DecodedVarsig::signature(&self) -> &benten_crypto_suite::sig::HybridSignature
 impl core::fmt::Debug for benten_crypto_suite::varsig::DecodedVarsig
-pub fn benten_crypto_suite::varsig::DecodedVarsig::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::varsig::DecodedVarsig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::varsig::DecodedVarsig
 impl core::marker::Send for benten_crypto_suite::varsig::DecodedVarsig
 impl core::marker::Sync for benten_crypto_suite::varsig::DecodedVarsig
@@ -971,8 +1149,8 @@ pub struct benten_crypto_suite::varsig::UcanVarsigV1Header
 impl benten_crypto_suite::varsig::UcanVarsigV1Header
 pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::advertises_hybrid(&self) -> bool
 pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::as_bytes(&self) -> &[u8]
-pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::decode(bytes: &[u8]) -> core::result::Result<benten_crypto_suite::varsig::DecodedVarsig, benten_crypto_suite::varsig::VarsigError>
-pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::encode_hybrid(sig: &benten_crypto_suite::sig::HybridSignature) -> Self
+pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::decode(&[u8]) -> core::result::Result<benten_crypto_suite::varsig::DecodedVarsig, benten_crypto_suite::varsig::VarsigError>
+pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::encode_hybrid(&benten_crypto_suite::sig::HybridSignature) -> Self
 impl core::marker::Freeze for benten_crypto_suite::varsig::UcanVarsigV1Header
 impl core::marker::Send for benten_crypto_suite::varsig::UcanVarsigV1Header
 impl core::marker::Sync for benten_crypto_suite::varsig::UcanVarsigV1Header
@@ -980,19 +1158,146 @@ impl core::marker::Unpin for benten_crypto_suite::varsig::UcanVarsigV1Header
 impl core::marker::UnsafeUnpin for benten_crypto_suite::varsig::UcanVarsigV1Header
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::varsig::UcanVarsigV1Header
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::varsig::UcanVarsigV1Header
+pub mod benten_crypto_suite::vault
+#[non_exhaustive] pub enum benten_crypto_suite::vault::VaultError
+pub benten_crypto_suite::vault::VaultError::AeadFailed
+pub benten_crypto_suite::vault::VaultError::EngineLocked
+pub benten_crypto_suite::vault::VaultError::MalformedCbor
+pub benten_crypto_suite::vault::VaultError::NonceWidthMismatch
+pub benten_crypto_suite::vault::VaultError::UnknownCodepoint
+pub benten_crypto_suite::vault::VaultError::WrongPassword
+impl core::clone::Clone for benten_crypto_suite::vault::VaultError
+pub fn benten_crypto_suite::vault::VaultError::clone(&self) -> benten_crypto_suite::vault::VaultError
+impl core::cmp::Eq for benten_crypto_suite::vault::VaultError
+impl core::cmp::PartialEq for benten_crypto_suite::vault::VaultError
+pub fn benten_crypto_suite::vault::VaultError::eq(&self, &benten_crypto_suite::vault::VaultError) -> bool
+impl core::error::Error for benten_crypto_suite::vault::VaultError
+impl core::fmt::Debug for benten_crypto_suite::vault::VaultError
+pub fn benten_crypto_suite::vault::VaultError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_crypto_suite::vault::VaultError
+pub fn benten_crypto_suite::vault::VaultError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_crypto_suite::vault::VaultError
+impl core::marker::Freeze for benten_crypto_suite::vault::VaultError
+impl core::marker::Send for benten_crypto_suite::vault::VaultError
+impl core::marker::Sync for benten_crypto_suite::vault::VaultError
+impl core::marker::Unpin for benten_crypto_suite::vault::VaultError
+impl core::marker::UnsafeUnpin for benten_crypto_suite::vault::VaultError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::vault::VaultError
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::VaultError
+pub struct benten_crypto_suite::vault::Argon2idParams
+pub benten_crypto_suite::vault::Argon2idParams::m_cost: u32
+pub benten_crypto_suite::vault::Argon2idParams::p_cost: u32
+pub benten_crypto_suite::vault::Argon2idParams::t_cost: u32
+impl core::clone::Clone for benten_crypto_suite::vault::Argon2idParams
+pub fn benten_crypto_suite::vault::Argon2idParams::clone(&self) -> benten_crypto_suite::vault::Argon2idParams
+impl core::cmp::Eq for benten_crypto_suite::vault::Argon2idParams
+impl core::cmp::PartialEq for benten_crypto_suite::vault::Argon2idParams
+pub fn benten_crypto_suite::vault::Argon2idParams::eq(&self, &benten_crypto_suite::vault::Argon2idParams) -> bool
+impl core::fmt::Debug for benten_crypto_suite::vault::Argon2idParams
+pub fn benten_crypto_suite::vault::Argon2idParams::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_crypto_suite::vault::Argon2idParams
+impl core::marker::StructuralPartialEq for benten_crypto_suite::vault::Argon2idParams
+impl core::marker::Freeze for benten_crypto_suite::vault::Argon2idParams
+impl core::marker::Send for benten_crypto_suite::vault::Argon2idParams
+impl core::marker::Sync for benten_crypto_suite::vault::Argon2idParams
+impl core::marker::Unpin for benten_crypto_suite::vault::Argon2idParams
+impl core::marker::UnsafeUnpin for benten_crypto_suite::vault::Argon2idParams
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::vault::Argon2idParams
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::Argon2idParams
+pub struct benten_crypto_suite::vault::DecodedVault
+pub benten_crypto_suite::vault::DecodedVault::codepoint: u16
+pub benten_crypto_suite::vault::DecodedVault::nonce: alloc::vec::Vec<u8>
+pub benten_crypto_suite::vault::DecodedVault::payload: benten_crypto_suite::vault::VaultPayload
+impl core::clone::Clone for benten_crypto_suite::vault::DecodedVault
+pub fn benten_crypto_suite::vault::DecodedVault::clone(&self) -> benten_crypto_suite::vault::DecodedVault
+impl core::fmt::Debug for benten_crypto_suite::vault::DecodedVault
+pub fn benten_crypto_suite::vault::DecodedVault::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_crypto_suite::vault::DecodedVault
+impl core::marker::Send for benten_crypto_suite::vault::DecodedVault
+impl core::marker::Sync for benten_crypto_suite::vault::DecodedVault
+impl core::marker::Unpin for benten_crypto_suite::vault::DecodedVault
+impl core::marker::UnsafeUnpin for benten_crypto_suite::vault::DecodedVault
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::vault::DecodedVault
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::DecodedVault
+pub struct benten_crypto_suite::vault::UnlockedKeyMaterial
+impl benten_crypto_suite::vault::UnlockedKeyMaterial
+pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::expose_k_principal(&self) -> &[u8; 32]
+pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::k_principal_len(&self) -> usize
+pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::new([u8; 32], alloc::vec::Vec<u8>) -> Self
+pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::structural_kdf_root_key(&self) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
+pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::user_did_signing_key(&self) -> &[u8]
+impl core::fmt::Debug for benten_crypto_suite::vault::UnlockedKeyMaterial
+pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_crypto_suite::vault::UnlockedKeyMaterial
+impl core::marker::Send for benten_crypto_suite::vault::UnlockedKeyMaterial
+impl core::marker::Sync for benten_crypto_suite::vault::UnlockedKeyMaterial
+impl core::marker::Unpin for benten_crypto_suite::vault::UnlockedKeyMaterial
+impl core::marker::UnsafeUnpin for benten_crypto_suite::vault::UnlockedKeyMaterial
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::vault::UnlockedKeyMaterial
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::UnlockedKeyMaterial
+pub struct benten_crypto_suite::vault::VaultEngine
+impl benten_crypto_suite::vault::VaultEngine
+pub fn benten_crypto_suite::vault::VaultEngine::encrypt_node(&self, &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_crypto_suite::vault::VaultError>
+pub fn benten_crypto_suite::vault::VaultEngine::new_locked() -> Self
+pub fn benten_crypto_suite::vault::VaultEngine::unlock(&mut self, &benten_crypto_suite::vault::VaultPayload)
+pub fn benten_crypto_suite::vault::VaultEngine::unlocked_handle(&self) -> core::option::Option<&benten_crypto_suite::vault::UnlockedKeyMaterial>
+impl core::default::Default for benten_crypto_suite::vault::VaultEngine
+pub fn benten_crypto_suite::vault::VaultEngine::default() -> Self
+impl core::marker::Freeze for benten_crypto_suite::vault::VaultEngine
+impl core::marker::Send for benten_crypto_suite::vault::VaultEngine
+impl core::marker::Sync for benten_crypto_suite::vault::VaultEngine
+impl core::marker::Unpin for benten_crypto_suite::vault::VaultEngine
+impl core::marker::UnsafeUnpin for benten_crypto_suite::vault::VaultEngine
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::vault::VaultEngine
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::VaultEngine
+pub struct benten_crypto_suite::vault::VaultPayload
+pub benten_crypto_suite::vault::VaultPayload::k_principal: [u8; 32]
+pub benten_crypto_suite::vault::VaultPayload::user_did_creation_time: u64
+pub benten_crypto_suite::vault::VaultPayload::user_did_signing_key: alloc::vec::Vec<u8>
+impl benten_crypto_suite::vault::VaultPayload
+pub fn benten_crypto_suite::vault::VaultPayload::from_canonical_cbor(&[u8]) -> core::result::Result<Self, benten_crypto_suite::vault::VaultError>
+pub fn benten_crypto_suite::vault::VaultPayload::to_canonical_cbor(&self) -> alloc::vec::Vec<u8>
+impl core::clone::Clone for benten_crypto_suite::vault::VaultPayload
+pub fn benten_crypto_suite::vault::VaultPayload::clone(&self) -> benten_crypto_suite::vault::VaultPayload
+impl core::cmp::Eq for benten_crypto_suite::vault::VaultPayload
+impl core::cmp::PartialEq for benten_crypto_suite::vault::VaultPayload
+pub fn benten_crypto_suite::vault::VaultPayload::eq(&self, &benten_crypto_suite::vault::VaultPayload) -> bool
+impl core::fmt::Debug for benten_crypto_suite::vault::VaultPayload
+pub fn benten_crypto_suite::vault::VaultPayload::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_crypto_suite::vault::VaultPayload
+impl serde_core::ser::Serialize for benten_crypto_suite::vault::VaultPayload
+pub fn benten_crypto_suite::vault::VaultPayload::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_crypto_suite::vault::VaultPayload
+pub fn benten_crypto_suite::vault::VaultPayload::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_crypto_suite::vault::VaultPayload
+impl core::marker::Send for benten_crypto_suite::vault::VaultPayload
+impl core::marker::Sync for benten_crypto_suite::vault::VaultPayload
+impl core::marker::Unpin for benten_crypto_suite::vault::VaultPayload
+impl core::marker::UnsafeUnpin for benten_crypto_suite::vault::VaultPayload
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::vault::VaultPayload
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::VaultPayload
+pub const benten_crypto_suite::vault::DAK_HKDF_INFO_TAG: &[u8]
+pub const benten_crypto_suite::vault::OWASP_DEFAULT: benten_crypto_suite::vault::Argon2idParams
+pub const benten_crypto_suite::vault::SYMMETRIC_AEAD_12B_CODEPOINT: u16
+pub const benten_crypto_suite::vault::VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT: u16
+pub const benten_crypto_suite::vault::VAULT_XNONCE_LEN: usize
+pub fn benten_crypto_suite::vault::decode_vault(&[u8], &[u8; 32]) -> core::result::Result<benten_crypto_suite::vault::DecodedVault, benten_crypto_suite::vault::VaultError>
+pub fn benten_crypto_suite::vault::decode_vault_strict(u16, usize) -> core::result::Result<(), benten_crypto_suite::vault::VaultError>
+pub fn benten_crypto_suite::vault::derive_dak(&[u8], &[u8; 16], benten_crypto_suite::vault::Argon2idParams, &[u8]) -> [u8; 32]
+pub fn benten_crypto_suite::vault::serialize_vault(&benten_crypto_suite::vault::VaultPayload, &[u8; 32]) -> core::result::Result<alloc::vec::Vec<u8>, benten_crypto_suite::vault::VaultError>
 #[non_exhaustive] pub enum benten_crypto_suite::AeadError
 pub benten_crypto_suite::AeadError::AeadAuthFailed
 pub benten_crypto_suite::AeadError::MalformedEnvelope(&'static str)
 pub benten_crypto_suite::AeadError::RecipientLacksKeysForSuite
 pub benten_crypto_suite::AeadError::Unsupported(benten_crypto_suite::error::UnsupportedAlgorithm)
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::aead::AeadError
-pub fn benten_crypto_suite::aead::AeadError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::aead::AeadError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::error::Error for benten_crypto_suite::aead::AeadError
 pub fn benten_crypto_suite::aead::AeadError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for benten_crypto_suite::aead::AeadError
-pub fn benten_crypto_suite::aead::AeadError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::aead::AeadError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_crypto_suite::aead::AeadError
-pub fn benten_crypto_suite::aead::AeadError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::aead::AeadError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::aead::AeadError
 impl core::marker::Send for benten_crypto_suite::aead::AeadError
 impl core::marker::Sync for benten_crypto_suite::aead::AeadError
@@ -1000,19 +1305,70 @@ impl core::marker::Unpin for benten_crypto_suite::aead::AeadError
 impl core::marker::UnsafeUnpin for benten_crypto_suite::aead::AeadError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::aead::AeadError
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::aead::AeadError
+#[non_exhaustive] pub enum benten_crypto_suite::BindingContext
+pub benten_crypto_suite::BindingContext::Recipient
+pub benten_crypto_suite::BindingContext::Recipient::audience_did: alloc::vec::Vec<u8>
+pub benten_crypto_suite::BindingContext::Recipient::body_cid: alloc::vec::Vec<u8>
+pub benten_crypto_suite::BindingContext::Recipient::recipient_key_generation: u32
+pub benten_crypto_suite::BindingContext::Vault
+pub benten_crypto_suite::BindingContext::Vault::vault_version: u8
+pub benten_crypto_suite::BindingContext::WholeContent
+pub benten_crypto_suite::BindingContext::WholeContent::plaintext_cid: alloc::vec::Vec<u8>
+impl benten_crypto_suite::envelope::BindingContext
+pub fn benten_crypto_suite::envelope::BindingContext::strict_decode(&self, &Self) -> core::result::Result<(), benten_crypto_suite::envelope::EnvelopeError>
+impl core::clone::Clone for benten_crypto_suite::envelope::BindingContext
+pub fn benten_crypto_suite::envelope::BindingContext::clone(&self) -> benten_crypto_suite::envelope::BindingContext
+impl core::cmp::Eq for benten_crypto_suite::envelope::BindingContext
+impl core::cmp::PartialEq for benten_crypto_suite::envelope::BindingContext
+pub fn benten_crypto_suite::envelope::BindingContext::eq(&self, &benten_crypto_suite::envelope::BindingContext) -> bool
+impl core::fmt::Debug for benten_crypto_suite::envelope::BindingContext
+pub fn benten_crypto_suite::envelope::BindingContext::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_crypto_suite::envelope::BindingContext
+impl core::marker::Freeze for benten_crypto_suite::envelope::BindingContext
+impl core::marker::Send for benten_crypto_suite::envelope::BindingContext
+impl core::marker::Sync for benten_crypto_suite::envelope::BindingContext
+impl core::marker::Unpin for benten_crypto_suite::envelope::BindingContext
+impl core::marker::UnsafeUnpin for benten_crypto_suite::envelope::BindingContext
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::envelope::BindingContext
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::envelope::BindingContext
+pub enum benten_crypto_suite::CodepointLifecycle
+pub benten_crypto_suite::CodepointLifecycle::Burned
+pub benten_crypto_suite::CodepointLifecycle::Deprecated
+pub benten_crypto_suite::CodepointLifecycle::Live
+pub benten_crypto_suite::CodepointLifecycle::Quarantined
+impl benten_crypto_suite::codepoint::CodepointLifecycle
+pub fn benten_crypto_suite::codepoint::CodepointLifecycle::dispatch(self) -> core::result::Result<(), benten_crypto_suite::error::UnsupportedAlgorithm>
+impl core::clone::Clone for benten_crypto_suite::codepoint::CodepointLifecycle
+pub fn benten_crypto_suite::codepoint::CodepointLifecycle::clone(&self) -> benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::cmp::Eq for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::cmp::PartialEq for benten_crypto_suite::codepoint::CodepointLifecycle
+pub fn benten_crypto_suite::codepoint::CodepointLifecycle::eq(&self, &benten_crypto_suite::codepoint::CodepointLifecycle) -> bool
+impl core::fmt::Debug for benten_crypto_suite::codepoint::CodepointLifecycle
+pub fn benten_crypto_suite::codepoint::CodepointLifecycle::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for benten_crypto_suite::codepoint::CodepointLifecycle
+pub fn benten_crypto_suite::codepoint::CodepointLifecycle::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::marker::StructuralPartialEq for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::marker::Freeze for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::marker::Send for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::marker::Sync for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::marker::Unpin for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::marker::UnsafeUnpin for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::codepoint::CodepointLifecycle
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::codepoint::CodepointLifecycle
 #[non_exhaustive] pub enum benten_crypto_suite::CryptoError
 pub benten_crypto_suite::CryptoError::Unsupported(benten_crypto_suite::error::UnsupportedAlgorithm)
 pub benten_crypto_suite::CryptoError::Verify(benten_crypto_suite::error::VerifyError)
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::error::CryptoError
-pub fn benten_crypto_suite::error::CryptoError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::error::CryptoError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::convert::From<benten_crypto_suite::error::VerifyError> for benten_crypto_suite::error::CryptoError
-pub fn benten_crypto_suite::error::CryptoError::from(source: benten_crypto_suite::error::VerifyError) -> Self
+pub fn benten_crypto_suite::error::CryptoError::from(benten_crypto_suite::error::VerifyError) -> Self
 impl core::error::Error for benten_crypto_suite::error::CryptoError
 pub fn benten_crypto_suite::error::CryptoError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for benten_crypto_suite::error::CryptoError
-pub fn benten_crypto_suite::error::CryptoError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::error::CryptoError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_crypto_suite::error::CryptoError
-pub fn benten_crypto_suite::error::CryptoError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::error::CryptoError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::error::CryptoError
 impl core::marker::Send for benten_crypto_suite::error::CryptoError
 impl core::marker::Sync for benten_crypto_suite::error::CryptoError
@@ -1020,6 +1376,34 @@ impl core::marker::Unpin for benten_crypto_suite::error::CryptoError
 impl core::marker::UnsafeUnpin for benten_crypto_suite::error::CryptoError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::error::CryptoError
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::error::CryptoError
+#[non_exhaustive] pub enum benten_crypto_suite::EnvelopeError
+pub benten_crypto_suite::EnvelopeError::BadMagic
+pub benten_crypto_suite::EnvelopeError::BadMagic::got: u8
+pub benten_crypto_suite::EnvelopeError::CrossVariantBinding
+pub benten_crypto_suite::EnvelopeError::HostileLengthPrefix
+pub benten_crypto_suite::EnvelopeError::HostileLengthPrefix::bound: usize
+pub benten_crypto_suite::EnvelopeError::HostileLengthPrefix::declared: usize
+pub benten_crypto_suite::EnvelopeError::Truncated
+pub benten_crypto_suite::EnvelopeError::UnsupportedVersion
+pub benten_crypto_suite::EnvelopeError::UnsupportedVersion::got: u8
+impl core::clone::Clone for benten_crypto_suite::envelope::EnvelopeError
+pub fn benten_crypto_suite::envelope::EnvelopeError::clone(&self) -> benten_crypto_suite::envelope::EnvelopeError
+impl core::cmp::Eq for benten_crypto_suite::envelope::EnvelopeError
+impl core::cmp::PartialEq for benten_crypto_suite::envelope::EnvelopeError
+pub fn benten_crypto_suite::envelope::EnvelopeError::eq(&self, &benten_crypto_suite::envelope::EnvelopeError) -> bool
+impl core::error::Error for benten_crypto_suite::envelope::EnvelopeError
+impl core::fmt::Debug for benten_crypto_suite::envelope::EnvelopeError
+pub fn benten_crypto_suite::envelope::EnvelopeError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_crypto_suite::envelope::EnvelopeError
+pub fn benten_crypto_suite::envelope::EnvelopeError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_crypto_suite::envelope::EnvelopeError
+impl core::marker::Freeze for benten_crypto_suite::envelope::EnvelopeError
+impl core::marker::Send for benten_crypto_suite::envelope::EnvelopeError
+impl core::marker::Sync for benten_crypto_suite::envelope::EnvelopeError
+impl core::marker::Unpin for benten_crypto_suite::envelope::EnvelopeError
+impl core::marker::UnsafeUnpin for benten_crypto_suite::envelope::EnvelopeError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::envelope::EnvelopeError
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::envelope::EnvelopeError
 pub enum benten_crypto_suite::SwapKeypair
 pub benten_crypto_suite::SwapKeypair::Hybrid(alloc::boxed::Box<benten_crypto_suite::sig::Keypair>)
 pub benten_crypto_suite::SwapKeypair::PurePq(alloc::boxed::Box<benten_crypto_suite::swap_matrix::PurePqKeypairInner>)
@@ -1042,13 +1426,13 @@ pub benten_crypto_suite::SwapMatrixError::ConfigMismatch::detail: &'static str
 pub benten_crypto_suite::SwapMatrixError::Signature(&'static str)
 pub benten_crypto_suite::SwapMatrixError::Unsupported(benten_crypto_suite::error::UnsupportedAlgorithm)
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::swap_matrix::SwapMatrixError
-pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::error::Error for benten_crypto_suite::swap_matrix::SwapMatrixError
 pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for benten_crypto_suite::swap_matrix::SwapMatrixError
-pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_crypto_suite::swap_matrix::SwapMatrixError
-pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::swap_matrix::SwapMatrixError
 impl core::marker::Send for benten_crypto_suite::swap_matrix::SwapMatrixError
 impl core::marker::Sync for benten_crypto_suite::swap_matrix::SwapMatrixError
@@ -1113,20 +1497,20 @@ impl core::clone::Clone for benten_crypto_suite::error::UnsupportedAlgorithm
 pub fn benten_crypto_suite::error::UnsupportedAlgorithm::clone(&self) -> benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::cmp::Eq for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::cmp::PartialEq for benten_crypto_suite::error::UnsupportedAlgorithm
-pub fn benten_crypto_suite::error::UnsupportedAlgorithm::eq(&self, other: &benten_crypto_suite::error::UnsupportedAlgorithm) -> bool
+pub fn benten_crypto_suite::error::UnsupportedAlgorithm::eq(&self, &benten_crypto_suite::error::UnsupportedAlgorithm) -> bool
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::aead::AeadError
-pub fn benten_crypto_suite::aead::AeadError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::aead::AeadError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::error::CryptoError
-pub fn benten_crypto_suite::error::CryptoError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::error::CryptoError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::error::VerifyError
-pub fn benten_crypto_suite::error::VerifyError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::error::VerifyError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::swap_matrix::SwapMatrixError
-pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::swap_matrix::SwapMatrixError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::error::Error for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::fmt::Debug for benten_crypto_suite::error::UnsupportedAlgorithm
-pub fn benten_crypto_suite::error::UnsupportedAlgorithm::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::error::UnsupportedAlgorithm::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_crypto_suite::error::UnsupportedAlgorithm
-pub fn benten_crypto_suite::error::UnsupportedAlgorithm::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::error::UnsupportedAlgorithm::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::marker::Freeze for benten_crypto_suite::error::UnsupportedAlgorithm
 impl core::marker::Send for benten_crypto_suite::error::UnsupportedAlgorithm
@@ -1146,12 +1530,12 @@ pub benten_crypto_suite::VarsigError::UnsupportedVersion
 pub benten_crypto_suite::VarsigError::UnsupportedVersion::got: u8
 impl core::cmp::Eq for benten_crypto_suite::varsig::VarsigError
 impl core::cmp::PartialEq for benten_crypto_suite::varsig::VarsigError
-pub fn benten_crypto_suite::varsig::VarsigError::eq(&self, other: &benten_crypto_suite::varsig::VarsigError) -> bool
+pub fn benten_crypto_suite::varsig::VarsigError::eq(&self, &benten_crypto_suite::varsig::VarsigError) -> bool
 impl core::error::Error for benten_crypto_suite::varsig::VarsigError
 impl core::fmt::Debug for benten_crypto_suite::varsig::VarsigError
-pub fn benten_crypto_suite::varsig::VarsigError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::varsig::VarsigError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_crypto_suite::varsig::VarsigError
-pub fn benten_crypto_suite::varsig::VarsigError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::varsig::VarsigError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_crypto_suite::varsig::VarsigError
 impl core::marker::Freeze for benten_crypto_suite::varsig::VarsigError
 impl core::marker::Send for benten_crypto_suite::varsig::VarsigError
@@ -1160,6 +1544,31 @@ impl core::marker::Unpin for benten_crypto_suite::varsig::VarsigError
 impl core::marker::UnsafeUnpin for benten_crypto_suite::varsig::VarsigError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::varsig::VarsigError
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::varsig::VarsigError
+#[non_exhaustive] pub enum benten_crypto_suite::VaultError
+pub benten_crypto_suite::VaultError::AeadFailed
+pub benten_crypto_suite::VaultError::EngineLocked
+pub benten_crypto_suite::VaultError::MalformedCbor
+pub benten_crypto_suite::VaultError::NonceWidthMismatch
+pub benten_crypto_suite::VaultError::UnknownCodepoint
+pub benten_crypto_suite::VaultError::WrongPassword
+impl core::clone::Clone for benten_crypto_suite::vault::VaultError
+pub fn benten_crypto_suite::vault::VaultError::clone(&self) -> benten_crypto_suite::vault::VaultError
+impl core::cmp::Eq for benten_crypto_suite::vault::VaultError
+impl core::cmp::PartialEq for benten_crypto_suite::vault::VaultError
+pub fn benten_crypto_suite::vault::VaultError::eq(&self, &benten_crypto_suite::vault::VaultError) -> bool
+impl core::error::Error for benten_crypto_suite::vault::VaultError
+impl core::fmt::Debug for benten_crypto_suite::vault::VaultError
+pub fn benten_crypto_suite::vault::VaultError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for benten_crypto_suite::vault::VaultError
+pub fn benten_crypto_suite::vault::VaultError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_crypto_suite::vault::VaultError
+impl core::marker::Freeze for benten_crypto_suite::vault::VaultError
+impl core::marker::Send for benten_crypto_suite::vault::VaultError
+impl core::marker::Sync for benten_crypto_suite::vault::VaultError
+impl core::marker::Unpin for benten_crypto_suite::vault::VaultError
+impl core::marker::UnsafeUnpin for benten_crypto_suite::vault::VaultError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::vault::VaultError
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::VaultError
 #[non_exhaustive] pub enum benten_crypto_suite::VerifyError
 pub benten_crypto_suite::VerifyError::ClassicalVerifyFailed
 pub benten_crypto_suite::VerifyError::CodepointMismatch
@@ -1170,17 +1579,17 @@ pub benten_crypto_suite::VerifyError::PqVerifyFailed
 pub benten_crypto_suite::VerifyError::StripResistanceViolated(&'static str)
 pub benten_crypto_suite::VerifyError::Unsupported(benten_crypto_suite::error::UnsupportedAlgorithm)
 impl core::cmp::PartialEq for benten_crypto_suite::error::VerifyError
-pub fn benten_crypto_suite::error::VerifyError::eq(&self, other: &Self) -> bool
+pub fn benten_crypto_suite::error::VerifyError::eq(&self, &Self) -> bool
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::error::VerifyError
-pub fn benten_crypto_suite::error::VerifyError::from(source: benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
+pub fn benten_crypto_suite::error::VerifyError::from(benten_crypto_suite::error::UnsupportedAlgorithm) -> Self
 impl core::convert::From<benten_crypto_suite::error::VerifyError> for benten_crypto_suite::error::CryptoError
-pub fn benten_crypto_suite::error::CryptoError::from(source: benten_crypto_suite::error::VerifyError) -> Self
+pub fn benten_crypto_suite::error::CryptoError::from(benten_crypto_suite::error::VerifyError) -> Self
 impl core::error::Error for benten_crypto_suite::error::VerifyError
 pub fn benten_crypto_suite::error::VerifyError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for benten_crypto_suite::error::VerifyError
-pub fn benten_crypto_suite::error::VerifyError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::error::VerifyError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_crypto_suite::error::VerifyError
-pub fn benten_crypto_suite::error::VerifyError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::error::VerifyError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::error::VerifyError
 impl core::marker::Send for benten_crypto_suite::error::VerifyError
 impl core::marker::Sync for benten_crypto_suite::error::VerifyError
@@ -1194,12 +1603,12 @@ pub benten_crypto_suite::AeadEnvelope::ciphertext: alloc::vec::Vec<u8>
 pub benten_crypto_suite::AeadEnvelope::format_version: u8
 pub benten_crypto_suite::AeadEnvelope::nonce: alloc::vec::Vec<u8>
 impl benten_crypto_suite::aead::AeadEnvelope
-pub fn benten_crypto_suite::aead::AeadEnvelope::from_wire_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_crypto_suite::aead::AeadError>
+pub fn benten_crypto_suite::aead::AeadEnvelope::from_wire_bytes(&[u8]) -> core::result::Result<Self, benten_crypto_suite::aead::AeadError>
 pub fn benten_crypto_suite::aead::AeadEnvelope::to_wire_bytes(&self) -> alloc::vec::Vec<u8>
 impl core::clone::Clone for benten_crypto_suite::aead::AeadEnvelope
 pub fn benten_crypto_suite::aead::AeadEnvelope::clone(&self) -> benten_crypto_suite::aead::AeadEnvelope
 impl core::fmt::Debug for benten_crypto_suite::aead::AeadEnvelope
-pub fn benten_crypto_suite::aead::AeadEnvelope::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::aead::AeadEnvelope::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::aead::AeadEnvelope
 impl core::marker::Send for benten_crypto_suite::aead::AeadEnvelope
 impl core::marker::Sync for benten_crypto_suite::aead::AeadEnvelope
@@ -1212,7 +1621,7 @@ pub benten_crypto_suite::AeadKeyMaterial::codepoint: benten_crypto_suite::codepo
 impl benten_crypto_suite::aead::AeadKeyMaterial
 pub fn benten_crypto_suite::aead::AeadKeyMaterial::as_bytes(&self) -> &[u8]
 pub const fn benten_crypto_suite::aead::AeadKeyMaterial::codepoint(&self) -> benten_crypto_suite::codepoint::CipherSuiteCodepoint
-pub fn benten_crypto_suite::aead::AeadKeyMaterial::from_raw_bytes(codepoint: benten_crypto_suite::codepoint::CipherSuiteCodepoint, bytes: &[u8]) -> Self
+pub fn benten_crypto_suite::aead::AeadKeyMaterial::from_raw_bytes(benten_crypto_suite::codepoint::CipherSuiteCodepoint, &[u8]) -> Self
 impl core::clone::Clone for benten_crypto_suite::aead::AeadKeyMaterial
 pub fn benten_crypto_suite::aead::AeadKeyMaterial::clone(&self) -> benten_crypto_suite::aead::AeadKeyMaterial
 impl core::ops::drop::Drop for benten_crypto_suite::aead::AeadKeyMaterial
@@ -1224,6 +1633,26 @@ impl core::marker::Unpin for benten_crypto_suite::aead::AeadKeyMaterial
 impl core::marker::UnsafeUnpin for benten_crypto_suite::aead::AeadKeyMaterial
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::aead::AeadKeyMaterial
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::aead::AeadKeyMaterial
+pub struct benten_crypto_suite::Argon2idParams
+pub benten_crypto_suite::Argon2idParams::m_cost: u32
+pub benten_crypto_suite::Argon2idParams::p_cost: u32
+pub benten_crypto_suite::Argon2idParams::t_cost: u32
+impl core::clone::Clone for benten_crypto_suite::vault::Argon2idParams
+pub fn benten_crypto_suite::vault::Argon2idParams::clone(&self) -> benten_crypto_suite::vault::Argon2idParams
+impl core::cmp::Eq for benten_crypto_suite::vault::Argon2idParams
+impl core::cmp::PartialEq for benten_crypto_suite::vault::Argon2idParams
+pub fn benten_crypto_suite::vault::Argon2idParams::eq(&self, &benten_crypto_suite::vault::Argon2idParams) -> bool
+impl core::fmt::Debug for benten_crypto_suite::vault::Argon2idParams
+pub fn benten_crypto_suite::vault::Argon2idParams::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_crypto_suite::vault::Argon2idParams
+impl core::marker::StructuralPartialEq for benten_crypto_suite::vault::Argon2idParams
+impl core::marker::Freeze for benten_crypto_suite::vault::Argon2idParams
+impl core::marker::Send for benten_crypto_suite::vault::Argon2idParams
+impl core::marker::Sync for benten_crypto_suite::vault::Argon2idParams
+impl core::marker::Unpin for benten_crypto_suite::vault::Argon2idParams
+impl core::marker::UnsafeUnpin for benten_crypto_suite::vault::Argon2idParams
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::vault::Argon2idParams
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::Argon2idParams
 pub struct benten_crypto_suite::CipherSuiteCodepoint(_)
 impl benten_crypto_suite::codepoint::CipherSuiteCodepoint
 pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::CLASSICAL_X25519: Self
@@ -1231,18 +1660,18 @@ pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::HYBRID_MLKEM768_
 pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::HYBRID_X25519_MLKEM768: Self
 pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::NONE_PLAINTEXT: Self
 pub const benten_crypto_suite::codepoint::CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY: Self
-pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::from_raw(raw: u16) -> Self
+pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::from_raw(u16) -> Self
 pub const fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::raw(self) -> u16
 pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::resolve(self) -> core::result::Result<(), benten_crypto_suite::error::UnsupportedAlgorithm>
 impl core::clone::Clone for benten_crypto_suite::codepoint::CipherSuiteCodepoint
 pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::clone(&self) -> benten_crypto_suite::codepoint::CipherSuiteCodepoint
 impl core::cmp::Eq for benten_crypto_suite::codepoint::CipherSuiteCodepoint
 impl core::cmp::PartialEq for benten_crypto_suite::codepoint::CipherSuiteCodepoint
-pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::eq(&self, other: &benten_crypto_suite::codepoint::CipherSuiteCodepoint) -> bool
+pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::eq(&self, &benten_crypto_suite::codepoint::CipherSuiteCodepoint) -> bool
 impl core::fmt::Debug for benten_crypto_suite::codepoint::CipherSuiteCodepoint
-pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::hash::Hash for benten_crypto_suite::codepoint::CipherSuiteCodepoint
-pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+pub fn benten_crypto_suite::codepoint::CipherSuiteCodepoint::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::Copy for benten_crypto_suite::codepoint::CipherSuiteCodepoint
 impl core::marker::StructuralPartialEq for benten_crypto_suite::codepoint::CipherSuiteCodepoint
 impl core::marker::Freeze for benten_crypto_suite::codepoint::CipherSuiteCodepoint
@@ -1252,23 +1681,44 @@ impl core::marker::Unpin for benten_crypto_suite::codepoint::CipherSuiteCodepoin
 impl core::marker::UnsafeUnpin for benten_crypto_suite::codepoint::CipherSuiteCodepoint
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::codepoint::CipherSuiteCodepoint
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::codepoint::CipherSuiteCodepoint
+pub struct benten_crypto_suite::EncryptedEnvelope
+pub benten_crypto_suite::EncryptedEnvelope::aad_binding: benten_crypto_suite::envelope::BindingContext
+pub benten_crypto_suite::EncryptedEnvelope::cipher_codepoint: u16
+pub benten_crypto_suite::EncryptedEnvelope::ciphertext: alloc::vec::Vec<u8>
+pub benten_crypto_suite::EncryptedEnvelope::format_version: u8
+pub benten_crypto_suite::EncryptedEnvelope::nonce: alloc::vec::Vec<u8>
+impl benten_crypto_suite::envelope::EncryptedEnvelope
+pub fn benten_crypto_suite::envelope::EncryptedEnvelope::decode_nonce_bounded(&[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_crypto_suite::envelope::EnvelopeError>
+pub fn benten_crypto_suite::envelope::EncryptedEnvelope::from_wire_bytes(&[u8]) -> core::result::Result<Self, benten_crypto_suite::envelope::EnvelopeError>
+pub fn benten_crypto_suite::envelope::EncryptedEnvelope::to_wire_bytes(&self) -> alloc::vec::Vec<u8>
+impl core::clone::Clone for benten_crypto_suite::envelope::EncryptedEnvelope
+pub fn benten_crypto_suite::envelope::EncryptedEnvelope::clone(&self) -> benten_crypto_suite::envelope::EncryptedEnvelope
+impl core::fmt::Debug for benten_crypto_suite::envelope::EncryptedEnvelope
+pub fn benten_crypto_suite::envelope::EncryptedEnvelope::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_crypto_suite::envelope::EncryptedEnvelope
+impl core::marker::Send for benten_crypto_suite::envelope::EncryptedEnvelope
+impl core::marker::Sync for benten_crypto_suite::envelope::EncryptedEnvelope
+impl core::marker::Unpin for benten_crypto_suite::envelope::EncryptedEnvelope
+impl core::marker::UnsafeUnpin for benten_crypto_suite::envelope::EncryptedEnvelope
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::envelope::EncryptedEnvelope
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::envelope::EncryptedEnvelope
 pub struct benten_crypto_suite::HashCodepoint(_)
 impl benten_crypto_suite::codepoint::HashCodepoint
 pub const benten_crypto_suite::codepoint::HashCodepoint::BLAKE3: Self
 pub const benten_crypto_suite::codepoint::HashCodepoint::SHA2_512_256: Self
 pub const benten_crypto_suite::codepoint::HashCodepoint::SHA3_256: Self
-pub const fn benten_crypto_suite::codepoint::HashCodepoint::from_raw(raw: u64) -> Self
+pub const fn benten_crypto_suite::codepoint::HashCodepoint::from_raw(u64) -> Self
 pub const fn benten_crypto_suite::codepoint::HashCodepoint::raw(self) -> u64
 pub fn benten_crypto_suite::codepoint::HashCodepoint::resolve(self) -> core::result::Result<(), benten_crypto_suite::error::UnsupportedAlgorithm>
 impl core::clone::Clone for benten_crypto_suite::codepoint::HashCodepoint
 pub fn benten_crypto_suite::codepoint::HashCodepoint::clone(&self) -> benten_crypto_suite::codepoint::HashCodepoint
 impl core::cmp::Eq for benten_crypto_suite::codepoint::HashCodepoint
 impl core::cmp::PartialEq for benten_crypto_suite::codepoint::HashCodepoint
-pub fn benten_crypto_suite::codepoint::HashCodepoint::eq(&self, other: &benten_crypto_suite::codepoint::HashCodepoint) -> bool
+pub fn benten_crypto_suite::codepoint::HashCodepoint::eq(&self, &benten_crypto_suite::codepoint::HashCodepoint) -> bool
 impl core::fmt::Debug for benten_crypto_suite::codepoint::HashCodepoint
-pub fn benten_crypto_suite::codepoint::HashCodepoint::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::codepoint::HashCodepoint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::hash::Hash for benten_crypto_suite::codepoint::HashCodepoint
-pub fn benten_crypto_suite::codepoint::HashCodepoint::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+pub fn benten_crypto_suite::codepoint::HashCodepoint::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::Copy for benten_crypto_suite::codepoint::HashCodepoint
 impl core::marker::StructuralPartialEq for benten_crypto_suite::codepoint::HashCodepoint
 impl core::marker::Freeze for benten_crypto_suite::codepoint::HashCodepoint
@@ -1282,11 +1732,11 @@ pub struct benten_crypto_suite::HashSeam
 impl benten_crypto_suite::hash::HashSeam
 pub const fn benten_crypto_suite::hash::HashSeam::codepoint(&self) -> benten_crypto_suite::codepoint::HashCodepoint
 pub const fn benten_crypto_suite::hash::HashSeam::default_codepoint() -> benten_crypto_suite::codepoint::HashCodepoint
-pub fn benten_crypto_suite::hash::HashSeam::digest(&self, input: &[u8]) -> alloc::vec::Vec<u8>
-pub fn benten_crypto_suite::hash::HashSeam::for_codepoint(codepoint: benten_crypto_suite::codepoint::HashCodepoint) -> core::result::Result<Self, benten_crypto_suite::error::UnsupportedAlgorithm>
+pub fn benten_crypto_suite::hash::HashSeam::digest(&self, &[u8]) -> alloc::vec::Vec<u8>
+pub fn benten_crypto_suite::hash::HashSeam::for_codepoint(benten_crypto_suite::codepoint::HashCodepoint) -> core::result::Result<Self, benten_crypto_suite::error::UnsupportedAlgorithm>
 pub fn benten_crypto_suite::hash::HashSeam::output_byte_len(&self) -> usize
 impl core::fmt::Debug for benten_crypto_suite::hash::HashSeam
-pub fn benten_crypto_suite::hash::HashSeam::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::hash::HashSeam::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::hash::HashSeam
 impl core::marker::Send for benten_crypto_suite::hash::HashSeam
 impl core::marker::Sync for benten_crypto_suite::hash::HashSeam
@@ -1304,9 +1754,9 @@ impl core::clone::Clone for benten_crypto_suite::sig::HybridSignature
 pub fn benten_crypto_suite::sig::HybridSignature::clone(&self) -> benten_crypto_suite::sig::HybridSignature
 impl core::cmp::Eq for benten_crypto_suite::sig::HybridSignature
 impl core::cmp::PartialEq for benten_crypto_suite::sig::HybridSignature
-pub fn benten_crypto_suite::sig::HybridSignature::eq(&self, other: &benten_crypto_suite::sig::HybridSignature) -> bool
+pub fn benten_crypto_suite::sig::HybridSignature::eq(&self, &benten_crypto_suite::sig::HybridSignature) -> bool
 impl core::fmt::Debug for benten_crypto_suite::sig::HybridSignature
-pub fn benten_crypto_suite::sig::HybridSignature::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::sig::HybridSignature::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_crypto_suite::sig::HybridSignature
 impl core::marker::Freeze for benten_crypto_suite::sig::HybridSignature
 impl core::marker::Send for benten_crypto_suite::sig::HybridSignature
@@ -1396,7 +1846,7 @@ impl benten_crypto_suite::codepoint::SigCodepoint
 pub const benten_crypto_suite::codepoint::SigCodepoint::CLASSICAL_ED25519: Self
 pub const benten_crypto_suite::codepoint::SigCodepoint::HYBRID_ED25519_MLDSA65: Self
 pub const benten_crypto_suite::codepoint::SigCodepoint::HYBRID_MLDSA65_SLHDSA: Self
-pub const fn benten_crypto_suite::codepoint::SigCodepoint::from_raw(raw: u16) -> Self
+pub const fn benten_crypto_suite::codepoint::SigCodepoint::from_raw(u16) -> Self
 pub const fn benten_crypto_suite::codepoint::SigCodepoint::is_classical_only(self) -> bool
 pub const fn benten_crypto_suite::codepoint::SigCodepoint::is_hybrid_default(self) -> bool
 pub const fn benten_crypto_suite::codepoint::SigCodepoint::raw(self) -> u16
@@ -1405,11 +1855,11 @@ impl core::clone::Clone for benten_crypto_suite::codepoint::SigCodepoint
 pub fn benten_crypto_suite::codepoint::SigCodepoint::clone(&self) -> benten_crypto_suite::codepoint::SigCodepoint
 impl core::cmp::Eq for benten_crypto_suite::codepoint::SigCodepoint
 impl core::cmp::PartialEq for benten_crypto_suite::codepoint::SigCodepoint
-pub fn benten_crypto_suite::codepoint::SigCodepoint::eq(&self, other: &benten_crypto_suite::codepoint::SigCodepoint) -> bool
+pub fn benten_crypto_suite::codepoint::SigCodepoint::eq(&self, &benten_crypto_suite::codepoint::SigCodepoint) -> bool
 impl core::fmt::Debug for benten_crypto_suite::codepoint::SigCodepoint
-pub fn benten_crypto_suite::codepoint::SigCodepoint::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::codepoint::SigCodepoint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::hash::Hash for benten_crypto_suite::codepoint::SigCodepoint
-pub fn benten_crypto_suite::codepoint::SigCodepoint::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+pub fn benten_crypto_suite::codepoint::SigCodepoint::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::Copy for benten_crypto_suite::codepoint::SigCodepoint
 impl core::marker::StructuralPartialEq for benten_crypto_suite::codepoint::SigCodepoint
 impl core::marker::Freeze for benten_crypto_suite::codepoint::SigCodepoint
@@ -1436,14 +1886,14 @@ pub struct benten_crypto_suite::SignatureSuite
 impl benten_crypto_suite::sig::SignatureSuite
 pub const fn benten_crypto_suite::sig::SignatureSuite::default_codepoint(&self) -> benten_crypto_suite::codepoint::SigCodepoint
 pub const fn benten_crypto_suite::sig::SignatureSuite::exposes_static_size_constant() -> bool
-pub const fn benten_crypto_suite::sig::SignatureSuite::from_config(config: benten_crypto_suite::sig::SuiteConfig) -> Self
+pub const fn benten_crypto_suite::sig::SignatureSuite::from_config(benten_crypto_suite::sig::SuiteConfig) -> Self
 pub fn benten_crypto_suite::sig::SignatureSuite::generate_keypair(&self) -> benten_crypto_suite::sig::Keypair
 pub const fn benten_crypto_suite::sig::SignatureSuite::is_hybrid(&self) -> bool
-pub fn benten_crypto_suite::sig::SignatureSuite::resolve_codepoint(codepoint: benten_crypto_suite::codepoint::SigCodepoint) -> core::result::Result<Self, benten_crypto_suite::error::UnsupportedAlgorithm>
-pub fn benten_crypto_suite::sig::SignatureSuite::sign(&self, kp: &benten_crypto_suite::sig::Keypair, msg: &[u8]) -> benten_crypto_suite::sig::HybridSignature
-pub fn benten_crypto_suite::sig::SignatureSuite::signature_byte_len_for(&self, codepoint: benten_crypto_suite::codepoint::SigCodepoint) -> usize
+pub fn benten_crypto_suite::sig::SignatureSuite::resolve_codepoint(benten_crypto_suite::codepoint::SigCodepoint) -> core::result::Result<Self, benten_crypto_suite::error::UnsupportedAlgorithm>
+pub fn benten_crypto_suite::sig::SignatureSuite::sign(&self, &benten_crypto_suite::sig::Keypair, &[u8]) -> benten_crypto_suite::sig::HybridSignature
+pub fn benten_crypto_suite::sig::SignatureSuite::signature_byte_len_for(&self, benten_crypto_suite::codepoint::SigCodepoint) -> usize
 pub const fn benten_crypto_suite::sig::SignatureSuite::v1_default() -> Self
-pub fn benten_crypto_suite::sig::SignatureSuite::verify(&self, pk: benten_crypto_suite::sig::PublicKey, msg: &[u8], sig: &benten_crypto_suite::sig::HybridSignature) -> core::result::Result<(), benten_crypto_suite::error::VerifyError>
+pub fn benten_crypto_suite::sig::SignatureSuite::verify(&self, benten_crypto_suite::sig::PublicKey, &[u8], &benten_crypto_suite::sig::HybridSignature) -> core::result::Result<(), benten_crypto_suite::error::VerifyError>
 impl core::marker::Freeze for benten_crypto_suite::sig::SignatureSuite
 impl core::marker::Send for benten_crypto_suite::sig::SignatureSuite
 impl core::marker::Sync for benten_crypto_suite::sig::SignatureSuite
@@ -1454,7 +1904,7 @@ impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::sig::Signatur
 pub struct benten_crypto_suite::StructuralKdfKey(_)
 impl benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub fn benten_crypto_suite::structural_kdf::StructuralKdfKey::as_bytes(&self) -> [u8; 32]
-pub fn benten_crypto_suite::structural_kdf::StructuralKdfKey::from_bytes_for_test(bytes: &[u8]) -> Self
+pub fn benten_crypto_suite::structural_kdf::StructuralKdfKey::from_bytes_for_test(&[u8]) -> Self
 impl core::clone::Clone for benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub fn benten_crypto_suite::structural_kdf::StructuralKdfKey::clone(&self) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
 impl core::ops::drop::Drop for benten_crypto_suite::structural_kdf::StructuralKdfKey
@@ -1470,16 +1920,16 @@ pub struct benten_crypto_suite::SuiteConfig
 impl benten_crypto_suite::sig::SuiteConfig
 pub const fn benten_crypto_suite::sig::SuiteConfig::classical_only() -> Self
 pub const fn benten_crypto_suite::sig::SuiteConfig::codepoint(self) -> benten_crypto_suite::codepoint::SigCodepoint
-pub fn benten_crypto_suite::sig::SuiteConfig::is_distinct_from(&self, other: &Self) -> bool
+pub fn benten_crypto_suite::sig::SuiteConfig::is_distinct_from(&self, &Self) -> bool
 pub const fn benten_crypto_suite::sig::SuiteConfig::is_hybrid(self) -> bool
 pub const fn benten_crypto_suite::sig::SuiteConfig::v1_default() -> Self
 impl core::clone::Clone for benten_crypto_suite::sig::SuiteConfig
 pub fn benten_crypto_suite::sig::SuiteConfig::clone(&self) -> benten_crypto_suite::sig::SuiteConfig
 impl core::cmp::Eq for benten_crypto_suite::sig::SuiteConfig
 impl core::cmp::PartialEq for benten_crypto_suite::sig::SuiteConfig
-pub fn benten_crypto_suite::sig::SuiteConfig::eq(&self, other: &benten_crypto_suite::sig::SuiteConfig) -> bool
+pub fn benten_crypto_suite::sig::SuiteConfig::eq(&self, &benten_crypto_suite::sig::SuiteConfig) -> bool
 impl core::fmt::Debug for benten_crypto_suite::sig::SuiteConfig
-pub fn benten_crypto_suite::sig::SuiteConfig::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::sig::SuiteConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for benten_crypto_suite::sig::SuiteConfig
 impl core::marker::StructuralPartialEq for benten_crypto_suite::sig::SuiteConfig
 impl core::marker::Freeze for benten_crypto_suite::sig::SuiteConfig
@@ -1493,7 +1943,7 @@ pub struct benten_crypto_suite::SwapDecrypted
 impl benten_crypto_suite::swap_matrix::SwapDecrypted
 pub fn benten_crypto_suite::swap_matrix::SwapDecrypted::as_slice(&self) -> &[u8]
 impl core::fmt::Debug for benten_crypto_suite::swap_matrix::SwapDecrypted
-pub fn benten_crypto_suite::swap_matrix::SwapDecrypted::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::swap_matrix::SwapDecrypted::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::swap_matrix::SwapDecrypted
 impl core::marker::Send for benten_crypto_suite::swap_matrix::SwapDecrypted
 impl core::marker::Sync for benten_crypto_suite::swap_matrix::SwapDecrypted
@@ -1525,18 +1975,18 @@ pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::encryption_is_pq_hybr
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::is_pure_pq_sole_trust_path(&self) -> bool
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::no_encryption_public_class() -> Self
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::non_pq_encryption() -> Self
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::open_and_verify(&self, recipient_secret: &benten_crypto_suite::swap_matrix::SwapRecipientSecret<'_>, sender_pub: &benten_crypto_suite::swap_matrix::SwapPublicKey, envelope: &benten_crypto_suite::swap_matrix::SwapEnvelope) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapDecrypted, benten_crypto_suite::swap_matrix::SwapMatrixError>
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::sign_and_seal(&self, kp: &benten_crypto_suite::swap_matrix::SwapKeypair, recipient: &benten_crypto_suite::swap_matrix::SwapRecipientPublic<'_>, payload: &[u8]) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapEnvelope, benten_crypto_suite::swap_matrix::SwapMatrixError>
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::sign_only(&self, kp: &benten_crypto_suite::swap_matrix::SwapKeypair, payload: &[u8]) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapEnvelope, benten_crypto_suite::swap_matrix::SwapMatrixError>
+pub fn benten_crypto_suite::swap_matrix::SwapMatrix::open_and_verify(&self, &benten_crypto_suite::swap_matrix::SwapRecipientSecret<'_>, &benten_crypto_suite::swap_matrix::SwapPublicKey, &benten_crypto_suite::swap_matrix::SwapEnvelope) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapDecrypted, benten_crypto_suite::swap_matrix::SwapMatrixError>
+pub fn benten_crypto_suite::swap_matrix::SwapMatrix::sign_and_seal(&self, &benten_crypto_suite::swap_matrix::SwapKeypair, &benten_crypto_suite::swap_matrix::SwapRecipientPublic<'_>, &[u8]) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapEnvelope, benten_crypto_suite::swap_matrix::SwapMatrixError>
+pub fn benten_crypto_suite::swap_matrix::SwapMatrix::sign_only(&self, &benten_crypto_suite::swap_matrix::SwapKeypair, &[u8]) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapEnvelope, benten_crypto_suite::swap_matrix::SwapMatrixError>
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::signature_codepoint(&self) -> benten_crypto_suite::codepoint::SigCodepoint
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::signature_is_hybrid(&self) -> bool
 pub fn benten_crypto_suite::swap_matrix::SwapMatrix::try_pure_pq_sole_trust_path() -> core::result::Result<Self, benten_crypto_suite::swap_matrix::SwapMatrixError>
 pub const fn benten_crypto_suite::swap_matrix::SwapMatrix::v1_beta_default() -> Self
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::verify_only(&self, sender_pub: &benten_crypto_suite::swap_matrix::SwapPublicKey, envelope: &benten_crypto_suite::swap_matrix::SwapEnvelope) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapDecrypted, benten_crypto_suite::swap_matrix::SwapMatrixError>
+pub fn benten_crypto_suite::swap_matrix::SwapMatrix::verify_only(&self, &benten_crypto_suite::swap_matrix::SwapPublicKey, &benten_crypto_suite::swap_matrix::SwapEnvelope) -> core::result::Result<benten_crypto_suite::swap_matrix::SwapDecrypted, benten_crypto_suite::swap_matrix::SwapMatrixError>
 impl benten_crypto_suite::swap_matrix::SwapMatrix
 pub fn benten_crypto_suite::swap_matrix::SwapMatrix::pure_pq_nf1_signature_arm() -> benten_crypto_suite::swap_matrix::PurePqNf1SignatureArm
 impl core::fmt::Debug for benten_crypto_suite::swap_matrix::SwapMatrix
-pub fn benten_crypto_suite::swap_matrix::SwapMatrix::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_crypto_suite::swap_matrix::SwapMatrix::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_crypto_suite::swap_matrix::SwapMatrix
 impl core::marker::Send for benten_crypto_suite::swap_matrix::SwapMatrix
 impl core::marker::Sync for benten_crypto_suite::swap_matrix::SwapMatrix
@@ -1548,8 +1998,8 @@ pub struct benten_crypto_suite::UcanVarsigV1Header
 impl benten_crypto_suite::varsig::UcanVarsigV1Header
 pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::advertises_hybrid(&self) -> bool
 pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::as_bytes(&self) -> &[u8]
-pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::decode(bytes: &[u8]) -> core::result::Result<benten_crypto_suite::varsig::DecodedVarsig, benten_crypto_suite::varsig::VarsigError>
-pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::encode_hybrid(sig: &benten_crypto_suite::sig::HybridSignature) -> Self
+pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::decode(&[u8]) -> core::result::Result<benten_crypto_suite::varsig::DecodedVarsig, benten_crypto_suite::varsig::VarsigError>
+pub fn benten_crypto_suite::varsig::UcanVarsigV1Header::encode_hybrid(&benten_crypto_suite::sig::HybridSignature) -> Self
 impl core::marker::Freeze for benten_crypto_suite::varsig::UcanVarsigV1Header
 impl core::marker::Send for benten_crypto_suite::varsig::UcanVarsigV1Header
 impl core::marker::Sync for benten_crypto_suite::varsig::UcanVarsigV1Header
@@ -1557,7 +2007,77 @@ impl core::marker::Unpin for benten_crypto_suite::varsig::UcanVarsigV1Header
 impl core::marker::UnsafeUnpin for benten_crypto_suite::varsig::UcanVarsigV1Header
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::varsig::UcanVarsigV1Header
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::varsig::UcanVarsigV1Header
+pub struct benten_crypto_suite::UnlockedKeyMaterial
+impl benten_crypto_suite::vault::UnlockedKeyMaterial
+pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::expose_k_principal(&self) -> &[u8; 32]
+pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::k_principal_len(&self) -> usize
+pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::new([u8; 32], alloc::vec::Vec<u8>) -> Self
+pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::structural_kdf_root_key(&self) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
+pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::user_did_signing_key(&self) -> &[u8]
+impl core::fmt::Debug for benten_crypto_suite::vault::UnlockedKeyMaterial
+pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_crypto_suite::vault::UnlockedKeyMaterial
+impl core::marker::Send for benten_crypto_suite::vault::UnlockedKeyMaterial
+impl core::marker::Sync for benten_crypto_suite::vault::UnlockedKeyMaterial
+impl core::marker::Unpin for benten_crypto_suite::vault::UnlockedKeyMaterial
+impl core::marker::UnsafeUnpin for benten_crypto_suite::vault::UnlockedKeyMaterial
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::vault::UnlockedKeyMaterial
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::UnlockedKeyMaterial
+pub struct benten_crypto_suite::VaultEngine
+impl benten_crypto_suite::vault::VaultEngine
+pub fn benten_crypto_suite::vault::VaultEngine::encrypt_node(&self, &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_crypto_suite::vault::VaultError>
+pub fn benten_crypto_suite::vault::VaultEngine::new_locked() -> Self
+pub fn benten_crypto_suite::vault::VaultEngine::unlock(&mut self, &benten_crypto_suite::vault::VaultPayload)
+pub fn benten_crypto_suite::vault::VaultEngine::unlocked_handle(&self) -> core::option::Option<&benten_crypto_suite::vault::UnlockedKeyMaterial>
+impl core::default::Default for benten_crypto_suite::vault::VaultEngine
+pub fn benten_crypto_suite::vault::VaultEngine::default() -> Self
+impl core::marker::Freeze for benten_crypto_suite::vault::VaultEngine
+impl core::marker::Send for benten_crypto_suite::vault::VaultEngine
+impl core::marker::Sync for benten_crypto_suite::vault::VaultEngine
+impl core::marker::Unpin for benten_crypto_suite::vault::VaultEngine
+impl core::marker::UnsafeUnpin for benten_crypto_suite::vault::VaultEngine
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::vault::VaultEngine
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::VaultEngine
+pub struct benten_crypto_suite::VaultPayload
+pub benten_crypto_suite::VaultPayload::k_principal: [u8; 32]
+pub benten_crypto_suite::VaultPayload::user_did_creation_time: u64
+pub benten_crypto_suite::VaultPayload::user_did_signing_key: alloc::vec::Vec<u8>
+impl benten_crypto_suite::vault::VaultPayload
+pub fn benten_crypto_suite::vault::VaultPayload::from_canonical_cbor(&[u8]) -> core::result::Result<Self, benten_crypto_suite::vault::VaultError>
+pub fn benten_crypto_suite::vault::VaultPayload::to_canonical_cbor(&self) -> alloc::vec::Vec<u8>
+impl core::clone::Clone for benten_crypto_suite::vault::VaultPayload
+pub fn benten_crypto_suite::vault::VaultPayload::clone(&self) -> benten_crypto_suite::vault::VaultPayload
+impl core::cmp::Eq for benten_crypto_suite::vault::VaultPayload
+impl core::cmp::PartialEq for benten_crypto_suite::vault::VaultPayload
+pub fn benten_crypto_suite::vault::VaultPayload::eq(&self, &benten_crypto_suite::vault::VaultPayload) -> bool
+impl core::fmt::Debug for benten_crypto_suite::vault::VaultPayload
+pub fn benten_crypto_suite::vault::VaultPayload::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_crypto_suite::vault::VaultPayload
+impl serde_core::ser::Serialize for benten_crypto_suite::vault::VaultPayload
+pub fn benten_crypto_suite::vault::VaultPayload::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for benten_crypto_suite::vault::VaultPayload
+pub fn benten_crypto_suite::vault::VaultPayload::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for benten_crypto_suite::vault::VaultPayload
+impl core::marker::Send for benten_crypto_suite::vault::VaultPayload
+impl core::marker::Sync for benten_crypto_suite::vault::VaultPayload
+impl core::marker::Unpin for benten_crypto_suite::vault::VaultPayload
+impl core::marker::UnsafeUnpin for benten_crypto_suite::vault::VaultPayload
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::vault::VaultPayload
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::VaultPayload
 pub const benten_crypto_suite::AUDIT_LANDED_PURE_PQ_FLAG: bool
+pub const benten_crypto_suite::DAK_HKDF_INFO_TAG: &[u8]
+pub const benten_crypto_suite::ENVELOPE_FORMAT_VERSION_V1: u8
+pub const benten_crypto_suite::ENVELOPE_FORMAT_VERSION_V2: u8
+pub const benten_crypto_suite::ENVELOPE_MAGIC: u8
+pub const benten_crypto_suite::MAX_NONCE_LEN: usize
+pub const benten_crypto_suite::OWASP_DEFAULT: benten_crypto_suite::vault::Argon2idParams
+pub const benten_crypto_suite::X_WING_LABEL: [u8; 6]
 pub const fn benten_crypto_suite::audit_landed_pure_pq_flag() -> bool
-pub fn benten_crypto_suite::derive_root(k_principal: &benten_crypto_suite::structural_kdf::StructuralKdfKey, root_cid: &[u8], cipher_suite_codepoint: u16) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
-pub fn benten_crypto_suite::derive_step(predecessor: &benten_crypto_suite::structural_kdf::StructuralKdfKey, edge_label: &[u8], node_cid: &[u8]) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
+pub fn benten_crypto_suite::canonical_tlv_encode(u16, &benten_crypto_suite::envelope::BindingContext) -> alloc::vec::Vec<u8>
+pub fn benten_crypto_suite::classical_combine(&[u8], &[u8], &[u8]) -> [u8; 32]
+pub fn benten_crypto_suite::combine_x_wing(&[u8], &[u8], &[u8], &[u8]) -> [u8; 32]
+pub fn benten_crypto_suite::derive_dak(&[u8], &[u8; 16], benten_crypto_suite::vault::Argon2idParams, &[u8]) -> [u8; 32]
+pub fn benten_crypto_suite::derive_root(&benten_crypto_suite::structural_kdf::StructuralKdfKey, &[u8], u16) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
+pub fn benten_crypto_suite::derive_step(&benten_crypto_suite::structural_kdf::StructuralKdfKey, &[u8], &[u8]) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
+pub const fn benten_crypto_suite::layer_c_and_d_share_one_hpke_primitive() -> bool
+pub fn benten_crypto_suite::x_wing_combiner_preimage(&[u8], &[u8], &[u8], &[u8]) -> alloc::vec::Vec<u8>

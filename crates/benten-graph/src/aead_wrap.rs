@@ -593,13 +593,15 @@ pub fn encode_encrypted_node(encrypted: &EncryptedNode) -> Result<Vec<u8>, AeadE
                 u32::try_from(chunked.chunks.len()).map_err(|_| AeadError::KeyMismatch {
                     reason: "chunk count exceeds u32".to_string(),
                 })?;
-            out.extend_from_slice(&count.to_le_bytes());
+            // M-19: chunk count + per-chunk length prefixes BIG-ENDIAN
+            // (migrated from LE at F-full Wave-0).
+            out.extend_from_slice(&count.to_be_bytes());
             for chunk in &chunked.chunks {
                 let bytes = chunk.to_wire_bytes();
                 let len = u32::try_from(bytes.len()).map_err(|_| AeadError::KeyMismatch {
                     reason: "chunk length exceeds u32".to_string(),
                 })?;
-                out.extend_from_slice(&len.to_le_bytes());
+                out.extend_from_slice(&len.to_be_bytes());
                 out.extend_from_slice(&bytes);
             }
         }
@@ -634,14 +636,14 @@ pub fn decode_encrypted_node(bytes: &[u8]) -> Result<EncryptedNode, AeadError> {
             if bytes.len() < 38 + 4 {
                 return Err(AeadError::CiphertextTooShort { got: bytes.len() });
             }
-            let count = u32::from_le_bytes([bytes[38], bytes[39], bytes[40], bytes[41]]) as usize;
+            let count = u32::from_be_bytes([bytes[38], bytes[39], bytes[40], bytes[41]]) as usize;
             let mut cursor = 42usize;
             let mut chunks = Vec::with_capacity(count);
             for _ in 0..count {
                 if cursor + 4 > bytes.len() {
                     return Err(AeadError::CiphertextTooShort { got: bytes.len() });
                 }
-                let len = u32::from_le_bytes([
+                let len = u32::from_be_bytes([
                     bytes[cursor],
                     bytes[cursor + 1],
                     bytes[cursor + 2],

@@ -1536,8 +1536,9 @@ fn compose_aad(
 ) -> Vec<u8> {
     let mut aad = Vec::with_capacity(8 + signature_bytes.len() + 32);
     aad.extend_from_slice(b"sm-aad:");
-    aad.extend_from_slice(&sig_cp.raw().to_le_bytes());
-    aad.extend_from_slice(&cipher_cp.raw().to_le_bytes());
+    // M-19: codepoints BIG-ENDIAN (migrated from LE at F-full Wave-0).
+    aad.extend_from_slice(&sig_cp.raw().to_be_bytes());
+    aad.extend_from_slice(&cipher_cp.raw().to_be_bytes());
     aad.extend_from_slice(signature_bytes);
     aad
 }
@@ -1545,9 +1546,10 @@ fn compose_aad(
 fn compose_plaintext_with_sig(signature_bytes: &[u8], payload: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(8 + signature_bytes.len() + payload.len());
     let sig_len_u32 = u32::try_from(signature_bytes.len()).expect("sig length fits in u32");
-    out.extend_from_slice(&sig_len_u32.to_le_bytes());
+    // M-19: length prefixes BIG-ENDIAN (migrated from LE at F-full Wave-0).
+    out.extend_from_slice(&sig_len_u32.to_be_bytes());
     let pl_len_u32 = u32::try_from(payload.len()).expect("payload length fits in u32");
-    out.extend_from_slice(&pl_len_u32.to_le_bytes());
+    out.extend_from_slice(&pl_len_u32.to_be_bytes());
     out.extend_from_slice(signature_bytes);
     out.extend_from_slice(payload);
     out
@@ -1562,7 +1564,7 @@ fn split_payload_from_plaintext_with_sig(
             "plaintext_with_sig too short for header+sig",
         ));
     }
-    let sig_len_carried = u32::from_le_bytes([
+    let sig_len_carried = u32::from_be_bytes([
         plaintext_with_sig[0],
         plaintext_with_sig[1],
         plaintext_with_sig[2],
@@ -1573,7 +1575,7 @@ fn split_payload_from_plaintext_with_sig(
             "carried sig length mismatch with envelope hint",
         ));
     }
-    let payload_len = u32::from_le_bytes([
+    let payload_len = u32::from_be_bytes([
         plaintext_with_sig[4],
         plaintext_with_sig[5],
         plaintext_with_sig[6],

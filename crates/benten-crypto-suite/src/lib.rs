@@ -127,19 +127,32 @@ pub mod aead;
 pub mod boundary;
 pub mod cipher_suite;
 pub mod codepoint;
+pub mod conformance;
 pub mod discharge;
+pub mod envelope;
 pub mod error;
 pub mod hash;
+pub mod hpke;
 pub mod primitives;
+pub mod registry;
 pub mod sig;
 pub mod sizes;
 pub mod structural_kdf;
 pub mod swap_matrix;
 pub mod varsig;
+pub mod vault;
 
 // Convenience re-exports of the most-used typed surface.
 pub use crate::aead::{AeadEnvelope, AeadError, AeadKeyMaterial};
-pub use crate::codepoint::{CipherSuiteCodepoint, HashCodepoint, SigCodepoint};
+pub use crate::cipher_suite::{
+    X_WING_LABEL, classical_combine, combine_x_wing, x_wing_combiner_preimage,
+};
+pub use crate::codepoint::{CipherSuiteCodepoint, CodepointLifecycle, HashCodepoint, SigCodepoint};
+pub use crate::envelope::{
+    BindingContext, ENVELOPE_FORMAT_VERSION_V1, ENVELOPE_FORMAT_VERSION_V2, ENVELOPE_MAGIC,
+    EncryptedEnvelope, EnvelopeError, MAX_NONCE_LEN, canonical_tlv_encode,
+    layer_c_and_d_share_one_hpke_primitive,
+};
 pub use crate::error::{CryptoError, UnsupportedAlgorithm, VerifyError};
 pub use crate::hash::HashSeam;
 pub use crate::sig::{HybridSignature, SignatureSuite, SuiteConfig};
@@ -151,3 +164,7 @@ pub use crate::swap_matrix::{
     SwapRecipientPublic, SwapRecipientSecret, audit_landed_pure_pq_flag,
 };
 pub use crate::varsig::{UcanVarsigV1Header, VarsigError};
+pub use crate::vault::{
+    Argon2idParams, DAK_HKDF_INFO_TAG, OWASP_DEFAULT, UnlockedKeyMaterial, VaultEngine, VaultError,
+    VaultPayload, derive_dak,
+};

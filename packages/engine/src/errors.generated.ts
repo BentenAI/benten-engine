@@ -232,6 +232,8 @@ export const CATALOG_CODES = [
   "E_DSL_PARSE_ERROR",
   "E_DSL_UNKNOWN_PRIMITIVE",
   "E_DSL_MISSING_RESPOND",
+  "E_ROLE_STALE_AT_VERIFY",
+  "E_KV_TARGET_NOT_IMMUTABLE",
 ] as const;
 
 export type CatalogCode = (typeof CATALOG_CODES)[number];
@@ -2854,9 +2856,9 @@ export class ENamespacedWriteUnsupported extends BentenError {
  */
 export class ERecipientLacksKeysForSuite extends BentenError {
   static readonly code = "E_RECIPIENT_LACKS_KEYS_FOR_SUITE";
-  static readonly fixHint = "Per CLAUDE.md baked-in #5 (codepoint-dispatched cipher-suite agility) + RATIFIED-S&C 2026-05-21 G-CORE-3a F-3 typed-arm contract: the hybrid X-Wing suite at `0x647a` (X25519⊕ML-KEM-768) requires the recipient to hold BOTH key halves to unwrap an encrypted key. A recipient presenting only the classical X25519 half (e.g. a legacy classical-only `RecipientKeypair` handed a hybrid-codepoint `WrappedKey`) fails closed with this typed code rather than silently falling back to a classical-only unwrap — that fallback would be a silent downgrade vector + would silently mis-decrypt. Fix at the call site: either (a) provision the recipient with the full hybrid keypair via `CipherSuite::generate_recipient_keypair_for_test(&hybrid_suite)` / the production keypair generator, or (b) route the wrap through a classical-only suite at codepoint `0x6400` so both wrap and unwrap agree on the codepoint. NEVER catch this error and retry with a different (lower-security) codepoint — that pattern is the silent-downgrade vector this typed arm exists to prevent.";
+  static readonly fixHint = "Per CLAUDE.md baked-in #5 (codepoint-dispatched cipher-suite agility) + RATIFIED-S&C 2026-05-21 G-CORE-3a F-3 typed-arm contract: the hybrid MLKEM768-X25519 suite at `0x647a` (X25519⊕ML-KEM-768) requires the recipient to hold BOTH key halves to unwrap an encrypted key. A recipient presenting only the classical X25519 half (e.g. a legacy classical-only `RecipientKeypair` handed a hybrid-codepoint `WrappedKey`) fails closed with this typed code rather than silently falling back to a classical-only unwrap — that fallback would be a silent downgrade vector + would silently mis-decrypt. Fix at the call site: either (a) provision the recipient with the full hybrid keypair via `CipherSuite::generate_recipient_keypair_for_test(&hybrid_suite)` / the production keypair generator, or (b) route the wrap through a classical-only suite at codepoint `0x6400` so both wrap and unwrap agree on the codepoint. NEVER catch this error and retry with a different (lower-security) codepoint — that pattern is the silent-downgrade vector this typed arm exists to prevent.";
   constructor(message: string, context?: Record<string, unknown>) {
-    super("E_RECIPIENT_LACKS_KEYS_FOR_SUITE", "Per CLAUDE.md baked-in #5 (codepoint-dispatched cipher-suite agility) + RATIFIED-S&C 2026-05-21 G-CORE-3a F-3 typed-arm contract: the hybrid X-Wing suite at `0x647a` (X25519⊕ML-KEM-768) requires the recipient to hold BOTH key halves to unwrap an encrypted key. A recipient presenting only the classical X25519 half (e.g. a legacy classical-only `RecipientKeypair` handed a hybrid-codepoint `WrappedKey`) fails closed with this typed code rather than silently falling back to a classical-only unwrap — that fallback would be a silent downgrade vector + would silently mis-decrypt. Fix at the call site: either (a) provision the recipient with the full hybrid keypair via `CipherSuite::generate_recipient_keypair_for_test(&hybrid_suite)` / the production keypair generator, or (b) route the wrap through a classical-only suite at codepoint `0x6400` so both wrap and unwrap agree on the codepoint. NEVER catch this error and retry with a different (lower-security) codepoint — that pattern is the silent-downgrade vector this typed arm exists to prevent.", message, context);
+    super("E_RECIPIENT_LACKS_KEYS_FOR_SUITE", "Per CLAUDE.md baked-in #5 (codepoint-dispatched cipher-suite agility) + RATIFIED-S&C 2026-05-21 G-CORE-3a F-3 typed-arm contract: the hybrid MLKEM768-X25519 suite at `0x647a` (X25519⊕ML-KEM-768) requires the recipient to hold BOTH key halves to unwrap an encrypted key. A recipient presenting only the classical X25519 half (e.g. a legacy classical-only `RecipientKeypair` handed a hybrid-codepoint `WrappedKey`) fails closed with this typed code rather than silently falling back to a classical-only unwrap — that fallback would be a silent downgrade vector + would silently mis-decrypt. Fix at the call site: either (a) provision the recipient with the full hybrid keypair via `CipherSuite::generate_recipient_keypair_for_test(&hybrid_suite)` / the production keypair generator, or (b) route the wrap through a classical-only suite at codepoint `0x6400` so both wrap and unwrap agree on the codepoint. NEVER catch this error and retry with a different (lower-security) codepoint — that pattern is the silent-downgrade vector this typed arm exists to prevent.", message, context);
     this.name = "ERecipientLacksKeysForSuite";
   }
 }
@@ -3222,6 +3224,36 @@ export class EDslMissingRespond extends BentenError {
 }
 
 /**
+ * E_ROLE_STALE_AT_VERIFY
+ *
+ * Thrown at: `crates/benten-membership-set/src/verify.rs::verify_stanza` — returns `RoleStaleError { code: "E_ROLE_STALE_AT_VERIFY" }` when `stanza.sealed_role_assignments_generation < current_generation`.
+ * Message template: "a stanza sealed under a stale role_assignments_generation was rejected at verify"
+ */
+export class ERoleStaleAtVerify extends BentenError {
+  static readonly code = "E_ROLE_STALE_AT_VERIFY";
+  static readonly fixHint = "A MembershipSet group stanza was sealed under a `role_assignments_generation` that is now STALE — the membership set has advanced its role-assignments generation since the stanza was sealed. The generation counter is the 11th field of the `0x6610` BLINDED group AAD (the BLINDED 11-field set per R0.7 §3.10/§4.1), so a stanza sealed at generation `G` fails AEAD-open / verify once the set advances to `G+1`. Re-seal the stanza under the CURRENT `role_assignments_generation`.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_ROLE_STALE_AT_VERIFY", "A MembershipSet group stanza was sealed under a `role_assignments_generation` that is now STALE — the membership set has advanced its role-assignments generation since the stanza was sealed. The generation counter is the 11th field of the `0x6610` BLINDED group AAD (the BLINDED 11-field set per R0.7 §3.10/§4.1), so a stanza sealed at generation `G` fails AEAD-open / verify once the set advances to `G+1`. Re-seal the stanza under the CURRENT `role_assignments_generation`.", message, context);
+    this.name = "ERoleStaleAtVerify";
+  }
+}
+
+/**
+ * E_KV_TARGET_NOT_IMMUTABLE
+ *
+ * Thrown at: `crates/benten-membership-set/src/keying_kv.rs::derive_kv` — returns `KvError::TargetNotImmutable` when the `CidTarget` is `MutableAnchor`.
+ * Message template: "K(V) derivation target is not an immutable Version-Node-CID (Inv-19)"
+ */
+export class EKvTargetNotImmutable extends BentenError {
+  static readonly code = "E_KV_TARGET_NOT_IMMUTABLE";
+  static readonly fixHint = "A K(V) (membership version-node key) derivation was requested against a MUTABLE Anchor CID. Inv-19 forbids binding key material to a `benten_core::version::Anchor` CID: the Anchor's CURRENT pointer moves across an `append_version`, so a key bound to an Anchor would silently re-target as the chain advances. Derive K(V) against an immutable Version-Node-CID (or a MembershipSet identity) instead.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_KV_TARGET_NOT_IMMUTABLE", "A K(V) (membership version-node key) derivation was requested against a MUTABLE Anchor CID. Inv-19 forbids binding key material to a `benten_core::version::Anchor` CID: the Anchor's CURRENT pointer moves across an `append_version`, so a key bound to an Anchor would silently re-target as the chain advances. Derive K(V) against an immutable Version-Node-CID (or a MembershipSet identity) instead.", message, context);
+    this.name = "EKvTargetNotImmutable";
+  }
+}
+
+/**
  * Phase-3 G19-B (§7.6): codegen-emitted CODE_TO_CTOR_GENERATED map. Keys are stable
  * catalog codes (`E_*`); values are the typed BentenError subclass constructor for each
  * code. Updated automatically every time `scripts/codegen-errors.ts` runs against
@@ -3429,4 +3461,6 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_DSL_PARSE_ERROR": EDslParseError,
   "E_DSL_UNKNOWN_PRIMITIVE": EDslUnknownPrimitive,
   "E_DSL_MISSING_RESPOND": EDslMissingRespond,
+  "E_ROLE_STALE_AT_VERIFY": ERoleStaleAtVerify,
+  "E_KV_TARGET_NOT_IMMUTABLE": EKvTargetNotImmutable,
 }) as Readonly<Record<string, new (message: string, context?: Record<string, unknown>) => BentenError>>;

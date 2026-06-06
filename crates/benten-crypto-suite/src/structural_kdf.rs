@@ -138,10 +138,9 @@ impl Drop for StructuralKdfKey {
 /// structurally impossible (different codepoint → different K_root
 /// → different downstream AEAD key).
 ///
-/// The codepoint is encoded as little-endian `u16` bytes (2 bytes)
-/// for compactness + endianness determinism (matches the
-/// `CipherSuiteCodepoint::as_le_bytes` convention at the wire
-/// layer).
+/// The codepoint is encoded as big-endian `u16` bytes (2 bytes)
+/// for endianness determinism (M-19: BE network-byte-order on every
+/// wire/AAD/keying integer; migrated from LE at F-full Wave-0).
 ///
 /// Cross-cut with G-CORE-PQ-WIRE swap matrix: the same codepoint
 /// dispatch works for classical AEAD (`0x6400`) + future PQ-hybrid
@@ -153,8 +152,11 @@ pub fn derive_root(
     root_cid: &[u8],
     cipher_suite_codepoint: u16,
 ) -> StructuralKdfKey {
-    // info = "root:codepoint:" || codepoint_le_bytes || root_cid.
-    let codepoint_bytes = cipher_suite_codepoint.to_le_bytes();
+    // info = "root:codepoint:" || codepoint_be_bytes || root_cid.
+    // M-19: codepoint serialized BIG-ENDIAN (migrated from LE at F-full
+    // Wave-0). The structural-KDF info-tag is an internal keying path; the
+    // BE migration keeps it consistent with every other wire/AAD integer.
+    let codepoint_bytes = cipher_suite_codepoint.to_be_bytes();
     let mut info = Vec::with_capacity(15 + codepoint_bytes.len() + root_cid.len());
     info.extend_from_slice(b"root:codepoint:");
     info.extend_from_slice(&codepoint_bytes);

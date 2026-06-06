@@ -1,0 +1,79 @@
+[package]
+name = "benten-membership-set"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "The 15th workspace crate — the MembershipSet keying primitive (a thin keying-glue Rust engine plugin / mechanism-half per GN-2 §6.1). Frozen Rust-mechanism: the EXACTLY-3 `MembershipSetKind` enum + its codepoint family (0x6600/0x6610/0x6620), the multi-stanza-HPKE keying glue (delegates primitives to benten-crypto-suite, NEVER forks #5), the `members_table` snapshot canonical-CBOR serialization (the AAD-bound keying minimum; NQ-W4), per-Kind cardinality constructors, the 0x6610 group AAD = the BLINDED 11-field set assembly (R0.7 §3.10/§4.1; supersedes the prior 9-tuple framing) → OPAQUE bytes handed to the crypto-suite (m-15 GNC-5; no reverse dep), the Inv-21 fork-tie-break CRDT rule, and the federation recursion-bound (Inv-20 k). Governance / RoleId-semantics / audit / federation / economics are GRAPH (data-half), never inside the sealed Policy. RED-PHASE STUB at R3-W4: scaffolded minimally so the W4 test pins compile green at baseline; G-CORE F-full canary waves fill the real impl."
+
+[lints]
+workspace = true
+
+[lib]
+# Match the workspace pattern (benten-errors / benten-core): disable the
+# implicit libtest bench harness so `cargo bench --workspace` passes
+# Criterion CLI flags through without libtest rejecting them.
+bench = false
+
+[features]
+default = []
+# `testing` gates the `pub fn .*_for_test*` constructors / helpers per the
+# V1-FROZEN-INTERFACE.md item-15 convention (matches benten-crypto-suite /
+# benten-core / benten-caps). The R5 canary wave fills this.
+testing = []
+
+[dependencies]
+# R5 canary (w-ms-canary) — the B-1 dependency set is now REAL (un-commented
+# from the R3-W4 documentation block). Per R0 §6.1: every one of these is
+# UPSTREAM; benten-membership-set is a leaf-ish addition — crypto-suite + sync
+# NEVER depend on IT (F-CRATE-2 compile-fence; verified by the no-reverse-edge
+# grep pins). The direction is membership-set → {crypto-suite, core, caps, id,
+# graph, sync}.
+#
+# benten-crypto-suite is the ONLY crypto-primitive call site (#5) — the AAD
+# assembler hands OPAQUE Vec<u8> across this seam (m-15 GNC-5).
+benten-crypto-suite = { path = "../benten-crypto-suite" }
+benten-core = { path = "../benten-core" }            # Node / Version-chain / CID
+benten-caps = { path = "../benten-caps" }            # UCAN / grants — RBAC composition
+benten-id = { path = "../benten-id" }                # DID + DeviceAttestation + RotationLog
+benten-graph = { path = "../benten-graph" }          # audit-sequence + ChangeEvent
+benten-sync = { path = "../benten-sync" }            # B-1 — HLC / Loro / MST / Transport (UPSTREAM)
+# benten-errors hosts the stable ErrorCode catalog (the §3.5g mint for
+# E_ROLE_STALE_AT_VERIFY lives there; this crate references the variant).
+benten-errors = { workspace = true }
+
+# Crypto/serialization helpers the keying-mechanism uses directly. blake3 is
+# the project hash + keyed-MAC primitive used for the AAD commitments (the
+# §3.9 gossip-topic construction); the serde stack is the canonical-CBOR
+# members_table snapshot encoder (NQ-W4). NO crypto primitive (sha3 / ml_kem /
+# chacha20 / ml_dsa / x25519) is constructed here — all routed via crypto-suite
+# (#5 ONLY-call-site; the F-CRATE-2 grep pin enforces this).
+blake3 = { workspace = true }
+serde = { workspace = true, features = ["derive", "alloc"] }
+serde_bytes = { workspace = true }
+serde_ipld_dagcbor = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+# R3 consolidation (merged from R3-W5): the W5 RED-PHASE pins (F-AAD-*,
+# F-INV21-*, F-HLC-*, F-CRDT-*, F-MST-*, F-GOSSIP-*) carry SELF-CONTAINED
+# in-file stub-shims that materialize canonical-CBOR AAD bytes + a
+# blake3-backed stub Cid + proptest convergence harnesses. W4's pins use
+# the crate's own `scaffold` module (in src/lib.rs) and need NO external
+# dev-deps; this block is exactly W5's set so both waves' test targets
+# compile green behind `#[ignore]`. The R5 canary replaces the in-file
+# shims with the real `benten_membership_set::…` surface.
+blake3 = { workspace = true }
+serde = { workspace = true, features = ["derive", "alloc"] }
+serde_bytes = { workspace = true }
+serde_ipld_dagcbor = { workspace = true }
+proptest = { workspace = true }
+# R5 (w-ms-sync): the F-MST-2 substitution-defense pin drives the REAL
+# `benten_sync::mst::Mst::apply_entries` rehash check via the test-only
+# `MstEntry::new_with_explicit_cid_for_testing` constructor (gated behind
+# `benten-sync/testing`). The normal `[dependencies]` `benten-sync` stays
+# feature-clean (production); this dev-dep adds the `testing` feature only for
+# the membership-set test target (matching the CI `benten-sync/testing` flag).
+benten-sync = { path = "../benten-sync", features = ["testing"] }

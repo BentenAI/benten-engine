@@ -141,6 +141,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "argon2"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c3610892ee6e0cbce8ae2700349fcf8f98adb0dbfbee85aec3c9179d29cc072"
+dependencies = [
+ "base64ct",
+ "blake2",
+ "cpufeatures 0.2.17",
+ "password-hash",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -368,6 +380,7 @@ dependencies = [
 name = "benten-crypto-suite"
 version = "0.1.0"
 dependencies = [
+ "argon2",
  "benten-id",
  "blake3",
  "chacha20poly1305",
@@ -378,6 +391,7 @@ dependencies = [
  "ml-kem",
  "rand_core 0.6.4",
  "redb",
+ "secrecy",
  "serde",
  "serde_bytes",
  "serde_ipld_dagcbor",
@@ -414,6 +428,8 @@ dependencies = [
  "benten-errors",
  "benten-graph",
  "benten-id",
+ "benten-sync",
+ "blake3",
  "serde",
  "serde_bytes",
  "serde_ipld_dagcbor",
@@ -442,6 +458,7 @@ dependencies = [
  "benten-graph",
  "benten-id",
  "benten-ivm",
+ "benten-membership-set",
  "benten-platform-foundation",
  "benten-sync",
  "blake3",
@@ -547,6 +564,25 @@ dependencies = [
  "proptest",
  "serde_json",
  "tempfile",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "benten-membership-set"
+version = "0.1.0"
+dependencies = [
+ "benten-caps",
+ "benten-core",
+ "benten-crypto-suite",
+ "benten-errors",
+ "benten-graph",
+ "benten-id",
+ "benten-sync",
+ "blake3",
+ "proptest",
+ "serde",
+ "serde_bytes",
+ "serde_ipld_dagcbor",
  "thiserror 2.0.18",
 ]
 
@@ -667,6 +703,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "031043d04099746d8db04daf1fa424b2bc8bd69d92b25962dcde24da39ab64a2"
 dependencies = [
  "typenum",
+]
+
+[[package]]
+name = "blake2"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46502ad458c9a52b69d4d4d32775c788b7a1b85e8bc9d482d92250fc0e3f8efe"
+dependencies = [
+ "digest 0.10.7",
 ]
 
 [[package]]
@@ -5072,6 +5117,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "password-hash"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "346f04948ba92c43e8469c1ee6736c7563d71012b17d40745260fe106aac2166"
+dependencies = [
+ "base64ct",
+ "rand_core 0.6.4",
+ "subtle",
+]
+
+[[package]]
 name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6096,6 +6152,15 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "secrecy"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e891af845473308773346dc847b2c23ee78fe442e0472ac50e22a18a93d3ae5a"
+dependencies = [
+ "zeroize",
+]
 
 [[package]]
 name = "security-framework"

@@ -180,7 +180,8 @@ impl SizeTouchingSurfaces {
             sig.classical_half_for_test().len() + sig.pq_half_for_test().len() + 32 + 8,
         );
         input.extend_from_slice(b"benten/hybrid-sig-cid/v1\0");
-        input.extend_from_slice(&sig.codepoint().raw().to_le_bytes());
+        // M-19: codepoint BIG-ENDIAN (migrated from LE at F-full Wave-0).
+        input.extend_from_slice(&sig.codepoint().raw().to_be_bytes());
         input.extend_from_slice(&sig.classical_half_for_test());
         input.extend_from_slice(&sig.pq_half_for_test());
         // Re-hash the commitment too (so the canonical-bytes input is

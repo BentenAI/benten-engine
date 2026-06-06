@@ -25,8 +25,35 @@ use crate::keypair::PublicKey;
 /// — `ed25519-pub` = `0xed`, varint-encoded as `0xed 0x01`.
 pub const ED25519_MULTICODEC: [u8; 2] = [0xed, 0x01];
 
+/// Multicodec varint prefix for the **PQ-hybrid signature** public key
+/// (Ed25519⊕ML-DSA-65 — the v1-beta LAMPS Composite default), distinct from
+/// [`ED25519_MULTICODEC`] so a `did:key` resolver does NOT mis-type the
+/// hybrid key as a bare Ed25519 key (NQ-C4 / U15).
+///
+/// **OPEN-SPEC (NQ-C4 / §5.D-9):** the multiformats registry has no assigned
+/// value for this PQ-hybrid pubkey shape at the time of writing, so this is a
+/// **reserved private-value-with-fallback** (reserved at G-CORE-9) — swapped
+/// for the registered multiformats value once one is allocated, an additive
+/// change, never a wire-break. See `docs/CRYPTO-CODEPOINTS.md`. Sits alongside
+/// the W3C `[byte, 0x01]` varint shape.
+pub const HYBRID_SIG_MULTICODEC: [u8; 2] = [0xef, 0x01];
+
+/// Multicodec varint prefix for the **PQ-hybrid KEM** public key
+/// (X25519⊕ML-KEM-768), distinct from [`ED25519_MULTICODEC`] +
+/// [`HYBRID_SIG_MULTICODEC`] (NQ-C4 / U15). Reserved private-value-with-
+/// fallback (open-spec; see [`HYBRID_SIG_MULTICODEC`] +
+/// `docs/CRYPTO-CODEPOINTS.md`).
+pub const HYBRID_KEM_MULTICODEC: [u8; 2] = [0xf0, 0x01];
+
 /// `did:key` URI prefix (literal string the W3C spec mandates).
 pub const DID_KEY_PREFIX: &str = "did:key:z";
+
+/// `did:agent:` — an OPTIONAL allowlist alias method (NQ-C4 + Inv-22). The
+/// principal's NATURE is DERIVED via method-parse; the `did:agent:` alias is
+/// an OPTIONAL allowlist hint, **never a stored authoritative discriminator**
+/// and never authority-bearing. It does NOT grant authority — it is a naming
+/// convenience that an allowlist may recognize, nothing more.
+pub const DID_AGENT_PREFIX: &str = "did:agent:";
 
 /// `did:key` DID — wrapper around the resolved string.
 ///

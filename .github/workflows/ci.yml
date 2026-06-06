@@ -138,7 +138,7 @@ jobs:
 
       - name: cargo clippy
         if: matrix.rust == 'stable'
-        run: cargo clippy --workspace --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-dev/testing -- -D warnings
+        run: cargo clippy --workspace --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-membership-set/testing,benten-dev/testing -- -D warnings
 
       - name: cargo build --locked
         # `--features benten-eval/testing` unlocks the `register_test_callee`
@@ -156,7 +156,7 @@ jobs:
         # compile those surfaces; CI re-enables them here so the full
         # `cargo build --all-targets` / `cargo nextest run` continues to
         # pick up every integration test.
-        run: cargo build --workspace --all-targets --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-dev/testing
+        run: cargo build --workspace --all-targets --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-membership-set/testing,benten-dev/testing
 
       - name: cargo nextest run
         env:
@@ -217,7 +217,7 @@ jobs:
         # All filter clauses dropped — Wave 3a closed every remaining
         # red-phase carry.
         run: |
-          cargo nextest run --profile ci --workspace --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-dev/testing
+          cargo nextest run --profile ci --workspace --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-membership-set/testing,benten-dev/testing
 
       - name: cargo doc
         if: matrix.rust == 'stable'

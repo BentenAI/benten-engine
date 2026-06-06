@@ -16,15 +16,15 @@ pub benten_drop::bundle::DropBundleError::UnsupportedDropMode::detail: alloc::st
 pub benten_drop::bundle::DropBundleError::UnsupportedDropVersion
 pub benten_drop::bundle::DropBundleError::UnsupportedDropVersion::seen: u16
 impl core::convert::From<benten_caps::authorization_grant::AuthorizationGrantError> for benten_drop::bundle::DropBundleError
-pub fn benten_drop::bundle::DropBundleError::from(source: benten_caps::authorization_grant::AuthorizationGrantError) -> Self
+pub fn benten_drop::bundle::DropBundleError::from(benten_caps::authorization_grant::AuthorizationGrantError) -> Self
 impl core::convert::From<benten_drop::envelope_sig::EnvelopeSigError> for benten_drop::bundle::DropBundleError
-pub fn benten_drop::bundle::DropBundleError::from(e: benten_drop::envelope_sig::EnvelopeSigError) -> Self
+pub fn benten_drop::bundle::DropBundleError::from(benten_drop::envelope_sig::EnvelopeSigError) -> Self
 impl core::error::Error for benten_drop::bundle::DropBundleError
 pub fn benten_drop::bundle::DropBundleError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for benten_drop::bundle::DropBundleError
-pub fn benten_drop::bundle::DropBundleError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_drop::bundle::DropBundleError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_drop::bundle::DropBundleError
-pub fn benten_drop::bundle::DropBundleError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_drop::bundle::DropBundleError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_drop::bundle::DropBundleError
 impl core::marker::Send for benten_drop::bundle::DropBundleError
 impl core::marker::Sync for benten_drop::bundle::DropBundleError
@@ -39,15 +39,15 @@ impl core::clone::Clone for benten_drop::bundle::DropBundleVersion
 pub fn benten_drop::bundle::DropBundleVersion::clone(&self) -> benten_drop::bundle::DropBundleVersion
 impl core::cmp::Eq for benten_drop::bundle::DropBundleVersion
 impl core::cmp::PartialEq for benten_drop::bundle::DropBundleVersion
-pub fn benten_drop::bundle::DropBundleVersion::eq(&self, other: &benten_drop::bundle::DropBundleVersion) -> bool
+pub fn benten_drop::bundle::DropBundleVersion::eq(&self, &benten_drop::bundle::DropBundleVersion) -> bool
 impl core::fmt::Debug for benten_drop::bundle::DropBundleVersion
-pub fn benten_drop::bundle::DropBundleVersion::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_drop::bundle::DropBundleVersion::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for benten_drop::bundle::DropBundleVersion
 impl core::marker::StructuralPartialEq for benten_drop::bundle::DropBundleVersion
 impl serde_core::ser::Serialize for benten_drop::bundle::DropBundleVersion
-pub fn benten_drop::bundle::DropBundleVersion::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_drop::bundle::DropBundleVersion::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_drop::bundle::DropBundleVersion
-pub fn benten_drop::bundle::DropBundleVersion::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_drop::bundle::DropBundleVersion::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_drop::bundle::DropBundleVersion
 impl core::marker::Send for benten_drop::bundle::DropBundleVersion
 impl core::marker::Sync for benten_drop::bundle::DropBundleVersion
@@ -62,15 +62,15 @@ impl core::clone::Clone for benten_drop::bundle::DropContentMode
 pub fn benten_drop::bundle::DropContentMode::clone(&self) -> benten_drop::bundle::DropContentMode
 impl core::cmp::Eq for benten_drop::bundle::DropContentMode
 impl core::cmp::PartialEq for benten_drop::bundle::DropContentMode
-pub fn benten_drop::bundle::DropContentMode::eq(&self, other: &benten_drop::bundle::DropContentMode) -> bool
+pub fn benten_drop::bundle::DropContentMode::eq(&self, &benten_drop::bundle::DropContentMode) -> bool
 impl core::fmt::Debug for benten_drop::bundle::DropContentMode
-pub fn benten_drop::bundle::DropContentMode::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_drop::bundle::DropContentMode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for benten_drop::bundle::DropContentMode
 impl core::marker::StructuralPartialEq for benten_drop::bundle::DropContentMode
 impl serde_core::ser::Serialize for benten_drop::bundle::DropContentMode
-pub fn benten_drop::bundle::DropContentMode::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_drop::bundle::DropContentMode::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_drop::bundle::DropContentMode
-pub fn benten_drop::bundle::DropContentMode::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_drop::bundle::DropContentMode::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_drop::bundle::DropContentMode
 impl core::marker::Send for benten_drop::bundle::DropContentMode
 impl core::marker::Sync for benten_drop::bundle::DropContentMode
@@ -90,20 +90,20 @@ pub benten_drop::bundle::DropBundle::restricted_spec: benten_caps::restricted_sp
 pub benten_drop::bundle::DropBundle::spec_cid: benten_core::Cid
 pub benten_drop::bundle::DropBundle::version: benten_drop::bundle::DropBundleVersion
 impl benten_drop::bundle::DropBundle
-pub fn benten_drop::bundle::DropBundle::consume_offline(&self, recipient_kp: &benten_id::keypair::Keypair) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<u8>>, benten_drop::bundle::DropBundleError>
+pub fn benten_drop::bundle::DropBundle::consume_offline(&self, &benten_id::keypair::Keypair) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<u8>>, benten_drop::bundle::DropBundleError>
 pub fn benten_drop::bundle::DropBundle::content_count(&self) -> usize
-pub fn benten_drop::bundle::DropBundle::parse_cbor_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_drop::bundle::DropBundleError>
-pub fn benten_drop::bundle::DropBundle::synthesize_revocation_for_embedded_ucan(_bundle: &Self, _issuer_kp: &benten_id::keypair::Keypair) -> benten_drop::bundle::RevocationRecord
+pub fn benten_drop::bundle::DropBundle::parse_cbor_bytes(&[u8]) -> core::result::Result<Self, benten_drop::bundle::DropBundleError>
+pub fn benten_drop::bundle::DropBundle::synthesize_revocation_for_embedded_ucan(&Self, &benten_id::keypair::Keypair) -> benten_drop::bundle::RevocationRecord
 pub fn benten_drop::bundle::DropBundle::to_cbor_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_drop::bundle::DropBundleError>
 pub fn benten_drop::bundle::DropBundle::verify_envelope_signature(&self) -> core::result::Result<(), benten_drop::bundle::DropBundleError>
 impl core::clone::Clone for benten_drop::bundle::DropBundle
 pub fn benten_drop::bundle::DropBundle::clone(&self) -> benten_drop::bundle::DropBundle
 impl core::fmt::Debug for benten_drop::bundle::DropBundle
-pub fn benten_drop::bundle::DropBundle::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_drop::bundle::DropBundle::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl serde_core::ser::Serialize for benten_drop::bundle::DropBundle
-pub fn benten_drop::bundle::DropBundle::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_drop::bundle::DropBundle::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_drop::bundle::DropBundle
-pub fn benten_drop::bundle::DropBundle::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_drop::bundle::DropBundle::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_drop::bundle::DropBundle
 impl core::marker::Send for benten_drop::bundle::DropBundle
 impl core::marker::Sync for benten_drop::bundle::DropBundle
@@ -114,16 +114,16 @@ impl core::panic::unwind_safe::UnwindSafe for benten_drop::bundle::DropBundle
 pub struct benten_drop::bundle::EncryptedContent
 pub benten_drop::bundle::EncryptedContent::bytes: alloc::vec::Vec<u8>
 impl benten_drop::bundle::EncryptedContent
-pub fn benten_drop::bundle::EncryptedContent::from_encrypted_node(node: &benten_graph::aead_wrap::EncryptedNode) -> core::result::Result<Self, benten_drop::bundle::DropBundleError>
+pub fn benten_drop::bundle::EncryptedContent::from_encrypted_node(&benten_graph::aead_wrap::EncryptedNode) -> core::result::Result<Self, benten_drop::bundle::DropBundleError>
 pub fn benten_drop::bundle::EncryptedContent::to_encrypted_node(&self) -> core::result::Result<benten_graph::aead_wrap::EncryptedNode, benten_drop::bundle::DropBundleError>
 impl core::clone::Clone for benten_drop::bundle::EncryptedContent
 pub fn benten_drop::bundle::EncryptedContent::clone(&self) -> benten_drop::bundle::EncryptedContent
 impl core::fmt::Debug for benten_drop::bundle::EncryptedContent
-pub fn benten_drop::bundle::EncryptedContent::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_drop::bundle::EncryptedContent::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl serde_core::ser::Serialize for benten_drop::bundle::EncryptedContent
-pub fn benten_drop::bundle::EncryptedContent::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_drop::bundle::EncryptedContent::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_drop::bundle::EncryptedContent
-pub fn benten_drop::bundle::EncryptedContent::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_drop::bundle::EncryptedContent::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_drop::bundle::EncryptedContent
 impl core::marker::Send for benten_drop::bundle::EncryptedContent
 impl core::marker::Sync for benten_drop::bundle::EncryptedContent
@@ -137,7 +137,7 @@ pub fn benten_drop::bundle::RevocationRecord::opaque_len(&self) -> usize
 impl core::clone::Clone for benten_drop::bundle::RevocationRecord
 pub fn benten_drop::bundle::RevocationRecord::clone(&self) -> benten_drop::bundle::RevocationRecord
 impl core::fmt::Debug for benten_drop::bundle::RevocationRecord
-pub fn benten_drop::bundle::RevocationRecord::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_drop::bundle::RevocationRecord::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_drop::bundle::RevocationRecord
 impl core::marker::Send for benten_drop::bundle::RevocationRecord
 impl core::marker::Sync for benten_drop::bundle::RevocationRecord
@@ -153,12 +153,12 @@ pub benten_drop::envelope_sig::EnvelopeSigError::SignatureMalformed(alloc::strin
 pub benten_drop::envelope_sig::EnvelopeSigError::VerifyFailed(alloc::string::String)
 pub benten_drop::envelope_sig::EnvelopeSigError::VerifyingKeyMalformed(alloc::string::String)
 impl core::convert::From<benten_drop::envelope_sig::EnvelopeSigError> for benten_drop::bundle::DropBundleError
-pub fn benten_drop::bundle::DropBundleError::from(e: benten_drop::envelope_sig::EnvelopeSigError) -> Self
+pub fn benten_drop::bundle::DropBundleError::from(benten_drop::envelope_sig::EnvelopeSigError) -> Self
 impl core::error::Error for benten_drop::envelope_sig::EnvelopeSigError
 impl core::fmt::Debug for benten_drop::envelope_sig::EnvelopeSigError
-pub fn benten_drop::envelope_sig::EnvelopeSigError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_drop::envelope_sig::EnvelopeSigError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_drop::envelope_sig::EnvelopeSigError
-pub fn benten_drop::envelope_sig::EnvelopeSigError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_drop::envelope_sig::EnvelopeSigError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_drop::envelope_sig::EnvelopeSigError
 impl core::marker::Send for benten_drop::envelope_sig::EnvelopeSigError
 impl core::marker::Sync for benten_drop::envelope_sig::EnvelopeSigError
@@ -166,9 +166,313 @@ impl core::marker::Unpin for benten_drop::envelope_sig::EnvelopeSigError
 impl core::marker::UnsafeUnpin for benten_drop::envelope_sig::EnvelopeSigError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::envelope_sig::EnvelopeSigError
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::envelope_sig::EnvelopeSigError
-pub fn benten_drop::envelope_sig::build_envelope_message(bundle: &benten_drop::bundle::DropBundle) -> alloc::vec::Vec<u8>
-pub fn benten_drop::envelope_sig::sign_envelope(issuer_kp: &benten_id::keypair::Keypair, msg: &[u8]) -> alloc::vec::Vec<u8>
-pub fn benten_drop::envelope_sig::verify_envelope(vk_bytes: &[u8], sig_bytes: &[u8], msg: &[u8]) -> core::result::Result<(), benten_drop::envelope_sig::EnvelopeSigError>
+pub fn benten_drop::envelope_sig::build_envelope_message(&benten_drop::bundle::DropBundle) -> alloc::vec::Vec<u8>
+pub fn benten_drop::envelope_sig::sign_envelope(&benten_id::keypair::Keypair, &[u8]) -> alloc::vec::Vec<u8>
+pub fn benten_drop::envelope_sig::verify_envelope(&[u8], &[u8], &[u8]) -> core::result::Result<(), benten_drop::envelope_sig::EnvelopeSigError>
+pub mod benten_drop::layer_c
+pub mod benten_drop::layer_c::abuse_control
+pub enum benten_drop::layer_c::abuse_control::AdmitError
+pub benten_drop::layer_c::abuse_control::AdmitError::MissingDeliveryToken
+pub benten_drop::layer_c::abuse_control::AdmitError::RateLimitExceeded
+pub benten_drop::layer_c::abuse_control::AdmitError::TokenBindingMismatch
+pub benten_drop::layer_c::abuse_control::AdmitError::TokenExpiredOrNotYetValid
+impl core::clone::Clone for benten_drop::layer_c::abuse_control::AdmitError
+pub fn benten_drop::layer_c::abuse_control::AdmitError::clone(&self) -> benten_drop::layer_c::abuse_control::AdmitError
+impl core::cmp::Eq for benten_drop::layer_c::abuse_control::AdmitError
+impl core::cmp::PartialEq for benten_drop::layer_c::abuse_control::AdmitError
+pub fn benten_drop::layer_c::abuse_control::AdmitError::eq(&self, &benten_drop::layer_c::abuse_control::AdmitError) -> bool
+impl core::fmt::Debug for benten_drop::layer_c::abuse_control::AdmitError
+pub fn benten_drop::layer_c::abuse_control::AdmitError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_drop::layer_c::abuse_control::AdmitError
+impl core::marker::Freeze for benten_drop::layer_c::abuse_control::AdmitError
+impl core::marker::Send for benten_drop::layer_c::abuse_control::AdmitError
+impl core::marker::Sync for benten_drop::layer_c::abuse_control::AdmitError
+impl core::marker::Unpin for benten_drop::layer_c::abuse_control::AdmitError
+impl core::marker::UnsafeUnpin for benten_drop::layer_c::abuse_control::AdmitError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::abuse_control::AdmitError
+impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::abuse_control::AdmitError
+pub struct benten_drop::layer_c::abuse_control::DeliveryToken
+pub benten_drop::layer_c::abuse_control::DeliveryToken::expires_at: u64
+pub benten_drop::layer_c::abuse_control::DeliveryToken::not_before: u64
+pub benten_drop::layer_c::abuse_control::DeliveryToken::rate_limit: u32
+impl core::clone::Clone for benten_drop::layer_c::abuse_control::DeliveryToken
+pub fn benten_drop::layer_c::abuse_control::DeliveryToken::clone(&self) -> benten_drop::layer_c::abuse_control::DeliveryToken
+impl core::fmt::Debug for benten_drop::layer_c::abuse_control::DeliveryToken
+pub fn benten_drop::layer_c::abuse_control::DeliveryToken::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_drop::layer_c::abuse_control::DeliveryToken
+impl core::marker::Send for benten_drop::layer_c::abuse_control::DeliveryToken
+impl core::marker::Sync for benten_drop::layer_c::abuse_control::DeliveryToken
+impl core::marker::Unpin for benten_drop::layer_c::abuse_control::DeliveryToken
+impl core::marker::UnsafeUnpin for benten_drop::layer_c::abuse_control::DeliveryToken
+impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::abuse_control::DeliveryToken
+impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::abuse_control::DeliveryToken
+pub struct benten_drop::layer_c::abuse_control::TokenBindingAad
+pub benten_drop::layer_c::abuse_control::TokenBindingAad::aad_version: u8
+pub benten_drop::layer_c::abuse_control::TokenBindingAad::audience_did: alloc::vec::Vec<u8>
+pub benten_drop::layer_c::abuse_control::TokenBindingAad::body_cid: alloc::vec::Vec<u8>
+pub benten_drop::layer_c::abuse_control::TokenBindingAad::codepoint: u16
+pub benten_drop::layer_c::abuse_control::TokenBindingAad::recipient_key_generation: u32
+pub benten_drop::layer_c::abuse_control::TokenBindingAad::token_expires_at: u64
+pub benten_drop::layer_c::abuse_control::TokenBindingAad::token_not_before: u64
+pub benten_drop::layer_c::abuse_control::TokenBindingAad::token_rate_limit: u32
+impl core::clone::Clone for benten_drop::layer_c::abuse_control::TokenBindingAad
+pub fn benten_drop::layer_c::abuse_control::TokenBindingAad::clone(&self) -> benten_drop::layer_c::abuse_control::TokenBindingAad
+impl core::fmt::Debug for benten_drop::layer_c::abuse_control::TokenBindingAad
+pub fn benten_drop::layer_c::abuse_control::TokenBindingAad::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_drop::layer_c::abuse_control::TokenBindingAad
+impl core::marker::Send for benten_drop::layer_c::abuse_control::TokenBindingAad
+impl core::marker::Sync for benten_drop::layer_c::abuse_control::TokenBindingAad
+impl core::marker::Unpin for benten_drop::layer_c::abuse_control::TokenBindingAad
+impl core::marker::UnsafeUnpin for benten_drop::layer_c::abuse_control::TokenBindingAad
+impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::abuse_control::TokenBindingAad
+impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::abuse_control::TokenBindingAad
+pub const benten_drop::layer_c::abuse_control::AAD_VERSION: u8
+pub const benten_drop::layer_c::abuse_control::DROP_TO_RECIPIENT_SEALED_SENDER: u16
+pub const benten_drop::layer_c::abuse_control::ENVELOPE_FORMAT_VERSION: u8
+pub fn benten_drop::layer_c::abuse_control::admit_sealed_sender(core::option::Option<&benten_drop::layer_c::abuse_control::DeliveryToken>, u64, u32) -> core::result::Result<(), benten_drop::layer_c::abuse_control::AdmitError>
+pub fn benten_drop::layer_c::abuse_control::admit_sealed_sender_bound(&benten_drop::layer_c::abuse_control::DeliveryToken, &benten_drop::layer_c::abuse_control::TokenBindingAad, &[u8], u64, u32) -> core::result::Result<(), benten_drop::layer_c::abuse_control::AdmitError>
+pub fn benten_drop::layer_c::abuse_control::decrypt_was_attempted_for_last_admit() -> bool
+pub fn benten_drop::layer_c::abuse_control::serialize_token_binding_aad(&benten_drop::layer_c::abuse_control::TokenBindingAad) -> alloc::vec::Vec<u8>
+pub mod benten_drop::layer_c::group_posture
+pub enum benten_drop::layer_c::group_posture::GroupError
+pub benten_drop::layer_c::group_posture::GroupError::AeadAuthenticationFailed
+pub benten_drop::layer_c::group_posture::GroupError::WrongGroupCodepoint
+pub benten_drop::layer_c::group_posture::GroupError::WrongGroupCodepoint::expected: u16
+pub benten_drop::layer_c::group_posture::GroupError::WrongGroupCodepoint::got: u16
+impl core::clone::Clone for benten_drop::layer_c::group_posture::GroupError
+pub fn benten_drop::layer_c::group_posture::GroupError::clone(&self) -> benten_drop::layer_c::group_posture::GroupError
+impl core::cmp::Eq for benten_drop::layer_c::group_posture::GroupError
+impl core::cmp::PartialEq for benten_drop::layer_c::group_posture::GroupError
+pub fn benten_drop::layer_c::group_posture::GroupError::eq(&self, &benten_drop::layer_c::group_posture::GroupError) -> bool
+impl core::fmt::Debug for benten_drop::layer_c::group_posture::GroupError
+pub fn benten_drop::layer_c::group_posture::GroupError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_drop::layer_c::group_posture::GroupError
+impl core::marker::Freeze for benten_drop::layer_c::group_posture::GroupError
+impl core::marker::Send for benten_drop::layer_c::group_posture::GroupError
+impl core::marker::Sync for benten_drop::layer_c::group_posture::GroupError
+impl core::marker::Unpin for benten_drop::layer_c::group_posture::GroupError
+impl core::marker::UnsafeUnpin for benten_drop::layer_c::group_posture::GroupError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::group_posture::GroupError
+impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::group_posture::GroupError
+pub struct benten_drop::layer_c::group_posture::GroupSealedEnvelope
+pub benten_drop::layer_c::group_posture::GroupSealedEnvelope::codepoint: u16
+pub benten_drop::layer_c::group_posture::GroupSealedEnvelope::wire: alloc::vec::Vec<u8>
+impl core::clone::Clone for benten_drop::layer_c::group_posture::GroupSealedEnvelope
+pub fn benten_drop::layer_c::group_posture::GroupSealedEnvelope::clone(&self) -> benten_drop::layer_c::group_posture::GroupSealedEnvelope
+impl core::fmt::Debug for benten_drop::layer_c::group_posture::GroupSealedEnvelope
+pub fn benten_drop::layer_c::group_posture::GroupSealedEnvelope::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_drop::layer_c::group_posture::GroupSealedEnvelope
+impl core::marker::Send for benten_drop::layer_c::group_posture::GroupSealedEnvelope
+impl core::marker::Sync for benten_drop::layer_c::group_posture::GroupSealedEnvelope
+impl core::marker::Unpin for benten_drop::layer_c::group_posture::GroupSealedEnvelope
+impl core::marker::UnsafeUnpin for benten_drop::layer_c::group_posture::GroupSealedEnvelope
+impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::group_posture::GroupSealedEnvelope
+impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::group_posture::GroupSealedEnvelope
+pub const benten_drop::layer_c::group_posture::LAYER_C_DROP_MULTI_RECIPIENT: u16
+pub const benten_drop::layer_c::group_posture::MEMBERSHIP_SET_GROUP_MULTI_STANZA: u16
+pub fn benten_drop::layer_c::group_posture::dispatch_group(&[u8], u16, u16) -> core::result::Result<(), benten_drop::layer_c::group_posture::GroupError>
+pub fn benten_drop::layer_c::group_posture::open_membership_set_group(&benten_drop::layer_c::group_posture::RecipientSecKey, usize, &benten_drop::layer_c::group_posture::GroupSealedEnvelope) -> core::result::Result<(alloc::vec::Vec<u8>, benten_drop::layer_c::group_posture::SenderDid), benten_drop::layer_c::group_posture::GroupError>
+pub fn benten_drop::layer_c::group_posture::seal_membership_set_group(&[benten_drop::layer_c::group_posture::RecipientPubKey], &benten_drop::layer_c::group_posture::SenderDid, &[u8; 32], &[u8]) -> benten_drop::layer_c::group_posture::GroupSealedEnvelope
+pub type benten_drop::layer_c::group_posture::RecipientPubKey = [u8; 32]
+pub type benten_drop::layer_c::group_posture::RecipientSecKey = [u8; 32]
+pub type benten_drop::layer_c::group_posture::SenderDid = alloc::vec::Vec<u8>
+pub mod benten_drop::layer_c::sealed_aad
+pub struct benten_drop::layer_c::sealed_aad::SealedSenderAad
+pub benten_drop::layer_c::sealed_aad::SealedSenderAad::aad_version: u8
+pub benten_drop::layer_c::sealed_aad::SealedSenderAad::audience_did: alloc::vec::Vec<u8>
+pub benten_drop::layer_c::sealed_aad::SealedSenderAad::body_cid: alloc::vec::Vec<u8>
+pub benten_drop::layer_c::sealed_aad::SealedSenderAad::codepoint: u16
+pub benten_drop::layer_c::sealed_aad::SealedSenderAad::recipient_key_generation: u32
+impl core::clone::Clone for benten_drop::layer_c::sealed_aad::SealedSenderAad
+pub fn benten_drop::layer_c::sealed_aad::SealedSenderAad::clone(&self) -> benten_drop::layer_c::sealed_aad::SealedSenderAad
+impl core::fmt::Debug for benten_drop::layer_c::sealed_aad::SealedSenderAad
+pub fn benten_drop::layer_c::sealed_aad::SealedSenderAad::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_drop::layer_c::sealed_aad::SealedSenderAad
+impl core::marker::Send for benten_drop::layer_c::sealed_aad::SealedSenderAad
+impl core::marker::Sync for benten_drop::layer_c::sealed_aad::SealedSenderAad
+impl core::marker::Unpin for benten_drop::layer_c::sealed_aad::SealedSenderAad
+impl core::marker::UnsafeUnpin for benten_drop::layer_c::sealed_aad::SealedSenderAad
+impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::sealed_aad::SealedSenderAad
+impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::sealed_aad::SealedSenderAad
+pub const benten_drop::layer_c::sealed_aad::AAD_VERSION: u8
+pub const benten_drop::layer_c::sealed_aad::DROP_TO_RECIPIENT_SEALED_SENDER: u16
+pub const benten_drop::layer_c::sealed_aad::ENVELOPE_FORMAT_VERSION: u8
+pub fn benten_drop::layer_c::sealed_aad::aad_field_set() -> alloc::vec::Vec<&'static str>
+pub fn benten_drop::layer_c::sealed_aad::residual_privacy_metadata() -> alloc::vec::Vec<&'static str>
+pub fn benten_drop::layer_c::sealed_aad::serialize_sealed_sender_aad(&benten_drop::layer_c::sealed_aad::SealedSenderAad) -> alloc::vec::Vec<u8>
+pub enum benten_drop::layer_c::BindingContext
+pub benten_drop::layer_c::BindingContext::DropPlaintextSender
+pub benten_drop::layer_c::BindingContext::DropPlaintextSender::aad_version: u8
+pub benten_drop::layer_c::BindingContext::DropPlaintextSender::audience_did: benten_drop::layer_c::AudienceDid
+pub benten_drop::layer_c::BindingContext::DropPlaintextSender::body_cid: benten_drop::layer_c::SelfDescribingCid
+pub benten_drop::layer_c::BindingContext::DropPlaintextSender::codepoint: u16
+pub benten_drop::layer_c::BindingContext::DropPlaintextSender::recipient_key_generation: u32
+pub benten_drop::layer_c::BindingContext::DropPlaintextSender::sender_did: benten_drop::layer_c::SenderDid
+pub benten_drop::layer_c::BindingContext::DropSealedSender
+pub benten_drop::layer_c::BindingContext::DropSealedSender::aad_version: u8
+pub benten_drop::layer_c::BindingContext::DropSealedSender::audience_did: benten_drop::layer_c::AudienceDid
+pub benten_drop::layer_c::BindingContext::DropSealedSender::body_cid: benten_drop::layer_c::SelfDescribingCid
+pub benten_drop::layer_c::BindingContext::DropSealedSender::codepoint: u16
+pub benten_drop::layer_c::BindingContext::DropSealedSender::recipient_key_generation: u32
+impl benten_drop::layer_c::BindingContext
+pub fn benten_drop::layer_c::BindingContext::plaintext_aad_bytes(&self) -> alloc::vec::Vec<u8>
+impl core::clone::Clone for benten_drop::layer_c::BindingContext
+pub fn benten_drop::layer_c::BindingContext::clone(&self) -> benten_drop::layer_c::BindingContext
+impl core::cmp::Eq for benten_drop::layer_c::BindingContext
+impl core::cmp::PartialEq for benten_drop::layer_c::BindingContext
+pub fn benten_drop::layer_c::BindingContext::eq(&self, &benten_drop::layer_c::BindingContext) -> bool
+impl core::fmt::Debug for benten_drop::layer_c::BindingContext
+pub fn benten_drop::layer_c::BindingContext::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_drop::layer_c::BindingContext
+impl core::marker::Freeze for benten_drop::layer_c::BindingContext
+impl core::marker::Send for benten_drop::layer_c::BindingContext
+impl core::marker::Sync for benten_drop::layer_c::BindingContext
+impl core::marker::Unpin for benten_drop::layer_c::BindingContext
+impl core::marker::UnsafeUnpin for benten_drop::layer_c::BindingContext
+impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::BindingContext
+impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::BindingContext
+pub enum benten_drop::layer_c::EncryptedEnvelope
+pub benten_drop::layer_c::EncryptedEnvelope::HpkeBase
+pub benten_drop::layer_c::EncryptedEnvelope::HpkeBase::binding: benten_drop::layer_c::BindingContext
+pub benten_drop::layer_c::EncryptedEnvelope::HpkeBase::ciphertext: alloc::vec::Vec<u8>
+pub benten_drop::layer_c::EncryptedEnvelope::HpkeBase::enc: alloc::vec::Vec<u8>
+pub benten_drop::layer_c::EncryptedEnvelope::HpkeBase::format_version: u8
+pub benten_drop::layer_c::EncryptedEnvelope::HpkeMultiBase
+pub benten_drop::layer_c::EncryptedEnvelope::HpkeMultiBase::cek_aead_ciphertext: alloc::vec::Vec<u8>
+pub benten_drop::layer_c::EncryptedEnvelope::HpkeMultiBase::cek_aead_nonce: [u8; 12]
+pub benten_drop::layer_c::EncryptedEnvelope::HpkeMultiBase::format_version: u8
+pub benten_drop::layer_c::EncryptedEnvelope::HpkeMultiBase::stanzas: alloc::vec::Vec<benten_drop::layer_c::HpkeRecipientStanza>
+impl core::clone::Clone for benten_drop::layer_c::EncryptedEnvelope
+pub fn benten_drop::layer_c::EncryptedEnvelope::clone(&self) -> benten_drop::layer_c::EncryptedEnvelope
+impl core::cmp::Eq for benten_drop::layer_c::EncryptedEnvelope
+impl core::cmp::PartialEq for benten_drop::layer_c::EncryptedEnvelope
+pub fn benten_drop::layer_c::EncryptedEnvelope::eq(&self, &benten_drop::layer_c::EncryptedEnvelope) -> bool
+impl core::fmt::Debug for benten_drop::layer_c::EncryptedEnvelope
+pub fn benten_drop::layer_c::EncryptedEnvelope::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_drop::layer_c::EncryptedEnvelope
+impl core::marker::Freeze for benten_drop::layer_c::EncryptedEnvelope
+impl core::marker::Send for benten_drop::layer_c::EncryptedEnvelope
+impl core::marker::Sync for benten_drop::layer_c::EncryptedEnvelope
+impl core::marker::Unpin for benten_drop::layer_c::EncryptedEnvelope
+impl core::marker::UnsafeUnpin for benten_drop::layer_c::EncryptedEnvelope
+impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::EncryptedEnvelope
+impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::EncryptedEnvelope
+pub enum benten_drop::layer_c::LayerCError
+pub benten_drop::layer_c::LayerCError::AeadAuthenticationFailed
+pub benten_drop::layer_c::LayerCError::InnerSenderDidForged
+pub benten_drop::layer_c::LayerCError::UnsupportedCodepoint(u16)
+impl core::clone::Clone for benten_drop::layer_c::LayerCError
+pub fn benten_drop::layer_c::LayerCError::clone(&self) -> benten_drop::layer_c::LayerCError
+impl core::cmp::Eq for benten_drop::layer_c::LayerCError
+impl core::cmp::PartialEq for benten_drop::layer_c::LayerCError
+pub fn benten_drop::layer_c::LayerCError::eq(&self, &benten_drop::layer_c::LayerCError) -> bool
+impl core::fmt::Debug for benten_drop::layer_c::LayerCError
+pub fn benten_drop::layer_c::LayerCError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_drop::layer_c::LayerCError
+impl core::marker::Freeze for benten_drop::layer_c::LayerCError
+impl core::marker::Send for benten_drop::layer_c::LayerCError
+impl core::marker::Sync for benten_drop::layer_c::LayerCError
+impl core::marker::Unpin for benten_drop::layer_c::LayerCError
+impl core::marker::UnsafeUnpin for benten_drop::layer_c::LayerCError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::LayerCError
+impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::LayerCError
+pub struct benten_drop::layer_c::HpkeRecipientStanza
+pub benten_drop::layer_c::HpkeRecipientStanza::body_cid: benten_drop::layer_c::SelfDescribingCid
+pub benten_drop::layer_c::HpkeRecipientStanza::codepoint: u16
+pub benten_drop::layer_c::HpkeRecipientStanza::plaintext_sender_did: core::option::Option<benten_drop::layer_c::SenderDid>
+pub benten_drop::layer_c::HpkeRecipientStanza::recipient_dids: alloc::vec::Vec<benten_drop::layer_c::RecipientDid>
+pub benten_drop::layer_c::HpkeRecipientStanza::recipient_key_generation: u32
+pub benten_drop::layer_c::HpkeRecipientStanza::sealed_inner: alloc::vec::Vec<u8>
+pub benten_drop::layer_c::HpkeRecipientStanza::stanza_count: u32
+pub benten_drop::layer_c::HpkeRecipientStanza::stanza_index: u32
+pub benten_drop::layer_c::HpkeRecipientStanza::wrapped_cek: alloc::vec::Vec<u8>
+impl benten_drop::layer_c::HpkeRecipientStanza
+pub fn benten_drop::layer_c::HpkeRecipientStanza::plaintext_aad_bytes(&self) -> alloc::vec::Vec<u8>
+impl core::clone::Clone for benten_drop::layer_c::HpkeRecipientStanza
+pub fn benten_drop::layer_c::HpkeRecipientStanza::clone(&self) -> benten_drop::layer_c::HpkeRecipientStanza
+impl core::cmp::Eq for benten_drop::layer_c::HpkeRecipientStanza
+impl core::cmp::PartialEq for benten_drop::layer_c::HpkeRecipientStanza
+pub fn benten_drop::layer_c::HpkeRecipientStanza::eq(&self, &benten_drop::layer_c::HpkeRecipientStanza) -> bool
+impl core::fmt::Debug for benten_drop::layer_c::HpkeRecipientStanza
+pub fn benten_drop::layer_c::HpkeRecipientStanza::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_drop::layer_c::HpkeRecipientStanza
+impl core::marker::Freeze for benten_drop::layer_c::HpkeRecipientStanza
+impl core::marker::Send for benten_drop::layer_c::HpkeRecipientStanza
+impl core::marker::Sync for benten_drop::layer_c::HpkeRecipientStanza
+impl core::marker::Unpin for benten_drop::layer_c::HpkeRecipientStanza
+impl core::marker::UnsafeUnpin for benten_drop::layer_c::HpkeRecipientStanza
+impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::HpkeRecipientStanza
+impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::HpkeRecipientStanza
+pub const benten_drop::layer_c::AAD_VERSION: u8
+pub const benten_drop::layer_c::DROP_TO_RECIPIENT_SEALED_SENDER: u16
+pub const benten_drop::layer_c::ENVELOPE_FORMAT_VERSION: u8
+pub const benten_drop::layer_c::HYBRID_X25519_MLKEM768: u16
+pub const benten_drop::layer_c::LAYER_C_DROP: u16
+pub const benten_drop::layer_c::LAYER_C_DROP_MULTI_RECIPIENT: u16
+pub fn benten_drop::layer_c::audience_set_commitment(&[benten_drop::layer_c::RecipientDid]) -> [u8; 32]
+pub fn benten_drop::layer_c::group_plaintext_aad_region(&benten_drop::layer_c::EncryptedEnvelope) -> alloc::vec::Vec<u8>
+pub fn benten_drop::layer_c::open_group_stanza(&benten_drop::layer_c::RecipientSecKey, usize, &benten_drop::layer_c::EncryptedEnvelope) -> core::result::Result<(alloc::vec::Vec<u8>, benten_drop::layer_c::SenderDid), benten_drop::layer_c::LayerCError>
+pub fn benten_drop::layer_c::open_single(&benten_drop::layer_c::RecipientSecKey, &benten_drop::layer_c::EncryptedEnvelope) -> core::result::Result<(alloc::vec::Vec<u8>, benten_drop::layer_c::SenderDid), benten_drop::layer_c::LayerCError>
+pub fn benten_drop::layer_c::seal_group_multi(&[benten_drop::layer_c::RecipientPubKey], &benten_drop::layer_c::SenderDid, &benten_drop::layer_c::BodyCidDigest, u32, &[u8]) -> benten_drop::layer_c::EncryptedEnvelope
+pub fn benten_drop::layer_c::seal_group_multi_plaintext_sender(&[benten_drop::layer_c::RecipientPubKey], &benten_drop::layer_c::SenderDid, &benten_drop::layer_c::BodyCidDigest, u32, &[u8]) -> benten_drop::layer_c::EncryptedEnvelope
+pub fn benten_drop::layer_c::seal_plaintext_sender(&benten_drop::layer_c::RecipientPubKey, &benten_drop::layer_c::AudienceDid, &benten_drop::layer_c::SenderDid, &benten_drop::layer_c::BodyCidDigest, u32, &[u8]) -> benten_drop::layer_c::EncryptedEnvelope
+pub fn benten_drop::layer_c::seal_sealed_sender(&benten_drop::layer_c::RecipientPubKey, &benten_drop::layer_c::AudienceDid, &benten_drop::layer_c::SenderDid, &benten_drop::layer_c::BodyCidDigest, u32, &[u8]) -> benten_drop::layer_c::EncryptedEnvelope
+pub fn benten_drop::layer_c::self_describing_cid(&benten_drop::layer_c::BodyCidDigest) -> benten_drop::layer_c::SelfDescribingCid
+pub fn benten_drop::layer_c::serialize(&benten_drop::layer_c::EncryptedEnvelope) -> alloc::vec::Vec<u8>
+pub fn benten_drop::layer_c::single_plaintext_aad_region(&benten_drop::layer_c::EncryptedEnvelope) -> alloc::vec::Vec<u8>
+pub type benten_drop::layer_c::AudienceDid = alloc::vec::Vec<u8>
+pub type benten_drop::layer_c::BodyCidDigest = [u8; 32]
+pub type benten_drop::layer_c::RecipientDid = alloc::vec::Vec<u8>
+pub type benten_drop::layer_c::RecipientPubKey = [u8; 32]
+pub type benten_drop::layer_c::RecipientSecKey = [u8; 32]
+pub type benten_drop::layer_c::SelfDescribingCid = alloc::vec::Vec<u8>
+pub type benten_drop::layer_c::SenderDid = alloc::vec::Vec<u8>
+pub mod benten_drop::payload
+pub struct benten_drop::payload::DropBundlePayload
+pub benten_drop::payload::DropBundlePayload::codepoint: u16
+pub benten_drop::payload::DropBundlePayload::content: alloc::vec::Vec<benten_drop::payload::EncryptedNode>
+pub benten_drop::payload::DropBundlePayload::format_version: u8
+pub benten_drop::payload::DropBundlePayload::recipient_wrapped_cek: benten_drop::payload::WrappedCek
+pub benten_drop::payload::DropBundlePayload::spec_cid: benten_drop::payload::Cid
+impl benten_drop::payload::DropBundlePayload
+pub fn benten_drop::payload::DropBundlePayload::serialize(&self) -> alloc::vec::Vec<u8>
+impl core::clone::Clone for benten_drop::payload::DropBundlePayload
+pub fn benten_drop::payload::DropBundlePayload::clone(&self) -> benten_drop::payload::DropBundlePayload
+impl core::cmp::Eq for benten_drop::payload::DropBundlePayload
+impl core::cmp::PartialEq for benten_drop::payload::DropBundlePayload
+pub fn benten_drop::payload::DropBundlePayload::eq(&self, &benten_drop::payload::DropBundlePayload) -> bool
+impl core::fmt::Debug for benten_drop::payload::DropBundlePayload
+pub fn benten_drop::payload::DropBundlePayload::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_drop::payload::DropBundlePayload
+impl core::marker::Freeze for benten_drop::payload::DropBundlePayload
+impl core::marker::Send for benten_drop::payload::DropBundlePayload
+impl core::marker::Sync for benten_drop::payload::DropBundlePayload
+impl core::marker::Unpin for benten_drop::payload::DropBundlePayload
+impl core::marker::UnsafeUnpin for benten_drop::payload::DropBundlePayload
+impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::payload::DropBundlePayload
+impl core::panic::unwind_safe::UnwindSafe for benten_drop::payload::DropBundlePayload
+pub struct benten_drop::payload::EncryptedNode
+pub benten_drop::payload::EncryptedNode::ciphertext: alloc::vec::Vec<u8>
+pub benten_drop::payload::EncryptedNode::node_cid: benten_drop::payload::Cid
+impl core::clone::Clone for benten_drop::payload::EncryptedNode
+pub fn benten_drop::payload::EncryptedNode::clone(&self) -> benten_drop::payload::EncryptedNode
+impl core::cmp::Eq for benten_drop::payload::EncryptedNode
+impl core::cmp::PartialEq for benten_drop::payload::EncryptedNode
+pub fn benten_drop::payload::EncryptedNode::eq(&self, &benten_drop::payload::EncryptedNode) -> bool
+impl core::fmt::Debug for benten_drop::payload::EncryptedNode
+pub fn benten_drop::payload::EncryptedNode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_drop::payload::EncryptedNode
+impl core::marker::Freeze for benten_drop::payload::EncryptedNode
+impl core::marker::Send for benten_drop::payload::EncryptedNode
+impl core::marker::Sync for benten_drop::payload::EncryptedNode
+impl core::marker::Unpin for benten_drop::payload::EncryptedNode
+impl core::marker::UnsafeUnpin for benten_drop::payload::EncryptedNode
+impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::payload::EncryptedNode
+impl core::panic::unwind_safe::UnwindSafe for benten_drop::payload::EncryptedNode
+pub fn benten_drop::payload::seal_drop_over_subtree(&[benten_drop::payload::EncryptedNode], &benten_drop::payload::Cid, &[u8; 32], &benten_drop::payload::KSet) -> benten_drop::payload::DropBundlePayload
+pub type benten_drop::payload::Cid = [u8; 32]
+pub type benten_drop::payload::KSet = [u8; 32]
+pub type benten_drop::payload::WrappedCek = alloc::vec::Vec<u8>
 #[non_exhaustive] pub enum benten_drop::DropBundleError
 pub benten_drop::DropBundleError::AuthorizationGrantFailed(benten_caps::authorization_grant::AuthorizationGrantError)
 pub benten_drop::DropBundleError::CodecError(alloc::string::String)
@@ -185,15 +489,15 @@ pub benten_drop::DropBundleError::UnsupportedDropMode::detail: alloc::string::St
 pub benten_drop::DropBundleError::UnsupportedDropVersion
 pub benten_drop::DropBundleError::UnsupportedDropVersion::seen: u16
 impl core::convert::From<benten_caps::authorization_grant::AuthorizationGrantError> for benten_drop::bundle::DropBundleError
-pub fn benten_drop::bundle::DropBundleError::from(source: benten_caps::authorization_grant::AuthorizationGrantError) -> Self
+pub fn benten_drop::bundle::DropBundleError::from(benten_caps::authorization_grant::AuthorizationGrantError) -> Self
 impl core::convert::From<benten_drop::envelope_sig::EnvelopeSigError> for benten_drop::bundle::DropBundleError
-pub fn benten_drop::bundle::DropBundleError::from(e: benten_drop::envelope_sig::EnvelopeSigError) -> Self
+pub fn benten_drop::bundle::DropBundleError::from(benten_drop::envelope_sig::EnvelopeSigError) -> Self
 impl core::error::Error for benten_drop::bundle::DropBundleError
 pub fn benten_drop::bundle::DropBundleError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for benten_drop::bundle::DropBundleError
-pub fn benten_drop::bundle::DropBundleError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_drop::bundle::DropBundleError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for benten_drop::bundle::DropBundleError
-pub fn benten_drop::bundle::DropBundleError::fmt(&self, __formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_drop::bundle::DropBundleError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_drop::bundle::DropBundleError
 impl core::marker::Send for benten_drop::bundle::DropBundleError
 impl core::marker::Sync for benten_drop::bundle::DropBundleError
@@ -208,15 +512,15 @@ impl core::clone::Clone for benten_drop::bundle::DropBundleVersion
 pub fn benten_drop::bundle::DropBundleVersion::clone(&self) -> benten_drop::bundle::DropBundleVersion
 impl core::cmp::Eq for benten_drop::bundle::DropBundleVersion
 impl core::cmp::PartialEq for benten_drop::bundle::DropBundleVersion
-pub fn benten_drop::bundle::DropBundleVersion::eq(&self, other: &benten_drop::bundle::DropBundleVersion) -> bool
+pub fn benten_drop::bundle::DropBundleVersion::eq(&self, &benten_drop::bundle::DropBundleVersion) -> bool
 impl core::fmt::Debug for benten_drop::bundle::DropBundleVersion
-pub fn benten_drop::bundle::DropBundleVersion::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_drop::bundle::DropBundleVersion::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for benten_drop::bundle::DropBundleVersion
 impl core::marker::StructuralPartialEq for benten_drop::bundle::DropBundleVersion
 impl serde_core::ser::Serialize for benten_drop::bundle::DropBundleVersion
-pub fn benten_drop::bundle::DropBundleVersion::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_drop::bundle::DropBundleVersion::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_drop::bundle::DropBundleVersion
-pub fn benten_drop::bundle::DropBundleVersion::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_drop::bundle::DropBundleVersion::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_drop::bundle::DropBundleVersion
 impl core::marker::Send for benten_drop::bundle::DropBundleVersion
 impl core::marker::Sync for benten_drop::bundle::DropBundleVersion
@@ -231,15 +535,15 @@ impl core::clone::Clone for benten_drop::bundle::DropContentMode
 pub fn benten_drop::bundle::DropContentMode::clone(&self) -> benten_drop::bundle::DropContentMode
 impl core::cmp::Eq for benten_drop::bundle::DropContentMode
 impl core::cmp::PartialEq for benten_drop::bundle::DropContentMode
-pub fn benten_drop::bundle::DropContentMode::eq(&self, other: &benten_drop::bundle::DropContentMode) -> bool
+pub fn benten_drop::bundle::DropContentMode::eq(&self, &benten_drop::bundle::DropContentMode) -> bool
 impl core::fmt::Debug for benten_drop::bundle::DropContentMode
-pub fn benten_drop::bundle::DropContentMode::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_drop::bundle::DropContentMode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for benten_drop::bundle::DropContentMode
 impl core::marker::StructuralPartialEq for benten_drop::bundle::DropContentMode
 impl serde_core::ser::Serialize for benten_drop::bundle::DropContentMode
-pub fn benten_drop::bundle::DropContentMode::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_drop::bundle::DropContentMode::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_drop::bundle::DropContentMode
-pub fn benten_drop::bundle::DropContentMode::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_drop::bundle::DropContentMode::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_drop::bundle::DropContentMode
 impl core::marker::Send for benten_drop::bundle::DropContentMode
 impl core::marker::Sync for benten_drop::bundle::DropContentMode
@@ -259,20 +563,20 @@ pub benten_drop::DropBundle::restricted_spec: benten_caps::restricted_spec::Rest
 pub benten_drop::DropBundle::spec_cid: benten_core::Cid
 pub benten_drop::DropBundle::version: benten_drop::bundle::DropBundleVersion
 impl benten_drop::bundle::DropBundle
-pub fn benten_drop::bundle::DropBundle::consume_offline(&self, recipient_kp: &benten_id::keypair::Keypair) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<u8>>, benten_drop::bundle::DropBundleError>
+pub fn benten_drop::bundle::DropBundle::consume_offline(&self, &benten_id::keypair::Keypair) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<u8>>, benten_drop::bundle::DropBundleError>
 pub fn benten_drop::bundle::DropBundle::content_count(&self) -> usize
-pub fn benten_drop::bundle::DropBundle::parse_cbor_bytes(bytes: &[u8]) -> core::result::Result<Self, benten_drop::bundle::DropBundleError>
-pub fn benten_drop::bundle::DropBundle::synthesize_revocation_for_embedded_ucan(_bundle: &Self, _issuer_kp: &benten_id::keypair::Keypair) -> benten_drop::bundle::RevocationRecord
+pub fn benten_drop::bundle::DropBundle::parse_cbor_bytes(&[u8]) -> core::result::Result<Self, benten_drop::bundle::DropBundleError>
+pub fn benten_drop::bundle::DropBundle::synthesize_revocation_for_embedded_ucan(&Self, &benten_id::keypair::Keypair) -> benten_drop::bundle::RevocationRecord
 pub fn benten_drop::bundle::DropBundle::to_cbor_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_drop::bundle::DropBundleError>
 pub fn benten_drop::bundle::DropBundle::verify_envelope_signature(&self) -> core::result::Result<(), benten_drop::bundle::DropBundleError>
 impl core::clone::Clone for benten_drop::bundle::DropBundle
 pub fn benten_drop::bundle::DropBundle::clone(&self) -> benten_drop::bundle::DropBundle
 impl core::fmt::Debug for benten_drop::bundle::DropBundle
-pub fn benten_drop::bundle::DropBundle::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_drop::bundle::DropBundle::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl serde_core::ser::Serialize for benten_drop::bundle::DropBundle
-pub fn benten_drop::bundle::DropBundle::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_drop::bundle::DropBundle::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_drop::bundle::DropBundle
-pub fn benten_drop::bundle::DropBundle::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_drop::bundle::DropBundle::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_drop::bundle::DropBundle
 impl core::marker::Send for benten_drop::bundle::DropBundle
 impl core::marker::Sync for benten_drop::bundle::DropBundle
@@ -280,19 +584,42 @@ impl core::marker::Unpin for benten_drop::bundle::DropBundle
 impl core::marker::UnsafeUnpin for benten_drop::bundle::DropBundle
 impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::bundle::DropBundle
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::bundle::DropBundle
+pub struct benten_drop::DropBundlePayload
+pub benten_drop::DropBundlePayload::codepoint: u16
+pub benten_drop::DropBundlePayload::content: alloc::vec::Vec<benten_drop::payload::EncryptedNode>
+pub benten_drop::DropBundlePayload::format_version: u8
+pub benten_drop::DropBundlePayload::recipient_wrapped_cek: benten_drop::payload::WrappedCek
+pub benten_drop::DropBundlePayload::spec_cid: benten_drop::payload::Cid
+impl benten_drop::payload::DropBundlePayload
+pub fn benten_drop::payload::DropBundlePayload::serialize(&self) -> alloc::vec::Vec<u8>
+impl core::clone::Clone for benten_drop::payload::DropBundlePayload
+pub fn benten_drop::payload::DropBundlePayload::clone(&self) -> benten_drop::payload::DropBundlePayload
+impl core::cmp::Eq for benten_drop::payload::DropBundlePayload
+impl core::cmp::PartialEq for benten_drop::payload::DropBundlePayload
+pub fn benten_drop::payload::DropBundlePayload::eq(&self, &benten_drop::payload::DropBundlePayload) -> bool
+impl core::fmt::Debug for benten_drop::payload::DropBundlePayload
+pub fn benten_drop::payload::DropBundlePayload::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_drop::payload::DropBundlePayload
+impl core::marker::Freeze for benten_drop::payload::DropBundlePayload
+impl core::marker::Send for benten_drop::payload::DropBundlePayload
+impl core::marker::Sync for benten_drop::payload::DropBundlePayload
+impl core::marker::Unpin for benten_drop::payload::DropBundlePayload
+impl core::marker::UnsafeUnpin for benten_drop::payload::DropBundlePayload
+impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::payload::DropBundlePayload
+impl core::panic::unwind_safe::UnwindSafe for benten_drop::payload::DropBundlePayload
 pub struct benten_drop::EncryptedContent
 pub benten_drop::EncryptedContent::bytes: alloc::vec::Vec<u8>
 impl benten_drop::bundle::EncryptedContent
-pub fn benten_drop::bundle::EncryptedContent::from_encrypted_node(node: &benten_graph::aead_wrap::EncryptedNode) -> core::result::Result<Self, benten_drop::bundle::DropBundleError>
+pub fn benten_drop::bundle::EncryptedContent::from_encrypted_node(&benten_graph::aead_wrap::EncryptedNode) -> core::result::Result<Self, benten_drop::bundle::DropBundleError>
 pub fn benten_drop::bundle::EncryptedContent::to_encrypted_node(&self) -> core::result::Result<benten_graph::aead_wrap::EncryptedNode, benten_drop::bundle::DropBundleError>
 impl core::clone::Clone for benten_drop::bundle::EncryptedContent
 pub fn benten_drop::bundle::EncryptedContent::clone(&self) -> benten_drop::bundle::EncryptedContent
 impl core::fmt::Debug for benten_drop::bundle::EncryptedContent
-pub fn benten_drop::bundle::EncryptedContent::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn benten_drop::bundle::EncryptedContent::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl serde_core::ser::Serialize for benten_drop::bundle::EncryptedContent
-pub fn benten_drop::bundle::EncryptedContent::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn benten_drop::bundle::EncryptedContent::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_drop::bundle::EncryptedContent
-pub fn benten_drop::bundle::EncryptedContent::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn benten_drop::bundle::EncryptedContent::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 impl core::marker::Freeze for benten_drop::bundle::EncryptedContent
 impl core::marker::Send for benten_drop::bundle::EncryptedContent
 impl core::marker::Sync for benten_drop::bundle::EncryptedContent
@@ -301,3 +628,5 @@ impl core::marker::UnsafeUnpin for benten_drop::bundle::EncryptedContent
 impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::bundle::EncryptedContent
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::bundle::EncryptedContent
 pub const benten_drop::DROP_BUNDLE_MAX_SIZE_BYTES: usize
+pub fn benten_drop::seal_drop_over_subtree(&[benten_drop::payload::EncryptedNode], &benten_drop::payload::Cid, &[u8; 32], &benten_drop::payload::KSet) -> benten_drop::payload::DropBundlePayload
+pub type benten_drop::KSet = [u8; 32]

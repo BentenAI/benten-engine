@@ -32,6 +32,23 @@
 # in place (a regression that removes the mirror without re-adding the
 # baseline line will fail). This is how the baseline drains over time.
 #
+# # F-full R5 additions (2026-06-05) — 9 NEW internal-error variants
+#
+# The Phase-4-Meta-Core F-full R5 waves introduced new typed INTERNAL
+# error enums in the new crates (benten-membership-set, benten-crypto-suite
+# envelope/layer_c, benten-sync transport_config/two_cid_store). These 9
+# variants are NOT first-class public catalog codes — they are wrapped /
+# internal verify-time + decode-time typed errors of exactly the same
+# category as the pre-existing 156 entries below. Minting public catalog
+# codes for them pre-FREEZE would be the same scope-explosion the FREEZE
+# window must not absorb, so they join the SAME NAMED-DEFERRED post-FREEZE
+# §3.5g item 6 drain wave (PRE-FREEZE-BACKLOG row, above). The 9:
+#   AuditChainError::TamperDetectedLinkageBroken,
+#   EnvelopeError::{BadMagic, HostileLengthPrefix, UnsupportedVersion},
+#   GenError::{StaleKPrincipalGeneration, StaleRecipientKeyGeneration},
+#   GroupError::WrongGroupCodepoint, LayerCError::UnsupportedCodepoint,
+#   TransportError::TransportReservedAtV1Beta.
+#
 # # Format
 #
 # One `TypeName::Variant` per line; blank lines + lines starting with `#`
@@ -55,6 +72,7 @@ AtriumError::SyncHopDepthExceeded
 AtriumTransportError::HandshakeWireFormat
 AtriumTransportError::PeerConnectFailed
 AtriumTransportError::TransportDegraded
+AuditChainError::TamperDetectedLinkageBroken
 AuthorizationGrantError::AudienceMismatch
 AuthorizationGrantError::BindingMismatch
 AuthorizationGrantError::Serialization
@@ -89,6 +107,9 @@ EngineError::Invariant
 EngineError::ModuleManifestVerify
 EngineError::ModuleMigrationsRequirePersistence
 EngineError::Other
+EnvelopeError::BadMagic
+EnvelopeError::HostileLengthPrefix
+EnvelopeError::UnsupportedVersion
 EnvelopeSigError::SignatureMalformed
 EnvelopeSigError::VerifyFailed
 EnvelopeSigError::VerifyingKeyMalformed
@@ -103,8 +124,11 @@ FixtureError::WasmInvalid
 FixtureError::WasmRead
 FixtureError::WatParse
 FixtureError::WatRead
+GenError::StaleKPrincipalGeneration
+GenError::StaleRecipientKeyGeneration
 GraphError::NestedTransactionNotSupported
 GraphError::Redb
+GroupError::WrongGroupCodepoint
 HandshakeError::AudienceMismatch
 HandshakeError::InvalidSignature
 HandshakeError::PayloadMalformed
@@ -112,6 +136,7 @@ HandshakeError::ReplayWithinBoundedWindow
 HandshakeError::WireFormat
 IpcError::CapabilityNotInManifest
 IpcError::MethodNotInAllowlist
+LayerCError::UnsupportedCodepoint
 LightClientError::BandwidthBudgetExceeded
 LightClientError::Mst
 LightClientError::ProofKeyMismatch
@@ -146,6 +171,7 @@ SwapMatrixError::CipherSuite
 SwapMatrixError::ConfigMismatch
 SwapMatrixError::Signature
 ThinClientSessionError::SessionExpired
+TransportError::TransportReservedAtV1Beta
 TwoCidMapError::AeadAuthenticationFailed
 TwoCidMapError::IntegrityMismatch
 TwoCidMapError::NotFound

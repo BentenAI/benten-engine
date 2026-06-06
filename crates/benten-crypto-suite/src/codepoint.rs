@@ -126,6 +126,45 @@ impl SigCodepoint {
     }
 }
 
+/// The lifecycle state of a codepoint (R0.5 §4.1 U16; the
+/// `0x6700..0x67FF` lifecycle band carries the per-codepoint state).
+///
+/// `Live`/`Deprecated` codepoints dispatch (a deprecated codepoint still
+/// decodes existing content — old-codepoints-supported-forever); a
+/// `Quarantined` or `Burned` codepoint MUST be typed-rejected — a burned
+/// codepoint is permanently un-dispatchable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CodepointLifecycle {
+    /// Actively dispatched.
+    Live,
+    /// Deprecated but still decodable (no new content; existing content still
+    /// opens).
+    Deprecated,
+    /// Quarantined — suspended pending a security review; rejected.
+    Quarantined,
+    /// Burned — permanently un-dispatchable; rejected forever.
+    Burned,
+}
+
+impl CodepointLifecycle {
+    /// Dispatch by lifecycle state. `Live`/`Deprecated` are `Ok`;
+    /// `Quarantined`/`Burned` are typed-rejected.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`UnsupportedAlgorithm::CipherSuite`] (codepoint `0`) for a
+    /// `Quarantined`/`Burned` state — the caller threads the real codepoint
+    /// at the call site; the lifecycle gate's contract is the state-reject.
+    pub fn dispatch(self) -> Result<(), UnsupportedAlgorithm> {
+        match self {
+            Self::Live | Self::Deprecated => Ok(()),
+            Self::Quarantined | Self::Burned => {
+                Err(UnsupportedAlgorithm::CipherSuite { codepoint: 0 })
+            }
+        }
+    }
+}
+
 /// Typed hash codepoint enum (multihash codepoints; CLAUDE.md baked-in #5).
 ///
 /// v1 default = BLAKE3 (`0x1e`). Pre-blessed agile fallbacks =
@@ -271,4 +310,92 @@ impl CipherSuiteCodepoint {
             other => Err(UnsupportedAlgorithm::CipherSuite { codepoint: other }),
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// F-full CODEPOINT-RESERVE set (NQ-A1 / NQ-W5 / GAP-6b).
+// ---------------------------------------------------------------------------
+
+/// The F-full reserved-codepoint set (NQ-A1 conservative-fallback: post-freeze
+/// high/critical findings → reserve-codepoints + new tag, NEVER a silent
+/// wire-break). Each slot is RESERVED at v1-beta and typed-rejected by
+/// [`ReservedCodepoint::resolve`]; it becomes LIVE additively at its
+/// §4.0-named band, never via a wire-format break.
+///
+/// - [`Self::ExecuteWorkflow`] — RemotePermission `0x6320..0x632F` band.
+/// - [`Self::SubsetRef`] — `MEMBERSHIP_SET_SUBSET_REF = 0x6620`.
+/// - [`Self::RecoveryArtifact`] — codepoint RESERVED at Core (NQ-W5/m-14);
+///   the `RecoveryHook` trait is NOT frozen at Core — it lands in
+///   Phase-4-Meta-Composing alongside the allocated codepoint.
+/// - [`Self::RotatingGroupKeyChainedMode`] — FS-future `0x6380..0x63CF`
+///   MLS/CGKA bracket.
+/// - [`Self::ChainedStateTlv`] — the per-stanza `Option<ChainedStateTlv>`
+///   codepoint-reserve sub-slot (GAP-6b), AAD-bound when present (see
+///   [`chained_state_tlv_aad_binding`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ReservedCodepoint {
+    /// `ExecuteWorkflow` reserve (RemotePermission `0x6320..0x632F` band).
+    ExecuteWorkflow,
+    /// `SubsetRef` federation reserve (`0x6620`).
+    SubsetRef,
+    /// `RecoveryArtifact` reserve (codepoint at Core; trait in Composing).
+    RecoveryArtifact,
+    /// `RotatingGroupKeyChainedMode` reserve (FS-future `0x6380..0x63CF`).
+    RotatingGroupKeyChainedMode,
+    /// `ChainedStateTlv` per-stanza sub-slot reserve (GAP-6b; AAD-bound).
+    ChainedStateTlv,
+}
+
+impl ReservedCodepoint {
+    /// The §4.0 band base integer this reserve dispatches from (the
+    /// `RecoveryArtifact` conceptual reserve has no Core integer — it returns
+    /// `None`).
+    #[must_use]
+    pub const fn band_base(self) -> Option<u16> {
+        match self {
+            Self::ExecuteWorkflow => Some(0x6320),
+            Self::SubsetRef => Some(0x6620),
+            Self::RotatingGroupKeyChainedMode | Self::ChainedStateTlv => Some(0x6380),
+            Self::RecoveryArtifact => None,
+        }
+    }
+
+    /// Resolve a reserved codepoint — ALWAYS typed-rejected at v1-beta (NEVER
+    /// a silent accept). The reserve becomes LIVE additively at v1-GM+.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`UnsupportedAlgorithm::CipherSuite`] with the band base
+    /// codepoint (or `0` for the conceptual `RecoveryArtifact` reserve).
+    pub fn resolve(self) -> Result<(), UnsupportedAlgorithm> {
+        Err(UnsupportedAlgorithm::CipherSuite {
+            codepoint: self.band_base().unwrap_or(0),
+        })
+    }
+}
+
+/// GAP-6b — the per-stanza `Option<ChainedStateTlv>` sub-slot is AAD-BOUND
+/// when present, so a present-vs-absent flip is detectable at decrypt (not
+/// advisory). This helper appends the optional `ChainedStateTlv` codepoint
+/// reserve into the AAD byte string (big-endian): a present sub-slot pushes
+/// `0x01 ‖ band_base_be`; an absent sub-slot pushes `0x00`. Binding it into
+/// the AAD means a relay that strips it fails AEAD-open (it cannot be silently
+/// removed).
+#[must_use]
+pub fn chained_state_tlv_aad_binding(present: bool) -> Vec<u8> {
+    let mut aad = Vec::new();
+    if present {
+        aad.push(0x01u8);
+        // The ChainedStateTlv reserve dispatches from the FS-future band base.
+        aad.extend_from_slice(
+            &ReservedCodepoint::ChainedStateTlv
+                .band_base()
+                .unwrap_or(0)
+                .to_be_bytes(),
+        );
+    } else {
+        aad.push(0x00u8);
+    }
+    aad
 }

@@ -21,46 +21,58 @@
 //! - [`CipherSuite::seal_aead`] / [`CipherSuite::open_aead`] — the
 //!   ChaCha20-Poly1305 production API over a [`crate::aead::AeadKeyMaterial`].
 //!
-//! # X-Wing-style combiner (per Spike I)
+//! # The real X-Wing combiner (BR-3 / R4.2-corrected — `draft-connolly-cfrg-xwing-kem-10`)
 //!
-//! Per `RATIFIED-sharing-and-confidentiality-2026-05-21` Spike-I row:
-//! "X-Wing combiner body = 24 LOC; codepoint-dispatch + typed-reject
-//! pattern works end-to-end; hybrid wrap ~1.7× slower than classical =
-//! non-issue." The combiner is committing across BOTH halves so neither
-//! can be stripped without the derive failing.
+//! The hybrid `0x647a` KEM uses the **IETF-faithful X-Wing combiner**, NOT
+//! a Benten-private HKDF stand-in. The combiner hashes the two shared
+//! secrets, the X25519 ciphertext, and the X25519 public key with the
+//! `XWingLabel` **APPENDED** as the trailing suffix:
 //!
 //! ```text
+//! combined = SHA3-256( ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel )
+//!   where  ss_M       = ML-KEM-768 shared secret (Encap/Decap)
+//!          ss_X       = X25519 shared secret
+//!          ct_X       = X25519 ciphertext (the ephemeral encapsulation pubkey)
+//!          pk_X       = recipient X25519 public key
+//!          XWingLabel = 0x5c2e2f2f5e5c  (ASCII `\.//^\`, the 6-byte
+//!                       draft-connolly §6 label — APPENDED, not prepended)
+//!
 //! WRAP(recipient_pub):
-//!     ek_x = X25519.encapsulate(recipient_pub.x25519)       // X25519 ECDH ek + shared
-//!     (ek_mlkem, ss_mlkem) = MLKEM768.encapsulate(recipient_pub.mlkem)
-//!     ss_x = X25519.shared_secret(...)
-//!     combined = HKDF-SHA256(ss_x || ss_mlkem || ek_x || ek_mlkem ||
-//!                            recipient_pub.x25519 || recipient_pub.mlkem,
-//!                            info = "x-wing-v1-benten-0x647a")
-//!     wrapped = { codepoint: 0x647a, ek_x, ek_mlkem, encrypted_key }
+//!     (ct_x, ss_x)     = X25519.encapsulate(recipient_pub.x25519)
+//!     (ct_mlkem, ss_m) = MLKEM768.encapsulate(recipient_pub.mlkem)
+//!     combined = SHA3-256(ss_m ‖ ss_x ‖ ct_x ‖ recipient_pub.x25519 ‖ XWingLabel)
+//!     wrapped  = { codepoint: 0x647a (BE on the wire), ct_x, ct_mlkem, encrypted_key }
 //!
 //! UNWRAP(recipient_sec, wrapped):
-//!     ss_x = X25519.decapsulate(recipient_sec.x25519, wrapped.ek_x)
-//!     ss_mlkem = MLKEM768.decapsulate(recipient_sec.mlkem, wrapped.ek_mlkem)
-//!     combined = HKDF-SHA256(ss_x || ss_mlkem || ek_x || ek_mlkem ||
-//!                            recipient_pub.x25519 || recipient_pub.mlkem,
-//!                            info = "x-wing-v1-benten-0x647a")
+//!     ss_x = X25519.decapsulate(recipient_sec.x25519, wrapped.ct_x)
+//!     ss_m = MLKEM768.decapsulate(recipient_sec.mlkem, wrapped.ct_mlkem)
+//!     combined = SHA3-256(ss_m ‖ ss_x ‖ ct_x ‖ recipient_pub.x25519 ‖ XWingLabel)
 //!     decrypt_key = combined
 //! ```
 //!
-//! Strip-resistance: the combiner HKDF input concatenates BOTH shared
-//! secrets + BOTH encapsulated-keys + BOTH public-keys. Stripping the
-//! ML-KEM-768 half (ek_mlkem = zero) yields a different `combined` →
-//! the unwrap derives a different key → the subsequent ChaCha20-Poly1305
-//! decrypt fails closed (the F-2 strip-resistance contract).
+//! See [`combine_x_wing`] / [`x_wing_combiner_preimage`] for the exact
+//! construction (the latter is exposed so the F-W0-1-LABEL construction-order
+//! witness pin can assert the label is the appended suffix, not a prepended
+//! prefix). The prior `HKDF-SHA256(… info = "x-wing-v1-benten-0x647a")`
+//! stand-in (the corpus base) is **superseded by BR-3** — it was a
+//! Benten-private mislabel at the IETF-reserved `0x647A` codepoint and would
+//! have frozen a non-interoperable KEM; the real construction change
+//! regenerated all golden/KAT vectors.
+//!
+//! Strip-resistance: the combiner input concatenates both shared secrets +
+//! the X25519 ciphertext + the X25519 public key, so the derive commits to
+//! both halves. Stripping the ML-KEM-768 half (substituting a zero/forged
+//! `ss_M`) yields a different `combined` → the unwrap derives a different
+//! key → the subsequent ChaCha20-Poly1305 decrypt fails closed (the F-2
+//! strip-resistance contract).
 //!
 //! Per CLAUDE.md baked-in #5 / `crypto-agility-contract:6`: this is the
 //! ONLY crypto-primitive call site; we wrap vetted upstream
-//! `x25519-dalek` + `ml-kem` + `hkdf` + `sha3` crates; we NEVER fork or
+//! `x25519-dalek` + `ml-kem` + `sha3` crates; we NEVER fork or
 //! reimplement primitives.
 
 use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
-use ml_kem::{Encoded, EncodedSizeUser as _, KemCore, MlKem768};
+use ml_kem::{B32, Encoded, EncodedSizeUser as _, KemCore, MlKem768};
 use rand_core::OsRng as RandOsRng;
 use sha3::Digest as _;
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey, StaticSecret};
@@ -72,10 +84,17 @@ use crate::aead::{
 pub use crate::codepoint::CipherSuiteCodepoint;
 use crate::error::UnsupportedAlgorithm;
 
-/// X-Wing combiner HKDF info-tag (Benten-owned, codepoint-bound). The
-/// info-tag carries the codepoint so a future codepoint at a different
-/// combiner has its own distinct derivation domain.
-const X_WING_HKDF_INFO_V1: &[u8] = b"x-wing-v1-benten-0x647a";
+/// The real draft-connolly X-Wing `XWingLabel` — the 6 bytes
+/// `0x5c2e2f2f5e5c` (ASCII `\.//^\`). **APPENDED** as the trailing suffix
+/// of the combiner pre-image per `draft-connolly-cfrg-xwing-kem-10` §6
+/// (R4.2-corrected 2026-06-03 — the prepended form is the superseded
+/// v01-v02 ordering and would freeze a non-interoperable KEM at the
+/// IETF-reserved `0x647A`).
+pub const X_WING_LABEL: [u8; 6] = [0x5c, 0x2e, 0x2f, 0x2f, 0x5e, 0x5c];
+
+/// Classical-only `0x6400` combiner domain-separation info string. ASCII;
+/// NOT an integer wire/AAD field (m-1: not flagged by the BE scanner).
+const X25519_CLASSICAL_INFO_V1: &[u8] = b"x25519-classical-v1-benten-0x6400";
 
 /// G-CORE-3-hook cipher-suite dispatcher. **G-CORE-3a flips `0x647a` +
 /// `0x6400` to LIVE.** Other codepoints typed-reject; G-CORE-3c (full
@@ -159,6 +178,70 @@ impl CipherSuite {
         }
     }
 
+    /// Deterministically derive a recipient keypair from a 32-byte `seed`.
+    ///
+    /// Both halves are derived from the seed via BLAKE3 domain-separated
+    /// expansion (the X25519 `StaticSecret` from one 32-byte block; the
+    /// ML-KEM-768 `(d, z)` from two more) so the same seed always yields
+    /// the same keypair. Used by the Layer-C drop path to map a stable
+    /// recipient pubkey *fingerprint* to a real hybrid keypair without a
+    /// keystore round-trip (the `0x647a` hybrid + the `0x6400` classical
+    /// downgrade are both supported; other codepoints would have been
+    /// rejected by [`Self::resolve`]).
+    ///
+    /// Per CLAUDE.md baked-in #5 this stays the ONLY crypto-primitive call
+    /// site — the seed expansion goes through the vetted `blake3` MAC and
+    /// the keys through `x25519-dalek` / `ml-kem`; no primitive is forked.
+    #[must_use]
+    pub fn generate_recipient_keypair_deterministic(&self, seed: &[u8; 32]) -> RecipientKeypair {
+        // Domain-separated expansion of the seed into the three 32-byte
+        // blocks the two key halves need.
+        let block = |tag: u8| -> [u8; 32] {
+            let mut h = blake3::Hasher::new();
+            h.update(b"benten-crypto-suite:recipient-seed");
+            h.update(&[tag]);
+            h.update(seed);
+            *h.finalize().as_bytes()
+        };
+        let x_block = block(0x01);
+        let x_sec = StaticSecret::from(x_block);
+        let x_pub = X25519PublicKey::from(&x_sec);
+        match self.codepoint.raw() {
+            0x647a => {
+                let d: B32 = block(0x02).into();
+                let z: B32 = block(0x03).into();
+                let (mlkem_dk, mlkem_ek) = MlKem768::generate_deterministic(&d, &z);
+                RecipientKeypair {
+                    codepoint: self.codepoint,
+                    public: RecipientPublic {
+                        codepoint: self.codepoint,
+                        x25519: Some(x_pub),
+                        mlkem768_ek: Some(mlkem_ek.as_bytes().to_vec()),
+                    },
+                    secret: RecipientSecret {
+                        codepoint: self.codepoint,
+                        x25519: Some(x_sec),
+                        mlkem768_dk: Some(mlkem_dk.as_bytes().to_vec()),
+                    },
+                }
+            }
+            // Classical-only `0x6400`: X25519 half only.
+            _ => RecipientKeypair {
+                codepoint: self.codepoint,
+                public: RecipientPublic {
+                    codepoint: self.codepoint,
+                    x25519: Some(x_pub),
+                    mlkem768_ek: None,
+                },
+                secret: RecipientSecret {
+                    codepoint: self.codepoint,
+                    x25519: Some(x_sec),
+                    mlkem768_dk: None,
+                },
+            },
+        }
+    }
+
     /// Wrap `k_root` for `recipient_pub` via the X-Wing-hybrid combiner
     /// (or classical-only at `0x6400`).
     ///
@@ -207,16 +290,19 @@ impl CipherSuite {
                     .encapsulate(&mut RandOsRng)
                     .map_err(|()| AeadError::MalformedEnvelope("ML-KEM-768 encapsulate"))?;
 
-                // X-Wing combiner (~24 LOC; vendored): HKDF-SHA256 over
-                // ss_x || ss_mlkem || ek_x || ek_mlkem || pub_x || pub_mlkem
-                // with the codepoint-bound info-tag.
-                let combined = x_wing_combine(
-                    ss_x.as_bytes(),
+                // Real draft-connolly X-Wing combiner:
+                // SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel).
+                // ss_M = ML-KEM-768 shared secret; ss_X = X25519 shared
+                // secret; ct_X = the X25519 ephemeral public key (ek_x);
+                // pk_X = the recipient X25519 public key. The ML-KEM
+                // ciphertext is bound transitively via ss_M (decapsulation).
+                let _ = &mlkem_ct;
+                let _ = mlkem_ek_bytes;
+                let combined = combine_x_wing(
                     ss_mlkem.as_slice(),
+                    ss_x.as_bytes(),
                     ek_x.as_bytes(),
-                    &mlkem_ct,
                     x_recipient.as_bytes(),
-                    mlkem_ek_bytes,
                 );
 
                 // AEAD-encrypt k_root under the combined key.
@@ -319,16 +405,12 @@ impl CipherSuite {
                 // Recover the recipient's public material to feed the
                 // combiner symmetrically (it bound them at wrap-time).
                 let x_pub = X25519PublicKey::from(x_sec);
-                let mlkem_ek = mlkem_dk.encapsulation_key();
-                let mlkem_ek_bytes = mlkem_ek.as_bytes();
 
-                let combined = x_wing_combine(
-                    ss_x.as_bytes(),
+                let combined = combine_x_wing(
                     ss_mlkem.as_slice(),
+                    ss_x.as_bytes(),
                     &ek_x_bytes,
-                    &wrapped.ek_mlkem,
                     x_pub.as_bytes(),
-                    mlkem_ek_bytes.as_slice(),
                 );
 
                 let combined_key = AeadKeyMaterial::from_bytes(self.codepoint, combined.to_vec());
@@ -398,59 +480,68 @@ impl CipherSuite {
     }
 }
 
-/// X-Wing-style combiner (~24 LOC vendored; Spike I + RATIFIED-S&C
-/// confirmation). HKDF-SHA256 over (ss_x || ss_mlkem || ek_x || ek_mlkem
-/// || pub_x || pub_mlkem) with the codepoint-bound info-tag.
-fn x_wing_combine(
-    ss_x: &[u8],
-    ss_mlkem: &[u8],
-    ek_x: &[u8],
-    ek_mlkem: &[u8],
-    pub_x: &[u8],
-    pub_mlkem: &[u8],
-) -> [u8; 32] {
-    use hkdf::Hkdf;
-    use sha2::Sha256;
-    let mut ikm = Vec::with_capacity(
-        ss_x.len() + ss_mlkem.len() + ek_x.len() + ek_mlkem.len() + pub_x.len() + pub_mlkem.len(),
-    );
-    ikm.extend_from_slice(ss_x);
-    ikm.extend_from_slice(ss_mlkem);
-    ikm.extend_from_slice(ek_x);
-    ikm.extend_from_slice(ek_mlkem);
-    ikm.extend_from_slice(pub_x);
-    ikm.extend_from_slice(pub_mlkem);
-    // Salt = SHA3-256 of the codepoint info-tag — Benten-owned
-    // domain-separation salt distinct from upstream X-Wing's IETF
-    // draft (the integration crate is the ONLY call site that controls
-    // the wire-format domain).
-    let salt = {
-        let mut h = sha3::Sha3_256::new();
-        h.update(X_WING_HKDF_INFO_V1);
-        let out = h.finalize();
-        out.to_vec()
-    };
-    let hk = Hkdf::<Sha256>::new(Some(&salt), &ikm);
-    let mut okm = [0u8; 32];
-    hk.expand(X_WING_HKDF_INFO_V1, &mut okm)
-        .expect("HKDF-SHA256 expand to 32 B is infallible");
-    okm
+/// Build the real draft-connolly X-Wing combiner pre-image (the exact byte
+/// sequence fed to `SHA3-256`):
+/// `ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel` — the 6-byte `XWingLabel` is
+/// **APPENDED** as the trailing suffix per `draft-connolly-cfrg-xwing-kem-10`
+/// §6 (R4.2-corrected). `ss_M` = ML-KEM-768 shared secret, `ss_X` = X25519
+/// shared secret, `ct_X` = the X25519 ephemeral public key (the X25519
+/// "ciphertext"), `pk_X` = the recipient X25519 public key.
+///
+/// Exposed so the F-W0-1-LABEL construction-order witness pin can assert the
+/// label is the appended suffix (and NOT a prepended prefix).
+#[must_use]
+pub fn x_wing_combiner_preimage(ss_m: &[u8], ss_x: &[u8], ct_x: &[u8], pk_x: &[u8]) -> Vec<u8> {
+    let mut pre = Vec::with_capacity(ss_m.len() + ss_x.len() + ct_x.len() + pk_x.len() + 6);
+    pre.extend_from_slice(ss_m);
+    pre.extend_from_slice(ss_x);
+    pre.extend_from_slice(ct_x);
+    pre.extend_from_slice(pk_x);
+    // APPENDED suffix (draft-connolly §6; NOT prepended).
+    pre.extend_from_slice(&X_WING_LABEL);
+    pre
 }
 
-/// Classical-only X25519 combiner (the `0x6400` downgrade arm).
-fn classical_combine(ss_x: &[u8], ek_x: &[u8], pub_x: &[u8]) -> [u8; 32] {
-    use hkdf::Hkdf;
-    use sha2::Sha256;
-    let mut ikm = Vec::with_capacity(ss_x.len() + ek_x.len() + pub_x.len());
-    ikm.extend_from_slice(ss_x);
-    ikm.extend_from_slice(ek_x);
-    ikm.extend_from_slice(pub_x);
-    let info = b"x25519-classical-v1-benten-0x6400";
-    let hk = Hkdf::<Sha256>::new(None, &ikm);
-    let mut okm = [0u8; 32];
-    hk.expand(info, &mut okm)
-        .expect("HKDF-SHA256 expand to 32 B is infallible");
-    okm
+/// The real draft-connolly X-Wing combiner:
+/// `SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel)`.
+///
+/// This replaces the prior HKDF-SHA256 mislabel (`cipher_suite.rs:404` at
+/// the corpus base) with the IETF-faithful construction at the IETF-reserved
+/// codepoint `0x647A`. Per CLAUDE.md baked-in #5 the SHA3-256 primitive is
+/// wrapped from the vetted upstream `sha3` crate — no reimplementation.
+///
+/// Argument order is `(ss_mlkem, ss_x25519, ct_x25519, pk_x25519)` to mirror
+/// the spec pre-image `ss_M ‖ ss_X ‖ ct_X ‖ pk_X`.
+#[must_use]
+pub fn combine_x_wing(
+    ss_mlkem: &[u8],
+    ss_x25519: &[u8],
+    ct_x25519: &[u8],
+    pk_x25519: &[u8],
+) -> [u8; 32] {
+    let pre = x_wing_combiner_preimage(ss_mlkem, ss_x25519, ct_x25519, pk_x25519);
+    let mut h = sha3::Sha3_256::new();
+    h.update(&pre);
+    h.finalize().into()
+}
+
+/// The classical-only X25519 combiner (the `0x6400` downgrade arm),
+/// re-derived consistently with the real-X-Wing rewrite (§3.2(a)):
+/// `SHA3-256(ss_X ‖ ct_X ‖ pk_X ‖ X25519_CLASSICAL_INFO)`. SHA3-256-based
+/// (matching the hybrid arm's hash family) so the two arms share the same
+/// hash primitive but derive distinct keys (distinct input set + distinct
+/// trailing domain-separation string).
+#[must_use]
+pub fn classical_combine(ss_x: &[u8], ek_x: &[u8], pub_x: &[u8]) -> [u8; 32] {
+    let mut pre =
+        Vec::with_capacity(ss_x.len() + ek_x.len() + pub_x.len() + X25519_CLASSICAL_INFO_V1.len());
+    pre.extend_from_slice(ss_x);
+    pre.extend_from_slice(ek_x);
+    pre.extend_from_slice(pub_x);
+    pre.extend_from_slice(X25519_CLASSICAL_INFO_V1);
+    let mut h = sha3::Sha3_256::new();
+    h.update(&pre);
+    h.finalize().into()
 }
 
 /// Recipient keypair carrying X25519 + (optionally) ML-KEM-768 halves

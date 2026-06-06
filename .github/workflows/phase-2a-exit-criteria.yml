@@ -129,7 +129,7 @@ jobs:
           # for the Inv-8 integration tests (G4-A mini-review C1 soundness
           # gate — MUTATION surface is `cfg(any(test, feature = "testing"))`
           # so non-test builds cannot seed the registry).
-          cargo nextest run --profile ci --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-dev/testing \
+          cargo nextest run --profile ci --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-membership-set/testing,benten-dev/testing \
             -E 'test(/invariant_(8|11|13|14)_/)'
 
   # ---------------------------------------------------------------------------
@@ -164,7 +164,7 @@ jobs:
           # turn it on here. Re-enable the end-to-end test once the
           # `.wait()` SubgraphSpecBuilder method + related red-phase
           # APIs land (plan §G3-B DSL continuation).
-          cargo nextest run --profile ci --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-dev/testing \
+          cargo nextest run --profile ci --locked --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-membership-set/testing,benten-dev/testing \
             -E 'test(/transform_via_get_by_label_respects_check_read/) + test(/transform_via_get_by_property_respects_check_read/) + test(/transform_via_read_view_respects_check_read/)'
 
   # ---------------------------------------------------------------------------
