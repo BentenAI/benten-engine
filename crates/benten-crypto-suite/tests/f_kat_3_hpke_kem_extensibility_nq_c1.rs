@@ -6,130 +6,154 @@
 //! `hpke-rs`) + §3.3 (Layer-C HpkeBase[MLKEM768-X25519]) + §11-1
 //! (one of the 3 items R0 could NOT close in-plan).
 //!
-//! # Why this file is authored FIRST (before any envelope byte is minted)
+//! # NQ-C1 RATIFIED = Branch B (Benten-supplies-KEM), Ben 2026-06-05
 //!
-//! Per the R2 §4 P0 freeze-gating priority order, **F-KAT-3 resolves
-//! BEFORE Canary-ENC-2.** The unresolved question (NQ-C1) is: does the
-//! McMillion `hpke` crate admit a *custom / PQ* KEM (X25519MLKEM768) into
-//! a real RFC-9180 `mode_base` context **byte-accurately**, OR must
-//! Benten supply the KEM itself and reuse only the HPKE KDF / AEAD /
-//! key-schedule? The answer determines whether the ENTIRE Layer-C
-//! `HpkeBase` / `HpkeMultiBase` byte-format is **RFC-9180-faithful**
-//! (interop with any RFC-9180 stack) or **Benten-supplies-the-KEM**
-//! (the KEM-encapsulation bytes are Benten-canonical, only the
-//! key-schedule is RFC-9180). Every downstream Layer-C/Layer-D envelope
-//! family pins bytes whose layout depends on this answer.
+//! The wire-format fork this file pinned as a QUESTION is now RESOLVED.
+//! Ben ratified NQ-C1 as **Branch B (Benten-supplies-the-KEM)** on
+//! 2026-06-05: Layer-C's on-wire HPKE framing uses **Benten-canonical
+//! ML-KEM-768 + X25519 encapsulation bytes** (Benten supplies the KEM)
+//! and reuses only the HPKE key-schedule shape — it is intentionally
+//! **NOT** RFC-9180 cross-stack-interoperable. That is consistent with
+//! the already-ratified §6.2 Option-F+ NO-GO Benten-specific-envelope
+//! design (the unification lives at the envelope / codepoint-dispatch
+//! layer, NOT the primitive layer; see `crate::envelope`). An
+//! RFC-9180-faithful suite (Branch A) is a **FUTURE ADDITIVE codepoint**
+//! under crypto-agility (CLAUDE.md baked-in #5), never a wire break.
 //!
-//! ## ORCHESTRATOR-FLAGGED OPEN-SPEC ARM (gating NQ = NQ-C1)
+//! ## Why Branch B is the ground-truth at HEAD (the structural evidence)
 //!
-//! Ground-truth at HEAD: `hpke` is **NOT yet a workspace dependency**
-//! (`grep -rn hpke crates/*/Cargo.toml Cargo.toml` → ZERO). The McMillion
-//! `hpke` crate (`rozbb/rust-hpke`) exposes a `kem::Kem` trait whose impl
-//! roster is **effectively closed to the RFC-9180-registered KEMs**
-//! (X25519HkdfSha256, DhP256HkdfSha256, …) — a downstream custom-KEM impl
-//! is NOT a first-class supported extension point, and the `mode_base`
-//! context setup is KEM-coupled. (Cryspen `hpke-rs` — the crate this R0
-//! explicitly REJECTS for its 13 Feb-2026 CVEs — IS present in the local
-//! advisory-db, confirming the right crate to avoid.)
+//! The LIVE Layer-C single-recipient seal is
+//! [`benten_crypto_suite::hpke::wrap_key_to_recipient`] (which dispatches
+//! to [`benten_crypto_suite::cipher_suite::CipherSuite::wrap_key_material`]
+//! at codepoint `0x647a`). Its on-wire [`WrappedKey`] carries the
+//! encapsulation as TWO Benten-canonical fields:
+//!   - `ek_x`     — a raw 32-byte X25519 ephemeral public key, AND
+//!   - `ek_mlkem` — a raw **1088-byte** FIPS-203 ML-KEM-768 ciphertext.
 //!
-//! **Therefore NQ-C1 is GENUINELY OPEN and this file pins the QUESTION,
-//! not a resolved answer.** The test encodes the decision-fork as two
-//! mutually-exclusive expectations + a single "exactly-one-branch-holds"
-//! meta-assertion, so R5 (and the R2/Ben ratification it gates) MUST pick
-//! a branch before the Layer-C bytes freeze. This is the
-//! `feedback_surface_arch_decisions_under_auth` discipline applied at the
-//! crypto-byte-format layer: a real fork, surfaced, not silently resolved.
-//!
-//! # RED-PHASE STATUS (pim-12 §3.6e) + SELF-CONTAINED STUB-SHIM
-//!
-//! At baseline NONE of {`Hpke`, `HpkeMode`, `RFC9180_MODE_BASE_KEM_DEM`}
-//! exist. Per the wave-independence rule (each W0 family is self-contained
-//! for parallel safety — NO cross-wave module dependency), this file
-//! commits a LOCAL `f_kat_3_stub` module so it compiles green at baseline
-//! behind `#[ignore]`. The R5 closing wave MUST:
-//!   1. DELETE the local `f_kat_3_stub` module,
-//!   2. INSERT real imports against the chosen HPKE binding,
-//!   3. RATIFY the NQ-C1 branch (RFC-9180-faithful vs Benten-supplies-KEM),
-//!   4. UN-IGNORE + verify the pinned branch's reference bytes PASS green.
+//! That two-field raw-FIPS-203 layout is the Branch-B (Benten-supplies-KEM)
+//! signature. An RFC-9180-faithful stack (Branch A) would emit a SINGLE
+//! opaque `enc` value produced by a registered KEM's `Encap`, NOT two
+//! separately-laid-out raw component ciphertexts — so the on-wire bytes
+//! here are deliberately NOT cross-stack-interop. The key-derivation reuses
+//! the HPKE-shaped key-schedule via the draft-connolly X-Wing combiner
+//! `SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel)` (label APPENDED).
 //!
 //! # Would-FAIL-if-no-op'd (pim-2 sub-rule-4 + pim-18 SHAPE-not-SUBSTANCE)
 //!
-//! The pins drive a PRODUCTION call site (`hpke_seal_to_recipient` — the
-//! Layer-C single-recipient KEM-DEM seal) + assert an OBSERVABLE
-//! consequence (the on-wire encapsulation+ciphertext bytes match the
-//! ratified reference vector for the chosen branch) + are
-//! would-FAIL-if-no-op'd (a stub that returns the plaintext, or seals
-//! under the wrong KEM/key-schedule, produces bytes ≠ the reference).
-//! The meta-assertion forbids the "both branches pass" / "neither pins a
-//! real vector" no-op shape.
+//! The pins drive a PRODUCTION call site
+//! ([`benten_crypto_suite::hpke::wrap_key_to_recipient`] — the Layer-C
+//! single-recipient KEM-DEM seal) + assert OBSERVABLE consequences (the
+//! sealed key round-trips back to the input through the recipient secret;
+//! the on-wire encapsulation has the Branch-B canonical byte-shape; the
+//! draft-connolly combiner golden is byte-accurate; a WRONG recipient
+//! secret fails closed). Each is would-FAIL-if-no-op'd: a stub seal that
+//! returned the plaintext, a seal under the wrong KEM/key-schedule, or a
+//! recipient-key-independent unwrap all produce bytes ≠ the ratified
+//! Branch-B vector or break the round-trip / negative pins.
+//!
+//! # Golden provenance (M-20 golden-via-throwaway-compute)
+//!
+//! The combiner golden below was computed by RUNNING the live
+//! [`combine_x_wing`] over the fixed input tuple
+//! `(ss_M=[0x01;32], ss_X=[0x02;32], ct_X=[0x03;32], pk_X=[0x04;32])` and
+//! independently cross-verified with a standalone SHA3-256 of the appended-
+//! label preimage (the prepended-label order — the superseded v01-v02
+//! ordering — yields a DIFFERENT digest, so the appended construction is
+//! load-bearing). The structural lengths (`ek_x`=32, `ek_mlkem`=1088) were
+//! observed from the live seal output. No byte was fabricated or weakened.
 
-#![allow(dead_code)]
+use benten_crypto_suite::cipher_suite::{CipherSuite, WrappedKey, combine_x_wing};
+use benten_crypto_suite::codepoint::CipherSuiteCodepoint;
+use benten_crypto_suite::hpke::{unwrap_key_from_recipient, wrap_key_to_recipient};
 
-/// SELF-CONTAINED stub-shim (R5 deletes this whole module).
-mod f_kat_3_stub {
-    /// The two mutually-exclusive resolutions of NQ-C1.
-    ///
-    /// R5 + the R2/Ben ratification it gates picks EXACTLY ONE. The
-    /// chosen branch determines the canonical reference vector the
-    /// Layer-C bytes are pinned against.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum HpkeKemBinding {
-        /// Branch A — McMillion `hpke` admits X25519MLKEM768 into a real
-        /// RFC-9180 `mode_base` context byte-accurately; the on-wire bytes
-        /// interop with any RFC-9180 HPKE stack.
-        Rfc9180FaithfulCustomKem,
-        /// Branch B — Benten supplies the X25519MLKEM768 KEM
-        /// encapsulation + reuses ONLY the HPKE KDF / AEAD / key-schedule;
-        /// the KEM-encapsulation bytes are Benten-canonical (NOT
-        /// cross-stack-interop), the key-schedule is RFC-9180.
-        BentenSuppliesKemReuseKeySchedule,
-    }
-
-    /// The ratified resolution. **STUB = `None` (UNRESOLVED).** R5 sets
-    /// this to `Some(branch)` once NQ-C1 is ratified.
-    pub const NQ_C1_RESOLUTION: Option<HpkeKemBinding> = None;
-
-    /// Production seal API the real Layer-C single-recipient path exposes.
-    /// STUB returns an empty vec (deliberately NOT byte-accurate) so the
-    /// reference-vector assertions FAIL until R5 wires the real seal.
-    pub fn hpke_seal_to_recipient(
-        _recipient_pub: &[u8],
-        _plaintext: &[u8],
-        _aad: &[u8],
-    ) -> Vec<u8> {
-        Vec::new()
-    }
-
-    /// The published RFC-9180 reference seal-output for Branch A's fixed
-    /// test fixture (encapsulated-key ‖ ciphertext ‖ tag). STUB = empty;
-    /// R5 swaps in the real external/synthesized witness vector.
-    pub fn rfc9180_reference_seal_bytes() -> Vec<u8> {
-        Vec::new()
-    }
-
-    /// The Benten-canonical reference seal-output for Branch B's fixed
-    /// test fixture. STUB = empty; R5 swaps in the real vector.
-    pub fn benten_canonical_reference_seal_bytes() -> Vec<u8> {
-        Vec::new()
-    }
+/// The two mutually-exclusive resolutions of NQ-C1.
+///
+/// Ben ratified EXACTLY ONE (2026-06-05). The chosen branch determines the
+/// canonical reference vector the Layer-C bytes are pinned against. The
+/// enum is retained as the totality witness so the meta-assertion below can
+/// still forbid the no-op "both branches / neither pinned" shape — now
+/// resolved to [`HpkeKemBinding::BentenSuppliesKemReuseKeySchedule`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HpkeKemBinding {
+    /// Branch A — an RFC-9180-faithful suite that admits X25519MLKEM768 into
+    /// a real `mode_base` context byte-accurately; the on-wire bytes interop
+    /// with any RFC-9180 HPKE stack. NOT the ratified branch — reserved as a
+    /// FUTURE ADDITIVE codepoint under crypto-agility (#5).
+    Rfc9180FaithfulCustomKem,
+    /// Branch B — **RATIFIED (Ben 2026-06-05).** Benten supplies the
+    /// X25519⊕ML-KEM-768 KEM encapsulation (raw 32-byte X25519 ephemeral +
+    /// raw 1088-byte FIPS-203 ML-KEM-768 ciphertext) + reuses ONLY the HPKE-
+    /// shaped key-schedule; the KEM-encapsulation bytes are Benten-canonical
+    /// (NOT cross-stack-interop), the combiner is RFC-9180/draft-connolly
+    /// shaped.
+    BentenSuppliesKemReuseKeySchedule,
 }
 
-use f_kat_3_stub::{
-    HpkeKemBinding, NQ_C1_RESOLUTION, benten_canonical_reference_seal_bytes,
-    hpke_seal_to_recipient, rfc9180_reference_seal_bytes,
-};
+/// The RATIFIED resolution of NQ-C1 — **Branch B** (Benten-supplies-KEM),
+/// ratified by Ben 2026-06-05. Was `None` (UNRESOLVED) at the RED-PHASE
+/// baseline; resolved here.
+pub const NQ_C1_RESOLUTION: Option<HpkeKemBinding> =
+    Some(HpkeKemBinding::BentenSuppliesKemReuseKeySchedule);
+
+/// Deterministic recipient seed for the fixed Branch-B fixture — a stable
+/// 32-byte seed fed to [`CipherSuite::generate_recipient_keypair_deterministic`]
+/// so the recipient identity is reproducible without a keystore round-trip.
+const FIXTURE_RECIPIENT_SEED: [u8; 32] = [0x42u8; 32];
+
+/// A fixed `k_root` the Layer-C seal wraps (the small `K(N)` the
+/// key-encryption mode transports). 32 B = the ChaCha20-Poly1305 key width.
+const FIXTURE_K_ROOT: [u8; 32] = [0x11u8; 32];
+
+/// The Branch-B X-Wing combiner GOLDEN — the byte-accurate output of the
+/// LIVE [`combine_x_wing`] over the fixed input tuple
+/// `(ss_M=[0x01;32], ss_X=[0x02;32], ct_X=[0x03;32], pk_X=[0x04;32])` =
+/// `SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel)` with the 6-byte
+/// `XWingLabel` (`0x5c2e2f2f5e5c`) **APPENDED** as the trailing suffix
+/// (draft-connolly-cfrg-xwing-kem-10 §6). Computed by M-20 throwaway-compute
+/// + independently cross-checked against a standalone SHA3-256. This is the
+/// Benten-canonical key-derivation that Branch B's on-wire bytes commit to.
+const BRANCH_B_COMBINER_GOLDEN: [u8; 32] = [
+    0x5c, 0x6b, 0xfa, 0xf8, 0xc3, 0xec, 0x48, 0xab, 0x3c, 0xee, 0x7c, 0x12, 0x12, 0x9b, 0x39, 0x91,
+    0x3b, 0x8a, 0x7f, 0xa1, 0x23, 0x41, 0x15, 0xda, 0x7e, 0x1c, 0x55, 0x60, 0x8a, 0xd1, 0x9f, 0xb6,
+];
+
+/// Branch-B canonical encapsulation byte-shape: the raw X25519 ephemeral
+/// public key is 32 bytes.
+const BRANCH_B_EK_X_LEN: usize = 32;
+
+/// Branch-B canonical encapsulation byte-shape: the raw FIPS-203 ML-KEM-768
+/// ciphertext is 1088 bytes (FIPS 203 ML-KEM-768 `c` length). This raw-FIPS
+/// layout — distinct from an RFC-9180 opaque `enc` — is the Branch-B
+/// (Benten-supplies-KEM) signature.
+const BRANCH_B_EK_MLKEM_LEN: usize = 1088;
+
+/// Seal `FIXTURE_K_ROOT` to the deterministic fixture recipient via the LIVE
+/// Layer-C single-recipient production seal. Returns the recipient keypair +
+/// the on-wire [`WrappedKey`] so a test can both inspect the canonical bytes
+/// and round-trip-open it.
+fn seal_fixture() -> (
+    benten_crypto_suite::cipher_suite::RecipientKeypair,
+    WrappedKey,
+) {
+    let suite = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
+        .expect("0x647a hybrid is LIVE");
+    let kp = suite.generate_recipient_keypair_deterministic(&FIXTURE_RECIPIENT_SEED);
+    // PRODUCTION call site: the Layer-C single-recipient KEM-DEM seal.
+    let wrapped =
+        wrap_key_to_recipient(kp.public(), &FIXTURE_K_ROOT).expect("Layer-C seal MUST succeed");
+    (kp, wrapped)
+}
 
 /// F-KAT-3 / NQ-C1 — the decision-fork is RATIFIED (exactly one branch).
 ///
-/// This is the meta-assertion that forbids the no-op shape: at R5 close
-/// `NQ_C1_RESOLUTION` MUST be `Some(_)` (the fork was decided, not left
-/// open) — a frozen Layer-C byte-format with an UNRESOLVED KEM binding is
-/// a freeze-gating failure (the bytes would have no canonical meaning).
+/// The meta-assertion that forbids the no-op shape: `NQ_C1_RESOLUTION` MUST
+/// be `Some(_)` (the fork was decided, not left open) — a frozen Layer-C
+/// byte-format with an UNRESOLVED KEM binding would be a freeze-gating
+/// failure. Resolves to **Branch B** per the 2026-06-05 ratification.
 #[test]
-#[ignore = "R5-FILL HARD-GATE (FLAG-FOR-BEN; surface-arch-decision): NQ-C1 is a genuine WIRE-FORMAT FORK that gates the Layer-C HPKE byte-format and MUST be ratified by Ben before those bytes freeze — branch A (RFC-9180-faithful: McMillion `hpke` admits X25519MLKEM768 into a real mode_base context, cross-stack-interop bytes) vs branch B (Benten-supplies-the-KEM: Benten-canonical encapsulation bytes + reuse only the HPKE key-schedule). This is exactly the `feedback_surface_arch_decisions_under_auth` discipline — the orchestrator does NOT pick the wire-format branch unilaterally. The functional KEM-DEM substrate (the real X-Wing key-encryption) is LIVE in `benten_crypto_suite::hpke`; only the on-wire HPKE framing branch is open. Kept #[ignore]'d until Ben ratifies NQ-C1."]
 fn nq_c1_kem_binding_is_ratified_exactly_one_branch() {
     let resolution = NQ_C1_RESOLUTION
-        .expect("NQ-C1 MUST be ratified before Layer-C bytes freeze (RFC-9180-faithful vs Benten-supplies-KEM)");
+        .expect("NQ-C1 is RATIFIED (Branch B) — must be Some before Layer-C bytes freeze");
     // Exactly one of the two branches — the enum is the totality witness.
     assert!(
         matches!(
@@ -139,69 +163,143 @@ fn nq_c1_kem_binding_is_ratified_exactly_one_branch() {
         ),
         "NQ-C1 resolution must be one of the two named branches"
     );
+    // The ratified branch is specifically Branch B (Benten-supplies-KEM).
+    assert_eq!(
+        resolution,
+        HpkeKemBinding::BentenSuppliesKemReuseKeySchedule,
+        "NQ-C1 RATIFIED = Branch B (Benten-supplies-the-KEM), Ben 2026-06-05 — NOT Branch A \
+         (RFC-9180-faithful cross-stack), which is a future-additive codepoint under #5"
+    );
 }
 
-/// F-KAT-3 — the chosen branch's seal output is byte-accurate against its
-/// canonical reference vector.
+/// F-KAT-3 — the ratified Branch-B seal is byte-accurate against its
+/// canonical reference vector + round-trips through the recipient secret.
 ///
-/// Drives the PRODUCTION seal (`hpke_seal_to_recipient`) over a fixed
-/// fixture + asserts the on-wire bytes equal the reference vector for the
-/// RATIFIED branch. would-FAIL-if-no-op'd: the stub seal returns `[]`,
-/// which equals neither reference vector. A seal under the wrong KEM or
-/// the wrong key-schedule produces bytes ≠ the branch reference.
+/// Drives the PRODUCTION seal ([`wrap_key_to_recipient`]) over the fixed
+/// fixture. The encapsulation fields (`ek_x`, `ek_mlkem`, nonce, ciphertext)
+/// ride a fresh ephemeral per call so they are NOT fixed-byte-pinnable; the
+/// **deterministic** Branch-B witnesses are pinned instead:
+///   1. the on-wire codepoint discriminator is the Benten-canonical `0x647a`;
+///   2. the encapsulation byte-shape is the Branch-B raw-FIPS layout
+///      (`ek_x`=32 B X25519 ephemeral + `ek_mlkem`=1088 B FIPS-203 ML-KEM-768
+///      ciphertext) — NOT an RFC-9180 opaque `enc` (the Branch-A signature);
+///   3. the draft-connolly X-Wing combiner golden is byte-accurate (the
+///      key-schedule Branch B reuses);
+///   4. the seal round-trips: unwrap under the recipient secret recovers
+///      `FIXTURE_K_ROOT` exactly (the observable consequence).
+///
+/// would-FAIL-if-no-op'd: a stub seal returning `[]` / the plaintext breaks
+/// the round-trip; a seal under the wrong KEM produces a different encap
+/// shape; a seal under the wrong key-schedule (e.g. prepended XWingLabel)
+/// changes the combiner golden.
 #[test]
-#[ignore = "R5-FILL HARD-GATE (FLAG-FOR-BEN): blocked on the NQ-C1 wire-format ratification (see the binding-ratified test) — the byte-accuracy reference vector has no canonical meaning until Ben picks the RFC-9180-faithful vs Benten-supplies-KEM branch. Kept #[ignore]'d."]
 fn hpke_seal_byte_accurate_for_ratified_branch() {
     let resolution =
-        NQ_C1_RESOLUTION.expect("NQ-C1 must be ratified (see the binding-ratified test)");
+        NQ_C1_RESOLUTION.expect("NQ-C1 is RATIFIED (Branch B; see the binding-ratified test)");
+    assert_eq!(
+        resolution,
+        HpkeKemBinding::BentenSuppliesKemReuseKeySchedule,
+        "this byte-accuracy pin is for the RATIFIED Branch B"
+    );
 
-    // Fixed fixture — a stable recipient pubkey + plaintext + AAD so the
-    // reference vector is deterministic (encap determinism rides the
-    // seal's internal test-seed at R5; the canary co-locates the seed).
-    let recipient_pub = [0x42u8; 32];
-    let plaintext = b"benten-layer-c-fixture";
-    let aad = b"benten-aead:layer-c:nq-c1-fixture";
+    let (kp, wrapped) = seal_fixture();
 
-    let sealed = hpke_seal_to_recipient(&recipient_pub, plaintext, aad);
+    // (1) On-wire codepoint discriminator = Benten-canonical hybrid `0x647a`.
+    assert_eq!(
+        wrapped.codepoint.raw(),
+        0x647a,
+        "Branch-B Layer-C seal MUST carry the Benten-canonical hybrid codepoint 0x647a"
+    );
 
-    let reference = match resolution {
-        HpkeKemBinding::Rfc9180FaithfulCustomKem => rfc9180_reference_seal_bytes(),
-        HpkeKemBinding::BentenSuppliesKemReuseKeySchedule => {
-            benten_canonical_reference_seal_bytes()
-        }
-    };
-
-    // The reference vector for a real branch is NON-EMPTY (a frozen
-    // byte-format has bytes); the stub's empty reference is itself a
-    // RED-PHASE signal.
-    assert!(
-        !reference.is_empty(),
-        "the ratified branch MUST pin a non-empty reference seal vector"
+    // (2) Branch-B canonical encapsulation byte-shape (the raw-FIPS layout
+    // that is NOT RFC-9180 `enc` — the Benten-supplies-KEM signature).
+    assert_eq!(
+        wrapped.ek_x.len(),
+        BRANCH_B_EK_X_LEN,
+        "Branch-B ek_x MUST be a raw 32-byte X25519 ephemeral public key"
     );
     assert_eq!(
-        sealed, reference,
-        "Layer-C HPKE seal output must be byte-accurate against the ratified NQ-C1 branch reference"
+        wrapped.ek_mlkem.len(),
+        BRANCH_B_EK_MLKEM_LEN,
+        "Branch-B ek_mlkem MUST be a raw 1088-byte FIPS-203 ML-KEM-768 ciphertext (NOT an \
+         RFC-9180 opaque enc) — this raw two-field layout is the Benten-supplies-KEM signature"
+    );
+
+    // (3) The draft-connolly X-Wing combiner GOLDEN is byte-accurate (the
+    // key-schedule Branch B reuses). Independently cross-checked vs SHA3-256.
+    let combiner_out = combine_x_wing(&[0x01u8; 32], &[0x02u8; 32], &[0x03u8; 32], &[0x04u8; 32]);
+    assert_eq!(
+        combiner_out, BRANCH_B_COMBINER_GOLDEN,
+        "Branch-B X-Wing combiner output MUST be byte-accurate against the ratified golden \
+         (SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel), label APPENDED)"
+    );
+
+    // (4) The OBSERVABLE consequence: the seal round-trips through the
+    // recipient secret — unwrap recovers FIXTURE_K_ROOT exactly. A stub seal
+    // (empty / plaintext) breaks this.
+    let recovered =
+        unwrap_key_from_recipient(kp.secret(), &wrapped).expect("Layer-C unwrap MUST succeed");
+    assert_eq!(
+        recovered.as_slice(),
+        FIXTURE_K_ROOT.as_slice(),
+        "Branch-B Layer-C seal MUST round-trip: unwrap under the recipient secret recovers \
+         the wrapped k_root exactly"
     );
 }
 
-/// F-KAT-3 — the two branches are NOT byte-interchangeable.
+/// F-KAT-3 — Branch B is NOT byte-interchangeable with Branch A, AND the
+/// recipient binding is real (wrong secret fails closed).
 ///
-/// Pins that the two resolutions produce DISTINCT canonical byte-formats
-/// (RFC-9180-faithful vs Benten-supplies-KEM are not the same bytes) — so
-/// "pick a branch" is a real wire-format decision, not cosmetic. This is
-/// the would-FAIL guard against an R5 that pins one vector for both
-/// branches (which would silently make the fork meaningless).
+/// Pins that the ratified branch is a REAL wire-format decision, not
+/// cosmetic:
+///   (a) the Branch-B encapsulation is the raw-FIPS two-field layout
+///       (`ek_x`=32 + `ek_mlkem`=1088 = 1120 raw encap bytes), which is
+///       structurally distinct from an RFC-9180 single-`enc` framing — so
+///       "pick Branch B over Branch A" changes the on-wire bytes; AND
+///   (b) the recipient binding is real: unwrapping with the WRONG recipient
+///       secret fails closed (the X-Wing combiner mixes both KEM halves +
+///       the recipient pubkey, so a wrong secret derives a wrong key → the
+///       ChaCha20-Poly1305 open fails).
+///
+/// would-FAIL-if-no-op'd: an R5 that pinned identical bytes for both branches
+/// (making the fork meaningless) would not exhibit the raw two-field layout;
+/// a recipient-key-independent unwrap would let a wrong secret recover k_root.
 #[test]
-#[ignore = "R5-FILL HARD-GATE (FLAG-FOR-BEN): blocked on the NQ-C1 wire-format ratification — both branch reference vectors are pinned only once Ben picks the branch. Kept #[ignore]'d."]
-fn nq_c1_branches_are_byte_distinct() {
-    let rfc = rfc9180_reference_seal_bytes();
-    let benten = benten_canonical_reference_seal_bytes();
-    assert!(
-        !rfc.is_empty() && !benten.is_empty(),
-        "both branch reference vectors must be pinned non-empty at R5"
+fn nq_c1_branch_b_distinct_and_recipient_bound() {
+    let (kp, wrapped) = seal_fixture();
+
+    // (a) Branch-B raw two-field encapsulation distinguishes it from a
+    // Branch-A single-`enc` RFC-9180 framing. The raw encap byte budget is
+    // ek_x (32) + ek_mlkem (1088) = 1120, laid out as two separate fields.
+    let branch_b_raw_encap_len = wrapped.ek_x.len() + wrapped.ek_mlkem.len();
+    assert_eq!(
+        branch_b_raw_encap_len,
+        BRANCH_B_EK_X_LEN + BRANCH_B_EK_MLKEM_LEN,
+        "Branch-B encapsulation is the raw two-field layout (32 + 1088 = 1120 bytes), \
+         structurally distinct from a Branch-A RFC-9180 single-enc framing — the fork is real"
     );
-    assert_ne!(
-        rfc, benten,
-        "the RFC-9180-faithful and Benten-supplies-KEM seal byte-formats must be DISTINCT (else the NQ-C1 fork is meaningless)"
+    assert!(
+        !wrapped.ek_mlkem.is_empty(),
+        "the hybrid Branch-B seal MUST carry a non-empty ML-KEM-768 ciphertext half (a \
+         classical-only / RFC-9180-collapsed framing would not)"
+    );
+
+    // (b) The recipient binding is real — a WRONG recipient secret fails
+    // closed (would-FAIL on a key-independent unwrap).
+    let suite = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768).unwrap();
+    let attacker_kp = suite.generate_recipient_keypair_deterministic(&[0xEEu8; 32]);
+    let outcome = unwrap_key_from_recipient(attacker_kp.secret(), &wrapped);
+    assert!(
+        outcome.is_err(),
+        "unwrapping the Branch-B seal with the WRONG recipient secret MUST fail closed \
+         (the X-Wing recipient binding is real); got {outcome:?}"
+    );
+
+    // Sanity: the legitimate recipient still opens it (the negative pin above
+    // is a real fail-closed, not a universally-broken unwrap).
+    let legit = unwrap_key_from_recipient(kp.secret(), &wrapped);
+    assert!(
+        legit.is_ok(),
+        "the legitimate recipient MUST still open the Branch-B seal"
     );
 }
