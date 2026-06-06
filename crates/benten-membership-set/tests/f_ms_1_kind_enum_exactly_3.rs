@@ -20,16 +20,13 @@
 //! _structural.rs` clone); `variant_count == 3`; selecting a reserve-Kind →
 //! typed-reject.
 //!
-//! # RED-PHASE status (pim-12 §3.6e)
+//! # Status: LANDED + GREEN (post-R5; F-MS-1/3/4 impl shipped)
 //!
-//! Each `#[test]` compiles **green at baseline** behind `#[ignore]` against a
-//! **self-contained in-file stub-shim** — this wave does NOT depend on a
-//! sibling wave's module (parallel-safety: each R3 wave is independent). The
-//! R5 canary wave (F-MS-1/3/4 minting) deletes the shim, inserts the real
-//! `use benten_membership_set::kind::{MembershipSetKind, …}`, un-ignores, and
-//! verifies green. The shim shape below IS the intended frozen surface — the
-//! observable consequences asserted here are exactly the ones the real type
-//! must satisfy (would-FAIL-if-no-op'd: a `#[non_exhaustive]` 4th-arm Kind,
+//! Each `#[test]` runs un-ignored against the REAL crate surface
+//! (`use benten_membership_set::kind::{MembershipSetKind, …}`). The R5 canary
+//! wave deleted the red-phase in-file stub-shim and inserted the real `use`.
+//! The asserted observable consequences are exactly the ones the real type
+//! satisfies (would-FAIL-if-no-op'd: a `#[non_exhaustive]` 4th-arm Kind,
 //! a Garden/Grove Kind, or a silently-accepted reserve all break a pin).
 
 #![allow(dead_code)]

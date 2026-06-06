@@ -57,7 +57,7 @@ This is the NQ-A1 conservative-fallback policy:
 | `0x0003`         | NF-1 ML-DSA-65⊕SLH-DSA PQ⊕PQ signature | RESERVED |
 | `0x0000`         | No-encryption (plaintext partition) | RESERVED |
 | `0x6320..0x632F` | RemotePermission band (incl. `ExecuteWorkflow` reserve) | RESERVED |
-| `0x6620`         | `SubsetRef` federation reserve (`MEMBERSHIP_SET_SUBSET_REF`) | RESERVED |
+| `0x6620`         | `SubsetRef` federation reserve (`MEMBERSHIP_SET_RESERVED_0X6620`) | RESERVED |
 | `0x6380..0x63CF` | FS-future MLS/CGKA bracket (incl. `RotatingGroupKeyChainedMode` + `ChainedStateTlv`) | RESERVED |
 | (no Core integer) | `RecoveryArtifact` — reserved-at-Core conceptually; the `RecoveryHook` trait lands in Phase-4-Meta-Composing alongside the allocated codepoint (NQ-W5/m-14) | RESERVED (Composing) |
 
@@ -133,6 +133,18 @@ The in-code wire-lock for the group-band constants is regression-guarded in
 `crates/benten-crypto-suite/tests/f_cp_codepoint_registry_dispatch.rs`
 (`MEMBERSHIP_SET_GROUP_MULTI_STANZA == 0x6610` and
 `LAYER_C_DROP_MULTI_RECIPIENT == 0x6520`).
+
+> **NAMED-CARRY obligation (F-full R6 R1 finding F-12; BELONGS-NAMED-NOW).**
+> The `0x6380` slot carries a **3-way discrete-value reserve obligation** that
+> MUST stay symbol-bound + integer-pinned, not prose-only: (1) `0x6380..0x638F`
+> = MLS-Application FS-future bracket (9-eyes; NOT MembershipSet); (2)
+> `0x6390..0x639F` = MLS-Welcome FS-future bracket; (3) the historical
+> M-CONS-FINAL `0x6380` `MembershipSetEncryption` assignment is RELOCATED to
+> `0x6600` (the §0.4 collision fix). Build-out item: a discrete-value
+> regression-pin in `f_cp_codepoint_registry_dispatch.rs` asserting each of the
+> three discrete reserves holds its integer (so a future round cannot silently
+> re-collide `0x6380` with the relocated MembershipSet value). Surfaced at
+> R6 R1; lands at the next crypto-suite codepoint build-out sub-pass.
 
 > **REJECTED: width-unification (freeze record — do not re-litigate).** A
 > future round MUST NOT unify the u16/u32 per-band length-prefix widths across

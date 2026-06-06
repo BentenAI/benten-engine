@@ -32,7 +32,8 @@
 #
 # Pinned by:
 #   `crates/benten-engine/tests/cargo_vet_policy_self_test.rs::cargo_vet_exemption_budget_within_ratified_cap`
-# (count cap updated 5 → 18, ratified Ben 2026-06-06, per the FLAG above).
+# (count cap updated 5 → 18 on 2026-06-05 alongside the libcrux-ml-kem
+# adoption, pending Ben ratification per the FLAG above).
 
 # --- libcrux-ml-kem ML-KEM-768 trust path (Compromise #32 mitigation) ---
 

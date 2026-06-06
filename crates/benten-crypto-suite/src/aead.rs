@@ -233,7 +233,8 @@ pub fn aad_whole_content(plaintext_cid: &[u8]) -> Vec<u8> {
 /// **Wire-format note:** this is the v1-beta canonical layout per the
 /// R6 R1 retraction of Fork 1. The 2-tuple layout
 /// `(plaintext_cid, chunk_index)` shipped earlier is REPLACED. The
-/// `total_chunks: u32` field is appended little-endian. Encoders MUST
+/// `chunk_index: u64` + `total_chunks: u32` fields are appended
+/// big-endian (M-19; migrated from LE at F-full Wave-0). Encoders MUST
 /// fail-CLOSED if `total_chunks` exceeds `u32::MAX`.
 ///
 /// G-CORE-3d's graph-AEAD layer threads this through every per-chunk
@@ -268,7 +269,8 @@ pub fn aad_per_chunk(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32) 
 /// Shape mirrors [`aad_per_chunk`] exactly: distinct domain-separator
 /// prefix (`benten-aead:recipe:`) so a per-Recipe seal can NEVER be
 /// reinterpreted as a per-chunk seal or a whole-content seal. The
-/// position + total are encoded little-endian.
+/// position + total are encoded big-endian (M-19; migrated from LE at
+/// F-full Wave-0).
 ///
 /// **Wire-format note:** this is the v1-beta canonical layout for the
 /// DropBundle per-Recipe AAD. Encoders MUST fail-CLOSED if

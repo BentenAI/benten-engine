@@ -273,9 +273,11 @@ stack. Produces `EncryptedNode` ciphertexts that `benten-drop` carries as
 its `EncryptedContent` payload. Calls into `benten-crypto-suite::aead`
 for the codepoint-dispatched primitive — this crate does NOT instantiate
 AEAD primitives directly (per CLAUDE.md #5 only-call-site rule). The AAD
-binds the plaintext-CID + chunk-index 2-tuple per RATIFIED-S&C §R6 R1
-Bundle 11b retract; `total_chunks` defense deferred to G-COMP-1 per
-V1-FROZEN-INTERFACE-DEFERRED Row D-15a. The per-chunk path is exercised
+binds the 4-segment `benten-aead:chunk: || plaintext_cid || chunk_index
+(u64 BE) || total_chunks (u32 BE)` per the R6 R1 Fork-1 retraction — the
+`total_chunks` truncation defense is BUILT (it replaced the earlier
+plaintext-CID + chunk-index 2-tuple); integers big-endian (M-19). The
+per-chunk path is exercised
 when content size exceeds `WHOLE_CONTENT_AEAD_THRESHOLD = 64 KiB`; chunk
 size = `IROH_BLOCK_SIZE = 16 KiB` golden constant pin per
 V1-FROZEN-INTERFACE item 15(g).

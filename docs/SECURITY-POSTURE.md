@@ -2725,10 +2725,18 @@ a physically-present attacker with measurement apparatus. Disclosed, not closed.
 Dependency pinning is **PARTIAL** at v1-beta: `cargo deny` + the RustSec advisory gate run in CI, and the HPKE /
 KEM crate choices are conservative — **Brendan McMillion `hpke`** (NOT Cryspen `hpke-rs`, which carried 13 CVEs
 Feb 2026) and **libcrux-ml-kem** (verified secret-independence). **O-1 disclosure:** `secrecy` is a NEW Layer-A
-dependency introduced this arc (wrapping secret bytes), disclosed here as a supply-chain surface. Full
-reproducible-builds + SLSA-3+ provenance is the SEPARATE post-v1-GM commitment (#40). This row discloses the
-partial-pinning substrate honestly; it is not a closed guarantee. **Cross-ref:** Compromise #40
-(reproducible-builds); R0.7 §2.2 (tactical picks); §5.2 (O-1).
+dependency introduced this arc (wrapping secret bytes), disclosed here as a supply-chain surface. **F-full
+disclosure (2026-06-05):** the production ML-KEM-768 swap to **libcrux-ml-kem** (Compromise #32 mitigation) pulls
+13 net-new transitive crates (the `libcrux-*` / `hax-lib*` / `pastey` / `proc-macro-error2*` / `core-models`
+family — all Cryspen / well-known, all Apache-2.0 / MIT-OR-Apache-2.0). These are **unaudited-by-Benten** and
+recorded HONESTLY as accepted-unaudited `cargo-vet` exemptions in `supply-chain/exemptions.toml` (the
+exemption-budget raised 5 → 18 — a FLAG-FOR-BEN policy decision, pending ratification; pinned by
+`crates/benten-engine/tests/cargo_vet_policy_self_test.rs::cargo_vet_exemption_budget_within_ratified_cap`).
+They are interim until the independent ML-DSA/ML-KEM audit (NF-2 / C-GM-AUDIT) that GATES v1-GM covers the
+pinned ML-KEM impl. Full reproducible-builds + SLSA-3+ provenance is the SEPARATE post-v1-GM commitment (#40).
+This row discloses the partial-pinning substrate honestly; it is not a closed guarantee. **Cross-ref:**
+Compromise #32 (ML-KEM production impl); Compromise #40 (reproducible-builds); R0.7 §2.2 (tactical picks);
+§5.2 (O-1).
 
 > **Dependency-posture note (Layer-C HPKE):** the McMillion-`hpke`-not-Cryspen choice above is a
 > **dependency-pinning posture** recorded for the audit window. At v1-beta the Layer-C `0x647a` X-Wing KEM-DEM is
@@ -2934,6 +2942,38 @@ consistent across the gossip + AAD surfaces. Honest scope: identity-HIDING, not 
 recurs; full per-send unlinkability = U25 v1-GM-reserve). **Cross-ref:** Compromise #58 (insider-correlation
 boundary); Compromise #43 (envelope-metadata); `CRYPTO-CODEPOINTS.md` (gossip-topic vs AAD-commitment distinction);
 R0.7 §3.9 (gossip topic) / §3.3 (`0x6610` AAD blinding).
+
+### Test-debt note — `f_audit_1` arm-(a) model-shape (F-full R6 R1 finding F-14)
+
+**Status.** TEST-DEBT (honest disclosure); NOT a security gap — the property
+IS enforced in the substrate. The MembershipSet audit-emit invariant (Inv-20
+clause-h / F-AUDIT-1: an audit event MUST flow through the ENFORCED engine-API
+WRITE path so the `(actor_cid, handler_cid, capability_grant_cid)` attribution
+triple is SET; a bare backend `put_node` leaves the triple `None` and is NOT
+the audit path) is pinned by two complementary arms in
+`crates/benten-engine/tests/f_audit_1_enforced_write_path_attribution_triple.rs`:
+
+- **Arm (a)** — the `enforced_write_*` arms drive the **model-shape**
+  `benten_membership_set::audit::emit_audit_event_via_engine` /
+  `emit_audit_event_via_bare_put` helpers, which model the enforced-vs-bare
+  distinction by constructing the `AuditEmitResult` directly (the enforced helper
+  fills the full `Some(...)` triple + advances the chain; the bare helper leaves
+  all three `None`). This pins the SHAPE of the property but is a model, not a
+  drive of the real engine.
+- **Arm (b)** — the `engine_enforced_path_*` arm drives the **REAL** `Engine`:
+  `audit_sequence()` advances on an enforced grant WRITE but NOT on a dedup-replay,
+  proving the enforced-vs-unenforced distinction is live in the real substrate the
+  W6 audit chain rides on.
+
+**Test-debt:** arm-(a)'s model-shape should be upgraded to drive the real
+membership-set → engine enforced-WRITE audit-emit wiring end-to-end (so the
+attribution triple is populated by the genuine production emit handler, not the
+model helper), closing the gap that arm-(b) already covers for the engine half.
+Tracked as a follow-up at the membership-set audit build-out (couples to the
+governance/audit graph-native exit criterion R0.5 §9.1-6). No exploit at v1-beta:
+the real-engine arm-(b) already proves the enforced path; arm-(a) is a redundant
+model that should be hardened to real-drive for defense-in-depth, not a missing
+control.
 
 ## Per-Node AEAD wrap layer — rebinding-attack-prevention (G-CORE-3d / #1301)
 

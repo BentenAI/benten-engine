@@ -6,9 +6,9 @@ For plain-English orientation, start with [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md). 
 
 ---
 
-## Fourteen crates (post-Phase-4-Meta-Core G-CORE-3f)
+## Fifteen crates (post-Phase-4-Meta-Core F-full)
 
-The Rust workspace ships fourteen Rust crates plus the napi bindings + the
+The Rust workspace ships fifteen Rust crates plus the napi bindings + the
 TypeScript DSL wrapper. The 8 → 10 crate transition completed in
 Phase 3 — `benten-id` (9th, identity + claims) and `benten-sync`
 (10th, sync runtime — native-only) landed and were filled in across
@@ -46,7 +46,21 @@ overhead). Per `RATIFIED-sharing-and-confidentiality-2026-05-21.md`
 revocation-reach asymmetry between online-pull and offline-Drop is
 documented at `docs/SECURITY-POSTURE.md` § "Revocation reach").
 
-The narrative below is the post-G-CORE-3f shape.
+**Phase 4-Meta-Core F-full extends the workspace to fifteen crates** by
+adding `benten-membership-set` — the MembershipSet keying primitive (a
+thin keying-glue Rust engine plugin: the EXACTLY-3 `MembershipSetKind`
+enum + its `0x6600`/`0x6610`/`0x6620` codepoint band + the
+multi-stanza-HPKE keying glue + the `members_table` canonical-CBOR
+snapshot + the `0x6610` group AAD = the BLINDED 11-field set + the
+5-value RoleId RBAC axis + the Inv-21 fork-tie-break CRDT rule). It
+delegates every crypto primitive to `benten-crypto-suite` (NEVER forks
+#5) and depends UPSTREAM on `benten-sync` for CRDT/HLC/MST/transport;
+governance / audit / federation / economics live as GRAPH (data-half).
+Native-only per CLAUDE.md baked-in #17 (its dep set includes the
+native-only `benten-sync`). Owns Inv-19..22. See
+`docs/V1-FROZEN-INTERFACE.md` §16 for the frozen public surface.
+
+The narrative below is the post-F-full shape.
 
 ```
 crates/
@@ -192,6 +206,24 @@ crates/
                         # (Keypair for envelope-sig), benten-crypto-suite
                         # (BLAKE3 + Ed25519 via the only-call-site
                         # primitive re-exports per CLAUDE.md #5).
+  benten-membership-set/ # 15th crate (Phase 4-Meta-Core / F-full). The
+                        # MembershipSet keying primitive — a thin
+                        # keying-glue Rust engine plugin. Owns: the
+                        # EXACTLY-3 `MembershipSetKind` enum (Atrium /
+                        # DeviceMesh / SingleDevice) + the
+                        # `0x6600`/`0x6610`/`0x6620` codepoint band +
+                        # the multi-stanza-HPKE keying glue + the
+                        # `members_table` canonical-CBOR snapshot +
+                        # `assemble_group_aad` (the `0x6610` group AAD =
+                        # the BLINDED 11-field set, big-endian) + the
+                        # 5-value RoleId RBAC axis + the Inv-21
+                        # fork-tie-break CRDT rule. Delegates EVERY
+                        # crypto primitive to benten-crypto-suite (NEVER
+                        # forks #5). Depends UP on benten-sync for
+                        # CRDT/HLC/MST/transport. Native-only (CLAUDE.md
+                        # #17). Governance/audit/federation/economics are
+                        # GRAPH (data-half). Owns Inv-19..22. See
+                        # V1-FROZEN-INTERFACE.md §16.
   benten-renderer-tauri/
                         # 12th crate (Phase 4-Foundation). Tauri 2.x
                         # renderer ENGINE EXTENSION per CLAUDE.md
@@ -224,10 +256,10 @@ packages/
                     # over the napi surface.
 ```
 
-A workspace test pin verifies all fourteen crate names + the
+A workspace test pin verifies all fifteen crate names + the
 `native-only` annotation on `benten-sync` are present in this document
 (see `crates/benten-engine/tests/architecture_md_12_crate_count_post_phase_4_foundation_canaries.rs`),
-so the Phase-4-Meta-Core-G-CORE-3f shape described above is the durable
+so the Phase-4-Meta-Core-F-full shape described above is the durable
 narrative.
 
 The crate graph is DAG-shaped:
@@ -249,7 +281,7 @@ Each crate has one responsibility. A reader can use `benten-engine` with `NoAuth
 
 ## Bindings and tooling
 
-Beyond the thirteen Rust crates, the workspace ships two ancillary trees that exist
+Beyond the fifteen Rust crates, the workspace ships two ancillary trees that exist
 to make the engine reachable from JavaScript and to keep developer onboarding
 ten minutes from `npx` to a green test:
 
