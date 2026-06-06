@@ -257,6 +257,29 @@ impl core::marker::Unpin for benten_drop::layer_c::group_posture::GroupError
 impl core::marker::UnsafeUnpin for benten_drop::layer_c::group_posture::GroupError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::group_posture::GroupError
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::group_posture::GroupError
+pub struct benten_drop::layer_c::group_posture::GroupAadInputs
+pub benten_drop::layer_c::group_posture::GroupAadInputs::body_cid: alloc::vec::Vec<u8>
+pub benten_drop::layer_c::group_posture::GroupAadInputs::codepoint: u16
+pub benten_drop::layer_c::group_posture::GroupAadInputs::k_set: [u8; 32]
+pub benten_drop::layer_c::group_posture::GroupAadInputs::member_dids: alloc::vec::Vec<alloc::string::String>
+pub benten_drop::layer_c::group_posture::GroupAadInputs::member_key_generation: u32
+pub benten_drop::layer_c::group_posture::GroupAadInputs::membership_set_generation: u32
+pub benten_drop::layer_c::group_posture::GroupAadInputs::membership_set_id: alloc::vec::Vec<u8>
+pub benten_drop::layer_c::group_posture::GroupAadInputs::plaintext_sender_did: core::option::Option<alloc::string::String>
+pub benten_drop::layer_c::group_posture::GroupAadInputs::role_assignments_generation: u32
+pub benten_drop::layer_c::group_posture::GroupAadInputs::stanza_count: u32
+pub benten_drop::layer_c::group_posture::GroupAadInputs::stanza_index: u32
+impl core::clone::Clone for benten_drop::layer_c::group_posture::GroupAadInputs
+pub fn benten_drop::layer_c::group_posture::GroupAadInputs::clone(&self) -> benten_drop::layer_c::group_posture::GroupAadInputs
+impl core::fmt::Debug for benten_drop::layer_c::group_posture::GroupAadInputs
+pub fn benten_drop::layer_c::group_posture::GroupAadInputs::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_drop::layer_c::group_posture::GroupAadInputs
+impl core::marker::Send for benten_drop::layer_c::group_posture::GroupAadInputs
+impl core::marker::Sync for benten_drop::layer_c::group_posture::GroupAadInputs
+impl core::marker::Unpin for benten_drop::layer_c::group_posture::GroupAadInputs
+impl core::marker::UnsafeUnpin for benten_drop::layer_c::group_posture::GroupAadInputs
+impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::group_posture::GroupAadInputs
+impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::group_posture::GroupAadInputs
 pub struct benten_drop::layer_c::group_posture::GroupSealParams
 pub benten_drop::layer_c::group_posture::GroupSealParams::member_key_generation: u32
 pub benten_drop::layer_c::group_posture::GroupSealParams::membership_set_generation: u32
@@ -289,6 +312,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::group_pos
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::group_posture::GroupSealedEnvelope
 pub const benten_drop::layer_c::group_posture::LAYER_C_DROP_MULTI_RECIPIENT: u16
 pub const benten_drop::layer_c::group_posture::MEMBERSHIP_SET_GROUP_MULTI_STANZA: u16
+pub fn benten_drop::layer_c::group_posture::assemble_group_aad_local(&benten_drop::layer_c::group_posture::GroupAadInputs) -> alloc::vec::Vec<u8>
 pub fn benten_drop::layer_c::group_posture::dispatch_group(&[u8], u16, u16) -> core::result::Result<(), benten_drop::layer_c::group_posture::GroupError>
 pub fn benten_drop::layer_c::group_posture::open_membership_set_group(&benten_drop::layer_c::group_posture::RecipientSecKey, usize, &benten_drop::layer_c::group_posture::GroupSealedEnvelope) -> core::result::Result<(alloc::vec::Vec<u8>, benten_drop::layer_c::group_posture::SenderDid), benten_drop::layer_c::group_posture::GroupError>
 pub fn benten_drop::layer_c::group_posture::seal_membership_set_group(&[benten_drop::layer_c::group_posture::RecipientPubKey], &benten_drop::layer_c::group_posture::SenderDid, &[u8; 32], &benten_drop::layer_c::group_posture::GroupSealParams, &[u8]) -> benten_drop::layer_c::group_posture::GroupSealedEnvelope

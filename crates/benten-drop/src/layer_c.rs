@@ -1126,8 +1126,9 @@ pub mod group_posture {
     /// `membership_set_id_commitment = blake3::keyed_hash(K_Set,
     /// "benten:setid:v1" || membership_set_id)`. MUST match the canonical
     /// `benten_membership_set::aad::SETID_COMMITMENT_LABEL` byte-for-byte (the
-    /// `f_02_*` cross-check pins this).
-    pub const SETID_COMMITMENT_LABEL: &[u8] = b"benten:setid:v1";
+    /// `f_02_*` cross-check pins this). Module-private (internal-only) — kept off
+    /// the frozen public surface; the byte-equality cross-check is the contract.
+    const SETID_COMMITMENT_LABEL: &[u8] = b"benten:setid:v1";
 
     /// A sender DID, as raw bytes.
     pub type SenderDid = Vec<u8>;

@@ -364,8 +364,8 @@ use benten_drop::layer_c::group_posture::{
     GroupError, GroupSealParams, open_membership_set_group, seal_membership_set_group,
 };
 use benten_drop::layer_c::{
-    AAD_VERSION, EncryptedEnvelope, LayerCError, RecipientPubKey,
-    open_single, sealed_aad, seal_sealed_sender,
+    AAD_VERSION, EncryptedEnvelope, LayerCError, RecipientPubKey, open_single, seal_sealed_sender,
+    sealed_aad,
 };
 
 /// Inv-16 ENFORCED — the `EncryptedEnvelope` codepoint-dispatch is LIVE and
@@ -381,7 +381,7 @@ use benten_drop::layer_c::{
 /// not the typed `UnsupportedCodepoint`.
 #[test]
 fn f_disc_2_inv16_codepoint_dispatch_enforced_fail_closed() {
-    use benten_drop::layer_c::{seal_group_multi};
+    use benten_drop::layer_c::seal_group_multi;
     let pks: [RecipientPubKey; 2] = [[0x21u8; 32], [0x22u8; 32]];
     let body_cid = *blake3::hash(b"inv16 enforced body").as_bytes();
     let group_env = seal_group_multi(&pks, &b"did:key:zS".to_vec(), &body_cid, 1, b"inv16 body");
@@ -421,7 +421,9 @@ fn f_disc_2_inv18_sealed_sender_default_metadata_disclosure_enforced() {
          sender field (Sealed-Sender). Got: {field_set:?}"
     );
     assert!(
-        !field_set.iter().any(|f| f.contains("coarse_epoch") || f.contains("epoch")),
+        !field_set
+            .iter()
+            .any(|f| f.contains("coarse_epoch") || f.contains("epoch")),
         "Inv-18 ENFORCED: the DEFAULT 0x6510 AAD field-set MUST NOT carry \
          coarse_epoch (Ben-RULING-#1 + M-14). Got: {field_set:?}"
     );
