@@ -12,14 +12,24 @@
 //! `role_assignments_generation`, and the canonical field ORDER). Ben ratified: the
 //! 11-field set is canonical.
 //!
-//! The fix routes the live seal's per-stanza AAD through the canonical
-//! [`benten_membership_set::aad::assemble_group_aad`] — single source of truth, zero
-//! drift. These arms PIN that:
+//! Ben ratified **option (b)**: benten-drop OWNS the `0x6610` 11-field group-AAD
+//! byte-assembly itself ([`benten_drop::layer_c::group_posture::assemble_group_aad_local`])
+//! — there is NO production dependency on `benten-membership-set` (which carries a
+//! native-only `benten-sync` edge that would invert drop's layering + contaminate its
+//! wasm/freeze graph). A TEST-ONLY cross-check (the dev-dependency below) asserts the
+//! local assembler reproduces the canonical
+//! [`benten_membership_set::aad::assemble_group_aad`] bytes BYTE-FOR-BYTE, so the two
+//! engines stay locked — single source of truth, zero drift. These arms PIN that:
 //!
-//! - **M-20 golden:** the live seal's bound per-stanza AAD reproduces the canonical
-//!   `assemble_group_aad` bytes BYTE-FOR-BYTE (the absolute hex is frozen). If the live
-//!   seal ever drifts back to the 6-field shape (or any field-order / endianness /
-//!   width / blinding drift), the golden flips and cross-engine AEAD-open breaks.
+//! - **M-20 golden:** the live seal's bound per-stanza AAD reproduces the LOCAL
+//!   `assemble_group_aad_local` bytes BYTE-FOR-BYTE AND equals the frozen absolute hex.
+//!   If the live seal ever drifts back to the 6-field shape (or any field-order /
+//!   endianness / width / blinding drift), the golden flips and cross-engine AEAD-open
+//!   breaks.
+//! - **ZERO-DRIFT cross-check (dev-dep, TEST-ONLY):** the local `assemble_group_aad_local`
+//!   bytes equal the canonical `benten_membership_set::aad::assemble_group_aad` bytes
+//!   byte-for-byte over the SAME inputs — so option (b)'s local copy can never silently
+//!   diverge from the band-owner's canonical encoder.
 //! - **Round-trip:** a real seal→open succeeds (open reconstructs the SAME 11-field AAD;
 //!   a seal-vs-open AAD mismatch would make EVERY group decrypt fail).
 //! - **The 5 new fields are LOAD-BEARING:** mutating any one of them flips the AAD (so
@@ -44,13 +54,18 @@
 #![allow(clippy::unwrap_used)]
 
 use benten_drop::layer_c::group_posture::{
-    GroupError, GroupSealParams, MEMBERSHIP_SET_GROUP_MULTI_STANZA, open_membership_set_group,
-    seal_membership_set_group,
+    GroupAadInputs, GroupError, GroupSealParams, MEMBERSHIP_SET_GROUP_MULTI_STANZA,
+    assemble_group_aad_local, open_membership_set_group, seal_membership_set_group,
 };
 use benten_drop::layer_c::{
     EncryptedEnvelope, LayerCError, RecipientPubKey, open_group_stanza, seal_group_multi,
 };
-use benten_membership_set::aad::{GroupAadInputs, assemble_group_aad};
+// F-02 option-(b) TEST-ONLY cross-check (dev-dependency ONLY): the canonical
+// band-owner encoder, aliased to keep it visibly distinct from benten-drop's
+// LOCAL `assemble_group_aad_local`. Asserted byte-equal — zero drift.
+use benten_membership_set::aad::{
+    GroupAadInputs as CanonicalGroupAadInputs, assemble_group_aad as assemble_group_aad_canonical,
+};
 
 // ── Shared fixtures ─────────────────────────────────────────────────────────
 
@@ -100,10 +115,30 @@ fn fixture_body_cid() -> Vec<u8> {
     cid
 }
 
-/// The canonical `GroupAadInputs` for stanza `idx` of the fixture send — the
-/// EXACT inputs the live seal routes through `assemble_group_aad`.
+/// The LOCAL `GroupAadInputs` for stanza `idx` of the fixture send — the EXACT
+/// inputs the live seal routes through the benten-drop-OWNED
+/// [`assemble_group_aad_local`] (F-02 option-(b)).
 fn fixture_aad_inputs(idx: u32, stanza_count: u32) -> GroupAadInputs {
     GroupAadInputs {
+        codepoint: MEMBERSHIP_SET_GROUP_MULTI_STANZA,
+        body_cid: fixture_body_cid(),
+        member_dids: fixture_roster(),
+        k_set: FIXTURE_K_SET,
+        stanza_index: idx,
+        stanza_count,
+        member_key_generation: 1,
+        membership_set_id: FIXTURE_SET_ID.to_vec(),
+        membership_set_generation: 1,
+        role_assignments_generation: 1,
+        plaintext_sender_did: None,
+    }
+}
+
+/// The CANONICAL (band-owner) `GroupAadInputs` for the SAME fixture stanza — the
+/// dev-dep-only cross-check input. Field-for-field identical to the LOCAL inputs;
+/// the cross-check asserts both encoders produce identical bytes (zero drift).
+fn fixture_canonical_aad_inputs(idx: u32, stanza_count: u32) -> CanonicalGroupAadInputs {
+    CanonicalGroupAadInputs {
         codepoint: MEMBERSHIP_SET_GROUP_MULTI_STANZA,
         body_cid: fixture_body_cid(),
         member_dids: fixture_roster(),
@@ -133,7 +168,9 @@ fn to_hex(bytes: &[u8]) -> String {
 /// The ABSOLUTE frozen golden vector for the live `0x6610` seal's per-stanza AAD
 /// (stanza_index = 0, stanza_count = 3) over the canonical fixture — the BLINDED
 /// 11-field set. Computed off-line (M-20) from the SAME bytes the live
-/// `seal_membership_set_group` binds (= `assemble_group_aad(fixture_aad_inputs(0, 3))`).
+/// `seal_membership_set_group` binds (= `assemble_group_aad_local(fixture_aad_inputs(0, 3))`).
+/// The bytes are UNCHANGED by F-02 option-(b) — only the assembling crate moved
+/// (benten-drop-local vs the band-owner); the cross-check below proves they match.
 /// **127 bytes** (NO plaintext sender field — F-LC-9; matches the membership-set
 /// `f_aad_2` golden length). Layout (R0.7 §3.10/§4.1):
 /// `aad_version u8 | codepoint(0x6610) u16 BE | body_cid (36B) | member_count u32 BE |
@@ -145,12 +182,14 @@ fn to_hex(bytes: &[u8]) -> String {
 /// (= cross-engine AEAD-open failure; Inv-20 clause-c).
 const F_02_LIVE_SEAL_STANZA0_AAD_HEX: &str = "01661001711e20632048ee454f9854f70d9ea7e52f27518b11f0d610140a1bcedd9b9b34e38c970000000371ff0a9870f21ac454ec95a9f4a9c9600bd2be1d190a55016d7338bd63f7475d0000000000000003000000013d7ae18fc21b0ad50fa86ad1a620ed2d343a191abd7e08525ad1d9a8849d71f50000000100000001";
 
-/// F-02 arm 1 — the live seal binds the canonical 11-field AAD BYTE-FOR-BYTE.
+/// F-02 arm 1 — the live seal binds the LOCAL 11-field AAD BYTE-FOR-BYTE.
 ///
 /// Two independent assertions: (a) the live seal's stanza-0 AAD reproduces the
-/// canonical `assemble_group_aad` bytes (single source of truth), and (b) it equals
-/// the frozen absolute golden hex (M-20). would-FAIL if the live seal regressed to
-/// the 6-field shape or drifted in field-order/width/blinding.
+/// benten-drop-LOCAL `assemble_group_aad_local` bytes (the production source of
+/// truth under F-02 option-(b)), and (b) it equals the frozen absolute golden hex
+/// (M-20). would-FAIL if the live seal regressed to the 6-field shape or drifted
+/// in field-order/width/blinding. (The zero-drift cross-check that the LOCAL bytes
+/// equal the canonical band-owner bytes is a SEPARATE dev-dep-only arm below.)
 #[test]
 fn f_02_live_0x6610_seal_binds_canonical_11_field_aad_golden() {
     let env = seal_membership_set_group(
@@ -162,14 +201,15 @@ fn f_02_live_0x6610_seal_binds_canonical_11_field_aad_golden() {
     );
     let live_aad = env.stanza_aad_for_test(0);
 
-    // (a) single-source-of-truth: live seal == canonical assemble_group_aad.
-    let canonical = assemble_group_aad(&fixture_aad_inputs(0, 3));
+    // (a) single-source-of-truth: live seal == benten-drop-LOCAL assembler.
+    let local = assemble_group_aad_local(&fixture_aad_inputs(0, 3));
     assert_eq!(
         to_hex(&live_aad),
-        to_hex(&canonical),
+        to_hex(&local),
         "F-02: the live 0x6610 seal MUST route its per-stanza AAD through the \
-         canonical assemble_group_aad (the BLINDED 11-field set) — single source \
-         of truth. A divergent encoder = cross-engine AEAD-open failure."
+         benten-drop-LOCAL assemble_group_aad_local (the BLINDED 11-field set) — \
+         single source of truth (F-02 option-(b)). A divergent encoder = \
+         cross-engine AEAD-open failure."
     );
 
     // (b) M-20 absolute golden — the 11-field set is 127 bytes (NO plaintext sender):
@@ -206,14 +246,14 @@ fn f_02_live_0x6610_seal_binds_canonical_11_field_aad_golden() {
 /// mutation flips one of the two 32-byte commitments.)
 #[test]
 fn f_02_new_11_field_members_are_load_bearing() {
-    let base = assemble_group_aad(&fixture_aad_inputs(0, 3));
+    let base = assemble_group_aad_local(&fixture_aad_inputs(0, 3));
 
     // member_key_generation
     let mut m = fixture_aad_inputs(0, 3);
     m.member_key_generation = 2;
     assert_ne!(
         base,
-        assemble_group_aad(&m),
+        assemble_group_aad_local(&m),
         "member_key_generation is byte-bound"
     );
 
@@ -222,7 +262,7 @@ fn f_02_new_11_field_members_are_load_bearing() {
     m.membership_set_id = b"benten:set:DIFFERENT".to_vec();
     assert_ne!(
         base,
-        assemble_group_aad(&m),
+        assemble_group_aad_local(&m),
         "membership_set_id is byte-bound (blinded)"
     );
 
@@ -231,7 +271,7 @@ fn f_02_new_11_field_members_are_load_bearing() {
     m.membership_set_generation = 7;
     assert_ne!(
         base,
-        assemble_group_aad(&m),
+        assemble_group_aad_local(&m),
         "membership_set_generation is byte-bound"
     );
 
@@ -240,7 +280,7 @@ fn f_02_new_11_field_members_are_load_bearing() {
     m.role_assignments_generation = 9;
     assert_ne!(
         base,
-        assemble_group_aad(&m),
+        assemble_group_aad_local(&m),
         "role_assignments_generation is byte-bound"
     );
 
@@ -249,9 +289,39 @@ fn f_02_new_11_field_members_are_load_bearing() {
     m.member_dids.push("did:key:zEXTRA".to_string());
     assert_ne!(
         base,
-        assemble_group_aad(&m),
+        assemble_group_aad_local(&m),
         "the member roster is byte-bound (member_count + audience_set_commitment)"
     );
+}
+
+/// F-02 arm 1b (ZERO-DRIFT cross-check, dev-dep TEST-ONLY) — benten-drop's LOCAL
+/// `assemble_group_aad_local` reproduces the canonical band-owner
+/// `benten_membership_set::aad::assemble_group_aad` bytes BYTE-FOR-BYTE over the
+/// SAME inputs.
+///
+/// This is the load-bearing safety net for F-02 option-(b): benten-drop owns a
+/// LOCAL copy of the 11-field encoder (so its production tree stays sync-free),
+/// and this arm guarantees the local copy can NEVER silently diverge from the
+/// canonical encoder. If a future edit to either assembler changes field-order /
+/// width / endianness / blinding / the version-prefix / codepoint on one side
+/// only, this byte-equality flips — surfacing the drift at test time. The
+/// cross-check runs over several stanza positions + a multi-recipient roster so a
+/// per-stanza index/count divergence is also caught.
+#[test]
+fn f_02_local_assembler_matches_canonical_membership_set_byte_for_byte() {
+    for (idx, count) in [(0u32, 3u32), (1, 3), (2, 3), (0, 1)] {
+        let local = assemble_group_aad_local(&fixture_aad_inputs(idx, count));
+        let canonical = assemble_group_aad_canonical(&fixture_canonical_aad_inputs(idx, count));
+        assert_eq!(
+            to_hex(&local),
+            to_hex(&canonical),
+            "F-02 (option-(b) zero-drift): benten-drop's LOCAL assemble_group_aad_local \
+             MUST byte-match the canonical benten_membership_set::aad::assemble_group_aad \
+             (stanza_index={idx}, stanza_count={count}). A divergence = the two engines \
+             would compute different AADs for the same group send = cross-engine \
+             AEAD-open failure."
+        );
+    }
 }
 
 /// F-02 arm 3 — a real seal→open round-trip succeeds (the open path reconstructs
