@@ -158,28 +158,27 @@ fn tf2_tampered_message_fails_closed() {
     );
 }
 
-/// MR-1 follow-up (G-CORE-2-FP-1): adversary substitutes the PQ half
-/// with a different keypair's PQ half over the same message. Both
-/// halves are individually well-formed (the substitute is a real
-/// ML-DSA-65 signature over `msg`), but the commitment binds the
-/// ORIGINAL keypair's PQ verifying-key, so the recomputation tripps
-/// the strip-resistance arm. Independent of the LIVE ML-DSA verify —
-/// the commitment + the dual cryptographic verify are TWO independent
-/// fail-closed surfaces. would-FAIL if a future agent regresses the
-/// commitment to bind only one pubkey (the MR-7 hazard).
+/// MR-1 follow-up: adversary substitutes the PQ half with a DIFFERENT
+/// keypair's PQ half over the same message. Each half is individually a
+/// real signature, but Eve's ML-DSA-65 `mldsaSig` does NOT verify under
+/// Alice's ML-DSA-65 public key — so the byte-faithful IETF LAMPS verify
+/// fails closed at the ML-DSA `verify_with_context` step. Each half's own
+/// key binds the signer; the shared `M'` binds the message. would-FAIL if
+/// a future agent regresses to accept a half whose signing key differs
+/// from the presented public key (the MR-7 hazard).
 #[test]
-fn tf2_cross_keypair_pq_half_substitute_fails_closed_via_commitment() {
+fn tf2_cross_keypair_pq_half_substitute_fails_closed_via_per_half_key() {
     let suite = SignatureSuite::v1_default();
     let kp_alice = suite.generate_keypair();
     let kp_eve = suite.generate_keypair();
-    let msg = b"keypair pubkey is bound into the NF-4 commitment";
+    let msg = b"each LAMPS half is bound to its own signing key";
 
     let sig_alice = suite.sign(&kp_alice, msg);
     let sig_eve = suite.sign(&kp_eve, msg);
 
     // Forge: Alice's classical half + Eve's PQ half (both halves valid
-    // signatures over `msg` individually, but they bind two different
-    // PQ pubkeys via the commitment).
+    // signatures over the shared M' individually, but signed by two
+    // different keypairs — Eve's mldsaSig won't verify under Alice's pk).
     let forged = HybridSignature::splice_for_test(
         sig_alice.classical_half_for_test(),
         sig_eve.pq_half_for_test(),
@@ -187,11 +186,11 @@ fn tf2_cross_keypair_pq_half_substitute_fails_closed_via_commitment() {
     let outcome = suite.verify(kp_alice.public(), msg, &forged);
     assert!(
         outcome.is_err(),
-        "cross-keypair PQ-half substitute MUST fail closed via the \
-         commitment-binding arm (the commitment binds the ORIGINAL \
-         keypair's PQ pubkey); got {outcome:?}. A future agent who \
-         binds only one pubkey into the commitment would silently \
-         accept this forgery — pim-18 SHAPE-trap."
+        "cross-keypair PQ-half substitute MUST fail closed — Eve's ML-DSA \
+         mldsaSig does not verify under Alice's ML-DSA public key (the \
+         LAMPS per-half key binding); got {outcome:?}. A future agent who \
+         accepts a half signed by a different key would silently accept \
+         this forgery — pim-18 SHAPE-trap."
     );
 }
 
