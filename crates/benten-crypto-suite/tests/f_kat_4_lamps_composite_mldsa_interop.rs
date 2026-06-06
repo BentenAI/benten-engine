@@ -28,30 +28,89 @@
 //!   3. NEGATIVE: a signature presented under a MISMATCHED OID is rejected (the
 //!      OID is load-bearing in the composite verification).
 //!
-//! ## ORCHESTRATOR-FLAGGED EXTERNAL-VECTOR SEED + FREEZE-GATING DECISION (NQ-C3)
+//! ## REAL INBOUND FIXTURE NOW IN-TREE + FORMAT-GAP FINDING + NAMED-DEFER (NQ-C3)
 //!
-//! Ground-truth at HEAD: there are NO external BouncyCastle/OpenSSL/OpenPGP
-//! LAMPS fixtures in-tree. This file uses **deterministic synthesized witnesses**
-//! so the interop SHAPE is pinned now; **R5 swaps in the real cross-ecosystem
-//! fixtures.** Per R2 §5-D-9 + §1 F-KAT-4 ("R2 must confirm freeze-gating vs
-//! v1-GM-deferred"): this family is enumerated **freeze-gating-by-default** but
-//! the freeze-gating-vs-v1-GM-deferred question (NQ-C3) is **SURFACED for R2/Ben
-//! ratification** — cross-ecosystem interop fixtures may be a v1-GM deliverable
-//! rather than a v1-beta freeze gate. **Orchestrator prediction:** Ben rules the
-//! OUTBOUND shape + OID-binding + mismatched-OID-reject (pins 2+3, which lock
-//! the WIRE) are freeze-gating-at-v1-beta, while the INBOUND real-fixture
-//! acceptance (pin 1) may relax to v1-GM-deferred (fixture acquisition is not
-//! wire-affecting). This is the `feedback_surface_arch_decisions_under_auth`
-//! discipline at the interop-fixture layer.
+//! Updated 2026-06-05 (f-kat4-inbound wave). The prior framing ("there are NO
+//! external LAMPS fixtures in-tree or network-acquirable") was **wrong**: the
+//! IETF LAMPS WG publishes a real, byte-exact KAT for the EXACT composite
+//! `id-MLDSA65-Ed25519-SHA512` (OID `1.3.6.1.5.5.7.6.48`). It is now embedded
+//! below as [`real_lamps_vector`] (the Ed25519 half + the LAMPS `M'`
+//! construction parameters), sourced from:
 //!
-//! # RED-PHASE STATUS (pim-12 §3.6e) + SELF-CONTAINED STUB-SHIM
+//!   - `lamps-wg/draft-composite-sigs` `src/testvectors.json`, `tcId =
+//!     "id-MLDSA65-Ed25519-SHA512"`, pinned at commit
+//!     `f0627ab34acfe1aee0abce4bee91ed2b577eab76` (2026-01-07 "re-ran test
+//!     vectors"):
+//!     <https://raw.githubusercontent.com/lamps-wg/draft-composite-sigs/f0627ab34acfe1aee0abce4bee91ed2b577eab76/src/testvectors.json>
+//!   - Spec: `draft-ietf-lamps-pq-composite-sigs-19` §"Label and Context" +
+//!     §"Composite-ML-DSA.Sign" (the `M' = Prefix || Label || len(ctx) || ctx
+//!     || PH(M)` representative; `mldsaSig || tradSig` serialization order):
+//!     <https://datatracker.ietf.org/doc/draft-ietf-lamps-pq-composite-sigs/19/>
 //!
-//! Per wave-independence this file commits a LOCAL `f_kat_4_stub`. The stub's
-//! verifier REJECTS the synthesized "external" sigs (it does not yet implement
-//! the LAMPS composite verify) so the inbound pins FAIL until R5 wires the real
-//! verifier + real fixtures. R5 DELETEs the stub + wires the LIVE
-//! `benten_crypto_suite::sig` LAMPS verify against real cross-ecosystem
-//! fixtures, un-ignores, verifies green.
+//! **Authenticity is proven IN-TEST, not asserted on faith:** the always-running
+//! [`real_lamps_vector_ed25519_half_is_authentic`] reconstructs the real LAMPS
+//! `M' = "CompositeAlgorithmSignatures2025" || "COMPSIG-MLDSA65-Ed25519-SHA512"
+//! || 0x00 || SHA-512(m)` and cryptographically verifies the vector's Ed25519
+//! half against it **using Benten's own `ed25519-dalek` + `sha2` deps**. This is
+//! a genuine cryptographic check over REAL external cross-ecosystem bytes — NOT
+//! a synthesized sentinel. It would FAIL on any tampered byte of the embedded
+//! fixture, on a wrong `M'`, or if Benten's classical primitive diverged from
+//! the IETF composite's classical leg.
+//!
+//! **FORMAT-GAP FINDING (the real blocker, sharper than "no fixture"):** Benten's
+//! v1-beta hybrid signature (`benten_crypto_suite::sig`, NF-4) is NOT byte-
+//! compatible with the IETF LAMPS composite wire format, by three independent
+//! constructions:
+//!   1. **Serialization order.** LAMPS = `mldsaSig(3309) || tradSig(64)` (ML-DSA
+//!      first). Benten = `classical(64) || pq(3309) || commitment(32)` (Ed25519
+//!      first, plus a SHA3-256 commitment trailer the LAMPS wire has no slot for).
+//!   2. **Message representative.** LAMPS components sign `M'` (prefix + ASCII
+//!      label + `len(ctx)||ctx` + `SHA-512(M)`), with the composite Label passed
+//!      into ML-DSA as its `ctx`. Benten's components sign the RAW message with
+//!      empty ML-DSA ctx + bind everything via its own SHA3-256 commitment.
+//!   3. **Strip-resistance mechanism.** LAMPS relies on the shared `M'`/ctx
+//!      binding; Benten relies on the explicit committing trailer.
+//!
+//! Therefore the LIVE `SignatureSuite::verify` **cannot** accept a real LAMPS
+//! composite sig as-is — full inbound acceptance requires *implementing an IETF
+//! LAMPS composite verifier* in production crypto (a new wire-format-affecting
+//! verify path + likely a new public surface/ErrorCode). That is a freeze-level
+//! design decision, OUT OF SCOPE for fixture-acquisition and reserved for Ben.
+//!
+//! **DISPOSITION (HARD-RULE clause-(b) BELONGS-NAMED-NOW + clause-(a) wire-scope).**
+//! The full INBOUND-ACCEPTANCE arm [`benten_accepts_cross_ecosystem_lamps_signatures`]
+//! stays `#[ignore]`'d and is **named-deferred to the v1-GM / NF-2 C-GM-AUDIT
+//! cross-ecosystem-interop window** (`docs/SECURITY-POSTURE.md` C-GM-AUDIT; the
+//! independent-audit + ecosystem-interop deliverable). Rationale, matching the
+//! orchestrator prediction below: implementing the IETF LAMPS composite verifier
+//! is a deliberate posture choice (does Benten's "LAMPS Composite" default emit/
+//! accept the IETF *byte format*, or does it cite LAMPS only for its construction
+//! *principles*?) that is NOT required to freeze the v1-beta wire — Benten's own
+//! outbound format + OID-binding are what the freeze locks, and those ARE pinned
+//! real + green below (pins 2+3). Cross-ecosystem inbound acceptance is not
+//! wire-affecting for Benten's own format and is correctly a v1-GM deliverable.
+//!
+//! ### ORCHESTRATOR-FLAGGED FREEZE-GATING DECISION (NQ-C3 — unchanged)
+//!
+//! Per R2 §5-D-9 + §1 F-KAT-4 ("R2 must confirm freeze-gating vs v1-GM-deferred"):
+//! this family is enumerated **freeze-gating-by-default** but the
+//! freeze-gating-vs-v1-GM-deferred question (NQ-C3) is **SURFACED for Ben
+//! ratification**. **Orchestrator prediction (now evidence-backed by the
+//! format-gap finding):** Ben rules the OUTBOUND shape + OID-binding +
+//! mismatched-OID-reject (pins 2+3, which lock Benten's own WIRE) are
+//! freeze-gating-at-v1-beta, while INBOUND real-fixture *acceptance* (pin 1,
+//! which needs a whole IETF LAMPS composite verifier) relaxes to
+//! v1-GM-deferred. This is the `feedback_surface_arch_decisions_under_auth`
+//! discipline at the interop layer.
+//!
+//! # STATUS (pim-12 §3.6e) + SELF-CONTAINED STUB-SHIM
+//!
+//! Per wave-independence this file commits a LOCAL `f_kat_4_stub` modelling the
+//! interop SHAPE (the OUTBOUND + OID-binding + mismatched-OID-reject pins below
+//! drive the LIVE `benten_crypto_suite::sig` suite for the real arms). The real
+//! IETF LAMPS vector + its authentic Ed25519-half crypto-check are in-tree and
+//! GREEN. The full inbound-ACCEPTANCE arm stays `#[ignore]`'d per the FORMAT-GAP
+//! FINDING + named-defer above (no pass-vs-sentinel; no faked "external" accept).
 
 #![allow(dead_code)]
 
@@ -123,12 +182,92 @@ mod f_kat_4_stub {
     }
 }
 
-// R5: the OUTBOUND shape arm is REAL (a genuine Benten LAMPS Composite ML-DSA
+/// REAL published cross-ecosystem fixture: the IETF LAMPS WG known-answer test
+/// vector for the EXACT composite `id-MLDSA65-Ed25519-SHA512`
+/// (OID `1.3.6.1.5.5.7.6.48`).
+///
+/// Source (cite-drift-verified): `lamps-wg/draft-composite-sigs`
+/// `src/testvectors.json`, `tcId = "id-MLDSA65-Ed25519-SHA512"`, pinned at
+/// commit `f0627ab34acfe1aee0abce4bee91ed2b577eab76` (2026-01-07). Spec:
+/// `draft-ietf-lamps-pq-composite-sigs-19`.
+///
+/// We embed the load-bearing slice that we can cryptographically validate with
+/// Benten's own deps: the message `M`, the LAMPS `M'` construction parameters
+/// (Prefix + Label), the Ed25519 public-key half (32 B) and Ed25519 signature
+/// half (64 B) of the composite, plus the published full composite pk/sig
+/// lengths (so the `mldsaSig(3309)||tradSig(64)` and `mldsaPK(1952)||tradPK(32)`
+/// LAMPS shape is pinned). The ML-DSA-65 half (1952 B pk / 3309 B sig) is NOT
+/// embedded byte-for-byte (it would require Benten to implement the IETF LAMPS
+/// composite verifier to validate — the named-deferred work); its *lengths*
+/// are pinned here so the composite shape is locked.
+mod real_lamps_vector {
+    /// `M`, the global message all LAMPS KAT signatures cover: ASCII
+    /// "The quick brown fox jumps over the lazy dog." (decoded from the
+    /// vector's base64 `m`).
+    pub const MESSAGE: &[u8] = b"The quick brown fox jumps over the lazy dog.";
+
+    /// LAMPS `M'` Prefix — ASCII "CompositeAlgorithmSignatures2025"
+    /// (`draft-ietf-lamps-pq-composite-sigs-19` §"Label and Context").
+    pub const M_PRIME_PREFIX: &[u8] = b"CompositeAlgorithmSignatures2025";
+
+    /// LAMPS `M'` Label for this composite — ASCII
+    /// "COMPSIG-MLDSA65-Ed25519-SHA512" (`src/algParams.md` row
+    /// id-MLDSA65-Ed25519-SHA512).
+    pub const M_PRIME_LABEL: &[u8] = b"COMPSIG-MLDSA65-Ed25519-SHA512";
+
+    /// Published composite serialization: `mldsaSig(3309) || tradSig(64)`.
+    pub const FULL_COMPOSITE_SIG_LEN: usize = 3309 + 64;
+    /// Published composite public key: `mldsaPK(1952) || tradPK(32)`.
+    pub const FULL_COMPOSITE_PK_LEN: usize = 1952 + 32;
+    /// Offset of the Ed25519 (traditional) half inside the composite sig.
+    pub const TRAD_SIG_OFFSET: usize = 3309;
+    /// Offset of the Ed25519 (traditional) half inside the composite pk.
+    pub const TRAD_PK_OFFSET: usize = 1952;
+
+    /// The Ed25519 public-key half (32 B) of the real composite pk
+    /// (`pk[1952..1984]`).
+    pub const ED25519_PK: [u8; 32] = [
+        0x42, 0xc8, 0x14, 0xea, 0x18, 0x81, 0x83, 0xf8, 0x36, 0x27, 0xb1, 0x3c, 0x96, 0x30, 0x3a,
+        0xe1, 0x21, 0xc8, 0xdc, 0x1e, 0x1f, 0x1b, 0xad, 0xfc, 0xc8, 0x3f, 0xfb, 0xd5, 0xd8, 0x50,
+        0x4f, 0xda,
+    ];
+
+    /// The Ed25519 signature half (64 B) of the real composite sig over the
+    /// empty-ctx message (`s[3309..3373]`).
+    pub const ED25519_SIG: [u8; 64] = [
+        0x4b, 0xe4, 0x30, 0xa7, 0x6b, 0xb7, 0x18, 0x4a, 0x93, 0xbe, 0x67, 0x6e, 0xc1, 0xf2, 0xa2,
+        0xa7, 0xaa, 0xac, 0x46, 0xdc, 0x75, 0x08, 0x7c, 0x90, 0xf4, 0xca, 0xd5, 0xed, 0x5d, 0xce,
+        0x88, 0x8d, 0xe4, 0x6f, 0xb3, 0x7d, 0xf4, 0x8a, 0x86, 0x10, 0x72, 0xde, 0x77, 0x03, 0x67,
+        0xce, 0x90, 0xa1, 0x6e, 0xef, 0xc4, 0x8c, 0xb5, 0xb5, 0x80, 0xd7, 0xa1, 0x9b, 0x46, 0xd2,
+        0x1a, 0xf9, 0x4a, 0x05,
+    ];
+
+    /// The empty context (`ctx`) under which `ED25519_SIG` was produced.
+    pub const CTX: &[u8] = b"";
+
+    /// Reconstruct the LAMPS message representative `M'` for the empty-ctx
+    /// signature: `Prefix || Label || len(ctx) || ctx || SHA-512(M)`.
+    pub fn m_prime() -> Vec<u8> {
+        use sha2::{Digest as _, Sha512};
+        let ph = Sha512::digest(MESSAGE);
+        let mut out = Vec::new();
+        out.extend_from_slice(M_PRIME_PREFIX);
+        out.extend_from_slice(M_PRIME_LABEL);
+        out.push(u8::try_from(CTX.len()).expect("ctx <= 255 bytes per LAMPS"));
+        out.extend_from_slice(CTX);
+        out.extend_from_slice(&ph);
+        out
+    }
+}
+
+// The OUTBOUND shape arm is REAL (a genuine Benten LAMPS Composite ML-DSA
 // signature with real Ed25519 (64 B) + ML-DSA-65 (3309 B) halves bound to the
-// OID). The INBOUND ×3 cross-ecosystem arm is HARD-GATED (`#[ignore]` +
-// FLAG-FOR-BEN — awaiting real BouncyCastle/OpenSSL/OpenPGP fixtures; per the
-// orchestrator prediction these may relax to v1-GM-deferred). The
-// mismatched-OID arm is a regression-guard over the wired verify model.
+// OID). The REAL IETF LAMPS vector's Ed25519 half is cryptographically verified
+// in-tree (always-running, non-sentinel). The full INBOUND-ACCEPTANCE arm is
+// named-deferred (`#[ignore]` + FLAG-FOR-BEN) per the FORMAT-GAP FINDING: it
+// needs a production IETF LAMPS composite verifier, a wire-affecting/Ben-gated
+// v1-GM deliverable. The mismatched-OID arm is a regression-guard over the
+// wired verify model.
 use f_kat_4_stub::{
     Ecosystem, LAMPS_COMPOSITE_OID, LampsCompositeSig, SIG_HYBRID_ED25519_MLDSA65, VERIFY_WIRED,
     benten_verify, external_fixture,
@@ -150,13 +289,69 @@ fn benten_sign() -> LampsCompositeSig {
     }
 }
 
-/// F-KAT-4 (a) — INBOUND ×3: Benten accepts `id-MLDSA65-Ed25519-SHA512` sigs
-/// from BouncyCastle + OpenSSL-3.5 + OpenPGP-PQC.
+/// F-KAT-4 (a-AUTHENTIC) — the REAL IETF LAMPS vector's Ed25519 half
+/// cryptographically verifies against the real LAMPS `M'`, using Benten's own
+/// `ed25519-dalek` + `sha2` deps. **Always-running, non-sentinel.**
 ///
-/// would-FAIL-if-no-op'd: the stub verifier rejects external sigs (VERIFY_WIRED
-/// = false); R5 wires the real LAMPS verify + real fixtures.
+/// This is the genuine cross-ecosystem-bytes check that the corpus IS in-tree
+/// and authentic. It proves: (1) the embedded fixture bytes are the real
+/// published LAMPS WG bytes (any tampered byte FAILS this); (2) the LAMPS `M'`
+/// construction (`Prefix || Label || len(ctx)||ctx || SHA-512(M)`) is correctly
+/// reconstructed; (3) Benten's classical primitive validates the classical leg
+/// of a real IETF composite. It does NOT claim Benten's *composite* verifier
+/// accepts the *whole* composite (that is the named-deferred FORMAT-GAP work).
+///
+/// would-FAIL-if-no-op'd: a flipped byte of `ED25519_SIG`/`ED25519_PK`, a wrong
+/// Prefix/Label, or a wrong pre-hash would make the Ed25519 verify reject.
 #[test]
-#[ignore = "R5-FILL HARD-GATE (FLAG-FOR-BEN): awaiting real BouncyCastle/OpenSSL-3.5/OpenPGP-PQC LAMPS `id-MLDSA65-Ed25519-SHA512` fixtures — no real cross-ecosystem corpus is in-tree or network-acquirable at impl-time, and accepting a synthesized 'external' sig would be a pass-vs-sentinel. The OUTBOUND shape + OID-binding + mismatched-OID-reject (the WIRE-affecting pins) ARE real + run green. Per the orchestrator prediction, Ben may rule this INBOUND real-fixture acceptance as v1-GM-deferred (fixture acquisition is not wire-affecting) vs freeze-gating-at-v1-beta. Kept #[ignore]'d per the no-pass-vs-sentinel HARD-GATE."]
+fn real_lamps_vector_ed25519_half_is_authentic() {
+    use benten_crypto_suite::primitives::ed25519_dalek::{Signature, Verifier as _, VerifyingKey};
+
+    let vk = VerifyingKey::from_bytes(&real_lamps_vector::ED25519_PK)
+        .expect("real LAMPS vector Ed25519 public-key half MUST be a valid Ed25519 point");
+    let sig = Signature::from_bytes(&real_lamps_vector::ED25519_SIG);
+    let m_prime = real_lamps_vector::m_prime();
+
+    vk.verify(&m_prime, &sig).expect(
+        "the Ed25519 (traditional) half of the REAL IETF LAMPS \
+         id-MLDSA65-Ed25519-SHA512 vector MUST verify against the reconstructed \
+         LAMPS M' — proves the embedded cross-ecosystem fixture is authentic \
+         published bytes, not a synthesized sentinel",
+    );
+
+    // Pin the published composite shape (mldsaSig(3309)||tradSig(64) etc.) so
+    // the LAMPS serialization order is locked alongside the crypto check.
+    assert_eq!(real_lamps_vector::FULL_COMPOSITE_SIG_LEN, 3373);
+    assert_eq!(real_lamps_vector::FULL_COMPOSITE_PK_LEN, 1984);
+    assert_eq!(
+        real_lamps_vector::TRAD_SIG_OFFSET,
+        3309,
+        "LAMPS serializes mldsaSig(3309) FIRST then tradSig — the Ed25519 half \
+         begins at offset 3309 in the composite signature"
+    );
+    assert_eq!(real_lamps_vector::TRAD_PK_OFFSET, 1952);
+}
+
+/// F-KAT-4 (a) — INBOUND ×3: Benten's PRODUCTION verifier accepts a real
+/// `id-MLDSA65-Ed25519-SHA512` composite signature from each of {BouncyCastle,
+/// OpenSSL-3.5, OpenPGP-PQC}.
+///
+/// NAMED-DEFERRED (HARD-RULE clause-(b)/(a)). This is NOT a fixture-acquisition
+/// gap — a real IETF LAMPS vector IS now in-tree (see [`real_lamps_vector`] +
+/// the authentic Ed25519-half check above). The blocker is the FORMAT-GAP
+/// FINDING (see module docs): Benten's NF-4 hybrid is NOT byte-compatible with
+/// the IETF LAMPS composite wire format (ML-DSA-first ordering + the `M'`
+/// message representative + ML-DSA-ctx=Label vs Benten's Ed25519-first +
+/// raw-message + SHA3-256 commitment). Full inbound acceptance therefore needs a
+/// PRODUCTION IETF LAMPS composite verifier — a wire-format-affecting design
+/// decision reserved for Ben (does the "LAMPS Composite" default emit/accept the
+/// IETF *byte format*, or cite LAMPS for its *principles* only?). Destination:
+/// v1-GM / NF-2 C-GM-AUDIT cross-ecosystem-interop window
+/// (`docs/SECURITY-POSTURE.md`). The WIRE-affecting pins (outbound shape +
+/// OID-binding + mismatched-OID-reject) ARE real + green so the v1-beta freeze
+/// is NOT under-pinned.
+#[test]
+#[ignore = "NAMED-DEFERRED to v1-GM / NF-2 C-GM-AUDIT (FLAG-FOR-BEN). A real IETF LAMPS id-MLDSA65-Ed25519-SHA512 vector IS now in-tree (real_lamps_vector; authenticity crypto-proven by real_lamps_vector_ed25519_half_is_authentic). The blocker is NOT fixtures — it is the FORMAT-GAP: Benten's NF-4 hybrid is not byte-compatible with the IETF LAMPS composite wire format (ML-DSA-first + M'-representative + ML-DSA-ctx=Label vs Benten Ed25519-first + raw-msg + SHA3-256 commitment), so SignatureSuite::verify cannot accept a real composite without a PRODUCTION IETF LAMPS composite verifier — a wire-affecting/Ben-gated decision. The WIRE-affecting pins (outbound shape + OID-binding + mismatched-OID-reject) ARE real + green, so the v1-beta freeze is not under-pinned. No pass-vs-sentinel: refusing to fake a composite-accept."]
 fn benten_accepts_cross_ecosystem_lamps_signatures() {
     for eco in [
         Ecosystem::BouncyCastle,
@@ -168,7 +363,8 @@ fn benten_accepts_cross_ecosystem_lamps_signatures() {
             benten_verify(&sig, VERIFY_WIRED),
             "Benten's verifier MUST accept a valid id-MLDSA65-Ed25519-SHA512 \
              signature from {eco:?} (cross-ecosystem LAMPS interop; NQ-C3). \
-             would-FAIL while the stub verifier is unwired."
+             Blocked by the FORMAT-GAP: needs a production IETF LAMPS composite \
+             verifier (v1-GM-deferred)."
         );
     }
 }
