@@ -225,6 +225,16 @@ Full enumeration + cross-references at GH issue #1308. (Section numbered §3.9 p
 
 ---
 
+### §3.11 crypto-suite naming — `WrappedKey::ek_mlkem` misnomer rename (F-full R6 R1 finding F-20; FROZEN-FIELD — defer to freeze-lens + Ben)
+
+The `WrappedKey` field `ek_mlkem` at `crates/benten-crypto-suite/src/cipher_suite.rs:628` is a **misnomer**: `ek` conventionally denotes an encapsulation key (public key), but this field carries the ML-KEM-768 **ciphertext** (`ct`, the KEM encapsulation output), per the doc-comment at `cipher_suite.rs:626` ("ML-KEM-768 ciphertext (the \"ek_mlkem\" half)") and the decapsulate call at `:395` (`mlkem::decapsulate(mlkem_dk_bytes, wrapped.ek_mlkem.as_slice())`). The accurate name is `ct_mlkem` (or `mlkem_ct`).
+
+**Why deferred (NOT fix-now):** `WrappedKey` is a **frozen wire-format-adjacent type** — the field name is part of the public `benten-crypto-suite` API surface (pinned by `docs/public-api/benten-crypto-suite.txt` + the cargo-public-api drift gate) and the serialized envelope shape. A rename is a public-API change that touches a FROZEN field, so it is gated on the **freeze-lens review + Ben sign-off** at the v1-beta interface-freeze decision-point (the same gate as the BUILD-BACKLOG Row 7 name-collision renames). Per CLAUDE.md #5 no-shims, the rename is a hard cut when taken, not an alias.
+
+**Acceptance criteria (freeze-lens + Ben):** rename `WrappedKey::ek_mlkem` → `ct_mlkem` (the byte layout is unchanged — only the Rust identifier); regenerate `docs/public-api/benten-crypto-suite.txt`; sweep the ~6 in-crate references (`cipher_suite.rs:315/342/395/628/644`, `swap_matrix.rs:576/1631`). Surfaced at R6 R1; FLAGGED for freeze-lens + Ben (frozen-field touch).
+
+---
+
 ## §4. Phase 4-Foundation Track B (Class-of-bug audits + cleanups)
 
 Plan G27 wave covers these; entries here for cross-reference.

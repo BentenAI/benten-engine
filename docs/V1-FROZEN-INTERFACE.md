@@ -62,14 +62,17 @@ fail CI on a frozen-surface mutation:
 1. **`cargo-public-api` baseline regeneration + drift test** at
    `crates/benten-engine/tests/cargo_public_api_drift.rs` against
    `docs/public-api/benten-*.{txt,json}`.
-   **LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 1 (commit `fb7c212d`).**
-   All 14 lib crate baselines regenerated with `cargo +nightly public-api
-   --simplified -p <crate>`; total **20,559 LOC** of real public-API
-   surface committed (replaces the 11-LOC G20-A3 seed stubs). The 3
-   missing baselines (`benten-crypto-suite` 1609 LOC, `benten-drop` 320
-   LOC, `benten-platform-foundation` 2557 LOC) ALL minted. CI workflow
-   `.github/workflows/cargo-public-api.yml` expanded from 8 → 14 crates.
-   The drift gate is now REAL, not a placebo.
+   **LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 1 (commit `fb7c212d`);
+   extended to the 15th crate `benten-membership-set` at F-full R5
+   (2026-06-05).** All 15 lib crate baselines regenerated with
+   `cargo +nightly public-api --simplified -p <crate>` (the original 14
+   total **20,559 LOC** of real public-API surface, replacing the 11-LOC
+   G20-A3 seed stubs; plus the 15th-crate `benten-membership-set`
+   baseline at `docs/public-api/benten-membership-set.txt`). The 3
+   originally-missing baselines (`benten-crypto-suite` 1609 LOC,
+   `benten-drop` 320 LOC, `benten-platform-foundation` 2557 LOC) ALL
+   minted. CI workflow `.github/workflows/cargo-public-api.yml` expanded
+   from 8 → 14 → **15 crates**. The drift gate is now REAL, not a placebo.
 2. **TS-side public-API parity gate (#1204)** for `@benten/engine`.
    **LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 2 (commit `13322df4`).**
    Workflow at `.github/workflows/ts-public-api.yml`; baseline at
@@ -91,11 +94,14 @@ fail CI on a frozen-surface mutation:
    post-freeze additions inherit the gate.
 5. **CATALOG_VARIANT_COUNT exhaustive-match dual-tripwire** at
    `crates/benten-errors/tests/stable_shape.rs::catalog_variant_count_matches_enum`.
-   **CATALOG_VARIANT_COUNT = 192 at G-CORE-9 build-out wave HEAD**
-   (was 191 at `ae7cd3d5`; +1 = `SubgraphSpecWalkFailed` minted at
-   G-CORE-9 V1-FROZEN-INTERFACE row 4 commit `7af94d06`). Adding
+   **CATALOG_VARIANT_COUNT = 199 at HEAD `84280d31`** (192 at the
+   G-CORE-9 build-out FREEZE milestone → 197 R6-R2-FP G-COMP-1 cohort 8
+   → 198 `E_ROLE_STALE_AT_VERIFY` (F-full w-ms-canary) → 199
+   `E_KV_TARGET_NOT_IMMUTABLE` (F-full w-gov-audit; Inv-19)). Adding
    or removing an `ErrorCode` variant without updating the list fails to
-   compile or fails the runtime length assertion.
+   compile or fails the runtime length assertion. ⚠️ A parallel F-full
+   CODE wave may mint one more (F-01) → **200**; the strategy-C
+   integrator reconciles at integrate-time.
 
 > **NEW pim-N candidate REJECTED at triage** (Planner-A's
 > per-`pub`-declaration `// FROZEN: re-open requires Ben sign-off`
@@ -306,7 +312,7 @@ re-open).
 
 | Sub-clause | Surface | Frozen shape |
 |---|---|---|
-| §4.60 | `crates/benten-graph/src/graph_backend.rs:238` `GraphBackend::Transaction::run<F, R>` | The closure-shaped transaction surface stays as-shipped; `run<F: FnOnce(&mut Transaction) -> R, R>` |
+| §4.60 | `crates/benten-graph/src/graph_backend.rs:269` `GraphBackend::transaction(&self) -> Self::Transaction` (umbrella trait at `:238`; associated `type Transaction` at `:262`) | The owned-handle transaction surface stays as-shipped; backends enter via `RedbBackend::transaction(\|tx\| ...)`. `Self::Transaction` is an owned handle type (no lifetime parameter); the closure-entry lives on the concrete backend, not as a `run<F, R>` trait method |
 | §4.61 | `GraphBackend::snapshot()` + `register_subscriber()` | Both **DECIDED infallible** (`-> SnapshotHandle` and `-> ()`); fail-modes route through the typed `GraphError` channel on dependent operations, NOT through `Result` on these allocation methods. Lock as-shipped per `c4a37bb`-era baseline. |
 | §4.62 | `crates/benten-graph/src/backends/blob_backend_trait.rs:120` `BlobBackend` | **DECIDED additive-default** (NOT a split). The trait carries `put_blob`/`get_blob`/`has_blob` with `Send + Sync + 'static`; future additive methods land as defaulted methods. |
 | §4.63 | `crates/benten-graph/src/backend.rs:306` `KVBackend: Send + Sync` | **DECIDED sync** (NOT RPITIT). RPITIT adds 2024-edition feature-gate complexity v1-beta cannot absorb; future-Composing-async migration is an additive `AsyncKVBackend` trait. |
@@ -823,9 +829,11 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
 
 ## 9. `cargo-public-api` baselines regenerated + committed as v1 surface
 
-**Frozen surfaces (all 14 baselines regenerated as real cargo-public-api
-output at G-CORE-9 FREEZE wave build-out commit `8cc4eddd`; per L12-R3-MIN-1
-closure):**
+**Frozen surfaces (the original 14 baselines regenerated as real
+cargo-public-api output at G-CORE-9 FREEZE wave build-out commit
+`8cc4eddd`; per L12-R3-MIN-1 closure — plus the 15th-crate
+`benten-membership-set` baseline added at F-full R5 2026-06-05; 15
+total):**
 - `docs/public-api/benten-caps.txt`
 - `docs/public-api/benten-core.txt`
 - `docs/public-api/benten-crypto-suite.txt`
@@ -837,6 +845,7 @@ closure):**
 - `docs/public-api/benten-graph.txt`
 - `docs/public-api/benten-id.txt`
 - `docs/public-api/benten-ivm.txt`
+- `docs/public-api/benten-membership-set.txt` (Phase-4-Meta-Core F-full crate; the 15th crate)
 - `docs/public-api/benten-platform-foundation.txt`
 - `docs/public-api/benten-renderer-tauri.txt`
 - `docs/public-api/benten-sync.txt`
@@ -850,11 +859,13 @@ closure):**
   review + Ben sign-off (the cargo-public-api gate is the freeze's
   structural backstop).
 
-**CLOSED post G-CORE-9 build-out (commit `8cc4eddd`):** all 14 baselines
-regenerated as real `cargo public-api -p <crate> --simplified --omit
-blanket-impls` output and committed as the canonical v1 baseline; the
-prior G20-A3 11-LOC placeholder stubs are gone. Per L12-R3-MIN-1 closure
-the gate is now structurally REAL (cf. item 1 "drift gate is now REAL,
+**CLOSED post G-CORE-9 build-out (commit `8cc4eddd`):** all 14 baselines-
+at-that-time regenerated as real `cargo public-api -p <crate> --simplified
+--omit blanket-impls` output and committed as the canonical v1 baseline
+(the 15th crate `benten-membership-set` baseline was added at F-full R5,
+2026-06-05); the prior G20-A3 11-LOC placeholder stubs are gone. Per
+L12-R3-MIN-1 closure the gate is now structurally REAL (cf. item 1 "drift
+gate is now REAL,
 not a placebo"). Baseline LOC range at HEAD: 110-3509 across the 14
 crates. See build-backlog row 1 for the regeneration procedure.
 
@@ -886,7 +897,7 @@ SURFACE.
 |---|---|---|
 | `packages/engine/src/index.ts` exports | All `export` statements at HEAD | LOCKED as-shipped at the freeze wave; commit the post-freeze `index.d.ts` |
 | `packages/engine/src/engine.ts` `Engine` + `PolicyKind` | As-shipped | LOCKED |
-| `packages/engine/src/errors.generated.ts` `CATALOG_CODES` | The 194-TS-class catalog at HEAD post G-CORE-9 build-out (192 Rust ErrorCode variants + `E_INV_ITERATE_NEST_DEPTH` Phase-2a-retired retained envelope + `E_UNKNOWN` forward-compat sentinel = 194; documented in ERROR-CATALOG.md "Catalog count narrative" table) | LOCKED — mirror item 8's `ErrorCode` mirror discipline; auto-generation contract frozen (regen MUST produce byte-identical file given same input) |
+| `packages/engine/src/errors.generated.ts` `CATALOG_CODES` | The 201-TS-class catalog at HEAD `84280d31` (199 Rust ErrorCode throwable variants + `E_INV_ITERATE_NEST_DEPTH` Phase-2a-retired retained envelope + `E_UNKNOWN` forward-compat sentinel = 201; documented in ERROR-CATALOG.md "Catalog count narrative" table) | LOCKED — mirror item 8's `ErrorCode` mirror discipline; auto-generation contract frozen (regen MUST produce byte-identical file given same input) |
 | `packages/engine/src/types.ts` typed-call shapes | `TypedCallInputShapes`, `TypedCallOutputShapes`, `ManifestSignature`, the `ed25519_*` / `keypair_*` / `did_resolve` arms | LOCKED — **PQ-hybrid-capable** sizes (NO hardcoded Ed25519 32B-key / 64B-sig assumption; per item 10 PQ-hybrid JS-shape widening + napi-r1-1 atomic mirror) |
 | `packages/engine/src/types.ts` other interface exports | `Subgraph`, `RegisteredHandler`, `AttributionFrame`, `Trace*`, `CapabilityClaim`, `DeviceAttestation`, `CapabilityGrant`, `Edge`, `TypedCallOp`, etc. | LOCKED as-shipped |
 | `packages/engine/src/index.d.ts` | The TS module declaration file; generated from napi-rs via the build pipeline | LOCKED post-regen at the freeze wave |
@@ -909,11 +920,12 @@ contained).
 
 **errors.generated.ts ↔ catalog ↔ Rust `ErrorCode` parity audit
 RESOLVED at G-CORE-9 V1-FROZEN-INTERFACE row 8a (investigation outcome
-in commit `75a1d33a` body).** Post-build-out counts: 192 Rust ErrorCode
-variants + 1 `E_INV_ITERATE_NEST_DEPTH` Phase-2a-retired retained
-envelope (catalog ID retained for backward-compat string round-trip;
-Rust enum has no variant) + 1 `E_UNKNOWN` forward-compat sentinel
-(mirrors Rust `Unknown(String)` fallback) = 194 catalog/TS entries.
+in commit `75a1d33a` body).** Counts at HEAD `84280d31`: 199 Rust
+ErrorCode throwable variants + 1 `E_INV_ITERATE_NEST_DEPTH`
+Phase-2a-retired retained envelope (catalog ID retained for
+backward-compat string round-trip; Rust enum has no variant) + 1
+`E_UNKNOWN` forward-compat sentinel (mirrors Rust `Unknown(String)`
+fallback) = 201 catalog/TS entries.
 **Delta is the legitimate retained-envelope set, NOT drift**; the
 drift-detect script (`npm run drift:errors`) validates this exact
 pattern. Documented in ERROR-CATALOG.md's "Catalog count narrative"
@@ -1808,6 +1820,75 @@ next request); doc-coverage CI lane.
 
 **Escape valve:** changing live-per-request to frozen-snapshot
 semantics in Composing = HALT.
+
+---
+
+## 16. MembershipSet keying primitive public surface frozen (the 15th crate `benten-membership-set`)
+
+> **⚠️ FLAG-FOR-BEN / FLAG-FOR-ORCHESTRATOR-REVIEW.** This section
+> documents the AS-BUILT shipped MembershipSet surface (F-full TIER-1/2,
+> HEAD `84280d31`). It is added by the R6 R1 doc-reconciler to make the
+> 15th crate's frozen surface referenceable; the freeze-lens + Ben sign
+> off the §1.A.FROZEN inclusion at the freeze gate. Read against
+> `crates/benten-membership-set/src/lib.rs` pub-use set +
+> `docs/public-api/benten-membership-set.txt` baseline.
+
+**The 15th workspace crate** is `benten-membership-set` — a thin
+keying-glue Rust engine plugin (mechanism-half per GN-2 / R0 §6.1). Its
+governance / audit / members / economics / federation surface is GRAPH
+Nodes (data-half); the frozen Rust-mechanism is the keying minimum. It
+delegates EVERY crypto primitive to `benten-crypto-suite` (the `#5`
+ONLY-call-site; NEVER forks #5) and depends UPSTREAM on
+`{crypto-suite, core, caps, id, graph, sync}` with no reverse edge
+(the F-CRATE-2 compile-fence).
+
+**Frozen public surface** (the `lib.rs` pub-use set; pinned by
+`docs/public-api/benten-membership-set.txt` + the cargo-public-api drift
+gate, item 9):
+
+| Surface | Source | v1-beta lock |
+|---|---|---|
+| `MembershipSetKind` (Atrium / DeviceMesh / SingleDevice) | `src/kind.rs` | LOCKED — **EXACTLY-3** (`VARIANT_COUNT == 3`); a 4th arm is a §15.c HALT-AND-SURFACE compile error, NOT a `#[non_exhaustive]` wildcard |
+| `RoleId` (Invitee=0 / Viewer=1 / Member=2 / Moderator=3 / Admin=4) | `src/role.rs` | LOCKED — **5-value ordinal, ALL-5-active** (Inv-20 clause-j); the `u8` ordinal is keying-AAD-bound → golden-vector-pinned |
+| `MemberEntry` / `MembersTable` / `MemberRef` / `Did` / `Hlc` / `SigPubKey` | `src/member.rs` | LOCKED — **one-DID-one-MemberEntry** fusion (`BTreeMap<Did, MemberEntry>`; Inv-20 clause-i). `MemberEntry` carries **ZERO nature field** (`has_any_nature_field() == false` compile-fence; Inv-22). Field ORDER is the canonical CBOR layout — load-bearing |
+| `MemberNature` / `derive_member_nature` / `is_ai_operated` | `src/member.rs` | LOCKED — member-nature is **DERIVED, never stored** (Inv-22); `is_ai_operated(method) = (method == "agent")` |
+| `MembershipSet` / `wire_cost_ceiling` | `src/set.rs` | LOCKED — per-Kind cardinality (Atrium ≤32 / DeviceMesh ≤5 / SingleDevice ==1; Compromise #46 ceiling); the Inv-21 fork-tie-break `fork_total_order_key` / `fork_a_wins` (SMALLER-`created_at_hlc`-wins, total via Version-Node-CID) |
+| `assemble_group_aad` / `canonical_members_table_bytes` / `audience_set_commitment` / `membership_set_id_commitment` | `src/aad.rs` | LOCKED — the `0x6610` group per-stanza AAD = the **BLINDED 11-field set** (big-endian, length-injective; R0.7 §3.10/§4.1) + the `members_table` canonical DAG-CBOR snapshot (NQ-W4). OPAQUE bytes across the m-15 GNC-5 crypto-suite seam |
+| `E_ROLE_STALE_AT_VERIFY` / `MembershipSetError` | `src/error.rs` | LOCKED — the role-staleness verify gate (mirrors `benten_errors::ErrorCode::RoleStaleAtVerify`) |
+| `dispatch_reserve` / `RequestedReserveKind` / `KindDispatchError` | `src/kind.rs` | LOCKED — the two keying-reserves (`AtriumWithRotatingGroupKey` / `EphemeralLobby`) typed-reject at v1-beta |
+
+**Codepoint band (`src/codepoints.rs`):** the MembershipSet band is
+`0x6600..=0x66FF` (Inv-18 / NQ-W2 FROZEN-band ownership). Three values
+assigned at v1-beta:
+- `0x6600` `MEMBERSHIP_SET_ENCRYPTION` — the set-keying envelope codepoint
+  (Sealed-Sender by default). Every `MembershipSetKind` binds here.
+- `0x6610` `MEMBERSHIP_SET_GROUP_MULTI_STANZA` — the group multi-stanza
+  per-stanza AAD codepoint (Sealed-Sender by default). The `0x6610`
+  group AAD assembler binds THIS value (the BLINDED 11-field set).
+- `0x6620` `MEMBERSHIP_SET_RESERVED_0X6620` — RESERVED for a future
+  MembershipSet wire shape (additive over crypto-agility; never a wire
+  break). `0x6620`-encode-only at v1-beta; `SubsetRef` federation is
+  reserved-and-refused (typed-reject).
+
+**The carve-outs (the load-bearing invariants this surface freezes):**
+1. **Kind EXACTLY-3** — `MembershipSetKind::VARIANT_COUNT == 3` (pinned
+   by `crates/benten-membership-set/tests/f_ms_1_kind_enum_exactly_3.rs`).
+2. **RoleId 5-value all-active** — Invitee=0 … Admin=4 (pinned by
+   `f_ms_4_5_roleid_ordinal_and_invitee_zero.rs`).
+3. **one-DID-one-MemberEntry** — `BTreeMap<Did, MemberEntry>` fusion;
+   zero stored nature field (pinned by `f_ms_3_members_table_fusion.rs`
+   + the `has_any_nature_field()` const fence).
+4. **Per-Kind cardinality** — Atrium ≤32 / DeviceMesh ≤5 /
+   SingleDevice ==1 (pinned by
+   `f_ms_2_constructor_cardinality_memberref.rs`).
+5. **`0x6610` group AAD = BLINDED 11-field set** (pinned by
+   `f_aad_1_members_table_canonical_cbor_length_injective.rs` +
+   `f_aad_2_nine_tuple_injectivity_opaque_boundary.rs`).
+
+**Escape valve:** any Composing-time change to the EXACTLY-3 Kind
+cardinality, the 5-value RoleId ordinal, the one-DID-one-record fusion,
+the `0x6610` 11-field AAD layout, or the `0x6600`/`0x6610`/`0x6620`
+codepoint band = a §1.A.FROZEN mutation → HALT-AND-SURFACE-TO-BEN.
 
 ---
 
