@@ -357,6 +357,9 @@ pub enum LayerCError {
     /// censored / truncated stanzas (SECURITY-PROOFS §3.3/§4.1
     /// truncation-defense; fail-closed; F-01). `delivered` is what arrived;
     /// `bound` is the count every survivor names.
+    // drift-detect: internal-only
+    // (layer_c typed error — not surfaced as a distinct wire/napi ErrorCode;
+    //  no boundary From/match; consistent w/ its baseline-grandfathered siblings; F-01.)
     StanzaCountMismatch {
         /// The number of stanzas actually present in the envelope.
         delivered: u32,
@@ -1171,6 +1174,9 @@ pub mod group_posture {
         /// censored / truncated one or more stanzas (SECURITY-PROOFS
         /// §3.3/§4.1 truncation-defense; fail-closed). `delivered` is what
         /// arrived; `bound` is the count every survivor names.
+        // drift-detect: internal-only
+        // (layer_c typed error — not surfaced as a distinct wire/napi ErrorCode;
+        //  consistent w/ its baseline-grandfathered siblings; F-01 truncation defense.)
         StanzaCountMismatch {
             /// The number of stanzas actually present in the envelope.
             delivered: u32,
