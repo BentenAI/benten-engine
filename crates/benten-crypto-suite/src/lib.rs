@@ -133,6 +133,7 @@ pub mod envelope;
 pub mod error;
 pub mod hash;
 pub mod hpke;
+pub(crate) mod mlkem;
 pub mod primitives;
 pub mod registry;
 pub mod sig;

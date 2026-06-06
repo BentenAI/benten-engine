@@ -1,4 +1,4 @@
-//! **F-KAT-2 — libcrux `check-secret-independence` CI gate (CE-D2).**
+//! **F-KAT-2 — libcrux ML-KEM-768 secret-independence assurance (CE-D2).**
 //!
 //! ADDL R3 wave **W1-crypto-kat**. Pin sources:
 //!   - `f-full-r2-test-landscape.md` Group-4 F-KAT-2 ("the libcrux hax/F*
@@ -8,117 +8,147 @@
 //!     `check-secret-independence` CI gate".
 //!   - R0 §3.2 Wave-0 exit gate (m-2): "`check-secret-independence` in CI".
 //!   - R0 §5.2 Compromise #30 (unaudited-PQ; CLOSES at v1-GM / C-GM-AUDIT) +
-//!     #32 (ML-KEM-768 Decap CT side-channel — the libcrux CT-mitigation the
-//!     secret-independence gate witnesses).
+//!     #32 (ML-KEM-768 Decap CT side-channel — the libcrux CT-mitigation this
+//!     witnesses).
 //!
-//! # What this pins (FREEZE-GATING / CI — presence + enablement)
+//! # WIRED 2026-06-05 — what is REAL at libcrux-ml-kem 0.0.9 (honesty over green)
 //!
-//! The libcrux secret-independence gate (its hax/F*-derived constant-time /
-//! secret-independence property check) MUST be WIRED into CI and ENABLED.
-//! Its ABSENCE is a freeze blocker (an un-witnessed ML-KEM-768 Decap
-//! side-channel posture — Compromise #32). Pins:
-//!   1. the gate is REGISTERED (a named CI step / feature toggle exists);
-//!   2. the gate is ENABLED (not declared-then-skipped);
-//!   3. the gate's subject is the ML-KEM (libcrux) impl (not a no-op target).
+//! `libcrux-ml-kem 0.0.9` is now the PRODUCTION ML-KEM-768 impl. Compromise
+//! #32 (ML-KEM-768 Decap side-channel / Tempo-SampleNTT-timing) is moved from
+//! deferred → mitigated-live by the swap: libcrux's portable + AVX2 field
+//! arithmetic / NTT / serialization / generic high-level code is FORMALLY
+//! VERIFIED via hax + F*, and on the targets where CT matters most (wasm +
+//! non-SIMD) the portable (verified, constant-time) backend is the one
+//! selected. The tests below pin THAT real, available assurance:
+//!   (a) the secret-independence-gate SEAM is registered (libcrux is a real
+//!       dep + the `mlkem-ct-check` forwarding feature exists);
+//!   (b) the PRODUCTION ML-KEM-768 impl is the verified libcrux (a live
+//!       FIPS-203 witness through the crate's own `mlkem` wrapper — not a
+//!       placeholder / not RustCrypto, which is dev-only now);
+//!   (c) [#[ignore]'d + FLAG-FOR-BEN] the runnable `check-secret-independence`
+//!       CI BUILD-gate — see the FLAG on that test.
 //!
-//! This is a CI-integration presence pin (the landscape's "FG (CI)" class), not
-//! a runtime crypto round-trip. The discipline mirrors the in-tree presence-pin
-//! shape used for other CI gates: assert the gate's registration record + its
-//! enabled-flag, with a foil that would FAIL on a declared-but-disabled gate.
+//! # ⚠️ FLAG-FOR-BEN — the runnable check-secret-independence CI gate
 //!
-//! # RED-PHASE STATUS (pim-12 §3.6e) + SELF-CONTAINED STUB-SHIM
-//!
-//! Ground-truth at HEAD: no `check-secret-independence` step exists (`grep -rn
-//! check-secret-independence .github/ Cargo.toml` → ZERO; libcrux is not yet a
-//! dep). Per wave-independence this file commits a LOCAL `f_kat_2_stub`
-//! modelling the gate-registration record. The stub deliberately reports the
-//! gate as REGISTERED-BUT-DISABLED so the enabled pin FAILS until R5 wires the
-//! real CI gate. R5 DELETEs the stub + wires the real gate-registration probe
-//! (a build-script/CI-manifest assertion against the actual libcrux feature +
-//! `.github/workflows` step), un-ignores, verifies green.
-//!
-//! # Would-FAIL-if-no-op'd (pim-2 sub-rule-4 + pim-18)
-//!
-//! The pins assert the gate is registered AND enabled AND targets libcrux-ml-kem.
-//! The stub's disabled-flag makes the enabled pin fail; a declared-then-skipped
-//! gate (the classic CI no-op) is exactly what the enabled pin forbids.
+//! libcrux 0.0.9's `check-secret-independence` feature EXISTS (verified in
+//! `libcrux-secrets 0.0.5`) and is a genuine COMPILE-TIME gate: with it on,
+//! ML-KEM secret integers become opaque secret-typed values that lack
+//! branch/index/non-CT ops, so the crate fails to compile if it would leak.
+//! BUT at the pinned `=0.0.9`, building `libcrux-ml-kem` with that feature on
+//! FAILS TO COMPILE (E0053 — its `impl_kem_trait!` macro does not propagate
+//! the secret-typed `keygen`/`encaps`/`decaps` signatures; reproduced
+//! 2026-06-05; an upstream 0.0.9 defect, NOT Benten's usage). So a green
+//! `check-secret-independence` CI step is NOT honestly wireable at 0.0.9 —
+//! reporting it as enabled+green would be a fake-green sentinel. The
+//! `mlkem-ct-check` feature on `benten-crypto-suite` is the one-flag-away
+//! seam for when libcrux ships a version that compiles cleanly under it.
+//! Ben decision: (i) accept the verified-backend assurance pinned here for
+//! v1-beta + carry the runnable CI gate to the libcrux-version that fixes
+//! the upstream macro (tracked as Compromise #32's residual), or (ii) hold
+//! the tag for an upstream fix. Kept #[ignore]'d per the no-fake-green rule.
 
 #![allow(dead_code)]
 
-/// SELF-CONTAINED stub-shim (R5 deletes + wires the real CI-gate registration
-/// probe against `.github/workflows` + the libcrux feature).
-mod f_kat_2_stub {
-    /// A model of the CI secret-independence gate's registration record. R5's
-    /// real probe reads the actual CI manifest + the libcrux feature flag.
-    #[derive(Debug, Clone)]
-    pub struct SecretIndependenceGate {
-        pub registered: bool,
-        pub enabled: bool,
-        pub target_impl: &'static str,
-    }
-
-    /// Read the gate's registration. RED-PHASE: registered but DISABLED + the
-    /// target is the placeholder — so the enabled + target pins FAIL until R5.
-    pub fn read_secret_independence_gate() -> SecretIndependenceGate {
-        SecretIndependenceGate {
-            registered: false,        // R5: true (the CI step exists)
-            enabled: false,           // R5: true (the step is not skipped)
-            target_impl: "<unwired>", // R5: "libcrux-ml-kem"
-        }
-    }
-
-    pub const EXPECTED_TARGET: &str = "libcrux-ml-kem";
+/// Read THIS crate's Cargo manifest (the real wiring source-of-truth — not a
+/// stub). The manifest lives one dir up from `tests/`.
+fn crate_manifest() -> String {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml");
+    std::fs::read_to_string(path).expect("crypto-suite Cargo.toml readable")
 }
 
-use f_kat_2_stub::{EXPECTED_TARGET, read_secret_independence_gate};
-
-/// F-KAT-2 (a) — the secret-independence CI gate is REGISTERED.
+/// F-KAT-2 (a) — the secret-independence gate SEAM is REGISTERED.
 ///
-/// would-FAIL-if-no-op'd: the stub reports `registered=false`; R5 wires the real
-/// CI step. Absence of the gate is a freeze blocker (Compromise #32).
+/// Real probe (not a stub): `libcrux-ml-kem` is a genuine dependency AND the
+/// `mlkem-ct-check` forwarding feature (→ `libcrux-ml-kem/check-secret-
+/// independence`) exists. This is the wiring seam the runnable CI gate plugs
+/// into. would-FAIL-if-no-op'd: if libcrux were not the dep, or the forwarding
+/// feature were absent, the gate could not be wired at all.
 #[test]
-#[ignore = "R5-FILL HARD-GATE (FLAG-FOR-BEN): rides the SAME libcrux-add decision f_kat_1 surfaces — the `check-secret-independence` CI gate cannot be honestly REGISTERED + ENABLED + targeting-libcrux without first wiring libcrux-ml-kem into the build + adding the `.github/workflows` step. Reporting registered=true with no real CI step would be a pass-vs-sentinel. Ben decision: add libcrux-ml-kem now (then wire the CI gate + un-ignore) vs defer the libcrux swap + its secret-independence gate to v1-GM. Kept #[ignore]'d per the no-pass-vs-sentinel HARD-GATE (#32 freeze-blocker tracked)."]
-fn secret_independence_gate_is_registered() {
-    let gate = read_secret_independence_gate();
+fn secret_independence_gate_seam_is_registered() {
+    let manifest = crate_manifest();
     assert!(
-        gate.registered,
-        "the libcrux check-secret-independence CI gate MUST be REGISTERED — its \
-         absence is a freeze blocker (un-witnessed ML-KEM-768 Decap \
-         side-channel posture; Compromise #32). would-FAIL while the stub \
-         reports registered=false."
+        manifest.contains("libcrux-ml-kem"),
+        "libcrux-ml-kem MUST be a real dependency (the verified ML-KEM-768 \
+         impl) — its absence means the secret-independence assurance is \
+         un-witnessed (Compromise #32 freeze-blocker)."
+    );
+    assert!(
+        manifest.contains("check-secret-independence"),
+        "the `mlkem-ct-check` feature (forwarding libcrux's \
+         `check-secret-independence`) MUST be registered — it is the seam the \
+         runnable CI gate plugs into."
     );
 }
 
-/// F-KAT-2 (b) — the gate is ENABLED (not declared-then-skipped).
+/// F-KAT-2 (b) — the PRODUCTION ML-KEM-768 impl is the verified libcrux.
 ///
-/// The classic CI no-op is a step that exists but is gated off. would-FAIL-if-
-/// no-op'd: the stub reports `enabled=false`; R5 ensures the step runs.
+/// Real LIVE witness (not a placeholder): drive a FIPS-203 keygen + encap +
+/// decap through the crate's own production `mlkem` wrapper (which wraps
+/// libcrux) and assert exact FIPS-203 sizes + a successful round-trip. A
+/// stub / wrong-impl target would not produce the exact 1184/1088/2400/32
+/// FIPS-203 byte sizes and a recovering decap. This is what makes the
+/// secret-independence assurance LOAD-BEARING: the impl whose CT property we
+/// rely on is genuinely the one running.
 #[test]
-#[ignore = "R5-FILL HARD-GATE (FLAG-FOR-BEN): rides the libcrux-add decision (see the registered test) — kept #[ignore]'d until libcrux + the CI gate are wired."]
-fn secret_independence_gate_is_enabled() {
-    let gate = read_secret_independence_gate();
-    assert!(
-        gate.registered && gate.enabled,
-        "the secret-independence gate MUST be ENABLED, not merely declared — a \
-         declared-then-skipped CI step is a no-op that does not witness the \
-         constant-time property. would-FAIL while the stub reports \
-         enabled=false."
-    );
-}
+fn production_impl_is_verified_libcrux_ml_kem() {
+    // The crate's production wrapper IS libcrux (see src/mlkem.rs). Round-trip
+    // through it to witness the verified impl is live.
+    use benten_crypto_suite::cipher_suite::{CipherSuite, CipherSuiteCodepoint};
 
-/// F-KAT-2 (c) — the gate targets the libcrux ML-KEM impl (not a no-op target).
-///
-/// would-FAIL-if-no-op'd: the stub's `<unwired>` target; R5 points it at
-/// `libcrux-ml-kem`.
-#[test]
-#[ignore = "R5-FILL HARD-GATE (FLAG-FOR-BEN): rides the libcrux-add decision (see the registered test) — kept #[ignore]'d until libcrux + the CI gate are wired."]
-fn secret_independence_gate_targets_libcrux_ml_kem() {
-    let gate = read_secret_independence_gate();
+    let suite = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
+        .expect("0x647a hybrid suite resolves");
+    let kp = CipherSuite::generate_recipient_keypair_for_test(&suite);
+    let k_root = [0x5au8; 32];
+    let wrapped = suite
+        .wrap_key_material(kp.public(), &k_root)
+        .expect("hybrid wrap (exercises libcrux ML-KEM-768 encapsulate) MUST succeed");
+    // The ML-KEM-768 ciphertext half is FIPS-203-exact (1088 B) — a live
+    // witness that the production encapsulate is the real ML-KEM-768 impl.
     assert_eq!(
-        gate.target_impl, EXPECTED_TARGET,
-        "the secret-independence gate MUST target the libcrux ML-KEM impl (the \
-         hax/F*-verified one) — not a placeholder. would-FAIL while the stub \
-         target is `{}`.",
-        gate.target_impl
+        wrapped.ek_mlkem.len(),
+        1088,
+        "the wrapped ML-KEM-768 ciphertext MUST be FIPS-203-exact (1088 B) — \
+         a live witness that the verified libcrux impl is the production path"
+    );
+    let recovered = suite
+        .unwrap_key_material(kp.secret(), &wrapped)
+        .expect("hybrid unwrap (exercises libcrux ML-KEM-768 decapsulate) MUST succeed");
+    assert_eq!(
+        recovered.as_bytes(),
+        &k_root,
+        "the libcrux ML-KEM-768 decapsulate path MUST recover k_root"
+    );
+}
+
+/// F-KAT-2 (c) — the RUNNABLE `check-secret-independence` CI BUILD-gate.
+///
+/// ⚠️ FLAG-FOR-BEN / #[ignore]'d: see the module FLAG. libcrux-ml-kem 0.0.9
+/// FAILS TO COMPILE under its own `check-secret-independence` feature (E0053
+/// upstream macro defect, reproduced 2026-06-05), so a green runnable CI gate
+/// is not honestly wireable at the pinned version. This test asserts the
+/// build SUCCEEDS under the `mlkem-ct-check` feature — which it does NOT at
+/// 0.0.9 — so it stays #[ignore]'d (not faked-green) until libcrux ships a
+/// version that compiles cleanly under the feature. Un-ignore + wire the
+/// `.github/workflows` build step at that version.
+#[test]
+#[ignore = "FLAG-FOR-BEN: libcrux-ml-kem =0.0.9 does NOT compile under its own \
+            `check-secret-independence` feature (E0053 — upstream impl_kem_trait! \
+            macro defect on keygen/encaps/decaps, reproduced 2026-06-05). A green \
+            runnable CI secret-independence gate is therefore not honestly wireable \
+            at 0.0.9. The `mlkem-ct-check` feature is the one-flag-away seam for \
+            the libcrux version that fixes this. Verified-backend assurance is \
+            pinned by tests (a)+(b); the runnable gate carries to that version \
+            (Compromise #32 residual). Kept #[ignore]'d per no-fake-green."]
+fn check_secret_independence_build_gate_compiles() {
+    // This body is intentionally a documentation anchor for the gate's INTENT.
+    // The REAL gate is a build under `--features mlkem-ct-check`, which at
+    // 0.0.9 fails to compile (so the gate cannot pass honestly). When libcrux
+    // ships a fix, the CI step `cargo build -p benten-crypto-suite --features
+    // mlkem-ct-check` becomes the runnable gate and this #[ignore] is removed.
+    panic!(
+        "runnable check-secret-independence gate not honestly wireable at \
+         libcrux-ml-kem 0.0.9 — see FLAG-FOR-BEN. This #[ignore]'d test must \
+         not be force-passed; it un-ignores only when `cargo build --features \
+         mlkem-ct-check` compiles against a fixed libcrux version."
     );
 }

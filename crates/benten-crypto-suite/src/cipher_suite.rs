@@ -68,11 +68,10 @@
 //!
 //! Per CLAUDE.md baked-in #5 / `crypto-agility-contract:6`: this is the
 //! ONLY crypto-primitive call site; we wrap vetted upstream
-//! `x25519-dalek` + `ml-kem` + `sha3` crates; we NEVER fork or
+//! `x25519-dalek` + `libcrux-ml-kem` (the hax/F*-verified ML-KEM-768
+//! impl, via `crate::mlkem`) + `sha3` crates; we NEVER fork or
 //! reimplement primitives.
 
-use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
-use ml_kem::{B32, Encoded, EncodedSizeUser as _, KemCore, MlKem768};
 use rand_core::OsRng as RandOsRng;
 use sha3::Digest as _;
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey, StaticSecret};
@@ -83,6 +82,7 @@ use crate::aead::{
 };
 pub use crate::codepoint::CipherSuiteCodepoint;
 use crate::error::UnsupportedAlgorithm;
+use crate::mlkem;
 
 /// The real draft-connolly X-Wing `XWingLabel` — the 6 bytes
 /// `0x5c2e2f2f5e5c` (ASCII `\.//^\`). **APPENDED** as the trailing suffix
@@ -141,18 +141,18 @@ impl CipherSuite {
                 // Hybrid: BOTH X25519 + ML-KEM-768 halves.
                 let x_sec = StaticSecret::random_from_rng(&mut RandOsRng);
                 let x_pub = X25519PublicKey::from(&x_sec);
-                let (mlkem_dk, mlkem_ek) = MlKem768::generate(&mut RandOsRng);
+                let mlkem_kp = mlkem::generate();
                 RecipientKeypair {
                     codepoint: suite.codepoint,
                     public: RecipientPublic {
                         codepoint: suite.codepoint,
                         x25519: Some(x_pub),
-                        mlkem768_ek: Some(mlkem_ek.as_bytes().to_vec()),
+                        mlkem768_ek: Some(mlkem_kp.ek),
                     },
                     secret: RecipientSecret {
                         codepoint: suite.codepoint,
                         x25519: Some(x_sec),
-                        mlkem768_dk: Some(mlkem_dk.as_bytes().to_vec()),
+                        mlkem768_dk: Some(mlkem_kp.dk),
                     },
                 }
             }
@@ -208,20 +208,26 @@ impl CipherSuite {
         let x_pub = X25519PublicKey::from(&x_sec);
         match self.codepoint.raw() {
             0x647a => {
-                let d: B32 = block(0x02).into();
-                let z: B32 = block(0x03).into();
-                let (mlkem_dk, mlkem_ek) = MlKem768::generate_deterministic(&d, &z);
+                // libcrux's FIPS-203 keygen takes the 64-byte `d‖z` seed.
+                // The two 32-byte BLAKE3 blocks (`d` = block(0x02), `z` =
+                // block(0x03)) are concatenated d-then-z — byte-identical to
+                // RustCrypto `generate_deterministic(&d, &z)` for the same
+                // (d, z) (proven by the canary spike + held by f_kat_1).
+                let mut dz = [0u8; mlkem::KEYGEN_SEED_LEN];
+                dz[..32].copy_from_slice(&block(0x02));
+                dz[32..].copy_from_slice(&block(0x03));
+                let mlkem_kp = mlkem::generate_deterministic(&dz);
                 RecipientKeypair {
                     codepoint: self.codepoint,
                     public: RecipientPublic {
                         codepoint: self.codepoint,
                         x25519: Some(x_pub),
-                        mlkem768_ek: Some(mlkem_ek.as_bytes().to_vec()),
+                        mlkem768_ek: Some(mlkem_kp.ek),
                     },
                     secret: RecipientSecret {
                         codepoint: self.codepoint,
                         x25519: Some(x_sec),
-                        mlkem768_dk: Some(mlkem_dk.as_bytes().to_vec()),
+                        mlkem768_dk: Some(mlkem_kp.dk),
                     },
                 }
             }
@@ -278,17 +284,12 @@ impl CipherSuite {
                 let ek_x = X25519PublicKey::from(&x_eph);
                 let ss_x = x_eph.diffie_hellman(x_recipient);
 
-                // ML-KEM-768 encapsulation → (ek_mlkem, ss_mlkem).
-                let mlkem_ek_array: Encoded<<MlKem768 as KemCore>::EncapsulationKey> = Encoded::<
-                    <MlKem768 as KemCore>::EncapsulationKey,
-                >::try_from(
-                    mlkem_ek_bytes.as_slice(),
-                )
-                .map_err(|_| AeadError::MalformedEnvelope("recipient ML-KEM-768 ek malformed"))?;
-                let mlkem_ek = <MlKem768 as KemCore>::EncapsulationKey::from_bytes(&mlkem_ek_array);
-                let (mlkem_ct, ss_mlkem) = mlkem_ek
-                    .encapsulate(&mut RandOsRng)
-                    .map_err(|()| AeadError::MalformedEnvelope("ML-KEM-768 encapsulate"))?;
+                // ML-KEM-768 encapsulation → (mlkem_ct, ss_mlkem). The OS
+                // RNG supplies the 32-byte `m` randomness inside the wrapper
+                // (same randomness source as the prior RustCrypto path).
+                let (mlkem_ct, ss_mlkem) = mlkem::encapsulate(mlkem_ek_bytes).ok_or(
+                    AeadError::MalformedEnvelope("recipient ML-KEM-768 ek malformed"),
+                )?;
 
                 // Real draft-connolly X-Wing combiner:
                 // SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel).
@@ -296,10 +297,8 @@ impl CipherSuite {
                 // secret; ct_X = the X25519 ephemeral public key (ek_x);
                 // pk_X = the recipient X25519 public key. The ML-KEM
                 // ciphertext is bound transitively via ss_M (decapsulation).
-                let _ = &mlkem_ct;
-                let _ = mlkem_ek_bytes;
                 let combined = combine_x_wing(
-                    ss_mlkem.as_slice(),
+                    &ss_mlkem,
                     ss_x.as_bytes(),
                     ek_x.as_bytes(),
                     x_recipient.as_bytes(),
@@ -313,7 +312,7 @@ impl CipherSuite {
                 Ok(WrappedKey {
                     codepoint: self.codepoint,
                     ek_x: ek_x.as_bytes().to_vec(),
-                    ek_mlkem: mlkem_ct[..].to_vec(),
+                    ek_mlkem: mlkem_ct,
                     aead_envelope: env,
                 })
             }
@@ -387,31 +386,19 @@ impl CipherSuite {
                 let ek_x_pub = X25519PublicKey::from(ek_x_bytes);
                 let ss_x = x_sec.diffie_hellman(&ek_x_pub);
 
-                // Decapsulate ML-KEM-768 half.
-                let mlkem_dk_array: Encoded<<MlKem768 as KemCore>::DecapsulationKey> = Encoded::<
-                    <MlKem768 as KemCore>::DecapsulationKey,
-                >::try_from(
-                    mlkem_dk_bytes.as_slice(),
-                )
-                .map_err(|_| AeadError::MalformedEnvelope("recipient ML-KEM-768 dk malformed"))?;
-                let mlkem_dk = <MlKem768 as KemCore>::DecapsulationKey::from_bytes(&mlkem_dk_array);
-                let mlkem_ct_array =
-                    ml_kem::Ciphertext::<MlKem768>::try_from(wrapped.ek_mlkem.as_slice())
-                        .map_err(|_| AeadError::MalformedEnvelope("ML-KEM-768 ct malformed"))?;
-                let ss_mlkem = mlkem_dk
-                    .decapsulate(&mlkem_ct_array)
-                    .map_err(|()| AeadError::MalformedEnvelope("ML-KEM-768 decapsulate"))?;
+                // Decapsulate ML-KEM-768 half. A malformed dk OR ct surfaces
+                // a typed MalformedEnvelope (the strip-resistance contract
+                // routes the zeroed-PQ-half F-2 case through a *different
+                // derived key* → AEAD fails closed, not through this arm).
+                let ss_mlkem = mlkem::decapsulate(mlkem_dk_bytes, wrapped.ek_mlkem.as_slice())
+                    .ok_or(AeadError::MalformedEnvelope("ML-KEM-768 dk/ct malformed"))?;
 
                 // Recover the recipient's public material to feed the
                 // combiner symmetrically (it bound them at wrap-time).
                 let x_pub = X25519PublicKey::from(x_sec);
 
-                let combined = combine_x_wing(
-                    ss_mlkem.as_slice(),
-                    ss_x.as_bytes(),
-                    &ek_x_bytes,
-                    x_pub.as_bytes(),
-                );
+                let combined =
+                    combine_x_wing(&ss_mlkem, ss_x.as_bytes(), &ek_x_bytes, x_pub.as_bytes());
 
                 let combined_key = AeadKeyMaterial::from_bytes(self.codepoint, combined.to_vec());
                 let aad = aad_whole_content(b"x-wing-wrap:k_root");

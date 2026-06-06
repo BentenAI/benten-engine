@@ -96,10 +96,10 @@
 
 use std::sync::OnceLock;
 
-use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
-use ml_kem::{Encoded, EncodedSizeUser as _, KemCore, MlKem768};
 use rand_core::OsRng as RandOsRng;
 use sha3::Digest as _;
+
+use crate::mlkem;
 use slh_dsa::signature::{Signer as SlhSignerTrait, Verifier as SlhVerifierTrait};
 use slh_dsa::{Sha2_128s, Signature as SlhDsaSignature, SigningKey as SlhDsaSigningKey};
 
@@ -393,10 +393,10 @@ impl SwapMatrix {
             }
             EncryptionArm::None => SwapRecipientKeypair::None,
             EncryptionArm::PurePqMlKem768Only => {
-                let (mlkem_dk, mlkem_ek) = MlKem768::generate(&mut RandOsRng);
+                let mlkem_kp = mlkem::generate();
                 SwapRecipientKeypair::PurePqMlKem(Box::new(PurePqMlKemKeypair {
-                    public_bytes: mlkem_ek.as_bytes().to_vec(),
-                    secret_bytes: mlkem_dk.as_bytes().to_vec(),
+                    public_bytes: mlkem_kp.ek,
+                    secret_bytes: mlkem_kp.dk,
                 }))
             }
         }
@@ -1304,21 +1304,19 @@ impl SwapMatrix {
             };
         }
         let seed = derive_named_seed(b"fips-203-ml-kem-768", name);
-        let (dk, ek) = MlKem768::generate(&mut RandOsRng);
-        let pubkey_bytes = ek.as_bytes().to_vec();
-        let secret_bytes = dk.as_bytes().to_vec();
+        let mlkem_kp = mlkem::generate();
+        let pubkey_bytes = mlkem_kp.ek.clone();
+        let secret_bytes = mlkem_kp.dk;
         let encap_randomness = derive_named_seed(b"fips-203-ml-kem-768-encap", name);
-        let (ct, ss) = ek
-            .encapsulate(&mut RandOsRng)
-            .expect("ML-KEM-768 encap infallible");
+        let (ct, ss) = mlkem::encapsulate(&pubkey_bytes).expect("ML-KEM-768 encap against own ek");
         let vector = KemKatVector {
             seed,
             pubkey: pubkey_bytes.clone(),
             secret_key: secret_bytes,
             encap_randomness,
             expected_pubkey: pubkey_bytes,
-            expected_ciphertext: ct.as_slice().to_vec(),
-            expected_shared_secret: ss.as_slice().to_vec(),
+            expected_ciphertext: ct,
+            expected_shared_secret: ss,
         };
         let returned = KemKatVector {
             seed: vector.seed.clone(),
@@ -1429,9 +1427,9 @@ impl SwapMatrix {
                 public: entry.vector.pubkey.clone(),
             };
         }
-        let (dk, ek) = MlKem768::generate(&mut RandOsRng);
-        let pubkey_bytes = ek.as_bytes().to_vec();
-        let secret_bytes = dk.as_bytes().to_vec();
+        let mlkem_kp = mlkem::generate();
+        let pubkey_bytes = mlkem_kp.ek;
+        let secret_bytes = mlkem_kp.dk;
         let vector = KemKatVector {
             seed: seed.to_vec(),
             pubkey: pubkey_bytes.clone(),
@@ -1464,15 +1462,8 @@ impl SwapMatrix {
                 ciphertext: entry.vector.expected_ciphertext.clone(),
             };
         }
-        let ek_array: Encoded<<MlKem768 as KemCore>::EncapsulationKey> =
-            Encoded::<<MlKem768 as KemCore>::EncapsulationKey>::try_from(pubkey)
-                .expect("ML-KEM-768 ek bytes well-formed");
-        let ek = <MlKem768 as KemCore>::EncapsulationKey::from_bytes(&ek_array);
-        let (ct, ss) = ek
-            .encapsulate(&mut RandOsRng)
-            .expect("ML-KEM-768 encap infallible");
-        let ct_bytes = ct.as_slice().to_vec();
-        let ss_bytes = ss.as_slice().to_vec();
+        let (ct_bytes, ss_bytes) =
+            mlkem::encapsulate(pubkey).expect("ML-KEM-768 ek bytes well-formed");
         let vector = KemKatVector {
             seed: Vec::new(),
             pubkey: pubkey.to_vec(),
@@ -1510,18 +1501,9 @@ impl SwapMatrix {
         // Cache miss — perform a live decap (this still witnesses the
         // FIPS-203 path).
         drop(guard);
-        let dk_array: Encoded<<MlKem768 as KemCore>::DecapsulationKey> =
-            Encoded::<<MlKem768 as KemCore>::DecapsulationKey>::try_from(secret_key)
-                .expect("ML-KEM-768 dk bytes well-formed");
-        let dk = <MlKem768 as KemCore>::DecapsulationKey::from_bytes(&dk_array);
-        let ct_array = ml_kem::Ciphertext::<MlKem768>::try_from(ciphertext)
-            .expect("ML-KEM-768 ct bytes well-formed");
-        let ss = dk
-            .decapsulate(&ct_array)
-            .expect("ML-KEM-768 decap infallible");
-        PureKemDec {
-            shared_secret: ss.as_slice().to_vec(),
-        }
+        let ss =
+            mlkem::decapsulate(secret_key, ciphertext).expect("ML-KEM-768 dk/ct bytes well-formed");
+        PureKemDec { shared_secret: ss }
     }
 }
 
@@ -1657,30 +1639,18 @@ fn pure_pq_wrap_ct(ct: Vec<u8>) -> crate::cipher_suite::WrappedKey {
 }
 
 fn pure_pq_mlkem_encapsulate(pub_bytes: &[u8]) -> Result<(Vec<u8>, Vec<u8>), SwapMatrixError> {
-    let ek_array: Encoded<<MlKem768 as KemCore>::EncapsulationKey> =
-        Encoded::<<MlKem768 as KemCore>::EncapsulationKey>::try_from(pub_bytes)
-            .map_err(|_| SwapMatrixError::CipherSuite("pure-PQ ek bytes malformed"))?;
-    let ek = <MlKem768 as KemCore>::EncapsulationKey::from_bytes(&ek_array);
-    let (ct, ss) = ek
-        .encapsulate(&mut RandOsRng)
-        .map_err(|()| SwapMatrixError::CipherSuite("pure-PQ encap failed"))?;
-    Ok((ct.as_slice().to_vec(), ss.as_slice().to_vec()))
+    // OS RNG supplies the 32-byte `m` randomness inside the wrapper (same
+    // randomness source as the prior RustCrypto path).
+    mlkem::encapsulate(pub_bytes).ok_or(SwapMatrixError::CipherSuite("pure-PQ ek bytes malformed"))
 }
 
 fn pure_pq_mlkem_decapsulate(
     secret_bytes: &[u8],
     ct_bytes: &[u8],
 ) -> Result<Vec<u8>, SwapMatrixError> {
-    let dk_array: Encoded<<MlKem768 as KemCore>::DecapsulationKey> =
-        Encoded::<<MlKem768 as KemCore>::DecapsulationKey>::try_from(secret_bytes)
-            .map_err(|_| SwapMatrixError::CipherSuite("pure-PQ dk bytes malformed"))?;
-    let dk = <MlKem768 as KemCore>::DecapsulationKey::from_bytes(&dk_array);
-    let ct_array = ml_kem::Ciphertext::<MlKem768>::try_from(ct_bytes)
-        .map_err(|_| SwapMatrixError::CipherSuite("pure-PQ ct bytes malformed"))?;
-    let ss = dk
-        .decapsulate(&ct_array)
-        .map_err(|()| SwapMatrixError::CipherSuite("pure-PQ decap failed"))?;
-    Ok(ss.as_slice().to_vec())
+    mlkem::decapsulate(secret_bytes, ct_bytes).ok_or(SwapMatrixError::CipherSuite(
+        "pure-PQ dk/ct bytes malformed",
+    ))
 }
 
 fn aead_wrap_pure_pq(

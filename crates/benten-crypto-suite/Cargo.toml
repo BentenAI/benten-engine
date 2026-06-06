@@ -20,6 +20,27 @@ workspace = true
 default = []
 testing = []
 
+# F-KAT-2 (CE-D2) — forwards libcrux's hax/F*-derived `check-secret-independence`
+# compile-time secret-independence check to the ML-KEM-768 impl. When enabled,
+# libcrux-ml-kem's secret integers become opaque secret-typed values that lack
+# branch/index/non-CT operations, so the crate FAILS TO COMPILE if it would
+# leak a secret-dependent timing path — the genuine build-level gate the
+# `check-secret-independence` CI step would run.
+#
+# ⚠️ FLAG-FOR-BEN (2026-06-05): at the pinned `libcrux-ml-kem =0.0.9` this
+# feature DOES NOT COMPILE — libcrux-ml-kem 0.0.9's `impl_kem_trait!` macro
+# does not propagate the secret-typed signatures to its `keygen`/`encaps`/
+# `decaps` trait methods (E0053 incompatible-type, reproduced 2026-06-05;
+# this is an UPSTREAM 0.0.9 defect, independent of Benten's usage). So the
+# runnable CI secret-independence gate is NOT honestly wireable at 0.0.9.
+# This feature is kept as the one-flag-away seam (and intent record) for when
+# libcrux ships a 0.0.x/0.1 that compiles cleanly under it; it is NOT enabled
+# by default and is NOT exercised in CI yet. f_kat_2 pins the REAL assurance
+# that IS available at 0.0.9 (the production impl is the verified libcrux; the
+# portable backend is hax/F*-verified constant-time) and leaves the
+# CI-gate-specific arm #[ignore]'d with this same flag. Honesty over green.
+mlkem-ct-check = ["libcrux-ml-kem/check-secret-independence"]
+
 # G-CORE-2 (#1300) — the integration crate is the ONE crypto-primitive
 # call site. We wrap vetted upstream RustCrypto crates; we NEVER fork or
 # reimplement primitives. The deps here are the workspace's only direct
@@ -115,11 +136,44 @@ sha3 = { version = "0.10", default-features = false }
 # Spike E Interpretation-B (`derive_step`/`derive_root` with
 # `"step"`/`"root"` info-tags for cross-role domain separation).
 x25519-dalek = { version = "2", default-features = false, features = ["alloc", "static_secrets", "zeroize"] }
-# `deterministic` lights ML-KEM-768 `generate_deterministic(d, z)` +
-# re-exports `B32` — used by `CipherSuite::generate_recipient_keypair_
-# deterministic` to derive a stable recipient keypair from a seed for the
-# Layer-C drop path (one-codepoint-per-suite; no keystore round-trip).
-ml-kem = { version = "0.2", default-features = false, features = ["deterministic"] }
+# ML-KEM-768 PRODUCTION impl = Cryspen `libcrux-ml-kem` (the hax/F*-verified
+# constant-time impl). Swapped in 2026-06-05 from the in-tree RustCrypto
+# `ml-kem 0.2.3` (now a [dev-dependencies] cross-impl-KAT witness only) per
+# Ben's "adopt libcrux now, before the tag" ratification. This moves
+# Compromise #32 (ML-KEM-768 Decap side-channel / Tempo-SampleNTT-timing)
+# from deferred → mitigated-live: libcrux's portable + AVX2 field
+# arithmetic / NTT / serialization / generic high-level code is formally
+# verified via hax + F* — its headline advantage over RustCrypto.
+#
+# The swap is BYTE-SAFE (proven by the canary spike at
+# `.addl/phase-4-meta/libcrux-canary-spike.md`): for a fixed FIPS-203
+# deterministic seed `libcrux-ml-kem 0.0.9` produces byte-identical
+# ek(1184)/ct(1088)/dk(2400)/ss(32) vs RustCrypto `ml-kem 0.2.3` and
+# cross-decapsulates both directions. Every on-wire ML-KEM-768 byte + every
+# frozen golden survives unchanged. `f_kat_1` asserts this cross-impl
+# byte-identity continuously (RustCrypto stays a dev-dep witness for it).
+#
+# API: the FIPS-203 deterministic path
+# `mlkem768::generate_key_pair([u8;64])` (the d‖z seed) +
+# `mlkem768::encapsulate(&pk, [u8;32])` (the m randomness) +
+# `mlkem768::decapsulate(&sk, &ct)` — all caller-supplied randomness. The
+# system-RNG source is PRESERVED unchanged (we fill the [u8;64]/[u8;32]
+# from the same OS RNG that the prior RustCrypto path used), so the wasm
+# randomness story is identical to before.
+#
+# `default-features = false, features = ["mlkem768"]` = the leanest build
+# (drops mlkem512/1024 + std + the `rand` randomized helpers we don't use).
+# On wasm32 the portable (formally-verified, constant-time) backend is
+# auto-selected (libcrux's build.rs enables simd128 only on aarch64, simd256
+# only on x86_64; neither fires on wasm) — `getrandom` is absent from the
+# wasm tree entirely (caller-supplied randomness), so the historical wasm
+# getrandom pain does not recur. Pinned EXACTLY (`=0.0.9`) per the spike's
+# maturity caveat (libcrux-ml-kem is pre-0.1; expect API/SemVer churn —
+# vendor-lock the audited version; the NF-2 / C-GM-AUDIT covers whichever
+# impl is pinned at v1-GM). NOT a crypto-primitive FORK — this is the ONLY
+# crypto-primitive call site wrapping a vetted upstream crate per
+# CLAUDE.md baked-in #5 / crypto-agility-contract:6.
+libcrux-ml-kem = { version = "=0.0.9", default-features = false, features = ["mlkem768"] }
 chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc", "getrandom", "rand_core"] }
 hkdf = { version = "0.12", default-features = false }
 
@@ -159,6 +213,16 @@ tempfile = { workspace = true }
 redb = { workspace = true }
 
 [dev-dependencies]
+# RustCrypto `ml-kem 0.2.3` is RETAINED as a TEST-ONLY cross-impl KAT
+# witness (NOT a production dep — production ML-KEM-768 is `libcrux-ml-kem`
+# above). `f_kat_1` drives BOTH impls from the same FIPS-203 deterministic
+# (d, z, m) seed and asserts byte-identical ek/ct/dk/ss + cross-decap — so
+# the libcrux swap is held byte-equal to the RustCrypto FIPS-203 reference
+# continuously (NQ-C2). `deterministic` lights the `generate_deterministic
+# (d, z)` + `encapsulate_deterministic(m)` FIPS-203 paths + re-exports `B32`
+# that f_kat_1 needs to match libcrux's seed-driven keygen exactly.
+ml-kem = { version = "0.2", default-features = false, features = ["deterministic"] }
+
 # benten-id pulled as a dev-dep so the `discharge::Issue835Discharge`
 # `compile_fail` doctest in lib can name `benten_id::did::Did` at
 # doctest-compile time — the test verifies that
