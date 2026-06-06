@@ -25,6 +25,32 @@
 //! `INVARIANT-COVERAGE.md` parser (proving the harness reads the doc, not
 //! a literal) — it recovers Inv-15 today and would-FAIL if the parser
 //! went inert. NEVER `assert_eq!(CONST, CONST_VAL)`.
+//!
+//! # R6 ENFORCEMENT-STATE strengthening (AS-BUILT+ENFORCED reclassification)
+//!
+//! The doc-registration arms above only assert Inv-16..22 are *registered*
+//! in the doc. A parallel doc branch reclassifies the benten-drop-owned
+//! invariants from "REGISTERED, NOT-YET-ENFORCED" to **AS-BUILT+ENFORCED**.
+//! A doc catch-net that only reads doc TEXT cannot structurally back an
+//! *enforcement* claim — text drift is exactly what it must catch. So the
+//! `f_disc_2_inv*_enforced_*` arms below DRIVE the REAL benten-drop
+//! production code (the surfaces this crate OWNS) and assert the invariant's
+//! enforcement is live: Inv-16 codepoint-dispatch typed-reject, Inv-18
+//! Sealed-Sender-default metadata-disclosure, Inv-20-clause-c the `0x6610`
+//! BLINDED 11-field group-AAD field-set, and the §3.3 truncation/censorship
+//! fail-closed (the F-01 enforcer). would-FAIL-if-no-op'd: each arm exercises
+//! a production entry point and asserts an observable consequence; reverting
+//! the enforcer flips the arm.
+//!
+//! **Honest scope (Inv-21 / Inv-22 FLAGGED, not over-claimed):** Inv-21
+//! (set-identity fork tie-break) + Inv-22 (member-nature derivation) are
+//! enforced in `benten-membership-set` / `benten-sync` / graph-native code —
+//! NOT in benten-drop. This crate's test target CANNOT cleanly drive their
+//! production enforcers (the fork-tie-break runs on the sync CRDT round; the
+//! member-nature derivation is graph-data-half), so this catch-net does NOT
+//! assert their enforcement and explicitly FLAGS them as owned-elsewhere (see
+//! `f_disc_2_inv21_inv22_enforcement_owned_elsewhere_flag`). Their AS-BUILT
+//! +ENFORCED backing belongs in the owner crates' test targets.
 
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
@@ -325,4 +351,246 @@ fn f_disc_2_records_r46_group_codepoints_0x6610_0x6520() {
          FREEZES it (per-stanza AAD BLINDED; see §3.3 / §4.1). A prose-only \
          mention or a value bound to the wrong symbol MUST fail."
     );
+}
+
+// ===========================================================================
+// R6 ENFORCEMENT-STATE arms — structurally back the AS-BUILT+ENFORCED
+// reclassification by DRIVING the REAL benten-drop production code (the
+// surfaces THIS crate owns). NOT doc-text reads — production entry points +
+// observable consequences. would-FAIL-if-no-op'd.
+// ===========================================================================
+
+use benten_drop::layer_c::group_posture::{
+    GroupError, GroupSealParams, open_membership_set_group, seal_membership_set_group,
+};
+use benten_drop::layer_c::{
+    AAD_VERSION, EncryptedEnvelope, LayerCError, RecipientPubKey, open_single, seal_sealed_sender,
+    sealed_aad,
+};
+
+/// Inv-16 ENFORCED — the `EncryptedEnvelope` codepoint-dispatch is LIVE and
+/// fails CLOSED on a cross-arm feed (the codepoint-dispatched encryption
+/// decomposition is real, not paper).
+///
+/// Drives the production `open_single` against a GROUP (`HpkeMultiBase`)
+/// envelope: the single-recipient open path MUST strict-reject with the typed
+/// `UnsupportedCodepoint(0x6520)` arm — proving the dispatch discriminates by
+/// codepoint and refuses the wrong shape (no silent cross-arm fallback, the
+/// Inv-16/codepoint-agility property). would-FAIL-if-no-op'd: a dispatch that
+/// blindly decrypted any envelope would return `Ok` or a generic AEAD error,
+/// not the typed `UnsupportedCodepoint`.
+#[test]
+fn f_disc_2_inv16_codepoint_dispatch_enforced_fail_closed() {
+    use benten_drop::layer_c::seal_group_multi;
+    let pks: [RecipientPubKey; 2] = [[0x21u8; 32], [0x22u8; 32]];
+    let body_cid = *blake3::hash(b"inv16 enforced body").as_bytes();
+    let group_env = seal_group_multi(&pks, &b"did:key:zS".to_vec(), &body_cid, 1, b"inv16 body");
+
+    // The single-recipient open arm MUST refuse a group envelope by codepoint.
+    let outcome = open_single(&[0xA1u8; 32], &group_env);
+    assert_eq!(
+        outcome,
+        Err(LayerCError::UnsupportedCodepoint(
+            benten_drop::layer_c::LAYER_C_DROP_MULTI_RECIPIENT
+        )),
+        "Inv-16 ENFORCED: EncryptedEnvelope codepoint-dispatch MUST fail closed \
+         with UnsupportedCodepoint(0x6520) when a group envelope is fed to the \
+         single-recipient open arm — no silent cross-arm fallback. Got: {outcome:?}"
+    );
+}
+
+/// Inv-18 ENFORCED — the DEFAULT (`0x6510`) Sealed-Sender on-wire AAD discloses
+/// EXACTLY `{audience}` as residual privacy-metadata and binds NO sender-DID in
+/// the plaintext (the metadata-disclosure invariant is live in the shipped
+/// default).
+///
+/// Drives the production `sealed_aad::aad_field_set` + `residual_privacy_metadata`
+/// AND a real `seal_sealed_sender` seal: the serialized plaintext AAD region MUST
+/// NOT contain the sender-DID bytes (it is sealed inside the ciphertext). The
+/// field-set MUST be the canonical 5-tuple with NO `sender_did` and NO
+/// `coarse_epoch`. would-FAIL-if-no-op'd: re-adding `sender_did`/`coarse_epoch`
+/// to the field-set, or leaking the sender into the plaintext AAD, flips an
+/// assertion.
+#[test]
+fn f_disc_2_inv18_sealed_sender_default_metadata_disclosure_enforced() {
+    // (1) The enumerated field-set is the canonical 5-tuple — no sender, no epoch.
+    let field_set = sealed_aad::aad_field_set();
+    assert!(
+        !field_set.iter().any(|f| f.contains("sender")),
+        "Inv-18 ENFORCED: the DEFAULT 0x6510 AAD field-set MUST NOT carry a \
+         sender field (Sealed-Sender). Got: {field_set:?}"
+    );
+    assert!(
+        !field_set
+            .iter()
+            .any(|f| f.contains("coarse_epoch") || f.contains("epoch")),
+        "Inv-18 ENFORCED: the DEFAULT 0x6510 AAD field-set MUST NOT carry \
+         coarse_epoch (Ben-RULING-#1 + M-14). Got: {field_set:?}"
+    );
+    assert_eq!(
+        sealed_aad::residual_privacy_metadata(),
+        vec!["audience"],
+        "Inv-18 ENFORCED: the residual privacy-metadata under the DEFAULT \
+         0x6510 path is EXACTLY {{audience}}."
+    );
+
+    // (2) A REAL seal's plaintext AAD region MUST NOT contain the sender-DID.
+    let sender: Vec<u8> = b"did:key:zUNIQUESENDERMARKER42".to_vec();
+    let env = seal_sealed_sender(
+        &[0x31u8; 32],
+        &b"did:key:zAUDIENCE".to_vec(),
+        &sender,
+        &[0x07u8; 32],
+        1,
+        b"inv18 enforced plaintext",
+    );
+    let aad_region = benten_drop::layer_c::single_plaintext_aad_region(&env);
+    assert!(
+        !contains_subslice(&aad_region, &sender),
+        "Inv-18 ENFORCED: the DEFAULT Sealed-Sender plaintext AAD region MUST \
+         NOT leak the sender-DID — it is sealed inside the ciphertext. The \
+         sender bytes were found in the relay-visible plaintext AAD."
+    );
+    assert_eq!(
+        aad_region.first().copied(),
+        Some(AAD_VERSION),
+        "Inv-18 ENFORCED: the AAD region leads with the dedicated AAD_VERSION \
+         (0x01) prefix byte (DISTINCT from the format byte)."
+    );
+}
+
+/// Inv-20 clause-c ENFORCED — the live `0x6610` group seal binds the BLINDED
+/// 11-field per-stanza AAD field-set (the canonical R0.7 §3.10/§4.1 set,
+/// NEVER the raw roster nor the raw set-id).
+///
+/// Drives the production `seal_membership_set_group` and inspects the actual
+/// bound per-stanza AAD: it MUST be the 127-byte 11-field set leading with
+/// `aad_version || codepoint(0x6610)`, and the raw set-id + raw roster bytes
+/// MUST NOT appear (they are BLINDED into the two 32-byte commitments).
+/// would-FAIL-if-no-op'd: a regression to the 6-field shape flips the length;
+/// emitting the raw set-id/roster flips the blinding assertion.
+#[test]
+fn f_disc_2_inv20_clause_c_group_aad_field_set_enforced_blinded() {
+    let pks: [RecipientPubKey; 3] = [[0x41u8; 32], [0x42u8; 32], [0x43u8; 32]];
+    let k_set = [0x55u8; 32];
+    let set_id: Vec<u8> = b"benten:set:inv20-RAW-SETID-MARKER".to_vec();
+    let params = GroupSealParams {
+        membership_set_id: set_id.clone(),
+        member_key_generation: 1,
+        membership_set_generation: 1,
+        role_assignments_generation: 1,
+    };
+    let env = seal_membership_set_group(
+        &pks,
+        &b"did:key:zGroupSender".to_vec(),
+        &k_set,
+        &params,
+        b"inv20 enforced group body",
+    );
+    let aad = env.stanza_aad_for_test(0);
+
+    assert_eq!(
+        aad.len(),
+        127,
+        "Inv-20 clause-c ENFORCED: the live 0x6610 per-stanza AAD MUST be the \
+         BLINDED 11-field set (127 bytes); the old 6-field shape was 79."
+    );
+    assert_eq!(
+        &aad[0..3],
+        &[0x01, 0x66, 0x10],
+        "Inv-20 clause-c ENFORCED: the AAD leads with aad_version(0x01) ‖ \
+         codepoint(0x6610 BE)."
+    );
+    // BLINDED: the raw set-id is NEVER in the AAD (it is keyed-MAC'd into the
+    // membership_set_id_commitment). would-FAIL if the seal emitted it raw.
+    assert!(
+        !contains_subslice(&aad, &set_id),
+        "Inv-20 clause-c ENFORCED: the raw membership_set_id MUST NOT appear in \
+         the per-stanza AAD — it is BLINDED into membership_set_id_commitment \
+         (§3.9 keyed-MAC). The raw set-id bytes were found in the AAD."
+    );
+}
+
+/// Inv-19/Inv-20 ENFORCED — the group truncation/censorship defense fails
+/// CLOSED (the §3.3/§4.1 delivered-vs-bound stanza-count check is live on the
+/// production `0x6610` open path; the F-01 enforcer).
+///
+/// Drives a real `seal_membership_set_group` → drop a stanza (the exact relay
+/// truncation) → the production `open_membership_set_group` MUST fail closed
+/// with the typed `StanzaCountMismatch`. would-FAIL-if-no-op'd: the survivor
+/// authenticates its own stanza, so reverting the count check returns
+/// `Ok(plaintext)` — silent censorship.
+#[test]
+fn f_disc_2_inv19_inv20_truncation_defense_enforced_fail_closed() {
+    let pks: [RecipientPubKey; 3] = [[0x61u8; 32], [0x62u8; 32], [0x63u8; 32]];
+    let sks: [[u8; 32]; 3] = [[0xE1u8; 32], [0xE2u8; 32], [0xE3u8; 32]];
+    let params = GroupSealParams {
+        membership_set_id: b"benten:set:inv19".to_vec(),
+        member_key_generation: 1,
+        membership_set_generation: 1,
+        role_assignments_generation: 1,
+    };
+    let env = seal_membership_set_group(
+        &pks,
+        &b"did:key:zSender".to_vec(),
+        &[0x77u8; 32],
+        &params,
+        b"inv19 body",
+    );
+    // Pre-condition (would-FAIL-on-revert witness): the FULL envelope opens.
+    assert!(
+        open_membership_set_group(&sks[1], 1, &env).is_ok(),
+        "pre-condition: the index-1 survivor opens fine on the FULL envelope \
+         (so the failure below is the count check firing, not a decrypt error)"
+    );
+    let truncated = env.with_last_stanza_dropped_for_test();
+    let outcome = open_membership_set_group(&sks[1], 1, &truncated);
+    assert_eq!(
+        outcome,
+        Err(GroupError::StanzaCountMismatch {
+            delivered: 2,
+            bound: 3,
+        }),
+        "Inv-19/Inv-20 ENFORCED: a truncated 0x6610 group envelope MUST fail \
+         closed (delivered 2 != bound 3) — the §3.3 truncation/censorship \
+         defense is live. Got: {outcome:?}"
+    );
+}
+
+/// Inv-21 + Inv-22 FLAG — enforcement is OWNED ELSEWHERE (precise flag, not
+/// an over-claim).
+///
+/// Inv-21 (set-identity fork tie-break, `smaller-created_at_hlc-wins`) runs on
+/// the `benten-sync` CRDT merge round; Inv-22 (member-nature derivation) is
+/// graph-data-half (engine/graph-native). NEITHER enforcer lives in benten-drop,
+/// and this crate's test target cannot drive them without reaching into a
+/// non-dependency's internals. So this catch-net does NOT structurally back
+/// their AS-BUILT+ENFORCED reclassification.
+///
+/// This arm asserts the HONEST boundary it CAN: the two invariants ARE
+/// registered in the doc (so they are not silently dropped), and records — via
+/// this test's existence + name — that their enforcement backing belongs in the
+/// owner crates' test targets (`benten-membership-set` / `benten-sync` /
+/// engine). If a future edit tries to claim benten-drop enforces them, this
+/// flag is the documented counter-evidence. (HARD RULE 12 (c) DISAGREE-WITH-
+/// EXPLANATION shape: do not over-claim enforcement this crate cannot drive.)
+#[test]
+fn f_disc_2_inv21_inv22_enforcement_owned_elsewhere_flag() {
+    let invs = registered_invariants(&invariant_coverage_md());
+    assert!(
+        invs.contains(&21) && invs.contains(&22),
+        "Inv-21 + Inv-22 MUST stay registered in INVARIANT-COVERAGE.md. Their \
+         ENFORCEMENT, however, is OWNED ELSEWHERE (Inv-21 → benten-sync CRDT \
+         fork tie-break; Inv-22 → graph-native member-nature derivation) — NOT \
+         in benten-drop. This catch-net deliberately does NOT assert their \
+         enforcement; that backing belongs in the owner crates' test targets."
+    );
+}
+
+/// Helper: does `haystack` contain `needle` as a contiguous subslice?
+fn contains_subslice(haystack: &[u8], needle: &[u8]) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    haystack.windows(needle.len()).any(|w| w == needle)
 }

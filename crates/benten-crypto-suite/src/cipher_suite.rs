@@ -326,8 +326,10 @@ impl CipherSuite {
                 let ek_x = X25519PublicKey::from(&x_eph);
                 let ss_x = x_eph.diffie_hellman(x_recipient);
 
-                // HKDF-SHA256 over (ss_x || ek_x || recipient_pub) — same
-                // shape as the hybrid but with the classical-only inputs.
+                // SHA3-256 over (ss_x || ek_x || recipient_pub ||
+                // X25519_CLASSICAL_INFO) via `classical_combine` — same
+                // hash family as the hybrid arm but with the classical-only
+                // inputs (no HKDF; the prior HKDF-SHA256 label was a mislabel).
                 let combined =
                     classical_combine(ss_x.as_bytes(), ek_x.as_bytes(), x_recipient.as_bytes());
                 let combined_key = AeadKeyMaterial::from_bytes(self.codepoint, combined.to_vec());

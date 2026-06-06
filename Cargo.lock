@@ -429,6 +429,7 @@ dependencies = [
  "benten-errors",
  "benten-graph",
  "benten-id",
+ "benten-membership-set",
  "benten-sync",
  "blake3",
  "serde",

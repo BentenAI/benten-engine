@@ -463,8 +463,10 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   to G-COMP-1") was **RETRACTED** at R6 R1 fix-pass. The CODE was
   revised to bind `total_chunks` per the spec text (3-tuple AAD
   layout: `aad_per_chunk(plaintext_cid, chunk_index, total_chunks)`
-  becomes 4-segment AAD: domain-tag || plaintext_cid ||
-  chunk_index LE || total_chunks LE), closing the
+  becomes 4-segment AAD: domain-tag `benten-aead:chunk:` ||
+  plaintext_cid || chunk_index (u64 BE) || total_chunks (u32 BE);
+  big-endian per M-19, migrated from the earlier LE encoding at
+  F-full Wave-0), closing the
   cross-chunk-truncation attack at v1-beta. Wire-format pin updated
   at `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs`;
   behavioral truncation/inflation pins added at
@@ -485,30 +487,24 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   letter-suffix anchor promotion (L4-R4b-MIN-2 + L4-R4b-MIN-1
   closure 2026-05-24).
 
-#### Row D-15a — AAD per-chunk `total_chunks` augmentation
+#### Row D-15a — AAD per-chunk `total_chunks` augmentation — ✅ CLOSED at v1-beta (SUPERSEDED by Row D-15 retraction)
 
-- **Frozen surface (v1-beta):** the as-shipped per-chunk AAD layout
-  is the 2-tuple `aad_per_chunk(plaintext_cid, chunk_index)` per
-  Fork 1 ratification at G-CORE-9 R1 fix-pass Bundle 11b
-  (V1-WIRE-FORMAT-INVENTORY.md row 4 + V1-BETA-BREAKING-CHANGES.md
-  Bundle 11b).
-- **Deferred consumption (G-COMP-1 destination):** augment the AAD
-  layout to a 3-tuple
-  `aad_per_chunk(plaintext_cid, chunk_index, total_chunks)` to
-  close the cross-chunk-truncation attack surface (chunk_index
-  alone does not bind the chunk count; an attacker truncating the
-  ciphertext stream after N chunks gives a valid-looking decryption
+- **CLOSED:** this deferral is RETRACTED — the `total_chunks` defense
+  is BUILT at v1-beta (see Row D-15 above). The per-chunk AAD is the
+  4-segment `aad_per_chunk(plaintext_cid, chunk_index, total_chunks)`
+  binding (`benten-aead:chunk: || plaintext_cid || chunk_index (u64 BE)
+  || total_chunks (u32 BE)`); big-endian per M-19. The
+  cross-chunk-truncation attack surface (an attacker truncating the
+  ciphertext stream after N chunks giving a valid-looking decryption
   for chunks 0..N-1 with no detection that chunks N..total_chunks-1
-  are missing).
+  are missing) is closed in-band.
 - **v1-beta posture:** the canonical-bytes pin at
-  `crates/benten-graph/tests/canonical_bytes_v1_per_chunk_aead_aad.rs`
-  locks the 2-tuple shape; cross-chunk-truncation is a documented
-  Compromise #5 sub-case (the per-Node-CID rebinding-attack defense
-  fires on tamper-AFTER-decrypt; truncation-BEFORE-decrypt is the
-  uncovered arm).
-- **Anchor:** Compromise #5 + V1-WIRE-FORMAT-INVENTORY.md row 4 +
-  V1-BETA-BREAKING-CHANGES.md Bundle 11b Fork 1 rebuttal-window
-  narrative.
+  `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs`
+  + the behavioral truncation/inflation pins at
+  `crates/benten-graph/src/aead_wrap.rs::tests` lock the 4-segment
+  shape and exercise the truncation-before-decrypt arm.
+- **Anchor:** Row D-15 retraction (R6 R1 fix-pass Bundle F3) +
+  V1-WIRE-FORMAT-INVENTORY.md per-chunk AAD row.
 
 #### Row D-15b — `CryptoPolicy::require_hybrid_pq` consumer-side flag
 
@@ -1331,6 +1327,29 @@ Row D-15's audit-readiness concern.
 
 - **v1-beta posture:** ZERO frozen hook; graph-native when activated; minted as
   a named deferral here for registry-discoverability.
+
+---
+
+### Row D-30 — `DeviceLinkError::SessionIdReplayed` production replay-store wire-in (F-full R6 R1 finding F-13)
+
+- **Frozen surface (v1-beta):** the typed error variant
+  `DeviceLinkError::SessionIdReplayed` exists at
+  `crates/benten-engine/src/layer_d/device_link.rs:147` (the Signal-Provisioning
+  device-link replay-defense arm) + is exercised by the layer_d test suite.
+- **Deferred consumption (G-COMP-1 destination):** wire the PRODUCTION
+  session-id replay store — the durable consumed-session-id set that the
+  device-link verify path consults so a replayed provisioning session id fires
+  `SessionIdReplayed` against real persisted state (not just the in-test
+  fixture). The replay-defense LOGIC is built + typed; the production storage
+  binding (per-engine persistent consumed-session-id set, pruned by the offer
+  `exp` window) is the G-COMP-1 deliverable coupled to the device-link UX flow
+  (Phase-4-Meta-Composing).
+- **v1-beta posture:** the typed reject + the in-band session-id-match check are
+  present; the residual is the durable replay-store binding. No exploit at
+  v1-beta on a single trusted engine (sessions are short-lived; the
+  session-id-mismatch arm already rejects substituted payloads).
+- **Anchor:** `crates/benten-engine/src/layer_d/device_link.rs::DeviceLinkError::SessionIdReplayed`
+  + the Signal-Provisioning device-link flow (Phase-4-Meta-Composing UX wave).
 
 ---
 

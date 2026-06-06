@@ -219,3 +219,9 @@ ViewError::StrategyNotImplemented
 WorkflowEditorError::CapElevation
 WorkflowEditorError::SubgraphInjection
 WorkflowEditorError::UnknownPrimitiveKind
+# F-01 (R6 reconcile-2): layer_c group truncation/censorship-detection errors.
+# layer_c-internal typed errors, not surfaced as distinct wire/napi ErrorCodes
+# (no boundary From/match; consistent with the sibling LayerCError/GroupError
+# variants already grandfathered above). Observable as a fail-closed open() Err.
+LayerCError::StanzaCountMismatch
+GroupError::StanzaCountMismatch

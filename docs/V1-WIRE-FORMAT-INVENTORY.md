@@ -71,7 +71,7 @@
 
 **Wire format:**
 - Per-chunk AEAD with chunk size = `IROH_BLOCK_SIZE = 16384` (`crates/benten-crypto-suite/src/aead.rs:52`).
-- AAD binds `(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32)` per `crates/benten-crypto-suite/src/aead.rs::aad_per_chunk` (4-segment layout: `b"benten-aead:chunk:" || plaintext_cid || chunk_index.to_le_bytes() || total_chunks.to_le_bytes()`). The `total_chunks` segment closes the cross-chunk-truncation attack (an attacker truncating a 10-chunk ciphertext to 5 chunks cannot fabricate per-chunk AAD-matching tags). **R6 R1 fix-pass:** the prior G-CORE-9 R1 Fork-1 2-tuple disposition was RETRACTED; code revised to match the spec text. Pinned at `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs::aad_per_chunk_canonical_layout_pinned` + behavioral pins at `crates/benten-graph/src/aead_wrap.rs::tests::{cross_chunk_truncation_fails, cross_chunk_inflation_fails}`.
+- AAD binds `(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32)` per `crates/benten-crypto-suite/src/aead.rs::aad_per_chunk` (4-segment layout: `b"benten-aead:chunk:" || plaintext_cid || chunk_index.to_be_bytes() || total_chunks.to_be_bytes()`; **big-endian per M-19**, migrated from LE at F-full Wave-0). The `total_chunks` segment closes the cross-chunk-truncation attack (an attacker truncating a 10-chunk ciphertext to 5 chunks cannot fabricate per-chunk AAD-matching tags). **R6 R1 fix-pass:** the prior G-CORE-9 R1 Fork-1 2-tuple disposition was RETRACTED; code revised to match the spec text. Pinned at `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs::aad_per_chunk_canonical_layout_pinned` + behavioral pins at `crates/benten-graph/src/aead_wrap.rs::tests::{cross_chunk_truncation_fails, cross_chunk_inflation_fails}`.
 - 64 KiB threshold for chunked-vs-whole-AEAD heuristic.
 - Codepoint-dispatched: `HYBRID_X25519_MLKEM768 = 0x647a` (default), `CLASSICAL_X25519 = 0x6400` (downgrade), `NONE_PLAINTEXT = 0x0000`, `HYBRID_MLKEM768_HQC = 0x647b` (reserved), `PURE_PQ_MLKEM768_ONLY = 0x647c` (reserved, audit-gated).
 
@@ -79,7 +79,7 @@
 
 **Byte-pin test coverage:**
 - `crates/benten-crypto-suite/tests/tf3a_*.rs` + `crates/benten-crypto-suite/tests/tf4_*.rs` — AEAD round-trip + codepoint dispatch pins.
-- `crates/benten-crypto-suite/tests/tf3a_pq_hybrid_wasm32_roundtrip.rs` — wasm32 cross-target round-trip.
+- `crates/benten-crypto-suite/tests/tf3a_pq_hybrid_wasm32_roundtrip.rs` — wasm32 cross-target PQ-hybrid round-trip, **CI-gated under wasm32-wasip1** by the `crypto-suite-wasm-roundtrip` job in `.github/workflows/wasm-conformance.yml` (F-full R6 R1 finding F-06; the encryption layer is now exercised on the wasm target through wasmtime, not just compile-checked / native-run).
 - `crates/benten-graph/src/aead_wrap.rs` — production wrap path; consumed by every encryption-bearing test.
 
 **FREEZE-WAVE status:** ✅ COVERED — `IROH_BLOCK_SIZE = 16 * 1024` constant pin lives in the aead module's golden-constant tests.
@@ -422,6 +422,27 @@
 
 ---
 
+## 25. MembershipSet codepoint band + `0x6610` group per-stanza AAD (F-full)
+
+**Surface:** `benten_membership_set::codepoints` (`MEMBERSHIP_SET_ENCRYPTION = 0x6600` / `MEMBERSHIP_SET_GROUP_MULTI_STANZA = 0x6610` / `MEMBERSHIP_SET_RESERVED_0X6620 = 0x6620`) + `benten_membership_set::aad::assemble_group_aad` (the `0x6610` group per-stanza AAD = the BLINDED 11-field set) + `canonical_members_table_bytes` (the NQ-W4 `members_table` snapshot).
+
+**Wire format:**
+- The MembershipSet band is `0x6600..=0x66FF` (Inv-18 / NQ-W2 FROZEN-band ownership). Three values assigned at v1-beta.
+- `0x6600` set-keying envelope (every `MembershipSetKind` binds here); `0x6610` group multi-stanza per-stanza AAD (the BLINDED 11-field set, big-endian, length-injective per R0.7 §3.10/§4.1); both Sealed-Sender by default.
+- **`0x6620` is RESERVED + ENCODE-ONLY at v1-beta** — the `SubsetRef` federation shape is reserved-and-refused (typed-reject) at v1-beta; the value is allocated/encoded in the band but NOT a live decode/dispatch arm until a future additive wave (never a wire break; F-full R6 R1 finding F-21).
+- The group AAD 11-field set is OPAQUE bytes across the m-15 GNC-5 crypto-suite seam.
+
+**Format version:** `aad_version: u8 = 0x01` prefix on the group AAD; the codepoint band IS the freeze for the set-keying axis.
+
+**Byte-pin test coverage:**
+- `crates/benten-crypto-suite/tests/f_cp_codepoint_registry_dispatch.rs` (`MEMBERSHIP_SET_GROUP_MULTI_STANZA == 0x6610` integer pin).
+- `crates/benten-membership-set/tests/f_aad_1_members_table_canonical_cbor_length_injective.rs` + `f_aad_2_nine_tuple_injectivity_opaque_boundary.rs` (the 11-field AAD injectivity + canonical-CBOR length-injectivity).
+- `crates/benten-membership-set/tests/f_fed_1_2_subset_ref_federation.rs` (`0x6620` reserved-and-refused typed-reject at v1-beta).
+
+**FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level; `0x6620` reserved-encode-only.
+
+---
+
 ## Summary
 
 | # | Surface | Format-version discriminator | Byte-pin test | Status |
@@ -450,8 +471,9 @@
 | 22 | Atrium PeerId (== iroh EndpointId byte-identical) | 32-byte width contract | crates/benten-sync/tests/tf3e_zero_conversion_endpoint_id_is_verifying_key.rs + peer_id.rs | ✅ COVERED |
 | 23 | LoroDoc canonical export + StampedValue codec | Loro upstream version | crates/benten-sync/tests/loro_lww.rs + loro_rich_type.rs (StampedValue defined in `crates/benten-sync/src/crdt.rs::StampedValue`) | ✅ COVERED (upstream-pinned) |
 | 24 | suspension_store on-disk records (crate-private) | per-record discriminator + #[serde(default)] | crates/benten-engine/tests/g12_e_suspension_store_round_trips.rs + redb_suspension_in_process.rs | ✅ COVERED (substrate-level; crate-private — not in public freeze scope) |
+| 25 | MembershipSet codepoint band (`0x6600`/`0x6610`/`0x6620`) + `0x6610` group 11-field AAD | `aad_version: u8 = 0x01` + codepoint band | f_cp_codepoint_registry_dispatch.rs + benten-membership-set/tests/f_aad_1_*.rs + f_aad_2_*.rs + f_fed_1_2_subset_ref_federation.rs | ✅ COVERED (substrate-level; `0x6620` reserved-encode-only at v1-beta) |
 
-**Outcome (R6 R1 L11 expansion, 2026-05-24):** 23 of 24 surfaces have byte-pin / round-trip coverage at v1-beta substrate-level (items 11-24 added at R6 R1 L11 closure per the lens's phase-wide sweep finding L11-R6-R1-MAJOR-1). The one DEFERRED public surface (MerkleRangeProof, item 3) is genuinely-not-built (no phantom freeze). The G-COMP-1 wave consumes this expanded inventory for the hex-byte regression-pin sweep per Row D-9 widening. Item 24 is crate-private + retained for completeness; it is NOT in the public freeze contract scope.
+**Outcome (R6 R1 L11 expansion, 2026-05-24; extended at F-full R6 R1 with item 25):** 24 of 25 surfaces have byte-pin / round-trip coverage at v1-beta substrate-level (items 11-24 added at R6 R1 L11 closure per the lens's phase-wide sweep finding L11-R6-R1-MAJOR-1; item 25 the MembershipSet codepoint band added at F-full R6 R1). The one DEFERRED public surface (MerkleRangeProof, item 3) is genuinely-not-built (no phantom freeze). The G-COMP-1 wave consumes this expanded inventory for the hex-byte regression-pin sweep per Row D-9 widening. Item 24 is crate-private + retained for completeness; it is NOT in the public freeze contract scope.
 
 ¹ **Format note (L11-MIN-2 close at R6-FP-D 2026-05-24):** the glob-form `tf3a_*.rs` / `tf3b_authorization_grant_*.rs` / `tf4_*.rs` cites resolve at wave-time to multiple discrete test files under `crates/benten-crypto-suite/tests/` + `crates/benten-caps/tests/`. The glob-form is intentional for items where the byte-pin coverage spans a test-file family (multiple swap-matrix arms × wire directions); items 1, 2, 7, 8, 9, 10 reference single test files because their byte-pin coverage IS in one file. A future CI inventory-walk lane that resolves these cites should expand the glob via `git ls-files` rather than treating it as a literal path.
 
