@@ -101,7 +101,8 @@ fn tf4_cross_recipient_b_cannot_decrypt_a() {
 
 /// Size-overhead budget: hybrid-signed envelopes ARE larger than
 /// classical-only envelopes (witness: ML-DSA-65 sig is ~3309 B vs
-/// Ed25519's 64 B; the hybrid carries both halves + a 32 B commitment).
+/// Ed25519's 64 B; the byte-faithful IETF LAMPS composite carries both
+/// halves `mldsaSig || tradSig` with NO commitment trailer).
 /// Asserting the ordering relation (not a hardcoded magic number)
 /// upholds the no-hardcoded-sizes contract while still pinning the
 /// observable property.
@@ -130,17 +131,19 @@ fn tf4_size_overhead_hybrid_larger_than_classical() {
         env_c.signature_bytes.len()
     );
 
-    // Sanity: hybrid sig should be at least ed25519-sig-len (64) +
-    // ml-dsa-65-sig-len (~3309) + commitment (32) → ~3405 B.
-    let expected_hybrid_min =
-        ed25519_dalek::SIGNATURE_LENGTH + benten_crypto_suite::sizes::ml_dsa_65_sig_len() + 32;
+    // Sanity: the byte-faithful IETF LAMPS composite wire is
+    // `mldsaSig(~3309) || tradSig(64)` = ~3373 B — ML-DSA first, NO
+    // commitment trailer (sig-lamps-faithful re-impl dropped the NF-4
+    // SHA3-256 commitment; the LAMPS wire has no slot for it).
+    let expected_hybrid_len =
+        benten_crypto_suite::sizes::ml_dsa_65_sig_len() + ed25519_dalek::SIGNATURE_LENGTH;
     assert_eq!(
         env_h.signature_bytes.len(),
-        expected_hybrid_min,
-        "hybrid signature wire-bytes MUST match codepoint-dispatched \
-         layout (ed25519 + ml-dsa-65 + commitment); got {}, expected {}",
+        expected_hybrid_len,
+        "hybrid signature wire-bytes MUST match the IETF LAMPS composite \
+         layout (mldsaSig || tradSig; NO commitment); got {}, expected {}",
         env_h.signature_bytes.len(),
-        expected_hybrid_min
+        expected_hybrid_len
     );
 }
 
@@ -191,46 +194,45 @@ fn tf4_aead_aad_binds_signature_bytes_so_sig_tamper_fails_closed() {
     );
 }
 
-/// NF-4 strip-resistance at the sig layer (defense-in-depth complement
+/// LAMPS strip-resistance at the sig layer (defense-in-depth complement
 /// to the AEAD-AAD pin above). Constructs a `HybridSignature` with the
 /// PQ half stripped from the START (so AAD-binding cannot detect the
 /// tamper — the receiver's AAD-recompute matches the wire bytes), and
 /// confirms that the sig-layer `verify` surfaces a typed
-/// `VerifyError::StripResistanceViolated` (commitment-recompute over
-/// the FULL inputs mismatches the wire commitment because one half is
-/// missing).
+/// `VerifyError::HybridHalfMissing` (the byte-faithful IETF LAMPS verify
+/// REQUIRES both halves; a missing half fails closed before any
+/// cryptographic check).
 ///
-/// This is the load-bearing NF-4 pin the wave brief calls out: a
-/// hybrid suite NEVER accepts a single-half signature, even when no
-/// other layer detects the strip. The test bypasses the AEAD layer and
-/// drives `SignatureSuite::verify` directly with a synthesized
-/// stripped signature, exercising the `VerifyError::StripResistanceViolated`
-/// arm in `sig.rs::verify` (the commitment-recompute path).
+/// This is the load-bearing strip-resistance pin the wave brief calls
+/// out: a hybrid suite NEVER accepts a single-half signature, even when
+/// no other layer detects the strip. The test bypasses the AEAD layer and
+/// drives `SignatureSuite::verify` directly with a synthesized stripped
+/// signature, exercising the both-halves-required arm in `sig.rs::verify`.
 ///
-/// Added at G-CORE-3c fix-pass (mr-minor-1) — paired with the renamed
-/// AEAD-AAD pin above for proper defense-in-depth coverage. The two
-/// pins together witness the FULL strip-resistance contract: AAD-
-/// binding catches sig-byte tamper in transit; commitment-recompute
-/// catches stripped-from-the-start half-missing constructions.
+/// Added at G-CORE-3c fix-pass (mr-minor-1); updated at sig-lamps-faithful
+/// (the NF-4 SHA3-256 commitment was dropped — strip-resistance now rests
+/// on the LAMPS both-halves-required + shared-`M'` binding). The two pins
+/// together witness the FULL strip-resistance contract: AAD-binding catches
+/// sig-byte tamper in transit; the both-halves-required arm catches
+/// stripped-from-the-start half-missing constructions.
 #[test]
 fn tf4_nf4_strip_resistance_at_sig_layer_fails_closed() {
     use benten_crypto_suite::sig::SignatureSuite;
 
     let suite = SignatureSuite::v1_default();
     let kp = suite.generate_keypair();
-    let msg = b"strip-resistance NF-4 target";
+    let msg = b"strip-resistance LAMPS target";
 
-    // Sign normally — produces a hybrid sig (classical || pq || commitment).
+    // Sign normally — produces a LAMPS composite sig (mldsaSig || tradSig).
     let sig = suite.sign(&kp, msg);
     // Sanity: full hybrid sig should verify cleanly.
     suite
         .verify(kp.public(), msg, &sig)
         .expect("full hybrid sig MUST verify");
 
-    // Construct a strip-attack input directly: drop the PQ half. The
-    // commitment stays as-was (the wire bytes that travelled with the
-    // strip-attack input); the missing-half arm + the commitment-
-    // mismatch arm in sig.rs::verify are what fail closed.
+    // Construct a strip-attack input directly: drop the PQ half. The LAMPS
+    // verify requires both halves, so the missing-half arm in sig.rs::verify
+    // fails closed (no commitment in the byte-faithful composite).
     let stripped = sig.without_pq_half_for_test();
     let outcome = suite.verify(kp.public(), msg, &stripped);
 
@@ -242,7 +244,7 @@ fn tf4_nf4_strip_resistance_at_sig_layer_fails_closed() {
                     | benten_crypto_suite::error::VerifyError::StripResistanceViolated(_)
             )
         ),
-        "NF-4 strip-resistance MUST fail closed at the sig-layer verify \
+        "LAMPS strip-resistance MUST fail closed at the sig-layer verify \
          with HybridHalfMissing or StripResistanceViolated; got {outcome:?}"
     );
 }

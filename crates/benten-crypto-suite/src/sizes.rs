@@ -99,14 +99,12 @@ impl SyntheticVector {
         // Classical half: Ed25519-shape sentinel bytes (so the test can
         // verify the ML-DSA-65 PQ half is what flows full-width through
         // every surface; the classical half always has its own dimension).
+        // The IETF LAMPS composite has NO commitment trailer.
         let classical = vec![0u8; ed25519_dalek::SIGNATURE_LENGTH];
-        // Commitment: SHA3-256-shaped bytes (32 B).
-        let commitment = vec![0xc1u8; 32];
         HybridSignature::from_parts_internal(
             SigCodepoint::HYBRID_ED25519_MLDSA65,
             classical,
             self.pq_sig.clone(),
-            commitment,
         )
     }
 }
@@ -124,7 +122,6 @@ struct HybridSigWire {
     codepoint: u16,
     classical: serde_bytes::ByteBuf,
     pq: serde_bytes::ByteBuf,
-    commitment: serde_bytes::ByteBuf,
 }
 
 impl SizeTouchingSurfaces {
@@ -135,12 +132,6 @@ impl SizeTouchingSurfaces {
             codepoint: sig.codepoint().raw(),
             classical: serde_bytes::ByteBuf::from(sig.classical_half_for_test()),
             pq: serde_bytes::ByteBuf::from(sig.pq_half_for_test()),
-            commitment: serde_bytes::ByteBuf::from(
-                sig.to_wire_bytes()
-                    .into_iter()
-                    .skip(sig.classical_half_for_test().len() + sig.pq_half_for_test().len())
-                    .collect::<Vec<u8>>(),
-            ),
         };
         serde_ipld_dagcbor::to_vec(&wire)
             .expect("DAG-CBOR encode MUST NOT fail on canonical hybrid sig wire form")
@@ -155,7 +146,6 @@ impl SizeTouchingSurfaces {
             SigCodepoint::from_raw(wire.codepoint),
             wire.classical.into_vec(),
             wire.pq.into_vec(),
-            wire.commitment.into_vec(),
         )
     }
 
@@ -175,21 +165,18 @@ impl SizeTouchingSurfaces {
         // Canonical-bytes builder: domain-separated concat of every
         // size-bearing field, then BLAKE3 hash. The full PQ half MUST be
         // consumed — otherwise the TF-2 byte-flip-at-offset-1064 assertion
-        // would not change the digest.
+        // would not change the digest. The IETF LAMPS composite has NO
+        // commitment trailer, so the canonical input is exactly the
+        // domain-separated codepoint + both signature halves (same shape
+        // as the `mldsaSig || tradSig` wire envelope).
         let mut input = Vec::with_capacity(
-            sig.classical_half_for_test().len() + sig.pq_half_for_test().len() + 32 + 8,
+            sig.classical_half_for_test().len() + sig.pq_half_for_test().len() + 8,
         );
         input.extend_from_slice(b"benten/hybrid-sig-cid/v1\0");
         // M-19: codepoint BIG-ENDIAN (migrated from LE at F-full Wave-0).
         input.extend_from_slice(&sig.codepoint().raw().to_be_bytes());
         input.extend_from_slice(&sig.classical_half_for_test());
         input.extend_from_slice(&sig.pq_half_for_test());
-        // Re-hash the commitment too (so the canonical-bytes input is
-        // the SAME shape as the wire envelope).
-        let wire = sig.to_wire_bytes();
-        let commitment_part =
-            &wire[sig.classical_half_for_test().len() + sig.pq_half_for_test().len()..];
-        input.extend_from_slice(commitment_part);
         blake3::hash(&input).as_bytes().to_vec()
     }
 

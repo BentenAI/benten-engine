@@ -679,6 +679,7 @@ pub struct benten_crypto_suite::sig::HybridSignature
 impl benten_crypto_suite::sig::HybridSignature
 pub fn benten_crypto_suite::sig::HybridSignature::classical_half_for_test(&self) -> alloc::vec::Vec<u8>
 pub const fn benten_crypto_suite::sig::HybridSignature::codepoint(&self) -> benten_crypto_suite::codepoint::SigCodepoint
+pub fn benten_crypto_suite::sig::HybridSignature::from_lamps_composite_wire(&[u8]) -> core::result::Result<Self, benten_crypto_suite::error::VerifyError>
 pub fn benten_crypto_suite::sig::HybridSignature::pq_half_for_test(&self) -> alloc::vec::Vec<u8>
 pub fn benten_crypto_suite::sig::HybridSignature::to_wire_bytes(&self) -> alloc::vec::Vec<u8>
 impl core::clone::Clone for benten_crypto_suite::sig::HybridSignature
@@ -708,6 +709,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::sig::Keypa
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::sig::Keypair
 pub struct benten_crypto_suite::sig::PublicKey
 impl benten_crypto_suite::sig::PublicKey
+pub fn benten_crypto_suite::sig::PublicKey::from_lamps_composite_bytes(&[u8]) -> core::result::Result<Self, benten_crypto_suite::error::VerifyError>
 pub fn benten_crypto_suite::sig::PublicKey::is_hybrid(&self) -> bool
 impl core::clone::Clone for benten_crypto_suite::sig::PublicKey
 pub fn benten_crypto_suite::sig::PublicKey::clone(&self) -> benten_crypto_suite::sig::PublicKey
@@ -727,9 +729,11 @@ pub fn benten_crypto_suite::sig::SignatureSuite::generate_keypair(&self) -> bent
 pub const fn benten_crypto_suite::sig::SignatureSuite::is_hybrid(&self) -> bool
 pub fn benten_crypto_suite::sig::SignatureSuite::resolve_codepoint(benten_crypto_suite::codepoint::SigCodepoint) -> core::result::Result<Self, benten_crypto_suite::error::UnsupportedAlgorithm>
 pub fn benten_crypto_suite::sig::SignatureSuite::sign(&self, &benten_crypto_suite::sig::Keypair, &[u8]) -> benten_crypto_suite::sig::HybridSignature
+pub fn benten_crypto_suite::sig::SignatureSuite::sign_with_context(&self, &benten_crypto_suite::sig::Keypair, &[u8], &[u8]) -> benten_crypto_suite::sig::HybridSignature
 pub fn benten_crypto_suite::sig::SignatureSuite::signature_byte_len_for(&self, benten_crypto_suite::codepoint::SigCodepoint) -> usize
 pub const fn benten_crypto_suite::sig::SignatureSuite::v1_default() -> Self
 pub fn benten_crypto_suite::sig::SignatureSuite::verify(&self, benten_crypto_suite::sig::PublicKey, &[u8], &benten_crypto_suite::sig::HybridSignature) -> core::result::Result<(), benten_crypto_suite::error::VerifyError>
+pub fn benten_crypto_suite::sig::SignatureSuite::verify_with_context(&self, benten_crypto_suite::sig::PublicKey, &[u8], &[u8], &benten_crypto_suite::sig::HybridSignature) -> core::result::Result<(), benten_crypto_suite::error::VerifyError>
 impl core::marker::Freeze for benten_crypto_suite::sig::SignatureSuite
 impl core::marker::Send for benten_crypto_suite::sig::SignatureSuite
 impl core::marker::Sync for benten_crypto_suite::sig::SignatureSuite
@@ -1748,6 +1752,7 @@ pub struct benten_crypto_suite::HybridSignature
 impl benten_crypto_suite::sig::HybridSignature
 pub fn benten_crypto_suite::sig::HybridSignature::classical_half_for_test(&self) -> alloc::vec::Vec<u8>
 pub const fn benten_crypto_suite::sig::HybridSignature::codepoint(&self) -> benten_crypto_suite::codepoint::SigCodepoint
+pub fn benten_crypto_suite::sig::HybridSignature::from_lamps_composite_wire(&[u8]) -> core::result::Result<Self, benten_crypto_suite::error::VerifyError>
 pub fn benten_crypto_suite::sig::HybridSignature::pq_half_for_test(&self) -> alloc::vec::Vec<u8>
 pub fn benten_crypto_suite::sig::HybridSignature::to_wire_bytes(&self) -> alloc::vec::Vec<u8>
 impl core::clone::Clone for benten_crypto_suite::sig::HybridSignature
@@ -1891,9 +1896,11 @@ pub fn benten_crypto_suite::sig::SignatureSuite::generate_keypair(&self) -> bent
 pub const fn benten_crypto_suite::sig::SignatureSuite::is_hybrid(&self) -> bool
 pub fn benten_crypto_suite::sig::SignatureSuite::resolve_codepoint(benten_crypto_suite::codepoint::SigCodepoint) -> core::result::Result<Self, benten_crypto_suite::error::UnsupportedAlgorithm>
 pub fn benten_crypto_suite::sig::SignatureSuite::sign(&self, &benten_crypto_suite::sig::Keypair, &[u8]) -> benten_crypto_suite::sig::HybridSignature
+pub fn benten_crypto_suite::sig::SignatureSuite::sign_with_context(&self, &benten_crypto_suite::sig::Keypair, &[u8], &[u8]) -> benten_crypto_suite::sig::HybridSignature
 pub fn benten_crypto_suite::sig::SignatureSuite::signature_byte_len_for(&self, benten_crypto_suite::codepoint::SigCodepoint) -> usize
 pub const fn benten_crypto_suite::sig::SignatureSuite::v1_default() -> Self
 pub fn benten_crypto_suite::sig::SignatureSuite::verify(&self, benten_crypto_suite::sig::PublicKey, &[u8], &benten_crypto_suite::sig::HybridSignature) -> core::result::Result<(), benten_crypto_suite::error::VerifyError>
+pub fn benten_crypto_suite::sig::SignatureSuite::verify_with_context(&self, benten_crypto_suite::sig::PublicKey, &[u8], &[u8], &benten_crypto_suite::sig::HybridSignature) -> core::result::Result<(), benten_crypto_suite::error::VerifyError>
 impl core::marker::Freeze for benten_crypto_suite::sig::SignatureSuite
 impl core::marker::Send for benten_crypto_suite::sig::SignatureSuite
 impl core::marker::Sync for benten_crypto_suite::sig::SignatureSuite

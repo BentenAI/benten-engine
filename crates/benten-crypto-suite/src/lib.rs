@@ -28,17 +28,24 @@
 //!   MLS-RFC9420, Nostr NIP-44; age's silent-ignore is the deliberately
 //!   rejected outlier).
 //!
-//! # v1-beta defaults (NF-4 ratified)
+//! # v1-beta defaults (byte-faithful IETF LAMPS composite)
 //!
 //! - **Signature default = hybrid Ed25519 ⊕ ML-DSA-65**
-//!   (`SigCodepoint::HYBRID_ED25519_MLDSA65 = 0x0001`):
-//!   *concatenated, committing, strip-resistant*. The message is
-//!   independently signed with both keys; both signatures travel
-//!   together with a commitment that binds them to the message; **both
-//!   MUST verify** or the verify fails closed. Aligned with the IETF
-//!   `draft-ietf-lamps-pq-composite-sigs` line. The classical half
-//!   (Ed25519) is the audited security floor; the construction means
-//!   unaudited PQC is never the SOLE trust path.
+//!   (`SigCodepoint::HYBRID_ED25519_MLDSA65 = 0x0001`): the
+//!   **byte-faithful IETF LAMPS composite `id-MLDSA65-Ed25519-SHA512`**
+//!   (OID `1.3.6.1.5.5.7.6.48`; pinned to `draft-19` + test-vector commit
+//!   `f0627ab3`, re-verify at RFC). Both halves independently sign the
+//!   SHARED message representative `M' = Prefix || Label || len(ctx) ||
+//!   ctx || SHA-512(M)` (the ML-DSA half with `mldsa_ctx = Label`); the
+//!   wire is `mldsaSig || tradSig` (ML-DSA FIRST; NO commitment trailer);
+//!   **both MUST verify** or the verify fails closed. Strip-resistance
+//!   rests on the shared-`M'` / `mldsa_ctx=Label` binding (the LAMPS
+//!   mechanism). The classical half (Ed25519) is the audited security
+//!   floor; the construction means unaudited PQC is never the SOLE trust
+//!   path. (This REPLACES the prior Benten-own "NF-4" Ed25519-first +
+//!   SHA3-256-commitment construction; security posture unchanged —
+//!   EUF-CMA-only / WNS per Compromise #31, SUF-equivalence closed by
+//!   Inv-15.)
 //!
 //! - **Hash default = BLAKE3-256** (multihash `0x1e`) with pre-blessed
 //!   agile fallbacks SHA-512/256 (multihash `0x1015`) + SHA3-256
