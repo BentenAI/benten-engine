@@ -1,0 +1,18 @@
+# Detached scratch crate for the LAMPS-faithful spike. Empty [workspace]
+# table detaches it from the benten workspace so it can resolve its own deps.
+[workspace]
+
+[package]
+name = "lamps-faithful-spike"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+# Match the workspace pins.
+ml-dsa = { version = "0.1", default-features = false, features = ["alloc", "rand_core", "getrandom"] }
+ed25519-dalek = "2.2.0"
+sha2 = "0.10.9"
+
+[[bin]]
+name = "spike"
+path = "src/main.rs"
