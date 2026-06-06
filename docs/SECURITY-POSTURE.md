@@ -121,9 +121,9 @@ table narrative.
 | 27 | (RESERVED for META #669 closure — Plugin trust model Layers 2+3 + T10-upgrade paper-only at HEAD) | 4-Foundation | **OPEN; tracking via [META #669](https://github.com/BentenAI/benten-engine/issues/669) + [#1118](https://github.com/BentenAI/benten-engine/issues/1118) Compromise #27 mint task.** Reserved row; row body lands when META #669 closure or honest-disclosure mint lands. |
 | 28 | (RESERVED for META #629 closure — DoS-via-unbounded-decode workspace pattern; 26 instances / 9 crates) | 4-Foundation | **OPEN; tracking via [META #629](https://github.com/BentenAI/benten-engine/issues/629) + [#1126](https://github.com/BentenAI/benten-engine/issues/1126) Compromise #28 mint task.** Reserved row; row body lands when META #629 closure or honest-disclosure mint lands. |
 | 29 | Engine-level extensions — compile-time trust posture (CLAUDE.md baked-in #19) | 4-Foundation | **OPEN ARCHITECTURAL COMMITMENT; registry-tracked for cross-reference completeness.** Engine extensions are Rust crates compile-time linked into the engine binary; trust is `cargo` + code review, not the type system. Future post-Ed25519 / post-iroh / post-redb / post-wasmtime engine-extension migrations land under this Compromise's namespace per Phase-9+ scope. The trust model is comprehensively narrated below at §"Engine-level extensions — compile-time trust"; this row makes the claim registry-discoverable for the §3.12 R7-equivalent audit walk. Tracking via [#1131](https://github.com/BentenAI/benten-engine/issues/1131). |
-| 30 | Unaudited PQ primitives in the v1-beta hybrid default (`ml-dsa` / `ml-kem` have no independent third-party audit yet) | 4-Meta-Core | **OPEN; MITIGATED by hybrid construction.** v1-beta ships PQ-hybrid by default (sig Ed25519⊕ML-DSA-65 concatenated/committing; enc X25519⊕ML-KEM-768 at codepoint `0x647a` + ChaCha20-Poly1305) where the PQ halves are not yet independently audited. Mitigation: the **classical half is the audited security floor** (Ed25519 / X25519 + the NCC-audited ChaCha20-Poly1305 AEAD) and the concatenated combiner is **committing / strip-resistant** (both halves must verify; the typed-unsupported-arm-never-silent-fallback contract enforces fail-closed) — so **unaudited PQC is never the SOLE trust path**. **CLOSES at v1-GM** when the independent `ml-dsa`/`ml-kem` audit lands (NF-2 / C-GM-AUDIT exit criterion). Per the 2026-05-19 PQ-default reframe (`.addl/pq-research/RATIFIED-pq-default-reframe-2026-05-19.md`; CLAUDE.md baked-in #5 / #15). Tracking via the v1-beta PQ-audit issue [#1302](https://github.com/BentenAI/benten-engine/issues/1302) + [#1300](https://github.com/BentenAI/benten-engine/issues/1300) / [#1301](https://github.com/BentenAI/benten-engine/issues/1301). |
+| 30 | Unaudited PQ primitives in the v1-beta hybrid default (`ml-dsa` signature half / `libcrux-ml-kem` KEM half have no independent third-party audit yet) | 4-Meta-Core | **OPEN; MITIGATED by hybrid construction.** v1-beta ships PQ-hybrid by default (sig Ed25519⊕ML-DSA-65 byte-faithful IETF LAMPS composite `id-MLDSA65-Ed25519-SHA512`, both-must-verify, NO commitment trailer; enc X25519⊕ML-KEM-768 at codepoint `0x647a` + ChaCha20-Poly1305) where the PQ halves are not yet independently audited. Mitigation: the **classical half is the audited security floor** (Ed25519 / X25519 + the NCC-audited ChaCha20-Poly1305 AEAD); the **signature** hybrid is strip-resistant via the shared-`M'`/ctx=Label binding + both-halves-required, and the **encryption** combiner is committing / strip-resistant — both fail closed (the typed-unsupported-arm-never-silent-fallback contract enforces it) so **unaudited PQC is never the SOLE trust path**. The KEM half is now `libcrux-ml-kem` (the 13 new Cryspen/libcrux crates join the C-GM-AUDIT scope as honest cargo-vet exemptions, budget 5→18). **CLOSES at v1-GM** when the independent `ml-dsa`/`ml-kem`(`libcrux-ml-kem`) audit lands (NF-2 / C-GM-AUDIT exit criterion). Per the 2026-05-19 PQ-default reframe (`.addl/pq-research/RATIFIED-pq-default-reframe-2026-05-19.md`; CLAUDE.md baked-in #5 / #15). Tracking via the v1-beta PQ-audit issue [#1302](https://github.com/BentenAI/benten-engine/issues/1302) + [#1300](https://github.com/BentenAI/benten-engine/issues/1300) / [#1301](https://github.com/BentenAI/benten-engine/issues/1301). |
 | 31 | LAMPS Composite ML-DSA combiner is EUF-CMA-only NOT SUF-CMA (CLOSED-equivalent via Inv-15 application-layer 3-layer decomposition) | 4-Meta-Core | **OPEN at construction layer; CLOSED-EQUIVALENT at application layer via Inv-15.** The v1-beta default signature combiner (LAMPS Composite ML-DSA `id-MLDSA65-Ed25519-SHA512` at `SigCodepoint::HYBRID_ED25519_MLDSA65 = 0x0001`) is EUF-CMA-secure but NOT SUF-CMA-preserving (Weakly-Non-Separable per `draft-ietf-lamps-pq-composite-sigs-19` §10). The SUF-CMA gap is closed at the application layer via **Inv-15** (sig-bundle CIDs are never load-bearing identifiers; identity = canonical-payload-CID, authentication = codepoint-dispatched signature, revocation = semantic tuple). SUF-CMA-preserving combiners (Bird-of-Prey) are reserved as future-additive codepoints. See the body section "Compromise #31 — LAMPS Composite ML-DSA combiner …" + [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md) Inv-15. |
-| 32 | ML-KEM-768 Decap chosen-ciphertext side-channel (libcrux CT-mitigation) — a Decap-axis refinement of #30 | 4-Meta-Core | **OPEN; MITIGATED.** Decap-axis refinement of the unaudited-PQ window (#30); explicitly cross-linked #30↔#32↔C-GM-AUDIT (M-5). The CT-Decap mitigation (libcrux constant-time decapsulation) is the substrate defense; closes with the #30 v1-GM audit. Encryption arc (9-eyes panel). See body section. |
+| 32 | ML-KEM-768 Decap chosen-ciphertext side-channel (libcrux CT-mitigation) — a Decap-axis refinement of #30 | 4-Meta-Core | **OPEN; MITIGATED-LIVE.** Decap-axis refinement of the unaudited-PQ window (#30); explicitly cross-linked #30↔#32↔C-GM-AUDIT (M-5). `libcrux-ml-kem` is now the LANDED production ML-KEM-768 impl (hax/F*-verified, constant-time portable backend selected on wasm + non-SIMD) — moving #32 from deferred → mitigated-live. **#32-residual:** the runnable `check-secret-independence` CI gate is NOT wireable at `libcrux-ml-kem 0.0.9` (upstream E0053 macro defect); the verified portable backend is the live mitigation, and the runnable gate (`mlkem-ct-check` feature seam) carries to the libcrux version that fixes the macro (f_kat_2 FLAG-FOR-BEN). Closes with the #30 v1-GM audit. Encryption arc (9-eyes panel). See body section. |
 | 33 | Coercion / wrench attack OUT-OF-SCOPE — incl. Layer-D approval-coercion (coerced-approving-device `RemoteUnlock`/`SignUcanDelegation`) | 4-Meta-Core | **OUT-OF-SCOPE (disclosed).** Password/physical coercion is outside the cryptographic threat model. m-5 extension: a coerced approving-device makes a coerced grant look legitimate forever via the audit-Node (distinct from #34 password-coercion). 9-eyes. |
 | 34 | Password-knowledge implies full access (Argon2id defense-in-depth) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** Whoever knows the principal password derives the DAK; Argon2id raises the offline-guess cost but does not change the knowledge-implies-access property. 9-eyes. |
 | 35 | Compromised-device retroactive decryption (no past-content forward-secrecy at v1-beta; CGKA deferred) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** A device whose long-term key is compromised can retro-decrypt content it held; full PCS/CGKA is deferred post-v1-beta. 9-eyes. |
@@ -2391,14 +2391,16 @@ ThinClientBridgePrincipalUnresolved}`.
 **Status.** **OPEN; MITIGATED.** Per the 2026-05-19 PQ-default reframe
 (`.addl/pq-research/RATIFIED-pq-default-reframe-2026-05-19.md`; CLAUDE.md
 baked-in #5 / #15), `v1-beta` ships PQ-hybrid by default for both
-signature (hybrid Ed25519⊕ML-DSA-65, concatenated/committing/
-strip-resistant, both-must-verify) and encryption (hybrid X25519⊕ML-KEM-768
-KEM-wrap at codepoint `0x647a` + ChaCha20-Poly1305 bulk). The PQ
-primitive crates (`ml-dsa` / `ml-kem`, RustCrypto-class) **have no
-independent third-party security audit yet** — this is the sole unmet
-security bar in the PQ stack (the classical AEAD bulk layer IS
-NCC-audited). The compromise is the pre-audit window between `v1-beta`
-and `v1-GM`.
+signature (byte-faithful IETF LAMPS composite Ed25519⊕ML-DSA-65
+`id-MLDSA65-Ed25519-SHA512`, shared-`M'`/ctx=Label binding,
+both-must-verify, NO commitment trailer) and encryption (hybrid
+X25519⊕ML-KEM-768 KEM-wrap at codepoint `0x647a` + ChaCha20-Poly1305
+bulk). The PQ primitive crates (`ml-dsa` RustCrypto-class for the
+signature half; **`libcrux-ml-kem` for the production constant-time
+ML-KEM-768**) **have no independent third-party security audit yet** —
+this is the sole unmet security bar in the PQ stack (the classical AEAD
+bulk layer IS NCC-audited). The compromise is the pre-audit window
+between `v1-beta` and `v1-GM`.
 
 **Class.** Dependency-on-unaudited-cryptographic-primitive, scoped to a
 defined release window. Distinct from Compromise #6 (BLAKE3 collision
@@ -2439,9 +2441,14 @@ construction means **unaudited PQC is never the SOLE trust path**:
    break of the unaudited ML-DSA / ML-KEM primitive does not, by itself,
    drop security below the classical baseline the platform would have had
    shipping classical-only.
-2. **Committing / strip-resistant combiner.** The signature hybrid is
-   concatenated and committing (NF-4): both signatures must verify; neither
-   half can be stripped or substituted without the verify failing closed.
+2. **Shared-`M'` / strip-resistant combiner.** The signature hybrid is the
+   byte-faithful IETF LAMPS composite `id-MLDSA65-Ed25519-SHA512`: both
+   halves sign a shared message representative `M'` (with context = the
+   composite Label) and BOTH must verify, so neither half can be stripped
+   or substituted without the verify failing closed (the prior Benten-own
+   NF-4 SHA3-256 commitment trailer is dropped — the IETF composite wire
+   has no slot for it; strip-resistance rests on the shared-`M'`/ctx=Label
+   binding + both-halves-required).
    The encryption hybrid uses the vendored ~30-LOC X-Wing-style combiner
    over `ml-kem` + `x25519-dalek` + `sha3`. The
    typed-unsupported-algorithm-arm-never-silent-fallback contract clause
@@ -2462,6 +2469,16 @@ audited versions (no post-audit trust-path version drift without
 re-audit); Ben sign-off on the actual findings. The audit is a
 **committed `v1-beta` deliverable that gates the `v1-GM` tag** (not a
 discretionary post-spike decision-point).
+
+**C-GM-AUDIT scope addition (libcrux/Cryspen dependency landing).** The
+production ML-KEM-768 impl is now `libcrux-ml-kem` (Compromise #32), which
+pulls in **13 new Cryspen/libcrux crates**. These are added to the v1-GM
+C-GM-AUDIT scope as honest `cargo-vet` exemptions (the ratified exemption
+budget was raised **5 → 18** by Ben 2026-06-06 to cover them; see
+`supply-chain/exemptions.toml` +
+`crates/benten-engine/tests/cargo_vet_policy_self_test.rs`). They are
+under the same audit-gated window: the v1-GM independent audit must cover
+the `libcrux-ml-kem` trust path alongside `ml-dsa`/`ml-kem`.
 
 **Rejected alternative (named, per the reframe).** "PQ-TLS as a
 quantum-resistant transport envelope buys time" (Matrix's public
@@ -2501,7 +2518,7 @@ named typed-arm is what the v1-GM-gating CI lane greps for (a generic
 
 **Code anchors:** the v1-beta default signature codepoint `crates/benten-crypto-suite/src/codepoint.rs::SigCodepoint::HYBRID_ED25519_MLDSA65 = 0x0001` (LAMPS Composite ML-DSA `id-MLDSA65-Ed25519-SHA512` per `draft-ietf-lamps-pq-composite-sigs-19`, OID `1.3.6.1.5.5.7.6.48`, IANA early-allocated 2025-10-20); the Inv-15 application-layer closure described in [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md) "Inv-15 Phase-4-Meta-Core mint + 3-layer decomposition" section; the existing payload-CID surfaces at `crates/benten-engine/src/engine_caps.rs::Engine::revoke_capability_by_grant_cid` + `crates/benten-platform-foundation/src/plugin_manifest.rs::manifest_cid`; the G-CORE-PQ-WIRE-1 audit + property-test cluster + cite-drift-detector `LoadBearingSigBundleCidPattern` scanner extension (planned).
 
-**Status.** **OPEN at construction layer; CLOSED-EQUIVALENT at application layer.** Per LAMPS draft-19 §9.2.2: *"NOT RECOMMENDED for use in applications where it has not been shown that EUF-CMA is acceptable."* The construction is EUF-CMA-secure (both components must verify) but NOT SUF-CMA-preserving (cannot prevent a malicious holder from minting a different-bytes signature on the same payload). It provides only Weakly-Non-Separable per LAMPS draft §10 (NOT Strongly-Non-Separable). For systems that key revocation, dedupe, or audit-uniqueness off signature bytes, the EUF-only scope admits a malleability bypass — an attacker with valid `(payload, sig)` could in principle mint `(payload, sig')` and observe different behavior wherever sig-CID was load-bearing.
+**Status.** **OPEN at construction layer; CLOSED-EQUIVALENT at application layer.** Per LAMPS draft-19 §9.2.2: *"NOT RECOMMENDED for use in applications where it has not been shown that EUF-CMA is acceptable."* The construction is EUF-CMA-secure (both components must verify) but NOT SUF-CMA-preserving (cannot prevent a malicious holder from minting a different-bytes signature on the same payload). It provides only Weakly-Non-Separable per LAMPS draft §10 (NOT Strongly-Non-Separable). For systems that key revocation, dedupe, or audit-uniqueness off signature bytes, the EUF-only scope admits a malleability bypass — an attacker with valid `(payload, sig)` could in principle mint `(payload, sig')` and observe different behavior wherever sig-CID was load-bearing. **The v1-beta default `0x0001` impl is now BYTE-FAITHFUL to the cited IETF construction** (the byte-faithful LAMPS composite `id-MLDSA65-Ed25519-SHA512` wire `mldsaSig(3309) ‖ tradSig(64)`, shared-`M'`/ctx=Label binding, NO commitment trailer — the prior Benten-own NF-4 SHA3-256 commitment is dropped); the §9.2.2/§10 EUF-CMA-only / Weakly-Non-Separable analysis therefore applies DIRECTLY (the commitment trailer was never the SUF-CMA mechanism — Inv-15 is).
 
 **Why we ship LAMPS despite this** (per cryptographer-review-bird-of-prey-vs-lamps 2026-05-26 + Ben ratification "all yes across the board"):
 1. **Ecosystem interop**: OpenPGP-PQC `draft-ietf-openpgp-pqc-17` mandates the same `ML-DSA-65+Ed25519` composite (RFC publication expected H1-2026; Sequoia PGP committed ship-on-publication); BouncyCastle 1.80+ / OpenSSL 3.5 / AWS KMS / Thales HSM all ship LAMPS composite.
@@ -2533,14 +2550,30 @@ Verified 2026-05-26 (Q1+Q2 ground-truth-verify): `Engine::revoke_capability_by_g
 
 ### Compromise #32 — ML-KEM-768 Decap chosen-ciphertext side-channel (Decap-axis refinement of #30)
 
-**Status.** OPEN; MITIGATED. **Class.** Dependency-on-unaudited-cryptographic-primitive, Decap-axis (`MIT`).
+**Status.** OPEN; MITIGATED-LIVE. **Class.** Dependency-on-unaudited-cryptographic-primitive, Decap-axis (`MIT`).
 
 This is a **refinement of Compromise #30** (unaudited PQ primitives), scoped specifically to the ML-KEM-768
 **decapsulation** path. Chosen-ciphertext side-channels against ML-KEM Decap (timing / fault on the
 re-encryption + FO-transform comparison) are a known implementation-risk class for the primitive. The substrate
-mitigation is constant-time decapsulation (libcrux CT-Decap). **The #30↔#32↔C-GM-AUDIT chain is explicit
-(M-5):** #32 is the Decap-specific axis of the same unaudited-primitive window that #30 names broadly; both
-**CLOSE at v1-GM** when the independent `ml-dsa`/`ml-kem` audit lands (NF-2 / C-GM-AUDIT), with #32 specifically
+mitigation is constant-time decapsulation (libcrux CT-Decap). **`libcrux-ml-kem` is now the LANDED production
+ML-KEM-768 impl** (no longer "substrate defense" pending — the swap shipped at `ee73bb5c`/`02cc6cdc`): its
+portable + AVX2 field arithmetic / NTT / serialization / generic high-level code is FORMALLY VERIFIED via
+hax + F*, and on the targets where CT matters most (wasm + non-SIMD) the verified, constant-time **portable
+backend** is the one selected. This is what moves #32 from deferred → **mitigated-LIVE**.
+
+**#32-residual (the runnable CI gate; f_kat_2 FLAG-FOR-BEN).** The runnable `check-secret-independence`
+CI build-gate is NOT honestly wireable at the pinned `libcrux-ml-kem =0.0.9`: building it with the
+`check-secret-independence` feature on FAILS TO COMPILE (E0053 — its `impl_kem_trait!` macro does not
+propagate the secret-typed `keygen`/`encaps`/`decaps` signatures; reproduced 2026-06-05; an upstream 0.0.9
+defect, NOT Benten's usage). The **verified portable backend is the live mitigation** at v1-beta; the runnable
+gate (the one-flag-away `mlkem-ct-check` feature seam on `benten-crypto-suite`) **carries to the libcrux
+version that fixes the upstream macro** — kept `#[ignore]`'d per the no-fake-green rule rather than reported
+as fake-green. Witness:
+`crates/benten-crypto-suite/tests/f_kat_2_check_secret_independence_ci_gate.rs`.
+
+**The #30↔#32↔C-GM-AUDIT chain is explicit (M-5):** #32 is the Decap-specific axis of the same
+unaudited-primitive window that #30 names broadly; both **CLOSE at v1-GM** when the independent
+`ml-dsa`/`ml-kem` (now incl. `libcrux-ml-kem`) audit lands (NF-2 / C-GM-AUDIT), with #32 specifically
 requiring the audit to cover the CT-Decap claim. **Cross-ref:** Compromise #30 (the parent window); R0.7 §5.2
 M-5.
 

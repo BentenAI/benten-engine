@@ -95,7 +95,7 @@
 **Wire format:**
 - Multiformats Varsig v1 — signature suite codepoint + signature bytes prefixed with the multibase header.
 - Sig codepoint table (V1-FROZEN-INTERFACE item 6.2):
-  - `HYBRID_ED25519_MLDSA65 = 0x0001` (default; concat/committing/strip-resistant per NF-4).
+  - `HYBRID_ED25519_MLDSA65 = 0x0001` (default; byte-faithful IETF LAMPS composite `id-MLDSA65-Ed25519-SHA512`, OID `1.3.6.1.5.5.7.6.48`, `draft-ietf-lamps-pq-composite-sigs-19` + test-vector commit `f0627ab3`; wire `mldsaSig(3309) ‖ tradSig(64)` = 3373 B ML-DSA-first, raw concat, NO commitment trailer; strip-resistance via shared-`M'`/ctx=Label binding + both-halves-required).
   - `CLASSICAL_ED25519 = 0x0002` (downgrade).
   - `HYBRID_MLDSA65_SLHDSA = 0x0003` (swap-matrix arm).
 

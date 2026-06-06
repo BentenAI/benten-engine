@@ -34,12 +34,19 @@ This is the NQ-A1 conservative-fallback policy:
 |-----------|-------|-------|
 | `0x647a`  | X25519⊕ML-KEM-768 hybrid KEM (real X-Wing SHA3-256 combiner) + ChaCha20-Poly1305 bulk | **LIVE — default** |
 | `0x6400`  | X25519-only classical KEM + ChaCha20-Poly1305 bulk | LIVE (non-default downgrade) |
-| `0x0001`  | Ed25519⊕ML-DSA-65 hybrid signature (LAMPS Composite) | LIVE (default sig) |
+| `0x0001`  | Ed25519⊕ML-DSA-65 hybrid signature — byte-faithful IETF LAMPS Composite `id-MLDSA65-Ed25519-SHA512` (OID `1.3.6.1.5.5.7.6.48`; `draft-ietf-lamps-pq-composite-sigs-19` + test-vector commit `f0627ab3`; wire `mldsaSig(3309) ‖ tradSig(64)` = 3373 B, ML-DSA-first, NO commitment trailer) | LIVE (default sig) |
 | `0x0002`  | Ed25519-only classical signature | LIVE (non-default downgrade) |
 | `0x6500`  | Layer-C drop, plaintext-sender (sender-DID on wire) | LIVE (non-default) |
 | `0x6510`  | Layer-C drop, **Sealed-Sender** (sender-DID inside ciphertext) | **LIVE — default (BR-1)** |
 | `0x6520`  | Layer-C group multi-stanza (`HpkeMultiBase`, blinded per-stanza AAD) | LIVE |
 | `0x6610`  | MembershipSet K_Set group multi-stanza (blinded AAD) | LIVE |
+
+> **`0x0001` draft-not-RFC caveat:** the LAMPS composite is pinned to
+> `draft-ietf-lamps-pq-composite-sigs-19` (NOT yet a final RFC — the `M'`
+> Prefix embeds the literal `"CompositeAlgorithmSignatures2025"`). Re-verify
+> the construction at the final RFC; crypto-agility absorbs any change
+> additively (new codepoint, never a wire-break on `0x0001` content already
+> in flight).
 
 ## RESERVED codepoints (typed-reject at v1-beta; additive at v1-GM+)
 

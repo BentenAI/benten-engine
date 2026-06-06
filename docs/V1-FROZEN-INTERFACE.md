@@ -572,7 +572,7 @@ each codepoint = SWAPPABLE within the framing):**
    | Hash | `HashCodepoint::BLAKE3` | `0x1e` | LIVE, default |
    | Hash | `HashCodepoint::SHA2_512_256` | `0x1015` | reserved fallback |
    | Hash | `HashCodepoint::SHA3_256` | `0x16` | reserved fallback |
-   | Sig | `SigCodepoint::HYBRID_ED25519_MLDSA65` | `0x0001` | LIVE, **default (NF-4 concat/committing/strip-resistant; IETF lamps-pq-composite-sigs-18 aligned)** |
+   | Sig | `SigCodepoint::HYBRID_ED25519_MLDSA65` | `0x0001` | LIVE, **default (byte-faithful IETF LAMPS composite `id-MLDSA65-Ed25519-SHA512`, OID `1.3.6.1.5.5.7.6.48`; `draft-ietf-lamps-pq-composite-sigs-19` + test-vector commit `f0627ab3`; wire `mldsaSig(3309) ‖ tradSig(64)` = 3373 B ML-DSA-first, NO commitment trailer; both halves MUST verify)** |
    | Sig | `SigCodepoint::CLASSICAL_ED25519` | `0x0002` | LIVE, non-default downgrade |
    | Sig | `SigCodepoint::HYBRID_MLDSA65_SLHDSA` | `0x0003` | reserved swap-matrix arm (NF-1 end-state; **typed-rejected by default** at `SigCodepoint::resolve` + `SignatureSuite::resolve_codepoint` + `varsig.rs::decode_payload`; reachable only via `SwapMatrix::try_pure_pq_sole_trust_path()` audit-gated constructor per C11b safety gate; mirrors 0x647c framing) |
    | Cipher | `CipherSuiteCodepoint::HYBRID_X25519_MLKEM768` | `0x647a` | LIVE, **default (X-Wing-style combiner vendored ~30 LOC; ChaCha20-Poly1305 bulk)** |
@@ -591,8 +591,14 @@ each codepoint = SWAPPABLE within the framing):**
 
 4. **Wire envelope structure** — the `AeadEnvelope` shape at
    `crates/benten-graph/src/aead_wrap.rs` + the `WrappedKey` wire form +
-   the hybrid-sig concatenated/committing/strip-resistant construction
-   (NF-4; both halves MUST verify). Byte-pinned at item 4.
+   the hybrid-sig byte-faithful IETF LAMPS composite construction
+   (`id-MLDSA65-Ed25519-SHA512`: shared `M'`/ctx=Label binding, wire
+   `mldsaSig(3309) ‖ tradSig(64)` = 3373 B ML-DSA-first, NO commitment
+   trailer; both halves MUST verify). Byte-pinned at item 4 — note item 4's
+   signature-envelope **hex**-golden is the DEFERRED half (Row D-9 →
+   G-COMP-1); at v1-beta the signature wire is locked by the
+   structural/size + roundtrip + constant-position + format-version pins,
+   not a deterministic hex byte-golden.
 
 5. **Multi-device key-wrap/recovery envelope SHAPE** — frozen as part of
    #1301 per item 6. Recovery PROTOCOL choice (Shamir / social / hardware
@@ -639,10 +645,14 @@ each codepoint = SWAPPABLE within the framing):**
   Ed25519-shaped (32 B-key / 64 B-sig) assumption survives anywhere in
   the workspace.
 - Typed-reject discipline frozen.
-- The hybrid construction = NF-4 concat/committing/strip-resistant (both
-  MUST verify). Safety invariant: PQC is NEVER the sole trust path (the
-  classical half is the audited security floor — exactly what makes
-  v1-beta shippable BEFORE the independent audit lands).
+- The hybrid construction = the byte-faithful IETF LAMPS composite
+  `id-MLDSA65-Ed25519-SHA512` (shared `M'`/ctx=Label binding + both halves
+  MUST verify; wire `mldsaSig(3309) ‖ tradSig(64)` = 3373 B ML-DSA-first,
+  NO commitment trailer — the prior Benten-own NF-4 SHA3-256 commitment is
+  dropped). Strip-resistance now rests on the shared-`M'`/ctx=Label binding
+  + both-halves-required. Safety invariant: PQC is NEVER the sole trust
+  path (the classical half is the audited security floor — exactly what
+  makes v1-beta shippable BEFORE the independent audit lands).
 
 **What's NOT frozen:**
 - The internal Rust implementation of any algorithm behind a codepoint —
