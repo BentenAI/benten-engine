@@ -1107,16 +1107,27 @@ pub mod group_posture {
     use super::{AAD_VERSION, Vec, audience_set_commitment, self_describing_cid};
     use benten_crypto_suite::cipher_suite::{CipherSuite, CipherSuiteCodepoint, WrappedKey};
     use benten_crypto_suite::{AeadEnvelope, AeadKeyMaterial};
-    // The `0x6610` group per-stanza AAD = the BLINDED 11-field set, OWNED by the
-    // MembershipSet band (benten-membership-set). The live seal routes through
-    // the canonical `assemble_group_aad` so it binds byte-IDENTICALLY to the
-    // `f_aad_2` golden — single source of truth, zero drift (F-02).
-    use benten_membership_set::aad::{GroupAadInputs, assemble_group_aad};
+
+    // F-02 OPTION-(b) (Ben-ratified): benten-drop OWNS the `0x6610` group
+    // per-stanza 11-field AAD byte-assembly itself ([`assemble_group_aad_local`]
+    // below) — there is NO production dependency on `benten-membership-set` (which
+    // carries a native-only `benten-sync` edge that would invert drop's layering +
+    // contaminate its wasm/freeze graph). The canonical bytes are IDENTICAL; a
+    // TEST-ONLY cross-check (`f_02_*`) asserts byte-equality against the canonical
+    // `benten_membership_set::aad::assemble_group_aad` so the two engines stay
+    // locked — single source of truth, zero drift.
 
     /// Layer-C group codepoint.
     pub const LAYER_C_DROP_MULTI_RECIPIENT: u16 = 0x6520;
     /// MembershipSet K_Set group codepoint.
     pub const MEMBERSHIP_SET_GROUP_MULTI_STANZA: u16 = 0x6610;
+
+    /// The §3.9 / setid-commitment domain-separation label (R0.7 §3.10):
+    /// `membership_set_id_commitment = blake3::keyed_hash(K_Set,
+    /// "benten:setid:v1" || membership_set_id)`. MUST match the canonical
+    /// `benten_membership_set::aad::SETID_COMMITMENT_LABEL` byte-for-byte (the
+    /// `f_02_*` cross-check pins this).
+    pub const SETID_COMMITMENT_LABEL: &[u8] = b"benten:setid:v1";
 
     /// A sender DID, as raw bytes.
     pub type SenderDid = Vec<u8>;
@@ -1259,10 +1270,142 @@ pub mod group_posture {
         })
     }
 
-    /// Build the canonical `0x6610` BLINDED 11-field per-stanza AAD inputs.
+    /// The LOCAL (benten-drop-owned) `0x6610` group per-stanza AAD inputs — the
+    /// BLINDED 11-field set per R0.7 §3.10/§4.1 (F-02 option-(b)).
     ///
-    /// The roster + raw set-id are BLINDED by `assemble_group_aad` (into the
-    /// two 32-byte commitments); on the DEFAULT path the inner-sender-DID is
+    /// Mirrors the canonical `benten_membership_set::aad::GroupAadInputs` field
+    /// shape so the local assembler [`assemble_group_aad_local`] reproduces the
+    /// canonical bytes byte-for-byte. The roster + raw set-id are BLINDED into
+    /// the two 32-byte commitments; on the DEFAULT path the inner-sender-DID is
+    /// sealed inside the stanza payload (`plaintext_sender_did = None`).
+    #[derive(Clone, Debug)]
+    pub struct GroupAadInputs {
+        /// The group per-stanza codepoint (`0x6610` on the DEFAULT path) — BE u16.
+        pub codepoint: u16,
+        /// Canonical body-CID — a self-describing CIDv1 (36 B).
+        pub body_cid: Vec<u8>,
+        /// Member-DID list (canonicalized — sorted — by the assembler; a reorder
+        /// is byte-neutral). NOT published in the clear (BLINDED).
+        pub member_dids: Vec<String>,
+        /// The group key `K_Set` (keys the `membership_set_id_commitment` MAC).
+        pub k_set: [u8; 32],
+        /// Per-stanza index — BE u32.
+        pub stanza_index: u32,
+        /// Total stanza count — BE u32 (truncation/censorship defense).
+        pub stanza_count: u32,
+        /// Member-key generation — BE u32.
+        pub member_key_generation: u32,
+        /// The raw set identity — BLINDED via keyed MAC into
+        /// `membership_set_id_commitment` (never on the wire in the clear).
+        pub membership_set_id: Vec<u8>,
+        /// Set generation counter — BE u32.
+        pub membership_set_generation: u32,
+        /// Role-assignment generation — BE u32 (BC-5).
+        pub role_assignments_generation: u32,
+        /// **NON-default plaintext-sender variant ONLY:** when `Some`, the
+        /// sender-DID is bound into the PLAINTEXT AAD (U4). `None` on the
+        /// DEFAULT Sealed-Sender path (the shipped default).
+        pub plaintext_sender_did: Option<String>,
+    }
+
+    /// `membership_set_id_commitment = blake3::keyed_hash(K_Set,
+    /// "benten:setid:v1" || membership_set_id)` — the §3.9 keyed-MAC primitive
+    /// (R0.7 §4.1). BLINDS the raw set-id. MUST match the canonical
+    /// `benten_membership_set::aad::membership_set_id_commitment` byte-for-byte
+    /// (the `f_02_*` cross-check pins this).
+    #[must_use]
+    fn membership_set_id_commitment(k_set: &[u8; 32], membership_set_id: &[u8]) -> [u8; 32] {
+        let mut msg = Vec::new();
+        msg.extend_from_slice(SETID_COMMITMENT_LABEL);
+        msg.extend_from_slice(membership_set_id);
+        blake3::keyed_hash(k_set, &msg).into()
+    }
+
+    /// `audience_set_commitment` over a `String` member-DID list (mirrors the
+    /// canonical `benten_membership_set::aad::audience_set_commitment`):
+    /// `BLAKE3(0x01 || lp_u32(sorted_did_0) || …)`. Routes through the parent
+    /// module's byte-slice [`super::audience_set_commitment`] over the sorted
+    /// roster so the two engines agree byte-for-byte.
+    #[must_use]
+    fn audience_set_commitment_str(member_dids: &[String]) -> [u8; 32] {
+        let mut sorted = member_dids.to_vec();
+        sorted.sort();
+        let mut msg = Vec::new();
+        msg.push(0x01u8); // domain-separation prefix (matches the canonical 0x6610)
+        for d in &sorted {
+            let len = u32::try_from(d.len()).expect("member DID len fits u32");
+            msg.extend_from_slice(&len.to_be_bytes());
+            msg.extend_from_slice(d.as_bytes());
+        }
+        *blake3::hash(&msg).as_bytes()
+    }
+
+    /// Assemble the `0x6610` group per-stanza PLAINTEXT-AAD as OPAQUE `Vec<u8>`
+    /// — the benten-drop-OWNED encoder (F-02 option-(b); NO production dep on
+    /// `benten-membership-set`).
+    ///
+    /// Encoding = the R0.7 §3.10/§4.1 canonical-TLV contract (the BLINDED
+    /// 11-field set, big-endian, length-injective):
+    ///
+    /// ```text
+    /// aad_version (u8) | codepoint (u16 BE) |
+    /// body_cid (inline self-describing CIDv1) | member_count (u32 BE) |
+    /// audience_set_commitment (32B) | stanza_index (u32 BE) |
+    /// stanza_count (u32 BE) | member_key_generation (u32 BE) |
+    /// membership_set_id_commitment (32B) | membership_set_generation (u32 BE) |
+    /// role_assignments_generation (u32 BE)
+    /// [non-default plaintext-sender ONLY] lp(sender_did)
+    /// ```
+    ///
+    /// Reproduces the canonical `benten_membership_set::aad::assemble_group_aad`
+    /// bytes BYTE-FOR-BYTE (the `f_02_*` cross-check pins zero drift). On the
+    /// DEFAULT (Sealed-Sender) path the sender-DID is NOT bound here — it is
+    /// sealed inside the stanza payload, recovered post-decrypt (F4-001/F-LC-9).
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the member count exceeds `u32::MAX` (the #46 ceiling makes
+    /// this unreachable in practice).
+    #[must_use]
+    pub fn assemble_group_aad_local(t: &GroupAadInputs) -> Vec<u8> {
+        let mut buf = Vec::new();
+        // aad_version prefix (U1/U14 strict-decode / cross-version replay defense).
+        buf.push(AAD_VERSION);
+        // codepoint — BE u16 (U1; committed in AAD).
+        buf.extend_from_slice(&t.codepoint.to_be_bytes());
+        // body_cid — INLINE self-describing CIDv1 (self-delimiting; no external lp).
+        buf.extend_from_slice(&t.body_cid);
+        // member_count — BE u32. The roster itself is BLINDED below.
+        let member_count = u32::try_from(t.member_dids.len()).expect("member count fits u32");
+        buf.extend_from_slice(&member_count.to_be_bytes());
+        // audience_set_commitment — BLAKE3 over the canonically SORTED DID list.
+        buf.extend_from_slice(&audience_set_commitment_str(&t.member_dids));
+        // fixed-width BE integers.
+        buf.extend_from_slice(&t.stanza_index.to_be_bytes());
+        buf.extend_from_slice(&t.stanza_count.to_be_bytes());
+        buf.extend_from_slice(&t.member_key_generation.to_be_bytes());
+        // membership_set_id_commitment — keyed_hash(K_Set, label || set_id).
+        buf.extend_from_slice(&membership_set_id_commitment(
+            &t.k_set,
+            &t.membership_set_id,
+        ));
+        buf.extend_from_slice(&t.membership_set_generation.to_be_bytes());
+        buf.extend_from_slice(&t.role_assignments_generation.to_be_bytes());
+        // F4-001 / F-LC-9: the DEFAULT path binds NO plaintext sender. ONLY the
+        // EXPLICITLY-non-default plaintext-sender variant appends it (U4).
+        if let Some(sender) = &t.plaintext_sender_did {
+            let len = u32::try_from(sender.len()).expect("sender DID len fits u32");
+            buf.extend_from_slice(&len.to_be_bytes());
+            buf.extend_from_slice(sender.as_bytes());
+        }
+        buf
+    }
+
+    /// Build the LOCAL `0x6610` BLINDED 11-field per-stanza AAD inputs for the
+    /// live seal (F-02 option-(b)).
+    ///
+    /// The roster + raw set-id are BLINDED by [`assemble_group_aad_local`] (into
+    /// the two 32-byte commitments); on the DEFAULT path the inner-sender-DID is
     /// sealed inside the stanza payload (`plaintext_sender_did = None`).
     fn group_aad_inputs(
         roster: &[Vec<u8>],
@@ -1272,11 +1415,11 @@ pub mod group_posture {
         stanza_count: u32,
         k_set: &[u8; 32],
     ) -> GroupAadInputs {
-        // The roster bytes are raw DIDs; assemble_group_aad sorts + BLINDS them
-        // into `audience_set_commitment` and reads only their COUNT for
-        // `member_count` — so the String round-trip is byte-faithful (DIDs are
-        // multibase ASCII; from_utf8_lossy is the identity for the derived
-        // `did:key:z` roster this seal builds).
+        // The roster bytes are raw DIDs; the assembler sorts + BLINDS them into
+        // `audience_set_commitment` and reads only their COUNT for `member_count`
+        // — so the String round-trip is byte-faithful (DIDs are multibase ASCII;
+        // from_utf8_lossy is the identity for the derived `did:key:z` roster this
+        // seal builds).
         let member_dids = roster
             .iter()
             .map(|d| String::from_utf8_lossy(d).into_owned())
@@ -1293,7 +1436,6 @@ pub mod group_posture {
             membership_set_generation: params.membership_set_generation,
             role_assignments_generation: params.role_assignments_generation,
             // DEFAULT Sealed-Sender path: NO plaintext sender-DID (F-LC-9).
-            sealed_inner: Vec::new(),
             plaintext_sender_did: None,
         }
     }
@@ -1302,11 +1444,14 @@ pub mod group_posture {
     /// each stanza binds the inner-sender-DID in its sealed payload (NOT
     /// plaintext on the wire).
     ///
-    /// The per-stanza AAD is the canonical BLINDED 11-field set
-    /// ([`benten_membership_set::aad::assemble_group_aad`]) — SECURITY-PROOFS
-    /// §3.3 / R0.7 §3.10/§4.1 — so the live seal binds byte-IDENTICALLY to the
-    /// `f_aad_2` golden (F-02). `params` supplies the MembershipSet-specific
-    /// keying generations + raw set-id that the 11-field set blinds.
+    /// The per-stanza AAD is the BLINDED 11-field set assembled LOCALLY via
+    /// [`assemble_group_aad_local`] (F-02 option-(b); benten-drop-owned, NO
+    /// production membership-set dep) — SECURITY-PROOFS §3.3 / R0.7 §3.10/§4.1.
+    /// The bytes are byte-IDENTICAL to the canonical
+    /// `benten_membership_set::aad::assemble_group_aad` `f_aad_2` golden (a
+    /// TEST-ONLY cross-check pins zero drift). `params` supplies the
+    /// MembershipSet-specific keying generations + raw set-id that the 11-field
+    /// set blinds.
     #[must_use]
     pub fn seal_membership_set_group(
         recipient_pks: &[RecipientPubKey],
@@ -1351,9 +1496,10 @@ pub mod group_posture {
         let mut stanzas = Vec::with_capacity(recipient_pks.len());
         for (idx, pk) in recipient_pks.iter().enumerate() {
             let stanza_index = u32::try_from(idx).expect("idx fits u32");
-            // Per-stanza AAD = the canonical BLINDED 11-field set (F-02). The
-            // sender-DID is NOT in the AAD (it is sealed inside the stanza).
-            let aad = assemble_group_aad(&group_aad_inputs(
+            // Per-stanza AAD = the BLINDED 11-field set assembled LOCALLY (F-02
+            // option-(b); benten-drop-owned, NO production membership-set dep).
+            // The sender-DID is NOT in the AAD (it is sealed inside the stanza).
+            let aad = assemble_group_aad_local(&group_aad_inputs(
                 &roster,
                 &cid,
                 params,
@@ -1507,8 +1653,9 @@ pub mod group_posture {
 
         /// **Test-only accessor (F-02 / M-20):** the actual canonical per-stanza
         /// AAD bytes the live seal bound for stanza `idx` (the BLINDED 11-field
-        /// set). Used to assert byte-equality against the canonical
-        /// [`benten_membership_set::aad::assemble_group_aad`] golden.
+        /// set). Used to assert byte-equality against the local
+        /// [`assemble_group_aad_local`] bytes AND (TEST-ONLY cross-check) the
+        /// canonical `benten_membership_set::aad::assemble_group_aad` golden.
         #[cfg(any(test, feature = "testing"))]
         #[must_use]
         pub fn stanza_aad_for_test(&self, idx: usize) -> Vec<u8> {

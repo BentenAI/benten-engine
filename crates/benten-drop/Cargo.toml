@@ -48,13 +48,16 @@ benten-caps = { path = "../benten-caps" }
 benten-graph = { path = "../benten-graph" }
 benten-crypto-suite = { path = "../benten-crypto-suite" }
 benten-id = { path = "../benten-id" }
-# The MembershipSet band (0x6600/0x6610/0x6620) is OWNED by benten-membership-set.
-# The Layer-C `group_posture::seal_membership_set_group` 0x6610 group seal routes
-# its per-stanza AAD through the canonical `aad::assemble_group_aad` (the BLINDED
-# 11-field set per SECURITY-PROOFS §3.3 / R0.7 §3.10/§4.1) so the live seal binds
-# byte-IDENTICALLY to the `f_aad_2` golden — single source of truth, zero drift
-# (F-02). Acyclic: benten-membership-set has no path back to benten-drop.
-benten-membership-set = { path = "../benten-membership-set" }
+# F-02 OPTION-(b) (Ben-ratified): benten-drop OWNS the `0x6610` group per-stanza
+# 11-field AAD byte-assembly itself (`layer_c::group_posture::assemble_group_aad_local`)
+# — there is NO production dependency on `benten-membership-set`. That crate
+# carries a PRODUCTION dep on `benten-sync` (→ iroh/loro, native-only), so a
+# production edge benten-drop → benten-membership-set would invert the layering
+# (drop is a leaf bundle-format crate) AND pull native-only sync into drop's
+# wasm/freeze graph. The canonical bytes are IDENTICAL — the local assembler
+# reproduces the R0.7 §3.10/§4.1 BLINDED 11-field set byte-for-byte. A TEST-ONLY
+# cross-check ([dev-dependencies] below) asserts zero drift against the canonical
+# `benten_membership_set::aad::assemble_group_aad` so the two engines stay locked.
 
 # Canonical bytes substrate. DAG-CBOR (the workspace canonical-bytes
 # encoding per Phase-1 Cid contract) is the bundle's on-disk format.
@@ -104,3 +107,11 @@ blake3 = { workspace = true }
 # No cycle — benten-sync depends on benten-{id,core,errors}, none of which
 # pull benten-drop (verified vs the workspace dependency edges).
 benten-sync = { path = "../benten-sync" }
+
+# F-02 OPTION-(b) TEST-ONLY cross-check: the `f_02_group_aad_11field_and_f_01_truncation`
+# test asserts benten-drop's LOCAL 11-field AAD assembler
+# (`layer_c::group_posture::assemble_group_aad_local`) reproduces the CANONICAL
+# `benten_membership_set::aad::assemble_group_aad` bytes BYTE-FOR-BYTE (zero drift).
+# This is the ONLY edge to benten-membership-set and it lives ONLY in the test
+# binaries — drop's PRODUCTION tree stays sync-free (cargo tree -e normal proves it).
+benten-membership-set = { path = "../benten-membership-set" }
