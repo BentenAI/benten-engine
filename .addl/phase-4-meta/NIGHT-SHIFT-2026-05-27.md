@@ -1191,3 +1191,25 @@ Ben: "Let's just proceed with it all now!" — launched both as background work.
 **KEY REFS:** PR #1360 · R5 branch `phase-4-meta-core/f-full-r5-doc @ 33c71615` · main `2172cb6d` · corpus `f-full-r4-fix @ c1ca7f29` · canonical R0 = R0.7 `phase-4-meta-core/f-full-r0-plan-r07 @ 111cca9c` · doc-cascade `f-full-doc-cascade @ 909f7c3e` (folded into R5 base) · hardened workflows `4d20b095`.
 
 **STANDING LAW:** NEVER `--admin-bypass`/force-push (incl `--force-with-lease`); NORMAL `--squash` only; HOLD all tags pending Ben; Opus-only for council/agents; surface arch/freeze forks (don't decide unilaterally); HARD RULE 12 (3 valid non-fix dispositions); no AI attribution on commits/PRs; agent isolation:worktree + commit-before-return + ABSOLUTE-PATH-FORBIDDEN; double-force `git worktree remove -f -f` for locked agent worktrees; disk HARD-ABORT 97% (~40GB effective via purgeable).
+
+---
+
+## ★★★ POST-MERGE UPDATE — 2026-06-06 00:13 (R5 MERGED; KAT-family pulled to pre-tag per Ben) ★★★
+
+**#1360 MERGED — `main @ 721af614`** (squash; NORMAL, no admin-bypass). main `2172cb6d → 721af614`. The ENTIRE F-full R5 slice (Sealed-Sender encryption substrate + MembershipSet primitive, 15th crate) is on main. R5 = CODE+DOCS COMPLETE + LANDED.
+
+**BEN RATIFIED 2026-06-05/06 (reconsider-the-KAT-deferral conversation):** my blanket "defer the f_kat family to v1-GM" was TOO COARSE; the four KATs are 3 different blocker-classes. Ben's two calls:
+1. **NQ-C1 = Branch B (Benten-supplies-KEM)** — Layer-C on-wire HPKE framing = Benten-canonical ML-KEM+X25519 encapsulation bytes + reuse only HPKE key-schedule (matches shipped impl + Option-F+ NO-GO). NOT cross-stack-RFC-9180-interop; an RFC-9180-faithful suite is a FUTURE ADDITIVE codepoint (crypto-agility #5), not a wire break. → un-ignore **f_kat_3** now: ratify B + delete stub + pin our reference vector against live `hpke_seal_to_recipient`. FREEZE-GATING.
+2. **libcrux-ml-kem = ADOPT NOW (before the tag)** — hax/F*-verified constant-time ML-KEM; moves **Compromise #32** (ML-KEM-768 Decap CT side-channel / Tempo-SampleNTT-timing) from deferred → mitigated-LIVE. Un-ignores **f_kat_2** (secret-independence CI gate) + **f_kat_1 cross-impl** (RustCrypto↔libcrux FIPS-203 byte-identity). NOTE: impl-swap is additive-safe (FIPS-203 serialization canonical regardless of impl) so it does NOT break the frozen wire — but Ben wants it pre-tag.
+
+**KAT cut (precise, from the #[ignore] reasons):** f_kat_4 OUTBOUND-shape/OID-binding/mismatched-OID-reject = ALREADY GREEN (wire arms). f_kat_1 sizes/seed-bound/within-impl = ALREADY GREEN (real RustCrypto). f_kat_3 = blocked only on Ben's NQ-C1 (now B). f_kat_2 + f_kat_1-cross-impl = ride libcrux-add (now). f_kat_4 INBOUND = needs real BouncyCastle/OpenSSL-3.5/OpenPGP-PQC LAMPS fixtures (try-to-generate; if genuinely not generable in-env → that ONE arm stays v1-GM, named).
+
+**REVISED PRE-TAG PLAN (in flight):**
+- **(A) libcrux canary spike FIRST** — de-risk cross-target build: does `libcrux-ml-kem` (latest) compile on `wasm32-unknown-unknown` + `wasm32-wasip1` + all CI arches, AND byte-match RustCrypto `ml-kem` FIPS-203 (ek=1184/ct=1088/dk=2400/ss=32)? RustCrypto is pure-Rust + builds everywhere; libcrux may not → outcome decides single-impl-swap vs native-libcrux/wasm-RustCrypto DUAL (dual is incidentally what f_kat_1 cross-impl wants). canary-first + reproduce-don't-assume. **RISK: if libcrux breaks wasm32, the CI we just greened re-breaks — must spike before wiring.**
+- **(B) f_kat_3 freeze-lock** (parallel; libcrux-independent — envelope bytes are impl-independent): ratify B, delete `f_kat_3_stub`, pin reference vector (M-20 throwaway-compute golden), un-ignore.
+- **(C) libcrux wire** (post-spike): add dep, wire impl (single or dual per spike), NQ-C2 byte-equality preserve, wire `check-secret-independence` CI gate → un-ignore f_kat_2 + f_kat_1 cross-impl.
+- **(D) f_kat_4 inbound fixtures** (try-generate; else named-v1-GM for that arm).
+- **(E) freeze-record + Compromise #32/#30 doc retense** (#32 → mitigated-LIVE).
+- **then R4b → R6 (hardened `converging-fix-loop.js`/`addl-review-council.js` @ 4d20b095) → pre-tag → tag `phase-4-meta-core-close` (HOLD Ben).**
+
+**STILL PENDING BEN:** the tag gate. **QUEUED post-merge (unchanged):** FILE 2 pre-existing-on-main bugs (benten-sync no-features build + `E_INV_ITERATE_NEST_DEPTH` TS-orphan); CLAUDE.md baked-in retenses; memory codifications; 21 held comment drafts. **main = `721af614`.**
