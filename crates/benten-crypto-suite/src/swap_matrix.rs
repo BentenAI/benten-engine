@@ -1588,22 +1588,21 @@ fn decode_hybrid_sig_from_bytes(
 ) -> Result<HybridSignature, SwapMatrixError> {
     use ed25519_dalek::SIGNATURE_LENGTH as ED25519_LEN;
     if is_hybrid {
+        // IETF LAMPS composite wire: `mldsaSig(3309) || tradSig(64)`
+        // (ML-DSA FIRST; NO commitment trailer).
         let pq_len = ml_dsa_65_sig_len();
-        let commitment_len = 32;
-        let total = ED25519_LEN + pq_len + commitment_len;
+        let total = pq_len + ED25519_LEN;
         if bytes.len() != total {
             return Err(SwapMatrixError::Signature(
                 "hybrid sig wire-bytes length mismatch",
             ));
         }
-        let classical = bytes[..ED25519_LEN].to_vec();
-        let pq = bytes[ED25519_LEN..ED25519_LEN + pq_len].to_vec();
-        let commitment = bytes[ED25519_LEN + pq_len..].to_vec();
+        let pq = bytes[..pq_len].to_vec();
+        let classical = bytes[pq_len..].to_vec();
         Ok(HybridSignature::from_parts_internal(
             SigCodepoint::HYBRID_ED25519_MLDSA65,
             classical,
             pq,
-            commitment,
         ))
     } else {
         if bytes.len() != ED25519_LEN {
@@ -1614,7 +1613,6 @@ fn decode_hybrid_sig_from_bytes(
         Ok(HybridSignature::from_parts_internal(
             SigCodepoint::CLASSICAL_ED25519,
             bytes.to_vec(),
-            Vec::new(),
             Vec::new(),
         ))
     }

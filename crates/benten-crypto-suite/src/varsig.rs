@@ -9,10 +9,13 @@
 //! # Wire format (G-CORE-2 internal; G-CORE-9 freezes for v1)
 //!
 //! ```text
-//! [magic (1 B = 0xb5) | version (1 B = 0x01) | codepoint (2 B LE) | payload (variable)]
+//! [magic (1 B = 0xb5) | version (1 B = 0x01) | codepoint (2 B BE) | payload (variable)]
 //! ```
 //!
-//! Sizes are codepoint-dispatched (no hardcoded Ed25519 assumption).
+//! For the `0x0001` hybrid default the payload is the IETF LAMPS composite
+//! `mldsaSig(3309) || tradSig(64)` (ML-DSA FIRST; NO commitment trailer);
+//! for `0x0002` it is the bare Ed25519 signature. Sizes are
+//! codepoint-dispatched (no hardcoded Ed25519 assumption).
 
 use thiserror::Error;
 
@@ -27,8 +30,6 @@ const VARSIG_V1: u8 = 0x01;
 // (NOT a Benten redefinition). ML-DSA-65 sourced from upstream `ml-dsa`
 // type-level constants via [`crate::sizes::ml_dsa_65_sig_len`].
 const ED25519_SIG_LEN: usize = ed25519_dalek::SIGNATURE_LENGTH;
-// SHA3-256 commitment fixed output.
-const COMMITMENT_LEN: usize = 32;
 
 /// UCAN-Varsig-v1 header carrying a hybrid signature on the wire.
 pub struct UcanVarsigV1Header {
@@ -116,16 +117,17 @@ impl UcanVarsigV1Header {
 fn decode_payload(codepoint: SigCodepoint, payload: &[u8]) -> Result<HybridSignature, VarsigError> {
     match codepoint.raw() {
         0x0001 => {
+            // IETF LAMPS composite wire: `mldsaSig(3309) || tradSig(64)`
+            // (ML-DSA FIRST; NO commitment trailer).
             let ml_dsa_sig_len = ml_dsa_65_sig_len();
-            let expected = ED25519_SIG_LEN + ml_dsa_sig_len + COMMITMENT_LEN;
+            let expected = ml_dsa_sig_len + ED25519_SIG_LEN;
             if payload.len() != expected {
                 return Err(VarsigError::Truncated);
             }
-            let classical = payload[..ED25519_SIG_LEN].to_vec();
-            let pq = payload[ED25519_SIG_LEN..ED25519_SIG_LEN + ml_dsa_sig_len].to_vec();
-            let commitment = payload[ED25519_SIG_LEN + ml_dsa_sig_len..].to_vec();
+            let pq = payload[..ml_dsa_sig_len].to_vec();
+            let classical = payload[ml_dsa_sig_len..].to_vec();
             Ok(HybridSignature::from_parts_internal(
-                codepoint, classical, pq, commitment,
+                codepoint, classical, pq,
             ))
         }
         0x0002 => {
@@ -135,7 +137,6 @@ fn decode_payload(codepoint: SigCodepoint, payload: &[u8]) -> Result<HybridSigna
             Ok(HybridSignature::from_parts_internal(
                 codepoint,
                 payload.to_vec(),
-                Vec::new(),
                 Vec::new(),
             ))
         }
