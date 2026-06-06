@@ -27,8 +27,10 @@ pub use crate::error::UnsupportedAlgorithm;
 /// Typed signature codepoint enum.
 ///
 /// The v1-beta SHIPPED arms are [`SigCodepoint::HYBRID_ED25519_MLDSA65`]
-/// (the DEFAULT — NF-4 concatenated/committing/strip-resistant Ed25519⊕
-/// ML-DSA-65) and [`SigCodepoint::CLASSICAL_ED25519`] (the non-default
+/// (the DEFAULT — byte-faithful IETF LAMPS composite
+/// `id-MLDSA65-Ed25519-SHA512` Ed25519⊕ML-DSA-65; both-must-verify;
+/// `mldsaSig||tradSig`, NO commitment trailer) and
+/// [`SigCodepoint::CLASSICAL_ED25519`] (the non-default
 /// downgrade). The NF-1 end-state arm
 /// [`SigCodepoint::HYBRID_MLDSA65_SLHDSA`] is a **reserved swap-matrix arm
 /// — typed-rejected by default** at [`SigCodepoint::resolve`] and at
@@ -43,9 +45,10 @@ pub use crate::error::UnsupportedAlgorithm;
 pub struct SigCodepoint(pub(crate) u16);
 
 impl SigCodepoint {
-    /// v1-beta DEFAULT: hybrid Ed25519⊕ML-DSA-65 (NF-4
-    /// concatenated/committing/strip-resistant). Aligned with
-    /// `draft-ietf-lamps-pq-composite-sigs-18`.
+    /// v1-beta DEFAULT: hybrid Ed25519⊕ML-DSA-65, byte-faithful IETF
+    /// LAMPS composite `id-MLDSA65-Ed25519-SHA512` (both-must-verify;
+    /// `mldsaSig||tradSig`, NO commitment trailer). Byte-faithful to
+    /// `draft-ietf-lamps-pq-composite-sigs-19`.
     pub const HYBRID_ED25519_MLDSA65: Self = Self(0x0001);
 
     /// Non-default downgrade: classical-only Ed25519 (built +

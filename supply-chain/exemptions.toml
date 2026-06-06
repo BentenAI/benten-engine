@@ -31,8 +31,8 @@
 # that audit lands.
 #
 # Pinned by:
-#   `crates/benten-engine/tests/cargo_vet_policy_self_test.rs::cargo_vet_exemption_budget_at_or_below_5_at_phase_3_close`
-# (count cap updated 5 → 18 in the same commit per the FLAG above).
+#   `crates/benten-engine/tests/cargo_vet_policy_self_test.rs::cargo_vet_exemption_budget_within_ratified_cap`
+# (count cap updated 5 → 18, ratified Ben 2026-06-06, per the FLAG above).
 
 # --- libcrux-ml-kem ML-KEM-768 trust path (Compromise #32 mitigation) ---
 

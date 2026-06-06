@@ -17,9 +17,10 @@
 //!
 //! ## Signature axis
 //!
-//! 1. **`v1_beta_default`** — hybrid Ed25519⊕ML-DSA-65 (NF-4
-//!    concatenated/committing/strip-resistant; both-must-verify;
-//!    `lamps-pq-composite-sigs`-aligned) +
+//! 1. **`v1_beta_default`** — hybrid Ed25519⊕ML-DSA-65, byte-faithful
+//!    IETF LAMPS composite `id-MLDSA65-Ed25519-SHA512` (both-must-verify;
+//!    `mldsaSig||tradSig`, NO commitment trailer;
+//!    `draft-ietf-lamps-pq-composite-sigs-19`) +
 //!    hybrid X25519⊕ML-KEM-768 KEM-wrap + ChaCha20-Poly1305 bulk.
 //!    The v1-beta DEFAULT.
 //! 2. **`classical_only`** — Ed25519 sig + X25519 KEM-wrap +
@@ -157,7 +158,7 @@ pub const fn audit_landed_pure_pq_flag() -> bool {
 /// Selects how the signature half of a swap-matrix arm is composed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SignatureArm {
-    /// Hybrid Ed25519⊕ML-DSA-65 (NF-4 default).
+    /// Hybrid Ed25519⊕ML-DSA-65 (byte-faithful IETF LAMPS composite default).
     HybridEd25519MlDsa65,
     /// Classical-only Ed25519 (downgrade).
     ClassicalOnlyEd25519,
@@ -287,7 +288,7 @@ impl SwapMatrix {
         }
     }
 
-    /// True iff the signature half is hybrid (Ed25519⊕ML-DSA-65 NF-4).
+    /// True iff the signature half is hybrid (Ed25519⊕ML-DSA-65 LAMPS composite).
     #[must_use]
     pub const fn signature_is_hybrid(&self) -> bool {
         matches!(self.sig_arm, SignatureArm::HybridEd25519MlDsa65)

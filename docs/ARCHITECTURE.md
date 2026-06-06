@@ -146,8 +146,10 @@ crates/
                         # crate NEVER forks or reimplements primitives
                         # (CLAUDE.md baked-in #5). v1-beta signature
                         # default = hybrid Ed25519⊕ML-DSA-65
-                        # (concatenated/committing/strip-resistant per
-                        # NF-4); classical-only Ed25519 is the
+                        # (byte-faithful IETF LAMPS composite
+                        # id-MLDSA65-Ed25519-SHA512; both halves MUST
+                        # verify; NO commitment trailer); classical-only
+                        # Ed25519 is the
                         # non-default downgrade arm. Unknown / reserved
                         # codepoints surface typed
                         # `UnsupportedAlgorithm` — NEVER a silent
