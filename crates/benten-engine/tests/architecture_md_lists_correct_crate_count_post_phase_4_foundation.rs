@@ -67,11 +67,23 @@ fn architecture_md_lists_correct_crate_count_post_phase_4_foundation() {
 
     // The new crates must be listed by name.
     for (name, note) in [
-        ("benten-platform-foundation", "11th crate per D-4F-2 ratification"),
-        ("benten-renderer-tauri", "12th crate per CLAUDE.md #19 engine-extension"),
-        ("benten-crypto-suite", "13th crate, Phase 4-Meta-Core G-CORE-2"),
+        (
+            "benten-platform-foundation",
+            "11th crate per D-4F-2 ratification",
+        ),
+        (
+            "benten-renderer-tauri",
+            "12th crate per CLAUDE.md #19 engine-extension",
+        ),
+        (
+            "benten-crypto-suite",
+            "13th crate, Phase 4-Meta-Core G-CORE-2",
+        ),
         ("benten-drop", "14th crate, Phase 4-Meta-Core G-CORE-3f"),
-        ("benten-membership-set", "15th crate, Phase 4-Meta-Core F-full"),
+        (
+            "benten-membership-set",
+            "15th crate, Phase 4-Meta-Core F-full",
+        ),
     ] {
         assert!(
             lower.contains(name),
