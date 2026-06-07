@@ -647,7 +647,7 @@ impl core::marker::Unpin for benten_engine::engine_stream::NextChunkPoll
 impl core::marker::UnsafeUnpin for benten_engine::engine_stream::NextChunkPoll
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::engine_stream::NextChunkPoll
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::engine_stream::NextChunkPoll
-pub enum benten_engine::engine_stream::StreamCursor
+#[non_exhaustive] pub enum benten_engine::engine_stream::StreamCursor
 pub benten_engine::engine_stream::StreamCursor::Latest
 pub benten_engine::engine_stream::StreamCursor::Sequence(u64)
 impl core::clone::Clone for benten_engine::engine_stream::StreamCursor
@@ -688,7 +688,7 @@ impl !core::panic::unwind_safe::UnwindSafe for benten_engine::engine_stream::Str
 pub const benten_engine::engine_stream::STREAM_GRANT_CEILING_CHUNK_COUNT: u64
 pub const benten_engine::engine_stream::STREAM_GRANT_CEILING_WALLCLOCK_MS: u64
 pub mod benten_engine::engine_subscribe
-pub enum benten_engine::engine_subscribe::SubscribeCursor
+#[non_exhaustive] pub enum benten_engine::engine_subscribe::SubscribeCursor
 pub benten_engine::engine_subscribe::SubscribeCursor::Latest
 pub benten_engine::engine_subscribe::SubscribeCursor::Persistent(alloc::string::String)
 pub benten_engine::engine_subscribe::SubscribeCursor::Sequence(u64)
@@ -1868,7 +1868,7 @@ impl core::marker::UnsafeUnpin for benten_engine::module_manifest::RandomHostFnO
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::module_manifest::RandomHostFnOverride
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::module_manifest::RandomHostFnOverride
 pub mod benten_engine::outcome
-pub enum benten_engine::outcome::TraceStep
+#[non_exhaustive] pub enum benten_engine::outcome::TraceStep
 pub benten_engine::outcome::TraceStep::BudgetExhausted
 pub benten_engine::outcome::TraceStep::BudgetExhausted::budget_type: &'static str
 pub benten_engine::outcome::TraceStep::BudgetExhausted::consumed: u64
@@ -1909,7 +1909,7 @@ impl core::marker::Unpin for benten_engine::outcome::TraceStep
 impl core::marker::UnsafeUnpin for benten_engine::outcome::TraceStep
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::TraceStep
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::TraceStep
-pub enum benten_engine::outcome::UserViewInputPattern
+#[non_exhaustive] pub enum benten_engine::outcome::UserViewInputPattern
 pub benten_engine::outcome::UserViewInputPattern::AnchorPrefix(alloc::string::String)
 pub benten_engine::outcome::UserViewInputPattern::Label(alloc::string::String)
 impl core::clone::Clone for benten_engine::outcome::UserViewInputPattern
@@ -2456,7 +2456,7 @@ impl core::marker::Unpin for benten_engine::thin_client::ThinClientSessionError
 impl core::marker::UnsafeUnpin for benten_engine::thin_client::ThinClientSessionError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::thin_client::ThinClientSessionError
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::thin_client::ThinClientSessionError
-pub enum benten_engine::thin_client::Transport
+#[non_exhaustive] pub enum benten_engine::thin_client::Transport
 pub benten_engine::thin_client::Transport::Http
 pub benten_engine::thin_client::Transport::Ipc
 impl core::clone::Clone for benten_engine::thin_client::Transport
@@ -2884,7 +2884,7 @@ impl core::marker::Unpin for benten_engine::engine_wait::ResumePayload
 impl core::marker::UnsafeUnpin for benten_engine::engine_wait::ResumePayload
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::engine_wait::ResumePayload
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::engine_wait::ResumePayload
-pub enum benten_engine::StreamCursor
+#[non_exhaustive] pub enum benten_engine::StreamCursor
 pub benten_engine::StreamCursor::Latest
 pub benten_engine::StreamCursor::Sequence(u64)
 impl core::clone::Clone for benten_engine::engine_stream::StreamCursor
@@ -2898,7 +2898,7 @@ impl core::marker::Unpin for benten_engine::engine_stream::StreamCursor
 impl core::marker::UnsafeUnpin for benten_engine::engine_stream::StreamCursor
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::engine_stream::StreamCursor
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::engine_stream::StreamCursor
-pub enum benten_engine::SubscribeCursor
+#[non_exhaustive] pub enum benten_engine::SubscribeCursor
 pub benten_engine::SubscribeCursor::Latest
 pub benten_engine::SubscribeCursor::Persistent(alloc::string::String)
 pub benten_engine::SubscribeCursor::Sequence(u64)
@@ -2929,7 +2929,7 @@ impl core::marker::Unpin for benten_engine::engine_wait::SuspensionOutcome
 impl core::marker::UnsafeUnpin for benten_engine::engine_wait::SuspensionOutcome
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::engine_wait::SuspensionOutcome
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::engine_wait::SuspensionOutcome
-pub enum benten_engine::TraceStep
+#[non_exhaustive] pub enum benten_engine::TraceStep
 pub benten_engine::TraceStep::BudgetExhausted
 pub benten_engine::TraceStep::BudgetExhausted::budget_type: &'static str
 pub benten_engine::TraceStep::BudgetExhausted::consumed: u64
@@ -2970,7 +2970,7 @@ impl core::marker::Unpin for benten_engine::outcome::TraceStep
 impl core::marker::UnsafeUnpin for benten_engine::outcome::TraceStep
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::TraceStep
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::TraceStep
-pub enum benten_engine::UserViewInputPattern
+#[non_exhaustive] pub enum benten_engine::UserViewInputPattern
 pub benten_engine::UserViewInputPattern::AnchorPrefix(alloc::string::String)
 pub benten_engine::UserViewInputPattern::Label(alloc::string::String)
 impl core::clone::Clone for benten_engine::outcome::UserViewInputPattern
