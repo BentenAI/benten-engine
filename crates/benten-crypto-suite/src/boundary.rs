@@ -4,8 +4,9 @@
 //! Per `crypto-agility-contract:6` the integration crate is the only
 //! crypto-primitive call site. The runtime-enforceable property is the
 //! Cargo direct-dep tree: only `benten-crypto-suite/Cargo.toml` may name
-//! `ed25519-dalek` / `ml-dsa` / `slh-dsa` / `x25519-dalek` / `ml-kem` /
-//! `chacha20poly1305` / `hkdf` / `argon2` as a direct dep.
+//! `ed25519-dalek` / `ml-dsa` / `slh-dsa` / `x25519-dalek` /
+//! `libcrux-ml-kem` / `chacha20poly1305` / `hkdf` / `sha2` / `sha3` /
+//! `argon2` / `secrecy` as a direct dep.
 //!
 //! This module scans the workspace at audit-time. The TF-2 grep-pin
 //! drives this and assertions on
@@ -23,12 +24,26 @@ const FORBIDDEN_DIRECT_DEPS: &[&str] = &[
     "ml-dsa",
     "slh-dsa",
     "x25519-dalek",
-    "ml-kem",
+    // ML-KEM-768 PRODUCTION impl = Cryspen `libcrux-ml-kem` (swapped in
+    // 2026-06-05; RustCrypto `ml-kem` is now a [dev-dependencies] cross-impl
+    // KAT witness only, so it is NOT a forbidden direct PRODUCTION dep and is
+    // deliberately absent from this list — the audit scans `[dependencies]`
+    // only).
+    "libcrux-ml-kem",
     "chacha20poly1305",
     "hkdf",
+    // Hash seam (CLAUDE.md baked-in #5) — `sha2` (SHA-512/256 agile fallback)
+    // + `sha3` (SHA3-256 agile fallback + X-Wing combiner + hybrid commitment
+    // + the structural KDF substrate) are wrapped HERE, the ONLY call site.
+    "sha2",
+    "sha3",
     // F-full Layer-A: the Argon2id DAK primitive (F-VA-2) — wrapped HERE, the
     // ONLY call site (crypto-agility-contract:6; never-fork-primitives #5).
     "argon2",
+    // F-full Layer-A in-process at-rest-key memory hygiene (F-VA-4) —
+    // `secrecy::SecretBox` wraps the unlocked K_principal; wrapped HERE, the
+    // ONLY call site.
+    "secrecy",
 ];
 
 /// The name of THE integration crate that legitimately direct-deps the
@@ -268,10 +283,37 @@ name = "foo"
 
 [dependencies]
 ed25519-dalek = "2"
+libcrux-ml-kem = { version = "=0.0.9" }
+sha2 = "0.10"
+sha3 = "0.10"
+secrecy = "0.10"
 serde = "1"
 "#;
         let set = primitives_named_in_manifest(m);
         assert!(set.contains("ed25519-dalek"));
+        // The 2026-06-05 production-dep entries are recognised by the audit.
+        assert!(set.contains("libcrux-ml-kem"));
+        assert!(set.contains("sha2"));
+        assert!(set.contains("sha3"));
+        assert!(set.contains("secrecy"));
         assert!(!set.contains("serde"));
+    }
+
+    /// The dead RustCrypto `ml-kem` entry was removed (it is a dev-dep-only
+    /// cross-impl KAT witness now, NOT a forbidden production direct dep);
+    /// the live production entries are present.
+    #[test]
+    fn forbidden_direct_deps_tracks_live_production_set() {
+        assert!(FORBIDDEN_DIRECT_DEPS.contains(&"libcrux-ml-kem"));
+        assert!(FORBIDDEN_DIRECT_DEPS.contains(&"sha2"));
+        assert!(FORBIDDEN_DIRECT_DEPS.contains(&"sha3"));
+        assert!(FORBIDDEN_DIRECT_DEPS.contains(&"secrecy"));
+        assert!(
+            !FORBIDDEN_DIRECT_DEPS.contains(&"ml-kem"),
+            "RustCrypto `ml-kem` is a dev-dep-only KAT witness now; it must \
+             NOT be in the production forbidden-direct-dep set (the audit \
+             scans `[dependencies]` only, so a dev-dep would never trip it \
+             anyway, but listing it here would be a stale claim)"
+        );
     }
 }

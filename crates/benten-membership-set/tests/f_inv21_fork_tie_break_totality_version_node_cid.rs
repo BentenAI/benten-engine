@@ -40,16 +40,16 @@
 //! ABSORBS the loser into CURRENT fails arm 4; a K(V) that ignores the CID
 //! fails arm 4's key sub-case).
 //!
-//! ## RED-PHASE (pim-12 §3.6e) + SELF-CONTAINED stub-shim
+//! ## Wiring (history: pim-12 §3.6e)
 //!
-//! Compiles GREEN behind `#[ignore]`; SELF-CONTAINED stub-shim for
-//! parallel-safe R3. R5 swaps in `benten_membership_set` + (when kani
-//! lands) the `#[kani::proof]` arm, and un-ignores.
+//! LIVE and un-ignored — runs every CI cycle against the REAL
+//! `benten_membership_set`. (History: this started as a RED-PHASE
+//! self-contained stub-shim for parallel-safe R3; R5 wired it to the
+//! production surfaces and un-ignored it. A `#[kani::proof]` arm remains
+//! a future addition for when kani lands.)
 
 #![allow(clippy::unwrap_used)]
-// TIER-2 (w-ms-sync) RED-PHASE stub: a cosmetic `format_collect` lint in the
-// self-contained hex helper. Non-semantic; the w-ms-sync wave rewrites this
-// stub against the real crate surface and clears it.
+// Cosmetic `format_collect` lint in the local hex helper; non-semantic.
 #![allow(clippy::format_collect)]
 // `cfg(kani)` is the conventional cargo-kani proof-harness gate. It is NOT a
 // declared workspace check-cfg (kani is a v1-GM strengthening, not a v1-beta

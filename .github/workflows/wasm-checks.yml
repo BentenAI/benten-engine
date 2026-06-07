@@ -114,3 +114,60 @@ jobs:
             exit 1
           fi
           echo "PASSED: benten-sync correctly refuses to compile for wasm32-unknown-unknown via compile_error! gate per CLAUDE.md baked-in #17 (defense-in-depth rung 2)."
+
+  # ---------------------------------------------------------------------------
+  # phase-4-meta-core R6-R2 fix wave (closes F-09 MAJOR): at-build-time
+  # assertion that `benten-membership-set` REFUSES to compile for
+  # wasm32-unknown-unknown per CLAUDE.md baked-in #17. Mirrors the
+  # `benten-sync-refuses-wasm32` cell above.
+  #
+  # The membership-set keying primitive's B-1 dep set includes the native-only
+  # `benten-sync` (iroh + Loro + MST), so it is itself full-peer-only. The
+  # source-of-truth manifest grep at
+  # `crates/benten-membership-set/tests/wasm32_excluded.rs` is defense-in-depth
+  # rung 1 (declarative — checks Cargo.toml + lib.rs strings). This CI cell is
+  # rung 3: the build itself MUST fail with the `compile_error!` macro firing.
+  # ---------------------------------------------------------------------------
+  membership-set-refuses-wasm32:
+    name: benten-membership-set refuses to compile for wasm32-unknown-unknown
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install Rust toolchain (stable + wasm32-unknown-unknown)
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - name: cargo build benten-membership-set for wasm32 MUST FAIL with compile_error!
+        # Per CLAUDE.md baked-in #17 (full peer vs thin compute surface):
+        # benten-membership-set (the MembershipSet keying primitive, whose B-1
+        # dep set includes the native-only benten-sync) is FULL-PEER-ONLY and
+        # MUST NOT compile for wasm32-unknown-unknown. The `compile_error!`
+        # macro at `crates/benten-membership-set/src/lib.rs` fires immediately
+        # on any wasm32 build attempt with a clear error citing the
+        # architectural commitment.
+        #
+        # We invert the exit code: cargo build MUST fail, AND its stderr MUST
+        # mention `compile_error!` / `baked-in #17` so we know the failure is
+        # the architectural gate firing (not some unrelated dep-graph break).
+        #
+        # Closes F-09 MAJOR per phase-4-meta-core R6-R2 fix wave.
+        run: |
+          set -uo pipefail
+          if output=$(cargo build --target wasm32-unknown-unknown -p benten-membership-set 2>&1); then
+            echo "::error::benten-membership-set MUST NOT compile for wasm32-unknown-unknown per CLAUDE.md baked-in #17 — but cargo build succeeded! The compile_error! gate at crates/benten-membership-set/src/lib.rs has been removed or bypassed."
+            echo "$output"
+            exit 1
+          fi
+          # Verify the failure was the architectural gate, not something else.
+          if ! echo "$output" | grep -q -E "(compile_error!|baked-in #17|target_arch)"; then
+            echo "::error::benten-membership-set wasm32 build failed BUT not for the expected architectural reason. The compile_error! macro at crates/benten-membership-set/src/lib.rs MUST be the failure source. Got:"
+            echo "$output"
+            exit 1
+          fi
+          echo "PASSED: benten-membership-set correctly refuses to compile for wasm32-unknown-unknown via compile_error! gate per CLAUDE.md baked-in #17 (defense-in-depth rung 3)."

@@ -353,6 +353,14 @@ fn crate2_no_direct_primitive_construction() {
         "ml_kem::",
         "ml_dsa::",
         "x25519_dalek::",
+        // Mirror the authoritative crypto-suite forbidden list
+        // (benten-crypto-suite/src/boundary.rs FORBIDDEN_DIRECT_DEPS): the
+        // Cryspen ML-KEM-768 PRODUCTION impl, the HKDF extract/expand KDF, and
+        // the Argon2id DAK primitive are ALL wrapped in benten-crypto-suite (the
+        // ONLY call site, #5); a direct import here would fork the crypto floor.
+        "libcrux_ml_kem",
+        "hkdf::",
+        "argon2::",
     ] {
         assert!(
             !src.contains(forbidden),

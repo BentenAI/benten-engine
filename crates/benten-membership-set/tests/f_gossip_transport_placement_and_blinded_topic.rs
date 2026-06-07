@@ -40,24 +40,24 @@
 //! generation flips the golden hex; convergence that depended on gossip
 //! fails the gossip-disabled arm).
 //!
-//! ## RED-PHASE (pim-12 §3.6e) + SELF-CONTAINED stub-shim
+//! ## Blinded-topic keyed MAC (history: pim-12 §3.6e)
 //!
-//! Compiles GREEN behind `#[ignore]`; SELF-CONTAINED stub-shim for
-//! parallel-safe R3. The blinded-topic stub-shim stub-shims the keyed MAC as
-//! `blake3::keyed_hash(K_Set, ·)` — where R0.7 §4.1 clarifies `HMAC` =
-//! `blake3::keyed_hash` (native BLAKE3 keyed MAC; no hmac/sha2 dep; bytes
-//! unchanged), the SAME primitive the sibling
-//! `f_aad_2_nine_tuple_injectivity_opaque_boundary.rs` uses for
-//! `membership_set_id_commitment`. R5 routes through the real
+//! LIVE and un-ignored — runs every CI cycle against the production
+//! surfaces. The blinded topic is the keyed MAC `blake3::keyed_hash(K_Set,
+//! ·)` — where R0.7 §4.1 clarifies `HMAC` = `blake3::keyed_hash` (native
+//! BLAKE3 keyed MAC; no hmac/sha2 dep; bytes unchanged), the SAME primitive
+//! the sibling `f_aad_2_nine_tuple_injectivity_opaque_boundary.rs` uses for
+//! `membership_set_id_commitment`. The test routes through the real
 //! `benten-crypto-suite` keyed MAC over `K_Set` (NOT HMAC-SHA256 — the crate
 //! carries no hmac/sha2 dep; do NOT invent a different HMAC/hash). The
 //! byte-derivation SHAPE (key ‖ set_id ‖ BE(gen), truncate-to-32, no time
 //! input) is what F-GOSSIP-2 freezes via the absolute golden vector.
+//! (History: this started as a RED-PHASE self-contained stub-shim for
+//! parallel-safe R3; R5 wired it to the production surfaces and un-ignored
+//! it.)
 
 #![allow(clippy::unwrap_used)]
-// TIER-2 (w-ms-sync) RED-PHASE stub: cosmetic clippy lints in the
-// self-contained convergence-harness shim. Non-semantic; the w-ms-sync wave
-// rewrites this stub against the real crate surface and clears these.
+// Cosmetic clippy lints in the local convergence-harness helper; non-semantic.
 #![allow(
     clippy::assigning_clones,
     clippy::no_effect_underscore_binding,

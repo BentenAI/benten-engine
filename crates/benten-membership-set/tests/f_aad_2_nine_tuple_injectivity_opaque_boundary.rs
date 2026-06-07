@@ -258,8 +258,12 @@ fn stub_cid(payload: &[u8]) -> Vec<u8> {
 /// (`0x6610` group multi-stanza, Sealed-Sender) `GroupAadInputs::fixture()`
 /// BLINDED 11-field AAD.
 ///
-/// Computed ONCE, off-line, from the canonical-TLV assembler (M-20). **131
-/// bytes** (NO plaintext sender field — F4-001 / F-LC-9); leading `0x01`
+/// Computed ONCE, off-line, from the canonical-TLV assembler (M-20). **127
+/// bytes** (the BLINDED 11-field set: 1 `aad_version` + 2 codepoint + 36
+/// body_cid + 4 member_count + 32 audience_set_commitment + 4 stanza_index +
+/// 4 stanza_count + 4 member_key_generation + 32 membership_set_id_commitment
+/// + 4 membership_set_generation + 4 role_assignments_generation = 127; NO
+/// plaintext sender field — F4-001 / F-LC-9); leading `0x01`
 /// (`aad_version`); bytes 1..3 = `0x6610` (BE codepoint — R4.6-FIX corrected
 /// from the prior `0x6600` set-keying value per R0.7 §3.10/§4.1). NEITHER the
 /// raw member roster NOR the raw set-id appears — they are BLINDED into the two

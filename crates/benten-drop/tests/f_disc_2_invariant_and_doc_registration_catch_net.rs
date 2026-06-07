@@ -621,6 +621,60 @@ fn f_disc_2_inv21_inv22_enforcement_owned_elsewhere_flag() {
     );
 }
 
+/// **F-24 codepoint-SSOT cross-crate const-equality pin.**
+///
+/// `benten_crypto_suite::registry` is the single source of truth for the
+/// `0x6100..0x6FFF` allocation map, but the wire-byte-emitting codepoint
+/// values are INDEPENDENTLY defined in the producing crates
+/// (`benten_membership_set::codepoints` for the MembershipSet band;
+/// `benten_drop::layer_c` for the Layer-C drop / Layer-D DeviceLink bands) and
+/// mirrored back to the registry — they are not re-exported from it. Because
+/// the same integer lives in two places, a single-side edit would silently
+/// drift the registry from the wire. This pin asserts the producing crates'
+/// constants EQUAL the registry's, so a one-sided edit fails the build (the
+/// `CRYPTO-CODEPOINTS.md` §4.0 SSOT note documents the same coupling). This is
+/// a cross-crate const-AGREEMENT assertion between two independent definitions
+/// — NOT an `assert_eq!(CONST, literal)` self-walker (which would tautologize).
+#[test]
+fn f_disc_2_codepoint_ssot_cross_crate_const_equality() {
+    use benten_crypto_suite::registry;
+    use benten_membership_set::codepoints;
+
+    // MembershipSet band (codepoints.rs ↔ registry.rs).
+    assert_eq!(
+        codepoints::MEMBERSHIP_SET_ENCRYPTION,
+        registry::MEMBERSHIP_SET_ENCRYPTION,
+        "0x6600 MEMBERSHIP_SET_ENCRYPTION drifted between \
+         benten_membership_set::codepoints and benten_crypto_suite::registry"
+    );
+    assert_eq!(
+        codepoints::MEMBERSHIP_SET_GROUP_MULTI_STANZA,
+        registry::MEMBERSHIP_SET_GROUP_MULTI_STANZA,
+        "0x6610 MEMBERSHIP_SET_GROUP_MULTI_STANZA drifted between \
+         benten_membership_set::codepoints and benten_crypto_suite::registry"
+    );
+    assert_eq!(
+        codepoints::MEMBERSHIP_SET_RESERVED_0X6620,
+        registry::MEMBERSHIP_SET_SUBSET_REF,
+        "0x6620 MembershipSet reserved/subset-ref slot drifted between \
+         benten_membership_set::codepoints and benten_crypto_suite::registry"
+    );
+
+    // Layer-C drop band (benten_drop::layer_c ↔ registry.rs).
+    assert_eq!(
+        benten_drop::layer_c::LAYER_C_DROP,
+        registry::LAYER_C_DROP,
+        "0x6500 LAYER_C_DROP drifted between benten_drop::layer_c and \
+         benten_crypto_suite::registry"
+    );
+    assert_eq!(
+        benten_drop::layer_c::LAYER_C_DROP_MULTI_RECIPIENT,
+        registry::LAYER_C_DROP_MULTI_RECIPIENT,
+        "0x6520 LAYER_C_DROP_MULTI_RECIPIENT drifted between \
+         benten_drop::layer_c and benten_crypto_suite::registry"
+    );
+}
+
 /// Helper: does `haystack` contain `needle` as a contiguous subslice?
 fn contains_subslice(haystack: &[u8], needle: &[u8]) -> bool {
     if needle.is_empty() {

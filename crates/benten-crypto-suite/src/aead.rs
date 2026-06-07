@@ -75,7 +75,9 @@ const CHACHA20POLY1305_NONCE_LEN: usize = 12;
 ///
 /// The byte length is dispatched by `cipher_codepoint` — at G-CORE-3a's
 /// `HYBRID_X25519_MLKEM768` codepoint the wrapped key is the
-/// HKDF-SHA256-derived 32-B ChaCha20-Poly1305 key. **NOT a hardcoded
+/// SHA3-256-combiner-derived 32-B ChaCha20-Poly1305 key (the X-Wing
+/// combiner output per `draft-connolly-cfrg-xwing-kem-10` §6;
+/// [`crate::cipher_suite::combine_x_wing`] — NOT HKDF). **NOT a hardcoded
 /// size in the CLAUDE.md #5 sense** — the codepoint surface enforces
 /// the dispatch (a future codepoint at a different AEAD would carry
 /// a different key length).
