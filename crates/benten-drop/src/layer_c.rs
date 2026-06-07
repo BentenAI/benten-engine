@@ -503,7 +503,11 @@ pub enum EncryptedEnvelope {
 // ---------------------------------------------------------------------------
 
 /// Typed Layer-C failure modes.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future failure mode lands as
+/// an additive variant without a breaking change for downstream `match` sites.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LayerCError {
     /// AEAD authentication failed (wrong key, tampered AAD, stanza
     /// substitution/reorder/re-target, wrong recipient sk).
@@ -1408,7 +1412,11 @@ pub mod abuse_control {
     }
 
     /// Typed admission failure modes.
+    ///
+    /// `#[non_exhaustive]` (§11 SemVer-readiness): a future admission failure
+    /// mode lands as an additive variant, never a downstream wire/match break.
     #[derive(Clone, Debug, PartialEq, Eq)]
+    #[non_exhaustive]
     pub enum AdmitError {
         /// No token presented for a Sealed-Sender envelope.
         MissingDeliveryToken,
@@ -1553,6 +1561,16 @@ pub mod group_posture {
     /// MembershipSet K_Set group codepoint.
     pub const MEMBERSHIP_SET_GROUP_MULTI_STANZA: u16 = 0x6610;
 
+    /// The frozen byte width of the inline self-describing CIDv1 the `0x6610`
+    /// AAD binds: `0x01 0x71 0x1e 0x20 || 32-byte BLAKE3` = **36 bytes**. The
+    /// `body_cid` is encoded INLINE (no external length prefix) and precedes
+    /// the fixed-width integer fields, so a malformed (wrong-width) CID would
+    /// shift every following field boundary. [`assemble_group_aad_local`]
+    /// asserts this exact width at the assembly site (U3 length-injectivity).
+    /// MUST equal `benten_membership_set::aad::SELF_DESCRIBING_CID_LEN` (the
+    /// `f_02_*` byte-equality cross-check keeps the two engines locked).
+    pub const SELF_DESCRIBING_CID_LEN: usize = 36;
+
     /// The §3.9 / setid-commitment domain-separation label (R0.7 §3.10):
     /// `membership_set_id_commitment = blake3::keyed_hash(K_Set,
     /// "benten:setid:v1" || membership_set_id)`. MUST match the canonical
@@ -1586,7 +1604,11 @@ pub mod group_posture {
     }
 
     /// Typed group failure modes.
+    ///
+    /// `#[non_exhaustive]` (§11 SemVer-readiness): a future group failure mode
+    /// lands as an additive variant, never a downstream wire/match break.
     #[derive(Clone, Debug, PartialEq, Eq)]
+    #[non_exhaustive]
     pub enum GroupError {
         /// AEAD authentication failed.
         AeadAuthenticationFailed,
@@ -1807,8 +1829,10 @@ pub mod group_posture {
     ///
     /// # Panics
     ///
-    /// Panics only if the member count exceeds `u32::MAX` (the #46 ceiling makes
-    /// this unreachable in practice).
+    /// Panics if the member count exceeds `u32::MAX` (the #46 ceiling makes
+    /// this unreachable in practice), or if `body_cid` is not exactly
+    /// [`SELF_DESCRIBING_CID_LEN`] (36) bytes — a malformed CID would shift
+    /// every later field boundary, so it fails loud at the assembly site.
     #[must_use]
     pub fn assemble_group_aad_local(t: &GroupAadInputs) -> Vec<u8> {
         let mut buf = Vec::new();
@@ -1817,6 +1841,17 @@ pub mod group_posture {
         // codepoint — BE u16 (U1; committed in AAD).
         buf.extend_from_slice(&t.codepoint.to_be_bytes());
         // body_cid — INLINE self-describing CIDv1 (self-delimiting; no external lp).
+        // WIDTH-ASSERT the canonical 36-byte CIDv1: the field is inline +
+        // boundary-load-bearing (the fixed-width integers below are positionally
+        // addressed off it), so a malformed CID MUST NOT silently shift every
+        // later field boundary (U3 length-injectivity). Fail loud here — and keep
+        // this assert byte-identical with the canonical
+        // `benten_membership_set::aad::assemble_group_aad` crosscheck.
+        assert_eq!(
+            t.body_cid.len(),
+            SELF_DESCRIBING_CID_LEN,
+            "0x6610 AAD body_cid MUST be a canonical {SELF_DESCRIBING_CID_LEN}-byte self-describing CIDv1 (0x01 0x71 0x1e 0x20 || 32-byte BLAKE3)"
+        );
         buf.extend_from_slice(&t.body_cid);
         // member_count — BE u32. The roster itself is BLINDED below.
         let member_count = u32::try_from(t.member_dids.len()).expect("member count fits u32");

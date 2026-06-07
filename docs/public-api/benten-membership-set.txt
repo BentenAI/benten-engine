@@ -25,6 +25,7 @@ impl core::marker::UnsafeUnpin for benten_membership_set::aad::GroupAadInputs
 impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::aad::GroupAadInputs
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::aad::GroupAadInputs
 pub const benten_membership_set::aad::AAD_VERSION: u8
+pub const benten_membership_set::aad::SELF_DESCRIBING_CID_LEN: usize
 pub const benten_membership_set::aad::SETID_COMMITMENT_LABEL: &[u8]
 pub fn benten_membership_set::aad::assemble_group_aad(&benten_membership_set::aad::GroupAadInputs) -> alloc::vec::Vec<u8>
 pub fn benten_membership_set::aad::audience_set_commitment(&[alloc::string::String]) -> [u8; 32]

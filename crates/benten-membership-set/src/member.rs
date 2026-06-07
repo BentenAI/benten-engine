@@ -20,8 +20,14 @@
 //!   discriminant is the AAD-keying-bound canonical wire form (determinism +
 //!   AAD compactness).
 //!
-//! Field ORDER on `MemberEntry` is load-bearing: it is the canonical
-//! serialization order the byte-pin (`f_aad_1`) freezes.
+//! The canonical serialization order is NOT the struct's field-DECLARATION
+//! order: `MemberEntry` serializes as a CBOR MAP, and the canonical DAG-CBOR
+//! encoder ([`crate::aad::canonical_members_table_bytes`]) sorts map keys by
+//! the canonical rule (length-first, then bytewise) — so the frozen on-wire
+//! key order is `role`, `member_ref`, `sig_pubkey`, `is_authority`,
+//! `admitted_at_hlc`. That KEY-SORTED byte order (not the declaration order)
+//! is what the `f_aad_1` byte-pin freezes; the declaration order below is
+//! free to differ.
 
 use crate::error::MembershipSetError;
 use serde::Serialize;
@@ -128,9 +134,13 @@ impl MemberRef {
 /// shape.
 ///
 /// **ZERO nature field by construction** — `is_ai` / `is_plugin` /
-/// `member_type` are DERIVED (Inv-22), never stored. Field ORDER is the
-/// canonical serialization order the byte-pin freezes:
-/// `role`, `is_authority`, `sig_pubkey`, `admitted_at_hlc`, `member_ref`.
+/// `member_type` are DERIVED (Inv-22), never stored. The fields are DECLARED
+/// `role`, `is_authority`, `sig_pubkey`, `admitted_at_hlc`, `member_ref`, but
+/// this struct serializes as a CBOR MAP whose keys the canonical DAG-CBOR
+/// encoder sorts (length-first, then bytewise). The frozen on-wire KEY-SORTED
+/// order the `f_aad_1` byte-pin freezes is therefore `role`, `member_ref`,
+/// `sig_pubkey`, `is_authority`, `admitted_at_hlc` — NOT the declaration
+/// order; reordering the declaration below is byte-neutral.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct MemberEntry {
     /// The governance-axis role (F-MS-4 owns the ordinal golden vector).
