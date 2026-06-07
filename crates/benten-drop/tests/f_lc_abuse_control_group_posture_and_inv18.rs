@@ -185,10 +185,36 @@ use abuse_stub::{
     AdmitError, DeliveryToken, TokenBindingAad, admit_sealed_sender, admit_sealed_sender_bound,
     decrypt_was_attempted_for_last_admit, serialize_token_binding_aad,
 };
+use benten_crypto_suite::sig::{Keypair as SigKeypair, SignatureSuite};
+use benten_id::did::Did;
 use group_posture_stub::{
-    GroupError, GroupSealParams, LAYER_C_DROP_MULTI_RECIPIENT, MEMBERSHIP_SET_GROUP_MULTI_STANZA,
-    dispatch_group, open_membership_set_group, seal_membership_set_group,
+    GroupError, GroupSealParams, GroupVerifyContext, LAYER_C_DROP_MULTI_RECIPIENT,
+    MEMBERSHIP_SET_GROUP_MULTI_STANZA, dispatch_group, open_membership_set_group,
+    seal_membership_set_group,
 };
+
+/// B2 ORIGIN-AUTH helper: a real sender (LAMPS-hybrid keypair + matching
+/// hybrid `did:key` bytes). See the `f_lc_hpke` sibling for the rationale.
+fn hybrid_sender() -> (SigKeypair, Vec<u8>) {
+    let kp = SignatureSuite::v1_default().generate_keypair();
+    let did_str = Did::from_hybrid_public_key(&kp.public()).to_string();
+    (kp, did_str.into_bytes())
+}
+
+/// The independently-held `GroupVerifyContext` over a derived roster (all
+/// generations = 1, matching `group_seal_params`).
+fn verify_ctx(pks: &[[u8; 32]]) -> GroupVerifyContext {
+    let member_dids = benten_drop::layer_c::group_roster_for_test(pks)
+        .iter()
+        .map(|d| String::from_utf8_lossy(d).into_owned())
+        .collect();
+    GroupVerifyContext {
+        member_dids,
+        member_key_generation: 1,
+        membership_set_generation: 1,
+        role_assignments_generation: 1,
+    }
+}
 
 /// The canonical `GroupSealParams` for the `0x6610` seal tests — the
 /// MembershipSet-specific keying generations + raw set-id that the BLINDED
@@ -481,12 +507,13 @@ fn f_lc_8_mutated_token_binding_aad_fails_admit() {
 #[test]
 fn f_lc_9_group_send_honors_sealed_sender_no_plaintext_sender_did() {
     let pks = [[0x10u8; 32], [0x11u8; 32], [0x12u8; 32]];
-    let sender = did("did:key:zGroupSenderUNIQUEMARKER");
+    let (sender_kp, sender) = hybrid_sender();
     let k_set = [0x33u8; 32];
 
     let env = seal_membership_set_group(
         &pks,
         &sender,
+        &sender_kp,
         &k_set,
         &group_seal_params(),
         b"group payload",
@@ -520,13 +547,19 @@ fn f_lc_9_group_send_honors_sealed_sender_no_plaintext_sender_did() {
 fn f_lc_9_group_recipient_recovers_inner_sender_did() {
     let pks = [[0x20u8; 32], [0x21u8; 32]];
     let sks = [[0xA0u8; 32], [0xA1u8; 32]];
-    let sender = did("did:key:zGroupSenderCarol");
+    let (sender_kp, sender) = hybrid_sender();
     let k_set = [0x44u8; 32];
 
-    let env =
-        seal_membership_set_group(&pks, &sender, &k_set, &group_seal_params(), b"hello group");
-    let (pt, recovered_sender) = open_membership_set_group(&sks[1], 1, &env)
-        .expect("group recipient MUST open their stanza");
+    let env = seal_membership_set_group(
+        &pks,
+        &sender,
+        &sender_kp,
+        &k_set,
+        &group_seal_params(),
+        b"hello group",
+    );
+    let (pt, recovered_sender) = open_membership_set_group(&sks[1], 1, &verify_ctx(&pks), &env)
+        .expect("group recipient MUST open + origin-verify their stanza");
 
     assert_eq!(
         pt, b"hello group",
@@ -554,9 +587,11 @@ fn f_lc_9_group_codepoints_distinct_and_dispatch_strict_reject() {
     assert_eq!(LAYER_C_DROP_MULTI_RECIPIENT, 0x6520);
 
     // Feed 0x6610-declared bytes to the 0x6520 arm → strict-reject.
+    let (sender_kp, sender) = hybrid_sender();
     let env = seal_membership_set_group(
         &[[0x30u8; 32]],
-        &did("did:key:zX"),
+        &sender,
+        &sender_kp,
         &[0x55u8; 32],
         &group_seal_params(),
         b"x",
@@ -829,16 +864,19 @@ fn f_lc_7_hpke_non_fs_old_envelope_still_opens_with_recovered_sk() {
         for (i, b) in recovered_sk.iter().enumerate() {
             pk[i] = b.wrapping_sub(0x80);
         }
+        let audience = b"did:key:zLongTermRecipient".to_vec();
+        let (sender_kp, sender) = hybrid_sender();
         let env = seal_sealed_sender(
             &pk,
-            &b"did:key:zLongTermRecipient".to_vec(),
-            &b"did:key:zSender".to_vec(),
+            &audience,
+            &sender,
+            &sender_kp,
             &[0xF5u8; 32],
             0,
             b"old 2026 content",
         );
         // A 2030 recovery of the SAME long-term sk decrypts the 2026 envelope.
-        open_single(recovered_sk, &env)
+        open_single(recovered_sk, &audience, 0, &env)
             .map(|(pt, _sender)| pt)
             .map_err(|_| ())
     }

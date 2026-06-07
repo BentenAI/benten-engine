@@ -151,10 +151,13 @@ pub mod benten_id::did
 pub struct benten_id::did::Did(_)
 impl benten_id::did::Did
 pub fn benten_id::did::Did::as_str(&self) -> &str
+pub fn benten_id::did::Did::from_hybrid_public_key(&benten_crypto_suite::sig::PublicKey) -> Self
 pub fn benten_id::did::Did::from_public_key(&benten_id::keypair::PublicKey) -> Self
 pub fn benten_id::did::Did::from_string_for_test_fixture(alloc::string::String) -> Self
 pub fn benten_id::did::Did::parse_validated(impl core::convert::Into<alloc::string::String>) -> core::result::Result<Self, benten_id::errors::DidError>
+pub fn benten_id::did::Did::parse_validated_hybrid(impl core::convert::Into<alloc::string::String>) -> core::result::Result<Self, benten_id::errors::DidError>
 pub fn benten_id::did::Did::resolve(&self) -> core::result::Result<benten_id::keypair::PublicKey, benten_id::errors::DidError>
+pub fn benten_id::did::Did::resolve_hybrid(&self) -> core::result::Result<benten_crypto_suite::sig::PublicKey, benten_id::errors::DidError>
 impl core::clone::Clone for benten_id::did::Did
 pub fn benten_id::did::Did::clone(&self) -> benten_id::did::Did
 impl core::cmp::Eq for benten_id::did::Did
@@ -185,6 +188,7 @@ pub const benten_id::did::DID_KEY_PREFIX: &str
 pub const benten_id::did::ED25519_MULTICODEC: [u8; 2]
 pub const benten_id::did::HYBRID_KEM_MULTICODEC: [u8; 2]
 pub const benten_id::did::HYBRID_SIG_MULTICODEC: [u8; 2]
+pub const benten_id::did::MLDSA65_PUB_MULTICODEC: [u8; 2]
 pub mod benten_id::did_rotation
 pub enum benten_id::did_rotation::AttestationKind
 pub benten_id::did_rotation::AttestationKind::SupersededBy
@@ -302,6 +306,13 @@ pub benten_id::errors::DidError::Base58Decode
 pub benten_id::errors::DidError::BodyTooShort
 pub benten_id::errors::DidError::BodyTooShort::got: usize
 pub benten_id::errors::DidError::BodyTooShort::min: usize
+pub benten_id::errors::DidError::HybridBodyTooShort
+pub benten_id::errors::DidError::HybridBodyTooShort::component: &'static str
+pub benten_id::errors::DidError::HybridBodyTooShort::got: usize
+pub benten_id::errors::DidError::HybridBodyTooShort::min: usize
+pub benten_id::errors::DidError::HybridTrailingBytes
+pub benten_id::errors::DidError::HybridTrailingBytes::extra: usize
+pub benten_id::errors::DidError::InvalidHybridPublicKey(&'static str)
 pub benten_id::errors::DidError::InvalidPrefix(alloc::string::String)
 pub benten_id::errors::DidError::InvalidPublicKey
 pub benten_id::errors::DidError::UnknownMulticodec(u8, u8)
@@ -977,6 +988,13 @@ pub benten_id::DidError::Base58Decode
 pub benten_id::DidError::BodyTooShort
 pub benten_id::DidError::BodyTooShort::got: usize
 pub benten_id::DidError::BodyTooShort::min: usize
+pub benten_id::DidError::HybridBodyTooShort
+pub benten_id::DidError::HybridBodyTooShort::component: &'static str
+pub benten_id::DidError::HybridBodyTooShort::got: usize
+pub benten_id::DidError::HybridBodyTooShort::min: usize
+pub benten_id::DidError::HybridTrailingBytes
+pub benten_id::DidError::HybridTrailingBytes::extra: usize
+pub benten_id::DidError::InvalidHybridPublicKey(&'static str)
 pub benten_id::DidError::InvalidPrefix(alloc::string::String)
 pub benten_id::DidError::InvalidPublicKey
 pub benten_id::DidError::UnknownMulticodec(u8, u8)

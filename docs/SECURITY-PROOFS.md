@@ -102,14 +102,32 @@ own AAD field-set under its own HPKE-derived AEAD key, so **each stanza independ
 - **Truncation / censorship defense:** `stanza_count` is bound alongside `stanza_index`, so dropping trailing
   stanzas to censor a co-recipient is detectable — each surviving stanza still names the original `stanza_count`,
   which no longer matches the delivered count.
-- **Inter-member non-forgeability:** a member cannot forge a stanza attributed to another member — the
-  sealed-inner-sender-DID + post-decrypt-verify proves origin from inside the ciphertext, not from a spoofable
-  plaintext field.
+- **Inter-member non-forgeability (B2 ORIGIN-AUTHENTICATION — NOW TRUE in code).** A member — even one holding
+  `K_Set` and thus able to derive the CEK and produce valid AEAD tags — **cannot** mint a send attributed to
+  another member, nor re-target another member's real body to a recipient set that member never chose. The AEAD
+  tag alone CANNOT provide this (a co-member can produce a valid tag), so the property rests on a real signature,
+  NOT on the un-authenticated sealed-inner-DID parse. Each Sealed-Sender send carries, **inside the once-sealed
+  body region** (on the wire exactly ONCE; sender-confidential), a single per-MESSAGE LAMPS-hybrid
+  `id-MLDSA65-Ed25519-SHA512` (`0x0001`) signature over a domain-separated binding `M_auth`
+  (`SENDER_AUTH_DOMAIN` ‖ sig/envelope codepoints ‖ sender-DID ‖ `body_cid` ‖ audience commitment ‖ key-epoch
+  generations ‖ `stanza_count` ‖ body-AAD digest). Each recipient resolves the recovered sender-DID to its
+  **hybrid** verifying key (self-certifying `did:key`, two-component multikey; `Did::resolve_hybrid`) and
+  cryptographically verifies **both halves** post-decrypt, fail-closed (`SenderOriginAuthFailed`). **Soundness
+  (F-2):** the recipient re-derives the audience commitment + the key-epoch generations from the set-state it
+  INDEPENDENTLY HOLDS (its own roster / `K_Set` / held generations), NEVER the attacker-controllable wire value —
+  so a re-target (re-wrap to a new set) flips the commitment and a stale-generation replay (revoked-member
+  cross-generation) flips a generation word, both fail-closed. Forging an attribution requires the target's
+  hybrid signing key (post-quantum-secure). The construction (`benten_drop::layer_c` seal/open + the substantive
+  `f_lc_3` pins: second-sealer-spoof / second-member-spoof / re-target / stale-generation / strip-PQ-half) makes
+  this claim TRUE; design record `.addl/phase-4-meta/sealed-sender-auth-design.md`.
 
-These properties hold **per stanza, independently** — which is exactly what makes the group send robust to active
-relays. The IND-CCA2-under-adversarially-chosen-recipient-seed tractability (M-6) — relevant because device-link /
-remote-permission flows admit a chosen-recipient-pubkey surface — is named as an **external-cryptographer-audit
-deliverable** (§9.3 audit line; Compromise #45 / #59), NOT a unit-test "proof" in this doc.
+These properties hold **per stanza, independently** for the per-stanza defenses (U17 / truncation), and **per
+message** for the origin-auth signature (one signature authenticates the body to the whole audience-SET at
+constant cost) — which together is exactly what makes the group send robust to active relays AND to malicious
+co-members. The IND-CCA2-under-adversarially-chosen-recipient-seed tractability (M-6) — relevant because
+device-link / remote-permission flows admit a chosen-recipient-pubkey surface — is named as an
+**external-cryptographer-audit deliverable** (§9.3 audit line; Compromise #45 / #59), NOT a unit-test "proof" in
+this doc.
 
 ---
 

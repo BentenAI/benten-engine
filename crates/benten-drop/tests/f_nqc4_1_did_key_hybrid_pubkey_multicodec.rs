@@ -1,12 +1,8 @@
 //! **F-NQC4-1** — did:key hybrid-pubkey multicodec (CE-I2 + WF-H1, NQ-C4).
 //!
-//! ADDL Phase-4-Meta-Core, F-full **R3-W7 (doc-wave)** partition.
-//! Doc-coupling + self-contained codec-stub family (reuses the `tf3f`
-//! doc-coupling shape for the registration-question half, plus a
-//! self-contained multicodec round-trip stub for the codec half — the
-//! stub mirrors the in-tree `benten_id::did::ED25519_MULTICODEC` shape at
-//! `crates/benten-id/src/did.rs:26,98` without depending on it for
-//! parallel-safety).
+//! ADDL Phase-4-Meta-Core, F-full **R3-W7 (doc-wave)** partition; the hybrid
+//! encode/decode arms wired GREEN at the `benten-id-hybrid-key` wave (the
+//! B2 sealed-sender sender-auth prerequisite).
 //!
 //! Pin source: `.addl/phase-4-meta/f-full-r2-test-landscape.md` §1
 //! Group-12 **F-NQC4-1**:
@@ -20,72 +16,31 @@
 //!    allowlist pin. SURFACES multiformats-registration question if no
 //!    value."
 //!
-//! **OPEN-SPEC ARM FLAGGED (NQ-C4 / §5.D-9):** the multiformats registry
-//! may not have an assigned value for the PQ-hybrid pubkeys. Per §5 the
-//! reserved-private-value-with-fallback is round-tripped if no registered
-//! value exists; the real-corpus (registered-value) swap is flagged for
-//! R5. The reserved private prefixes below are PLACEHOLDERS R5 replaces
-//! with the registered (or G-CORE-9-reserved) values.
+//! **OPEN-SPEC ARM RESOLVED (NQ-C4 / §5.D-9):** at G-CORE-9 the multiformats
+//! registry had no assigned value for the PQ-hybrid pubkey shape, so a
+//! reserved private-value-with-fallback was held. Registered COMPONENT codes
+//! now exist (`mldsa-65-pub = 0x1211`, `ed25519-pub = 0xed`), so the v1 hybrid
+//! `did:key` encoding uses the **two-registered-component-multikey** form
+//! (`varint(0x1211) ‖ mldsaPK(1952) ‖ varint(0xed) ‖ tradPK(32)`, ML-DSA
+//! FIRST) — #5-clean, no invented number. The single-byte `0xef`/`0xf0`
+//! interim values are relegated to documented fallback-only. This wave wires
+//! the REAL `benten_id::did::{Did::from_hybrid_public_key, Did::resolve_hybrid}`
+//! and replaces the prior self-contained codec stub.
 //!
-//! **RED-PHASE (pim-12 §3.6e):** the hybrid `did:key` encode/decode path
-//! does NOT exist at baseline (`did.rs` is Ed25519-only). The end-state
-//! arms are `#[ignore = "RED-PHASE: F-NQC4-1 ..."]`; R5 wires the real
-//! `benten_id::did` hybrid encode/decode and un-ignores. The NON-ignored
-//! baseline arms drive the self-contained codec stub (a real round-trip,
-//! not a CONST compare) + the in-tree Ed25519 multicodec shape, and pass
-//! green now. NEVER `assert_eq!(CONST, CONST_VAL)`.
+//! **`did:agent:` (PIN-3) + the registration-doc-coupling (PIN-4) stay a
+//! SEPARATE NAMED carry** — the `did:agent:` alias is an Inv-22 nature
+//! concern orthogonal to sender-auth; it is NOT absorbed by this hybrid-key
+//! wave (the arms remain `#[ignore]`'d with a precise carry reason below).
 
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
-#![allow(unused_imports)]
-#![allow(unused_variables)]
-#![allow(dead_code)]
 
-// ===========================================================================
-// SELF-CONTAINED MULTICODEC STUB-SHIM (no cross-wave / no benten-id dep).
-// Mirrors the `did.rs:26` varint-prefix shape. R5 deletes this and uses
-// the real `benten_id::did::{encode_did_key_hybrid, parse_did_key}`.
-// ===========================================================================
+use benten_crypto_suite::sig::SignatureSuite;
+use benten_id::did::{Did, ED25519_MULTICODEC, MLDSA65_PUB_MULTICODEC};
+use benten_id::errors::DidError;
 
-/// RESERVED placeholder multicodec prefixes for the PQ-hybrid pubkeys.
-/// These are the "private-value-with-fallback reserved at G-CORE-9"
-/// values (NQ-C4) — R5 swaps in the registered multiformats values if
-/// they exist, else keeps the reserved private range. NOT the real
-/// registered values yet (open-spec arm).
-const HYBRID_SIG_MULTICODEC_RESERVED: [u8; 2] = [0x12, 0x01]; // placeholder
-const HYBRID_KEM_MULTICODEC_RESERVED: [u8; 2] = [0x13, 0x01]; // placeholder
-
-#[derive(Debug, PartialEq, Eq)]
-enum StubDidError {
-    UnknownMulticodec(u8, u8),
-    Malformed,
-}
-
-/// Encode a (prefix, pubkey-bytes) pair into a `did:key`-style payload
-/// (prefix || pubkey). This is the round-trippable shim — a real encode,
-/// not a CONST.
-fn stub_encode(prefix: [u8; 2], pubkey: &[u8]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(2 + pubkey.len());
-    out.extend_from_slice(&prefix);
-    out.extend_from_slice(pubkey);
-    out
-}
-
-/// Decode: recover (prefix, pubkey). Rejects an unrecognized prefix with
-/// `UnknownMulticodec` (mirrors `did.rs:98`).
-fn stub_decode(payload: &[u8], allowed: &[[u8; 2]]) -> Result<(usize, Vec<u8>), StubDidError> {
-    if payload.len() < 2 {
-        return Err(StubDidError::Malformed);
-    }
-    let prefix = [payload[0], payload[1]];
-    let idx = allowed.iter().position(|p| *p == prefix);
-    match idx {
-        Some(i) => Ok((i, payload[2..].to_vec())),
-        None => Err(StubDidError::UnknownMulticodec(prefix[0], prefix[1])),
-    }
-}
-
-fn invariant_doc() -> String {
+/// Read the in-tree `did.rs` source for doc-coupling assertions.
+fn did_rs() -> String {
     std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../crates/benten-id/src/did.rs"
@@ -93,158 +48,251 @@ fn invariant_doc() -> String {
     .expect("did.rs must be present")
 }
 
+/// Mint a real v1-beta-default hybrid (Ed25519⊕ML-DSA-65) verifying key.
+fn hybrid_public_key() -> benten_crypto_suite::sig::PublicKey {
+    let kp = SignatureSuite::v1_default().generate_keypair();
+    let pk = kp.public();
+    assert!(
+        pk.is_hybrid(),
+        "v1-beta default suite MUST mint a hybrid (PQ-carrying) key"
+    );
+    pk
+}
+
 // ===========================================================================
-// BASELINE ARMS (NOT ignored) — real round-trip over the stub codec +
-// the in-tree Ed25519 multicodec shape. Pass green now; would-FAIL if the
-// codec or the in-tree prefix shape regresses.
+// HYBRID ARMS (GREEN) — drive the REAL benten-id two-component-multikey
+// encode/decode. These replace the prior self-contained stub codec.
 // ===========================================================================
 
-/// PIN 0a (baseline) — the stub codec round-trips a synthesized hybrid
-/// sig pubkey: `decode(encode(pk)) == pk` AND the recovered prefix index
-/// is the sig slot. A no-op codec (returning empty / fixed bytes) fails.
+/// PIN 1 (registered-component-codec) — the REAL `did:key` hybrid encode
+/// emits the two-component-multikey body `varint(0x1211) ‖ mldsaPK ‖
+/// varint(0xed) ‖ tradPK` (ML-DSA FIRST, registered component codes), and
+/// `resolve_hybrid` recovers a byte-identical composite key. Would-FAIL if
+/// the codec is lossy, mis-orders the components, or shoe-horns the hybrid
+/// key under a single Benten-private prefix.
 #[test]
-fn f_nqc4_1_hybrid_sig_pubkey_round_trips_baseline() {
-    // Synthesized hybrid sig pubkey: Ed25519(32) ⊕ ML-DSA-65(1952) — we
-    // use a deterministic witness (not the real keygen; real-corpus swap
-    // flagged for R5 per §5.D-9).
-    let pk: Vec<u8> = (0u16..(32 + 1952)).map(|i| (i % 251) as u8).collect();
-    let allowed = [
-        HYBRID_SIG_MULTICODEC_RESERVED,
-        HYBRID_KEM_MULTICODEC_RESERVED,
-    ];
+fn f_nqc4_1_hybrid_did_key_round_trips() {
+    let pk = hybrid_public_key();
 
-    let encoded = stub_encode(HYBRID_SIG_MULTICODEC_RESERVED, &pk);
-    let (slot, recovered) = stub_decode(&encoded, &allowed)
-        .expect("encoded hybrid sig pubkey MUST decode under reserved prefix");
+    let did = Did::from_hybrid_public_key(&pk);
+    assert!(
+        did.as_str().starts_with("did:key:z"),
+        "hybrid did:key MUST carry the W3C `z` (base58btc) multibase prefix"
+    );
 
+    let recovered = did
+        .resolve_hybrid()
+        .expect("a freshly-encoded hybrid did:key MUST resolve");
+
+    // Byte-identical round-trip: re-serialize both composites and compare.
+    let want = pk
+        .to_lamps_composite_bytes()
+        .expect("hybrid pk serializes to LAMPS composite bytes");
+    let got = recovered
+        .to_lamps_composite_bytes()
+        .expect("resolved hybrid pk serializes to LAMPS composite bytes");
     assert_eq!(
-        slot, 0,
-        "sig pubkey MUST resolve to the sig multicodec slot"
+        got, want,
+        "did:key hybrid encode/decode MUST round-trip the composite pubkey \
+         bytes byte-for-byte (mldsaPK ‖ tradPK). A lossy or mis-ordered codec \
+         regresses U15."
     );
+}
+
+/// PIN 1b — the hybrid did:key body uses the REGISTERED component multicodecs
+/// in ML-DSA-first order (`0x1211` then `0xed`), NOT a Benten-private
+/// single-byte squat. Decodes the base58btc body and asserts the leading
+/// varint is `MLDSA65_PUB_MULTICODEC` and the second component prefix is
+/// `ED25519_MULTICODEC`. Would-FAIL if the encoder fell back to `0xef`/`0xf0`.
+#[test]
+fn f_nqc4_1_hybrid_body_uses_registered_component_codecs_mldsa_first() {
+    let pk = hybrid_public_key();
+    let did = Did::from_hybrid_public_key(&pk);
+    let body = did
+        .as_str()
+        .strip_prefix("did:key:z")
+        .expect("did:key:z prefix");
+    let decoded = bs58::decode(body).into_vec().expect("base58btc decode");
+
+    // Leading varint == registered mldsa-65-pub (0x1211 = [0x91, 0x24]).
     assert_eq!(
-        recovered, pk,
-        "did:key hybrid encode/decode MUST round-trip the pubkey bytes \
-         byte-for-byte. A lossy or stubbed codec regresses U15."
+        [decoded[0], decoded[1]],
+        MLDSA65_PUB_MULTICODEC,
+        "hybrid did:key MUST lead with the registered ML-DSA-65 component \
+         multicodec (0x1211), ML-DSA FIRST — never a Benten-private prefix"
     );
-}
 
-/// PIN 0b (baseline) — an unrecognized multicodec prefix decodes to
-/// `UnknownMulticodec` (NEVER silent acceptance). Mirrors the in-tree
-/// `did.rs:98` typed-reject. Would-FAIL if decode silently accepts an
-/// unknown prefix.
-#[test]
-fn f_nqc4_1_unknown_multicodec_typed_reject_baseline() {
-    let allowed = [
-        HYBRID_SIG_MULTICODEC_RESERVED,
-        HYBRID_KEM_MULTICODEC_RESERVED,
-    ];
-    // A prefix not in the allowed set (e.g. a bogus 0xff 0xff).
-    let payload = stub_encode([0xff, 0xff], &[1, 2, 3]);
-    let err = stub_decode(&payload, &allowed)
-        .expect_err("unknown multicodec prefix MUST be typed-rejected");
+    // The Ed25519 component (registered ed25519-pub = [0xed, 0x01]) follows
+    // after the ML-DSA pubkey. Locate it via the upstream-sourced ML-DSA-65
+    // pubkey length (no hardcoded size).
+    let mldsa_len = benten_crypto_suite::sizes::ml_dsa_65_pubkey_len();
+    let ed_prefix_at = MLDSA65_PUB_MULTICODEC.len() + mldsa_len;
     assert_eq!(
-        err,
-        StubDidError::UnknownMulticodec(0xff, 0xff),
-        "an unrecognized hybrid multicodec MUST yield UnknownMulticodec, \
-         never a silent fallback (mirrors did.rs:98 typed-reject)."
+        [decoded[ed_prefix_at], decoded[ed_prefix_at + 1]],
+        ED25519_MULTICODEC,
+        "the SECOND hybrid component MUST be the registered Ed25519 \
+         component multicodec (0xed)"
     );
 }
 
-/// PIN 0c (baseline) — the in-tree Ed25519 multicodec prefix shape is the
-/// W3C-mandated `[0xed, 0x01]` varint. Doc-coupling to the real `did.rs`
-/// source: the hybrid prefixes R5 adds MUST sit alongside this same
-/// `[byte, 0x01]` varint shape. Would-FAIL if the in-tree shape drifts.
+/// PIN 2 — typed-reject on a corrupted hybrid did:key. Flipping the leading
+/// component-codec byte MUST surface `DidError::UnknownMulticodec` (NEVER a
+/// silent accept, NEVER a panic). Mirrors the `did.rs` typed-reject contract.
 #[test]
-fn f_nqc4_1_in_tree_ed25519_multicodec_shape_present_baseline() {
-    let did_rs = invariant_doc();
+fn f_nqc4_1_hybrid_unknown_component_codec_typed_reject() {
+    let pk = hybrid_public_key();
+    let did = Did::from_hybrid_public_key(&pk);
+    let body = did
+        .as_str()
+        .strip_prefix("did:key:z")
+        .expect("did:key:z prefix");
+    let mut decoded = bs58::decode(body).into_vec().expect("base58btc decode");
+
+    // Corrupt the leading component-codec byte to a value in no registry slot.
+    decoded[0] = 0xff;
+    let corrupted = Did::from_string_for_test_fixture(format!(
+        "did:key:z{}",
+        bs58::encode(&decoded).into_string()
+    ));
+
+    // `PublicKey` is not `Debug`, so match on the `Result` rather than
+    // `expect_err` (which would require `T: Debug`).
+    match corrupted.resolve_hybrid() {
+        Err(DidError::UnknownMulticodec(0xff, _)) => {}
+        Err(other) => panic!(
+            "an unrecognized hybrid component multicodec MUST yield \
+             UnknownMulticodec, never a silent fallback; got {other:?}"
+        ),
+        Ok(_) => panic!("a wrong component multicodec MUST be typed-rejected, not accepted"),
+    }
+}
+
+/// PIN 2b — trailing-byte fail-closed. A well-formed hybrid body is EXACTLY
+/// the two component multikeys; an extra appended byte MUST surface
+/// `DidError::HybridTrailingBytes` (payload-stuffing defense).
+#[test]
+fn f_nqc4_1_hybrid_trailing_bytes_rejected() {
+    let pk = hybrid_public_key();
+    let did = Did::from_hybrid_public_key(&pk);
+    let body = did
+        .as_str()
+        .strip_prefix("did:key:z")
+        .expect("did:key:z prefix");
+    let mut decoded = bs58::decode(body).into_vec().expect("base58btc decode");
+    decoded.push(0x00); // one byte of slack
+
+    let stuffed = Did::from_string_for_test_fixture(format!(
+        "did:key:z{}",
+        bs58::encode(&decoded).into_string()
+    ));
+    match stuffed.resolve_hybrid() {
+        Err(DidError::HybridTrailingBytes { extra: 1 }) => {}
+        Err(other) => panic!(
+            "a hybrid body with slack MUST yield HybridTrailingBytes, never \
+             a silent truncation-accept; got {other:?}"
+        ),
+        Ok(_) => panic!("trailing bytes after both components MUST be rejected, not accepted"),
+    }
+}
+
+/// PIN 2c — truncated-body fail-closed. A body too short for the ML-DSA
+/// component MUST surface `DidError::HybridBodyTooShort` (NEVER an
+/// out-of-bounds panic).
+#[test]
+fn f_nqc4_1_hybrid_truncated_body_rejected() {
+    let pk = hybrid_public_key();
+    let did = Did::from_hybrid_public_key(&pk);
+    let body = did
+        .as_str()
+        .strip_prefix("did:key:z")
+        .expect("did:key:z prefix");
+    let mut decoded = bs58::decode(body).into_vec().expect("base58btc decode");
+    decoded.truncate(10); // far too short for mldsaPK
+
+    let short = Did::from_string_for_test_fixture(format!(
+        "did:key:z{}",
+        bs58::encode(&decoded).into_string()
+    ));
+    match short.resolve_hybrid() {
+        Err(DidError::HybridBodyTooShort { .. }) => {}
+        Err(other) => panic!(
+            "a too-short hybrid body MUST yield HybridBodyTooShort, never a \
+             panic or other error; got {other:?}"
+        ),
+        Ok(_) => panic!("a truncated hybrid body MUST be typed-rejected, not accepted"),
+    }
+}
+
+/// PIN 1c (doc-coupling) — `did.rs` defines a hybrid-SIG multicodec const +
+/// the registered ML-DSA-65 component multicodec const. Would-FAIL if the
+/// hybrid encode regressed to shoe-horning under the Ed25519 prefix.
+#[test]
+fn f_nqc4_1_did_rs_defines_hybrid_multicodecs() {
+    let src = did_rs();
     assert!(
-        did_rs.contains("ED25519_MULTICODEC") && did_rs.contains("[0xed, 0x01]"),
-        "did.rs MUST define ED25519_MULTICODEC = [0xed, 0x01] (the varint \
-         shape the hybrid prefixes extend). The F-NQC4-1 hybrid encode \
-         lands alongside it at R5."
+        src.contains("HYBRID_SIG_MULTICODEC") && src.contains("MLDSA65_PUB_MULTICODEC"),
+        "did.rs MUST define the hybrid-SIG fallback const AND the registered \
+         ML-DSA-65 component multicodec (NQ-C4 / U15)."
+    );
+    assert!(
+        src.contains("HYBRID_KEM_MULTICODEC"),
+        "did.rs MUST retain the hybrid-KEM fallback const (NQ-C4 / U15)."
     );
 }
 
-// ===========================================================================
-// RED-PHASE ARMS (ignored until R5) — assert the real benten-id hybrid
-// did:key surface + the registration-question doc-coupling.
-// ===========================================================================
-
-/// PIN 1 — the REAL `benten-id` hybrid `did:key` encode names a hybrid
-/// SIG multicodec const (Ed25519⊕ML-DSA-65). Source doc-coupling: the
-/// hybrid-sig multicodec const MUST be defined in `did.rs` at R5.
-/// Would-FAIL if the hybrid pubkey is shoe-horned under the Ed25519
-/// prefix (which would mis-type the key for every did:key resolver).
+/// PIN 4-partial (doc-coupling, GREEN here) — the registered-component-codec
+/// resolution of NQ-C4 is surfaced in `CRYPTO-CODEPOINTS.md`: the doc cites
+/// the registered component multicodec values and marks `0xef`/`0xf0` as
+/// fallback-only. (The broader `did:agent:` PIN-3 + the full PIN-4 carry stay
+/// ignored below — this arm only pins the hybrid-key resolution this wave
+/// lands.)
 #[test]
-fn f_nqc4_1_did_rs_defines_hybrid_sig_multicodec() {
-    let did_rs = invariant_doc();
-    assert!(
-        did_rs.contains("HYBRID_SIG_MULTICODEC")
-            || did_rs.contains("ED25519_MLDSA65_MULTICODEC")
-            || did_rs.contains("MLDSA65_ED25519_MULTICODEC"),
-        "did.rs MUST define a hybrid-SIG multicodec const for the \
-         Ed25519⊕ML-DSA-65 did:key pubkey (NQ-C4 / U15), distinct from \
-         ED25519_MULTICODEC. R5 adds it."
-    );
-}
-
-/// PIN 2 — the REAL `benten-id` hybrid `did:key` encode names a hybrid
-/// KEM multicodec const (X25519⊕ML-KEM-768). Source doc-coupling.
-/// Would-FAIL if the KEM pubkey lacks a distinct multicodec.
-#[test]
-fn f_nqc4_1_did_rs_defines_hybrid_kem_multicodec() {
-    let did_rs = invariant_doc();
-    assert!(
-        did_rs.contains("HYBRID_KEM_MULTICODEC")
-            || did_rs.contains("X25519_MLKEM768_MULTICODEC")
-            || did_rs.contains("MLKEM768_X25519_MULTICODEC"),
-        "did.rs MUST define a hybrid-KEM multicodec const for the \
-         X25519⊕ML-KEM-768 did:key pubkey (NQ-C4 / U15). R5 adds it."
-    );
-}
-
-/// PIN 3 — `did:agent:` optional allowlist alias is named (Inv-22
-/// nature-derived alias, NOT a stored discriminator). Doc-coupling to
-/// did.rs: the alias MUST be documented as an allowlist alias, not a
-/// method that carries authority. Would-FAIL if `did:agent` is wired as
-/// a trust-bearing method.
-#[test]
-fn f_nqc4_1_did_agent_optional_allowlist_alias() {
-    let did_rs = invariant_doc();
-    assert!(
-        did_rs.contains("did:agent"),
-        "did.rs MUST name the `did:agent:` optional allowlist alias \
-         (NQ-C4 + Inv-22: nature DERIVED via method-parse, alias is an \
-         OPTIONAL allowlist hint, never a stored authoritative \
-         discriminator). R5 adds it."
-    );
-    // Over-claim guard: the alias MUST NOT be described as carrying
-    // authority / being authoritative.
-    assert!(
-        !did_rs.contains("did:agent grants") && !did_rs.contains("did:agent authority"),
-        "`did:agent:` MUST be an OPTIONAL alias, never authority-bearing \
-         (Inv-22 nature-derived-not-stored)."
-    );
-}
-
-/// PIN 4 — the multiformats-registration QUESTION is surfaced in the
-/// codepoint doc: either a registered value is cited OR the reserved
-/// private-value-with-fallback is documented (NQ-C4 open-spec resolution).
-/// Doc-coupling. Would-FAIL if the registration status is left silent
-/// (the open-spec arm un-surfaced).
-#[test]
-fn f_nqc4_1_multiformats_registration_question_surfaced() {
+fn f_nqc4_1_registered_component_codec_resolution_surfaced() {
     let codepoints = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../docs/CRYPTO-CODEPOINTS.md"
     ))
-    .unwrap_or_default();
+    .expect("CRYPTO-CODEPOINTS.md must be present");
     assert!(
         codepoints.contains("multicodec") && codepoints.contains("hybrid"),
         "CRYPTO-CODEPOINTS.md MUST surface the hybrid-pubkey multicodec \
-         registration status (NQ-C4): cite the registered multiformats \
-         value if one exists, else document the reserved private-value-\
-         with-fallback reserved at G-CORE-9. Leaving it silent un-surfaces \
-         the open-spec arm."
+         registration status (NQ-C4)."
+    );
+    assert!(
+        codepoints.contains("0x1211"),
+        "CRYPTO-CODEPOINTS.md NQ-C4 section MUST cite the registered \
+         ML-DSA-65 component multicodec (0x1211) the v1 hybrid did:key uses."
+    );
+}
+
+// ===========================================================================
+// SEPARATE NAMED CARRY — `did:agent:` alias (PIN-3) + the broader NQ-C4
+// did:agent doc-coupling (PIN-4). Carried: NQ-C4 did:agent arm, separate from
+// the hybrid-key wave. `did:agent` is an Inv-22 nature concern (nature DERIVED
+// via method-parse; alias is an OPTIONAL allowlist hint, never authority-
+// bearing) orthogonal to B2 sealed-sender SENDER-AUTH. NOT absorbed here.
+// ===========================================================================
+
+/// PIN 3 — `did:agent:` optional allowlist alias.
+///
+/// **CARRIED:** NQ-C4 `did:agent:` arm — separate from the hybrid-key wave
+/// (Inv-22 nature-derived alias, orthogonal to sender-auth). Un-ignored by the
+/// dedicated `did:agent:`/Inv-22 wave.
+#[test]
+#[ignore = "CARRIED: NQ-C4 did:agent arm, separate from the hybrid-key wave (Inv-22 nature concern, not sender-auth)"]
+fn f_nqc4_1_did_agent_optional_allowlist_alias() {
+    let src = did_rs();
+    assert!(
+        src.contains("did:agent"),
+        "did.rs MUST name the `did:agent:` optional allowlist alias \
+         (NQ-C4 + Inv-22: nature DERIVED via method-parse, alias is an \
+         OPTIONAL allowlist hint, never a stored authoritative \
+         discriminator)."
+    );
+    // Over-claim guard: the alias MUST NOT be described as carrying authority.
+    assert!(
+        !src.contains("did:agent grants") && !src.contains("did:agent authority"),
+        "`did:agent:` MUST be an OPTIONAL alias, never authority-bearing \
+         (Inv-22 nature-derived-not-stored)."
     );
 }

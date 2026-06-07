@@ -49,6 +49,18 @@
 #   GroupError::WrongGroupCodepoint, LayerCError::UnsupportedCodepoint,
 #   TransportError::TransportReservedAtV1Beta.
 #
+# # F-NQC4-1 hybrid did:key wave addition (2026-06-06) — 3 NEW DidError variants
+#
+# The `benten-id-hybrid-key` wave (B2 sealed-sender sender-auth prerequisite)
+# added 3 resolution-path typed variants on the existing `DidError` enum:
+#   DidError::{HybridBodyTooShort, HybridTrailingBytes, InvalidHybridPublicKey}.
+# These are EXACTLY the same category as the pre-existing baselined
+# `DidError::{BodyTooShort, InvalidPrefix, UnknownMulticodec}` — `DidError`
+# has NO `code()` method and does NOT cross the napi/wire/ErrorCode catalog
+# surface; it is a `Did::resolve` / `Did::resolve_hybrid` typed-reject error.
+# They join the SAME NAMED-DEFERRED post-FREEZE §3.5g item 6 drain wave (the
+# whole `DidError` type is in the PRE-FREEZE-BACKLOG drain row above).
+#
 # # Format
 #
 # One `TypeName::Variant` per line; blank lines + lines starting with `#`
@@ -88,6 +100,9 @@ CrdtError::StampedValueCodec
 DeviceAttestationError::EnvelopeWidening
 DeviceAttestationError::IncompatibleWithRuntime
 DidError::BodyTooShort
+DidError::HybridBodyTooShort
+DidError::HybridTrailingBytes
+DidError::InvalidHybridPublicKey
 DidError::InvalidPrefix
 DidError::UnknownMulticodec
 DidRotationError::HlcNotStrictlyMonotonic

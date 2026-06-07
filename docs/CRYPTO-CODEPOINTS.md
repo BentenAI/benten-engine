@@ -68,24 +68,49 @@ The reserved set is enumerated in
 (`chained_state_tlv_aad_binding`) so a present-vs-absent flip is detectable at
 decrypt (not advisory).
 
-## did:key hybrid-pubkey multicodec (NQ-C4 / U15)
+## did:key hybrid-pubkey multicodec (NQ-C4 / U15) — RESOLVED
 
-The PQ-**hybrid** public keys carried in `did:key` need their own multicodec
-prefixes, distinct from the Ed25519-only `ED25519_MULTICODEC = [0xed, 0x01]`:
+The PQ-**hybrid** public keys carried in `did:key` must reference REGISTERED
+multiformats multicodec values, distinct from the Ed25519-only
+`ED25519_MULTICODEC = [0xed, 0x01]`, per CLAUDE.md baked-in #5 ("component
+algorithm IDs reference the multiformats/IANA registry — never a Benten-private
+number").
 
-- **Hybrid signature pubkey** (Ed25519⊕ML-DSA-65) — `HYBRID_SIG_MULTICODEC`
-  in `crates/benten-id/src/did.rs`.
-- **Hybrid KEM pubkey** (X25519⊕ML-KEM-768) — `HYBRID_KEM_MULTICODEC` in
-  `crates/benten-id/src/did.rs`.
+**Multiformats-registration status (RESOLVED, NQ-C4 / §5.D-9).** There is **no
+registered COMPOSITE multicodec** for the hybrid pubkey shapes, but registered
+**COMPONENT** codes DO exist:
 
-**Multiformats-registration status (OPEN-SPEC, NQ-C4 / §5.D-9).** At the time
-of writing the multiformats registry has **no assigned multicodec value** for
-these specific PQ-hybrid pubkey shapes. Per the conservative-fallback policy
-above, Benten reserves a **private-value-with-fallback** prefix for each hybrid
-pubkey (reserved at G-CORE-9), to be swapped for the registered multiformats
-value once one is allocated — an additive change, **never a wire-break**. The
-`did:agent:` method is an **optional allowlist alias** (Inv-22: nature DERIVED
-via method-parse; the alias is a hint, never a stored authoritative
+| Component | Registered multicodec | Unsigned-varint |
+|-----------|-----------------------|-----------------|
+| ML-DSA-65 pubkey | `mldsa-65-pub = 0x1211` | `[0x91, 0x24]` (`MLDSA65_PUB_MULTICODEC`) |
+| Ed25519 pubkey | `ed25519-pub = 0xed` | `[0xed, 0x01]` (`ED25519_MULTICODEC`) |
+
+So the **v1 hybrid `did:key` encodes the hybrid key as TWO registered
+component multikeys** (the multi-multikey form), **ML-DSA FIRST** (consistent
+with `benten_crypto_suite::sig::PublicKey::from_lamps_composite_bytes`, which
+expects `mldsaPK(1952) ‖ tradPK(32)`):
+
+```text
+did:key:z + base58btc( varint(0x1211) ‖ mldsaPK(1952) ‖ varint(0xed) ‖ tradPK(32) )
+```
+
+This is **#5-clean** (no invented number). Implemented at
+`crates/benten-id/src/did.rs::{Did::from_hybrid_public_key, Did::resolve_hybrid}`;
+component-codec dispatch is typed-reject (`DidError::UnknownMulticodec` /
+`HybridBodyTooShort` / `HybridTrailingBytes` / `InvalidHybridPublicKey`) — never
+a silent fallback. (The hybrid **KEM** pubkey, X25519⊕ML-KEM-768, follows the
+same two-registered-component-multikey discipline when wired.)
+
+**Fallback-only interim values.** The single-byte private prefixes
+`HYBRID_SIG_MULTICODEC = [0xef, 0x01]` + `HYBRID_KEM_MULTICODEC = [0xf0, 0x01]`
+in `crates/benten-id/src/did.rs` were the G-CORE-9 NQ-C4 reserved-private
+interim, held when no registered code was known. They are **NOT the v1 wire
+encoding** — they are retained as **documented fallback-only** and are
+**#5-RISKY** (single-byte private values that squat the registered single-byte
+multicodec range). New content uses the two-component-multikey form above.
+
+The `did:agent:` method is an **optional allowlist alias** (Inv-22: nature
+DERIVED via method-parse; the alias is a hint, never a stored authoritative
 discriminator and never authority-bearing).
 
 ## Transport-config reserve (Compromise #53 / §3.9)

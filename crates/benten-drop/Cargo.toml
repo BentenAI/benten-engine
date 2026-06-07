@@ -115,3 +115,9 @@ benten-sync = { path = "../benten-sync" }
 # This is the ONLY edge to benten-membership-set and it lives ONLY in the test
 # binaries — drop's PRODUCTION tree stays sync-free (cargo tree -e normal proves it).
 benten-membership-set = { path = "../benten-membership-set" }
+
+# F-NQC4-1 hybrid did:key wave: the `f_nqc4_1_*` arms decode the base58btc
+# `did:key` body to assert the two-registered-component-multikey layout
+# (ML-DSA-first) + drive the adversarial corruption pins. Same base58btc
+# (multibase `z`) primitive `benten-id::did` uses; TEST-ONLY edge.
+bs58 = { workspace = true }

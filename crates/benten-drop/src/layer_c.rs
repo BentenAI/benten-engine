@@ -56,6 +56,166 @@ use benten_crypto_suite::cipher_suite::{CipherSuite, CipherSuiteCodepoint, Wrapp
 use benten_crypto_suite::{AeadEnvelope, AeadKeyMaterial};
 
 // ---------------------------------------------------------------------------
+// Sender ORIGIN-AUTHENTICATION (B2) — the per-MESSAGE LAMPS-hybrid signature.
+// ---------------------------------------------------------------------------
+
+/// Per-surface domain-separation tag for the Sealed-Sender ORIGIN-AUTH
+/// signature (B2). PREFIXED into `M_auth` so a Sealed-Sender auth signature
+/// can NEVER be reinterpreted as any other Benten signature surface
+/// (offline DropBundle envelope-sig `envelope_sig::ENVELOPE_SIG_DOMAIN`,
+/// UCAN-Varsig, device attestation, rotation attestation, …) and vice-versa
+/// (cross-context resistance — design §1.1 / §1.4 (f)).
+///
+/// **F-1 (corrected from the design draft):** domain separation is the
+/// PREFIX byte-string here, NOT a LAMPS `with_context` API. There is NO
+/// `sign_with_context` call on this surface — the signature is produced via
+/// the plain [`benten_crypto_suite::sig::SignatureSuite::sign`] /
+/// [`benten_crypto_suite::sig::SignatureSuite::verify`] (empty LAMPS ctx),
+/// exactly as `envelope_sig.rs` does. The tag rides inside the signed
+/// `M_auth` bytes.
+pub const SENDER_AUTH_DOMAIN: &[u8] = b"benten/layer-c/sealed-sender-origin-auth/v1";
+
+/// The default sender-origin-auth signature suite codepoint — the v1-beta
+/// LAMPS Composite `id-MLDSA65-Ed25519-SHA512` hybrid
+/// ([`benten_crypto_suite::codepoint::SigCodepoint::HYBRID_ED25519_MLDSA65`]
+/// = `0x0001`). Carried inside the once-sealed body region (bound into
+/// `M_auth`) so the classical-only `0x0002` arm stays a really-built
+/// NON-DEFAULT swap and any future suite is an additive upgrade — never a
+/// wire-break (CLAUDE.md baked-in #5).
+pub const SENDER_AUTH_SIG_CODEPOINT: u16 = 0x0001;
+
+/// The fields bound by the per-message `M_auth` ORIGIN-AUTH binding.
+///
+/// The sender signs `M_auth` ONCE per message (design §1.1, R0.2). The
+/// binding is **injective** (every variable field is `u32-BE`
+/// length-prefixed) and **all integers are big-endian** (M-19). The
+/// recipient INDEPENDENTLY RE-DERIVES this binding from the set-state it
+/// already holds — NEVER the attacker-controllable wire value (F-2,
+/// SOUNDNESS-CRITICAL): the `audience_commitment` + `generations` come from
+/// the recipient's own roster / `K_Set` / generations, NOT from the wire.
+///
+/// Layout (`build_m_auth`):
+/// ```text
+/// SENDER_AUTH_DOMAIN
+///   ‖ sig_codepoint        (u16 BE)   // 0x0001 default — binds the auth suite
+///   ‖ envelope_codepoint   (u16 BE)   // 0x6510 / 0x6520 / 0x6610 — binds the band
+///   ‖ lp_u32(sender_did)              // the claimed origin — self-binding
+///   ‖ body_cid             (36 B)     // self-describing CIDv1 — binds the CONTENT
+///   ‖ lp_u32(audience_commitment)     // binds WHO the message is for (anti-re-target)
+///   ‖ generation_count     (u32 BE)   // number of generation words that follow
+///   ‖ generations          (u32 BE each, in order)  // key-epoch binding (F-3)
+///   ‖ stanza_count         (u32 BE)   // F-01 truncation defense (also covered by the sig)
+///   ‖ body_aad_digest      (32 B)     // BLAKE3 of the once-sealed BODY's AEAD AAD bytes
+/// ```
+pub struct SenderAuthBinding<'a> {
+    /// The auth-suite selector (default [`SENDER_AUTH_SIG_CODEPOINT`]).
+    pub sig_codepoint: u16,
+    /// The envelope band (`0x6510` / `0x6520` / `0x6610`).
+    pub envelope_codepoint: u16,
+    /// The claimed origin — the sealed sender-DID bytes (a hybrid `did:key`).
+    pub sender_did: &'a [u8],
+    /// Self-describing CIDv1 over the body digest (36 B).
+    pub body_cid: &'a [u8],
+    /// The audience commitment the recipient INDEPENDENTLY recomputes from
+    /// its own held roster / audience (NEVER the wire value): `0x6510` =
+    /// the recipient's OWN audience DID; `0x6520` = the
+    /// `audience_set_commitment` over the recipient's independently-held
+    /// roster; `0x6610` = the `audience_set_commitment` over the roster the
+    /// recipient derives from `K_Set`/set-state.
+    pub audience_commitment: &'a [u8],
+    /// The key-epoch generation words bound EXPLICITLY (F-3; BE u32 each,
+    /// in canonical order). `0x6510`/`0x6520` = `[recipient_key_generation]`;
+    /// `0x6610` = `[member_key_generation, membership_set_generation,
+    /// role_assignments_generation]` (the `body_aad_digest` does NOT cover
+    /// the generations — explicit binding closes the revoked-member
+    /// cross-generation replay).
+    pub generations: &'a [u32],
+    /// The total stanza count (F-01 truncation defense; defense-in-depth).
+    pub stanza_count: u32,
+    /// BLAKE3 of the once-sealed body region's AEAD AAD bytes (transitively
+    /// binds the frozen body-seal AAD with zero new wire-field-set drift).
+    pub body_aad_digest: [u8; 32],
+}
+
+/// Build the canonical `M_auth` binding bytes (design §1.1). Injective +
+/// big-endian. The SAME function is used at seal (to sign) and at open (to
+/// re-derive + verify) — guaranteeing seal/verify agree on the byte layout.
+#[must_use]
+pub fn build_m_auth(b: &SenderAuthBinding<'_>) -> Vec<u8> {
+    let mut m = Vec::new();
+    m.extend_from_slice(SENDER_AUTH_DOMAIN);
+    m.extend_from_slice(&b.sig_codepoint.to_be_bytes());
+    m.extend_from_slice(&b.envelope_codepoint.to_be_bytes());
+    // lp_u32(sender_did) — injective framing of the variable origin field.
+    let sd_len = u32::try_from(b.sender_did.len()).expect("sender DID len fits u32");
+    m.extend_from_slice(&sd_len.to_be_bytes());
+    m.extend_from_slice(b.sender_did);
+    // body_cid — self-delimiting self-describing CIDv1 (no external lp).
+    m.extend_from_slice(b.body_cid);
+    // lp_u32(audience_commitment) — injective framing (the value is a fixed
+    // 32-B commitment for the group bands + a variable DID for 0x6510).
+    let ac_len = u32::try_from(b.audience_commitment.len()).expect("audience commitment fits u32");
+    m.extend_from_slice(&ac_len.to_be_bytes());
+    m.extend_from_slice(b.audience_commitment);
+    // generations — count-prefixed (injective) BE-u32 words (F-3).
+    let gen_count = u32::try_from(b.generations.len()).expect("generation count fits u32");
+    m.extend_from_slice(&gen_count.to_be_bytes());
+    for g in b.generations {
+        m.extend_from_slice(&g.to_be_bytes());
+    }
+    m.extend_from_slice(&b.stanza_count.to_be_bytes());
+    m.extend_from_slice(&b.body_aad_digest);
+    m
+}
+
+/// Sign `M_auth` with the sender's hybrid keypair (default LAMPS hybrid
+/// `0x0001`). **F-1: plain `sign` (empty LAMPS ctx); domain separation is
+/// the `SENDER_AUTH_DOMAIN` prefix INSIDE `M_auth`.** ML-DSA-first wire per
+/// [`benten_crypto_suite::sig::HybridSignature::to_wire_bytes`]. Returns the
+/// opaque `sender_sig` bytes carried inside the once-sealed body region.
+fn sign_m_auth(sender_kp: &benten_crypto_suite::sig::Keypair, m_auth: &[u8]) -> Vec<u8> {
+    let suite = benten_crypto_suite::sig::SignatureSuite::v1_default();
+    suite.sign(sender_kp, m_auth).to_wire_bytes()
+}
+
+/// Verify `sender_sig` over `M_auth` against the hybrid verifying key
+/// resolved from the recovered `sender_did`. Fail-closed → `Err(())` on ANY
+/// mismatch (the caller maps `Err(())` to its typed `SenderOriginAuthFailed`).
+/// NEVER accepts on a parse alone — both LAMPS halves must verify.
+///
+/// `sender_did` is the recovered sealed sender-DID bytes; it MUST be a valid
+/// UTF-8 hybrid `did:key` string (every legitimate sender's DID is). The
+/// resolve + verify both fail-close.
+fn verify_m_auth(
+    sig_codepoint: u16,
+    sender_did: &[u8],
+    m_auth: &[u8],
+    sender_sig: &[u8],
+) -> Result<(), ()> {
+    // The default + only v1 sender-auth suite is the hybrid 0x0001; a
+    // downgraded/unknown codepoint inside the sealed region is bound into
+    // M_auth (so it cannot be silently swapped) and is fail-closed here.
+    if sig_codepoint != SENDER_AUTH_SIG_CODEPOINT {
+        return Err(());
+    }
+    // The sealed sender-DID must be a valid hybrid did:key (UTF-8). Resolve
+    // the HYBRID verifying key from the self-certifying did:key —
+    // ML-DSA-first two-component multikey (F-NQC4-1) — via the
+    // production-safe validate-on-construct constructor. Fail-closed on any
+    // malformed / non-hybrid / unknown-multicodec DID.
+    let did_str = core::str::from_utf8(sender_did).map_err(|_| ())?;
+    let did = benten_id::did::Did::parse_validated_hybrid(did_str).map_err(|_| ())?;
+    let vk = did.resolve_hybrid().map_err(|_| ())?;
+    // Reconstruct the LAMPS composite signature from the ML-DSA-first wire
+    // and cryptographically verify BOTH halves over M_auth (empty LAMPS ctx;
+    // domain separation is the SENDER_AUTH_DOMAIN prefix in M_auth — F-1).
+    let sig = benten_crypto_suite::sig::HybridSignature::from_lamps_composite_wire(sender_sig)
+        .map_err(|_| ())?;
+    let suite = benten_crypto_suite::sig::SignatureSuite::v1_default();
+    suite.verify(vk, m_auth, &sig).map_err(|_| ())
+}
+
+// ---------------------------------------------------------------------------
 // Wire constants (§4.0 / §4.1) — all wire-locked.
 // ---------------------------------------------------------------------------
 
@@ -348,8 +508,21 @@ pub enum LayerCError {
     /// AEAD authentication failed (wrong key, tampered AAD, stanza
     /// substitution/reorder/re-target, wrong recipient sk).
     AeadAuthenticationFailed,
-    /// The recovered inner sender-DID did not verify (forged inner DID).
+    /// The recovered inner payload was malformed (a length-prefix overran
+    /// the decrypted buffer / a truncated inner_v2 framing). NOT a forgery
+    /// (a wrong-signer forgery surfaces [`LayerCError::SenderOriginAuthFailed`]
+    /// at the post-decrypt verify); this is a structural decode failure.
     InnerSenderDidForged,
+    /// **B2 Sealed-Sender ORIGIN-AUTH (post-decrypt verify) FAILED** — the
+    /// envelope AEAD-opened cleanly (so a co-recipient / any party able to
+    /// derive the CEK CAN produce a valid AEAD tag), but the per-message
+    /// LAMPS-hybrid signature over `M_auth` did NOT verify against the
+    /// hybrid verifying key resolved from the recovered sender-DID. This is
+    /// the defense the AEAD tag structurally cannot provide: a
+    /// validly-sealed-but-WRONG-SIGNER (impersonation / re-target / suite-
+    /// downgrade / stripped-PQ-half) envelope. Fail-closed; NEVER accepted on
+    /// a parse alone (design §1.4; `f_lc_3` substantive pins).
+    SenderOriginAuthFailed, // drift-detect: internal-only — layer_c-internal; no napi/wire ErrorCode boundary (§3.5g precedent: StanzaCountMismatch / DidError).
     /// Codepoint dispatch hit an unknown/reserved arm.
     UnsupportedCodepoint(u16),
     /// The number of stanzas actually DELIVERED does not equal the
@@ -430,12 +603,26 @@ fn decode_wrapped_key(bytes: &[u8]) -> Option<WrappedKey> {
     })
 }
 
-/// Seal `(inner_sender_did ‖ body)` under a fresh CEK with the given AAD;
+/// Seal the `0x6510` inner payload under a fresh CEK with the given AAD;
 /// HPKE-wrap the CEK to the recipient (derived deterministically from the
-/// pubkey fingerprint). Returns `(enc, ciphertext)`.
+/// pubkey fingerprint). The inner payload carries the ORIGIN-AUTH signature
+/// in the once-sealed region (B2):
+/// `inner_v2 = lp_u32(sender_did) ‖ sig_codepoint(u16 BE) ‖ lp_u32(sender_sig) ‖ body`.
+/// `M_auth` binds the `audience_did` the sender is sending TO (the recipient
+/// re-derives it from its OWN audience — F-2). Returns `(enc, ciphertext)`.
+// The B2 origin-auth binding genuinely needs all of {recipient_pk, sender_did,
+// sender_kp, envelope_codepoint, audience_did, body_cid, recipient_key_generation,
+// aad, body}; bundling them into a params struct would obscure the seal flow's
+// 1:1 correspondence with M_auth's fields. Internal (crate-private) helper.
+#[allow(clippy::too_many_arguments)]
 fn seal_inner(
     recipient_pk: &RecipientPubKey,
     sender_did: &SenderDid,
+    sender_kp: &benten_crypto_suite::sig::Keypair,
+    envelope_codepoint: u16,
+    audience_did: &[u8],
+    body_cid: &[u8],
+    recipient_key_generation: u32,
     aad: &[u8],
     body: &[u8],
 ) -> (Vec<u8>, Vec<u8>) {
@@ -451,12 +638,35 @@ fn seal_inner(
     cek_h.update(body);
     let cek = *cek_h.finalize().as_bytes();
 
-    // Bulk-seal the inner payload (inner_sender_did length-prefixed ‖ body)
-    // under the CEK, binding the plaintext AAD.
+    // B2 ORIGIN-AUTH: compute M_auth + sign ONCE per message. The single
+    // recipient send binds the recipient's audience-DID as the audience
+    // commitment, the recipient_key_generation as the single generation word,
+    // and stanza_count = 1.
+    let body_aad_digest = *blake3::hash(aad).as_bytes();
+    let generations = [recipient_key_generation];
+    let m_auth = build_m_auth(&SenderAuthBinding {
+        sig_codepoint: SENDER_AUTH_SIG_CODEPOINT,
+        envelope_codepoint,
+        sender_did,
+        body_cid,
+        audience_commitment: audience_did,
+        generations: &generations,
+        stanza_count: 1,
+        body_aad_digest,
+    });
+    let sender_sig = sign_m_auth(sender_kp, &m_auth);
+
+    // Bulk-seal the inner payload (inner_v2) under the CEK, binding the
+    // plaintext AAD. The sender-DID + sig_codepoint + sig + body are sealed
+    // together in the ONCE-sealed region.
     let mut inner = Vec::new();
     let sd_len = u32::try_from(sender_did.len()).expect("sender DID len fits u32");
     inner.extend_from_slice(&sd_len.to_be_bytes());
     inner.extend_from_slice(sender_did);
+    inner.extend_from_slice(&SENDER_AUTH_SIG_CODEPOINT.to_be_bytes());
+    let sig_len = u32::try_from(sender_sig.len()).expect("sender sig len fits u32");
+    inner.extend_from_slice(&sig_len.to_be_bytes());
+    inner.extend_from_slice(&sender_sig);
     inner.extend_from_slice(body);
     let cek_key =
         AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &cek);
@@ -474,12 +684,23 @@ fn seal_inner(
 }
 
 /// Recover `(body, inner_sender_did)` from `(enc, ciphertext)` under the
-/// recipient secret fingerprint + the plaintext AAD.
+/// recipient secret fingerprint + the plaintext AAD, then VERIFY the B2
+/// ORIGIN-AUTH signature. `recipient_audience_did` is the recipient's OWN
+/// audience DID — the recipient re-derives the audience commitment from it,
+/// NEVER the wire `audience_did` (F-2). `recipient_key_generation` is the
+/// recipient's independently-held key epoch.
+// Mirrors seal_inner's input set for the post-decrypt M_auth re-derivation
+// (F-2); internal (crate-private) helper. See seal_inner's note.
+#[allow(clippy::too_many_arguments)]
 fn open_inner(
     recipient_sk: &RecipientSecKey,
     enc: &[u8],
     ciphertext: &[u8],
     aad: &[u8],
+    envelope_codepoint: u16,
+    recipient_audience_did: &[u8],
+    body_cid: &[u8],
+    recipient_key_generation: u32,
 ) -> Result<(Vec<u8>, SenderDid), LayerCError> {
     let suite = hybrid_suite();
     // Reconstruct the recipient keypair from the secret fingerprint. The
@@ -506,16 +727,56 @@ fn open_inner(
     let inner = benten_crypto_suite::aead::unwrap(&body_env, &cek_key, aad)
         .map_err(|_| LayerCError::AeadAuthenticationFailed)?;
 
-    // Split off the inner sender-DID.
-    if inner.len() < 4 {
+    // Parse inner_v2 = lp_u32(sender_did) ‖ sig_codepoint(u16) ‖
+    // lp_u32(sender_sig) ‖ body.
+    let mut off = 0usize;
+    if inner.len() < off + 4 {
         return Err(LayerCError::InnerSenderDidForged);
     }
-    let sd_len = u32::from_be_bytes([inner[0], inner[1], inner[2], inner[3]]) as usize;
-    if 4 + sd_len > inner.len() {
+    let sd_len =
+        u32::from_be_bytes([inner[off], inner[off + 1], inner[off + 2], inner[off + 3]]) as usize;
+    off += 4;
+    if off + sd_len > inner.len() {
         return Err(LayerCError::InnerSenderDidForged);
     }
-    let sender_did = inner[4..4 + sd_len].to_vec();
-    let body = inner[4 + sd_len..].to_vec();
+    let sender_did = inner[off..off + sd_len].to_vec();
+    off += sd_len;
+    if inner.len() < off + 2 {
+        return Err(LayerCError::InnerSenderDidForged);
+    }
+    let sig_codepoint = u16::from_be_bytes([inner[off], inner[off + 1]]);
+    off += 2;
+    if inner.len() < off + 4 {
+        return Err(LayerCError::InnerSenderDidForged);
+    }
+    let sig_len =
+        u32::from_be_bytes([inner[off], inner[off + 1], inner[off + 2], inner[off + 3]]) as usize;
+    off += 4;
+    if off + sig_len > inner.len() {
+        return Err(LayerCError::InnerSenderDidForged);
+    }
+    let sender_sig = inner[off..off + sig_len].to_vec();
+    off += sig_len;
+    let body = inner[off..].to_vec();
+
+    // B2 ORIGIN-AUTH VERIFY: re-derive M_auth from the recovered sender-DID +
+    // the recipient's OWN audience-DID / key-generation (NOT the wire
+    // audience — F-2) and cryptographically verify the hybrid signature.
+    let body_aad_digest = *blake3::hash(aad).as_bytes();
+    let generations = [recipient_key_generation];
+    let m_auth = build_m_auth(&SenderAuthBinding {
+        sig_codepoint,
+        envelope_codepoint,
+        sender_did: &sender_did,
+        body_cid,
+        audience_commitment: recipient_audience_did,
+        generations: &generations,
+        stanza_count: 1,
+        body_aad_digest,
+    });
+    verify_m_auth(sig_codepoint, &sender_did, &m_auth, &sender_sig)
+        .map_err(|()| LayerCError::SenderOriginAuthFailed)?;
+
     Ok((body, sender_did))
 }
 
@@ -526,24 +787,43 @@ fn open_inner(
 /// Single-recipient HPKE-base seal (`0x647A`) under the Sealed-Sender
 /// DEFAULT (`0x6510`): the sender-DID is sealed INSIDE the ciphertext; the
 /// AAD binds the `audience` + body-CID + recipient_key_generation.
+///
+/// **B2 ORIGIN-AUTH (always-on, BD-2):** `sender_kp` is the sender's
+/// LAMPS-hybrid signing keypair, and `sender_did` MUST be the hybrid
+/// `did:key` that [`benten_id::did::Did::resolve_hybrid`] resolves to
+/// `sender_kp.public()` — the recipient verifies the per-message signature
+/// against that resolved key post-decrypt. There is NO unauthenticated
+/// single-recipient seal.
 #[must_use]
 pub fn seal_sealed_sender(
     recipient_pk: &RecipientPubKey,
     audience_did: &AudienceDid,
     sender_did: &SenderDid,
+    sender_kp: &benten_crypto_suite::sig::Keypair,
     body_cid: &BodyCidDigest,
     recipient_key_generation: u32,
     plaintext: &[u8],
 ) -> EncryptedEnvelope {
+    let cid = self_describing_cid(body_cid);
     let binding = BindingContext::DropSealedSender {
         aad_version: AAD_VERSION,
         codepoint: DROP_TO_RECIPIENT_SEALED_SENDER,
         audience_did: audience_did.clone(),
-        body_cid: self_describing_cid(body_cid),
+        body_cid: cid.clone(),
         recipient_key_generation,
     };
     let aad = binding.plaintext_aad_bytes();
-    let (enc, ciphertext) = seal_inner(recipient_pk, sender_did, &aad, plaintext);
+    let (enc, ciphertext) = seal_inner(
+        recipient_pk,
+        sender_did,
+        sender_kp,
+        DROP_TO_RECIPIENT_SEALED_SENDER,
+        audience_did,
+        &cid,
+        recipient_key_generation,
+        &aad,
+        plaintext,
+    );
     EncryptedEnvelope::HpkeBase {
         format_version: ENVELOPE_FORMAT_VERSION,
         binding,
@@ -554,26 +834,40 @@ pub fn seal_sealed_sender(
 
 /// Single-recipient HPKE-base seal under the plaintext-sender NON-DEFAULT
 /// path (`0x6500`): sender-DID bound INTO the AAD (U4) AND inside the
-/// ciphertext (so open still recovers it).
+/// ciphertext (so open still recovers it). Plaintext-sender discloses WHO;
+/// it STILL carries the B2 ORIGIN-AUTH signature (it must prove the who) —
+/// see `sender_kp` on [`seal_sealed_sender`].
 #[must_use]
 pub fn seal_plaintext_sender(
     recipient_pk: &RecipientPubKey,
     audience_did: &AudienceDid,
     sender_did: &SenderDid,
+    sender_kp: &benten_crypto_suite::sig::Keypair,
     body_cid: &BodyCidDigest,
     recipient_key_generation: u32,
     plaintext: &[u8],
 ) -> EncryptedEnvelope {
+    let cid = self_describing_cid(body_cid);
     let binding = BindingContext::DropPlaintextSender {
         aad_version: AAD_VERSION,
         codepoint: LAYER_C_DROP,
         audience_did: audience_did.clone(),
-        body_cid: self_describing_cid(body_cid),
+        body_cid: cid.clone(),
         recipient_key_generation,
         sender_did: sender_did.clone(),
     };
     let aad = binding.plaintext_aad_bytes();
-    let (enc, ciphertext) = seal_inner(recipient_pk, sender_did, &aad, plaintext);
+    let (enc, ciphertext) = seal_inner(
+        recipient_pk,
+        sender_did,
+        sender_kp,
+        LAYER_C_DROP,
+        audience_did,
+        &cid,
+        recipient_key_generation,
+        &aad,
+        plaintext,
+    );
     EncryptedEnvelope::HpkeBase {
         format_version: ENVELOPE_FORMAT_VERSION,
         binding,
@@ -582,17 +876,26 @@ pub fn seal_plaintext_sender(
     }
 }
 
-/// Open a single-recipient envelope. On the Sealed-Sender path it returns
-/// the recovered sender-DID (verified via AEAD authentication of the
-/// inner payload). Wrong sk / tampered AAD / forged inner DID → `Err`.
+/// Open a single-recipient envelope, VERIFYING the B2 ORIGIN-AUTH signature
+/// post-decrypt. `recipient_audience_did` is the recipient's OWN audience
+/// DID — the B2 audience commitment is re-derived from it, NEVER from the
+/// wire `audience_did` (F-2, SOUNDNESS-CRITICAL). `recipient_key_generation`
+/// is the recipient's independently-held key epoch. Returns the recovered
+/// sender-DID only after BOTH the AEAD unwrap AND the hybrid signature
+/// verify succeed.
 ///
 /// # Errors
 ///
 /// Returns [`LayerCError::AeadAuthenticationFailed`] on a wrong recipient
-/// secret / tampered ciphertext / tampered AAD, and
-/// [`LayerCError::InnerSenderDidForged`] on a malformed inner payload.
+/// secret / tampered ciphertext / tampered AAD,
+/// [`LayerCError::InnerSenderDidForged`] on a malformed inner payload, and
+/// [`LayerCError::SenderOriginAuthFailed`] when the per-message origin-auth
+/// signature does not verify (impersonation / re-target / suite-downgrade /
+/// stripped-half).
 pub fn open_single(
     recipient_sk: &RecipientSecKey,
+    recipient_audience_did: &AudienceDid,
+    recipient_key_generation: u32,
     env: &EncryptedEnvelope,
 ) -> Result<(Vec<u8>, SenderDid), LayerCError> {
     match env {
@@ -602,8 +905,29 @@ pub fn open_single(
             ciphertext,
             ..
         } => {
+            let (envelope_codepoint, body_cid) = match binding {
+                BindingContext::DropSealedSender {
+                    codepoint,
+                    body_cid,
+                    ..
+                }
+                | BindingContext::DropPlaintextSender {
+                    codepoint,
+                    body_cid,
+                    ..
+                } => (*codepoint, body_cid.clone()),
+            };
             let aad = binding.plaintext_aad_bytes();
-            open_inner(recipient_sk, enc, ciphertext, &aad)
+            open_inner(
+                recipient_sk,
+                enc,
+                ciphertext,
+                &aad,
+                envelope_codepoint,
+                recipient_audience_did,
+                &body_cid,
+                recipient_key_generation,
+            )
         }
         EncryptedEnvelope::HpkeMultiBase { .. } => Err(LayerCError::UnsupportedCodepoint(
             LAYER_C_DROP_MULTI_RECIPIENT,
@@ -635,9 +959,22 @@ fn group_roster(recipient_pks: &[RecipientPubKey]) -> Vec<RecipientDid> {
         .collect()
 }
 
+/// **Test-only (B2 / F-2):** the recipient-DID roster the `0x6520` seal
+/// derives from the recipient pubkeys — the INDEPENDENTLY-held roster an
+/// honest `open_group_stanza` recipient passes to recompute the B2
+/// `audience_set_commitment` (NEVER the wire `stanza.recipient_dids`). In
+/// production a recipient holds the actual roster; this mirrors the seal-side
+/// derivation so the round-trip pins model the held-roster faithfully.
+#[cfg(any(test, feature = "testing"))]
+#[must_use]
+pub fn group_roster_for_test(recipient_pks: &[RecipientPubKey]) -> Vec<RecipientDid> {
+    group_roster(recipient_pks)
+}
+
 fn seal_group_impl(
     recipient_pks: &[RecipientPubKey],
     sender_did: &SenderDid,
+    sender_kp: &benten_crypto_suite::sig::Keypair,
     body_cid: &BodyCidDigest,
     recipient_key_generation: u32,
     plaintext: &[u8],
@@ -664,7 +1001,34 @@ fn seal_group_impl(
     body_aad.push(AAD_VERSION);
     body_aad.extend_from_slice(&LAYER_C_DROP_MULTI_RECIPIENT.to_be_bytes());
     body_aad.extend_from_slice(&cid);
-    let body_env = benten_crypto_suite::aead::wrap(plaintext, &cek_key, &body_aad)
+
+    // B2 ORIGIN-AUTH: compute M_auth + sign ONCE per message. The group send
+    // binds the BLINDED audience_set_commitment over the roster (anti-re-target,
+    // design §1.4 (b)), the recipient_key_generation, and the total
+    // stanza_count. The signature is PREPENDED into the ONCE-bulk-sealed body
+    // region: body_v2 = sig_codepoint(u16) ‖ lp_u32(sender_sig) ‖ body.
+    let body_aad_digest = *blake3::hash(&body_aad).as_bytes();
+    let group_commitment = audience_set_commitment(&roster);
+    let generations = [recipient_key_generation];
+    let m_auth = build_m_auth(&SenderAuthBinding {
+        sig_codepoint: SENDER_AUTH_SIG_CODEPOINT,
+        envelope_codepoint: LAYER_C_DROP_MULTI_RECIPIENT,
+        sender_did,
+        body_cid: &cid,
+        audience_commitment: &group_commitment,
+        generations: &generations,
+        stanza_count,
+        body_aad_digest,
+    });
+    let sender_sig = sign_m_auth(sender_kp, &m_auth);
+    let mut body_v2 = Vec::new();
+    body_v2.extend_from_slice(&SENDER_AUTH_SIG_CODEPOINT.to_be_bytes());
+    let sig_len = u32::try_from(sender_sig.len()).expect("sender sig len fits u32");
+    body_v2.extend_from_slice(&sig_len.to_be_bytes());
+    body_v2.extend_from_slice(&sender_sig);
+    body_v2.extend_from_slice(plaintext);
+
+    let body_env = benten_crypto_suite::aead::wrap(&body_v2, &cek_key, &body_aad)
         .expect("group bulk seal must succeed");
     let mut cek_aead_nonce = [0u8; 12];
     cek_aead_nonce.copy_from_slice(&body_env.nonce[..12]);
@@ -731,6 +1095,7 @@ fn seal_group_impl(
 pub fn seal_group_multi(
     recipient_pks: &[RecipientPubKey],
     sender_did: &SenderDid,
+    sender_kp: &benten_crypto_suite::sig::Keypair,
     body_cid: &BodyCidDigest,
     recipient_key_generation: u32,
     plaintext: &[u8],
@@ -738,6 +1103,7 @@ pub fn seal_group_multi(
     seal_group_impl(
         recipient_pks,
         sender_did,
+        sender_kp,
         body_cid,
         recipient_key_generation,
         plaintext,
@@ -752,6 +1118,7 @@ pub fn seal_group_multi(
 pub fn seal_group_multi_plaintext_sender(
     recipient_pks: &[RecipientPubKey],
     sender_did: &SenderDid,
+    sender_kp: &benten_crypto_suite::sig::Keypair,
     body_cid: &BodyCidDigest,
     recipient_key_generation: u32,
     plaintext: &[u8],
@@ -759,6 +1126,7 @@ pub fn seal_group_multi_plaintext_sender(
     seal_group_impl(
         recipient_pks,
         sender_did,
+        sender_kp,
         body_cid,
         recipient_key_generation,
         plaintext,
@@ -766,19 +1134,35 @@ pub fn seal_group_multi_plaintext_sender(
     )
 }
 
-/// Group multi-stanza open (recipient at `my_index` opens via their stanza).
-/// Recovers the inner-sender-DID post-decrypt.
-/// Tampered/substituted/reordered/re-targeted stanza → `Err`.
+/// Group multi-stanza open (recipient at `my_index` opens via their stanza),
+/// VERIFYING the B2 ORIGIN-AUTH signature post-decrypt.
+///
+/// **F-2 (SOUNDNESS-CRITICAL):** `independent_roster` is the recipient's
+/// OWN, independently-held recipient-DID roster — the B2 `audience_set_`
+/// `commitment` is recomputed from IT, NEVER from the attacker-controllable
+/// wire `stanza.recipient_dids`. A re-targeted body (a co-member re-wraps
+/// Alice's real signed body to a NEW recipient set, design §1.4 (b)) is
+/// rejected because the recipient's independent commitment differs from the
+/// one Alice signed. `recipient_key_generation` is the recipient's
+/// independently-held key epoch (F-3).
+///
+/// Recovers the inner-sender-DID + body post-decrypt, then resolves the
+/// sender-DID to its hybrid verifying key and cryptographically verifies the
+/// per-message signature. Tampered/substituted/reordered stanza → AEAD `Err`;
+/// wrong-signer / re-target / suite-downgrade → `SenderOriginAuthFailed`.
 ///
 /// # Errors
 ///
 /// Returns [`LayerCError::AeadAuthenticationFailed`] when the recipient's
-/// stanza fails to authenticate (wrong sk, substituted/re-targeted stanza,
-/// tampered AAD), and [`LayerCError::InnerSenderDidForged`] on a malformed
-/// recovered inner payload.
+/// stanza fails to authenticate (wrong sk, substituted stanza, tampered AAD),
+/// [`LayerCError::InnerSenderDidForged`] on a malformed recovered inner /
+/// body payload, and [`LayerCError::SenderOriginAuthFailed`] when the
+/// per-message origin-auth signature does not verify.
 pub fn open_group_stanza(
     recipient_sk: &RecipientSecKey,
     my_index: usize,
+    independent_roster: &[RecipientDid],
+    recipient_key_generation: u32,
     env: &EncryptedEnvelope,
 ) -> Result<(Vec<u8>, SenderDid), LayerCError> {
     let EncryptedEnvelope::HpkeMultiBase {
@@ -851,8 +1235,55 @@ pub fn open_group_stanza(
     body_aad.extend_from_slice(&cid);
     let body_env = AeadEnvelope::from_wire_bytes(cek_aead_ciphertext)
         .map_err(|_| LayerCError::AeadAuthenticationFailed)?;
-    let body = benten_crypto_suite::aead::unwrap(&body_env, &cek_key, &body_aad)
+    let body_v2 = benten_crypto_suite::aead::unwrap(&body_env, &cek_key, &body_aad)
         .map_err(|_| LayerCError::AeadAuthenticationFailed)?;
+
+    // Parse body_v2 = sig_codepoint(u16) ‖ lp_u32(sender_sig) ‖ body.
+    let mut off = 0usize;
+    if body_v2.len() < off + 2 {
+        return Err(LayerCError::InnerSenderDidForged);
+    }
+    let sig_codepoint = u16::from_be_bytes([body_v2[off], body_v2[off + 1]]);
+    off += 2;
+    if body_v2.len() < off + 4 {
+        return Err(LayerCError::InnerSenderDidForged);
+    }
+    let sig_len = u32::from_be_bytes([
+        body_v2[off],
+        body_v2[off + 1],
+        body_v2[off + 2],
+        body_v2[off + 3],
+    ]) as usize;
+    off += 4;
+    if off + sig_len > body_v2.len() {
+        return Err(LayerCError::InnerSenderDidForged);
+    }
+    let sender_sig = body_v2[off..off + sig_len].to_vec();
+    off += sig_len;
+    let body = body_v2[off..].to_vec();
+
+    // B2 ORIGIN-AUTH VERIFY (F-2 SOUNDNESS-CRITICAL): re-derive M_auth from
+    // the recovered sender-DID + the recipient's OWN independently-held roster
+    // (NOT `stanza.recipient_dids` from the wire) + its independently-held
+    // recipient_key_generation. A re-targeted body (re-wrapped to a new set)
+    // yields a different commitment → verify fails. The body_aad_digest is
+    // recomputed from the body AAD this recipient just AEAD-verified.
+    let body_aad_digest = *blake3::hash(&body_aad).as_bytes();
+    let independent_commitment = audience_set_commitment(independent_roster);
+    let generations = [recipient_key_generation];
+    let m_auth = build_m_auth(&SenderAuthBinding {
+        sig_codepoint,
+        envelope_codepoint: LAYER_C_DROP_MULTI_RECIPIENT,
+        sender_did: &sender_did,
+        body_cid: &cid,
+        audience_commitment: &independent_commitment,
+        generations: &generations,
+        stanza_count: stanza.stanza_count,
+        body_aad_digest,
+    });
+    verify_m_auth(sig_codepoint, &sender_did, &m_auth, &sender_sig)
+        .map_err(|()| LayerCError::SenderOriginAuthFailed)?;
+
     Ok((body, sender_did))
 }
 
@@ -1159,6 +1590,17 @@ pub mod group_posture {
     pub enum GroupError {
         /// AEAD authentication failed.
         AeadAuthenticationFailed,
+        /// **B2 Sealed-Sender ORIGIN-AUTH (post-decrypt verify) FAILED** —
+        /// the `0x6610` group envelope AEAD-opened cleanly (a co-member
+        /// holding `K_Set` CAN derive the CEK and produce valid AEAD tags),
+        /// but the per-message LAMPS-hybrid signature over `M_auth` did NOT
+        /// verify against the hybrid verifying key resolved from the
+        /// recovered sender-DID. This closes the THREAT-MODEL "Co-recipient
+        /// member" impersonation gap: a second member cannot mint a send
+        /// attributed to another member, nor re-target / replay a stale-
+        /// generation body. Fail-closed; NEVER accepted on a parse alone
+        /// (design §1.4 / §4.1; `f_lc_3` substantive pins).
+        SenderOriginAuthFailed, // drift-detect: internal-only — layer_c-internal; no napi/wire ErrorCode boundary (§3.5g precedent: StanzaCountMismatch / DidError).
         /// `0x6610` bytes fed to the `0x6520` dispatch arm (or vice versa).
         WrongGroupCodepoint {
             /// The codepoint declared by the bytes.
@@ -1457,6 +1899,7 @@ pub mod group_posture {
     pub fn seal_membership_set_group(
         recipient_pks: &[RecipientPubKey],
         sender_did: &SenderDid,
+        sender_kp: &benten_crypto_suite::sig::Keypair,
         k_set: &[u8; 32],
         params: &GroupSealParams,
         plaintext: &[u8],
@@ -1483,7 +1926,46 @@ pub mod group_posture {
         body_aad.push(AAD_VERSION);
         body_aad.extend_from_slice(&MEMBERSHIP_SET_GROUP_MULTI_STANZA.to_be_bytes());
         body_aad.extend_from_slice(&cid);
-        let body_env = benten_crypto_suite::aead::wrap(plaintext, &cek_key, &body_aad)
+
+        // B2 ORIGIN-AUTH (F-3): compute M_auth + sign ONCE per message. The
+        // `0x6610` binding EXPLICITLY binds the THREE generation words
+        // (member_key / membership_set / role_assignments) — the body_aad_digest
+        // does NOT cover them, so the explicit binding closes the revoked-member
+        // cross-generation replay (a stale-generation signed body re-delivered
+        // to current-gen members fails verify). The audience commitment is the
+        // BLINDED audience_set_commitment over the member-DID roster. The
+        // signature is PREPENDED into the ONCE-sealed body region:
+        // body_v2 = sig_codepoint(u16) ‖ lp_u32(sender_sig) ‖ body.
+        let body_aad_digest = *blake3::hash(&body_aad).as_bytes();
+        let member_dids: Vec<String> = roster
+            .iter()
+            .map(|d| String::from_utf8_lossy(d).into_owned())
+            .collect();
+        let group_commitment = audience_set_commitment_str(&member_dids);
+        let generations = [
+            params.member_key_generation,
+            params.membership_set_generation,
+            params.role_assignments_generation,
+        ];
+        let m_auth = super::build_m_auth(&super::SenderAuthBinding {
+            sig_codepoint: super::SENDER_AUTH_SIG_CODEPOINT,
+            envelope_codepoint: MEMBERSHIP_SET_GROUP_MULTI_STANZA,
+            sender_did,
+            body_cid: &cid,
+            audience_commitment: &group_commitment,
+            generations: &generations,
+            stanza_count,
+            body_aad_digest,
+        });
+        let sender_sig = super::sign_m_auth(sender_kp, &m_auth);
+        let mut body_v2 = Vec::new();
+        body_v2.extend_from_slice(&super::SENDER_AUTH_SIG_CODEPOINT.to_be_bytes());
+        let sig_len = u32::try_from(sender_sig.len()).expect("sender sig len fits u32");
+        body_v2.extend_from_slice(&sig_len.to_be_bytes());
+        body_v2.extend_from_slice(&sender_sig);
+        body_v2.extend_from_slice(plaintext);
+
+        let body_env = benten_crypto_suite::aead::wrap(&body_v2, &cek_key, &body_aad)
             .expect("group bulk seal must succeed");
         let body_wire = body_env.to_wire_bytes();
 
@@ -1543,8 +2025,39 @@ pub mod group_posture {
         }
     }
 
-    /// Open a `0x6610` group stanza; recovers the inner-sender-DID
-    /// post-decrypt.
+    /// The recipient's INDEPENDENTLY-held `0x6610` verification context — the
+    /// set-state every honest member already holds (NOT read from the wire).
+    ///
+    /// **F-2 (SOUNDNESS-CRITICAL):** the B2 verify recomputes the audience
+    /// commitment + the generation words from THIS context, NEVER from the
+    /// attacker-controllable wire value. A second member who re-targets /
+    /// replays a stale-generation body cannot make the recipient's
+    /// independently-recomputed `M_auth` match the one Alice signed.
+    #[derive(Clone, Debug)]
+    pub struct GroupVerifyContext {
+        /// The member-DID roster the recipient holds independently (the same
+        /// `did:key:z…` derivation `seal_membership_set_group` bound). The B2
+        /// `audience_set_commitment` is recomputed over THIS list (sorted +
+        /// blinded internally), NEVER the wire commitment.
+        pub member_dids: Vec<String>,
+        /// The recipient's independently-held member-key generation (F-3).
+        pub member_key_generation: u32,
+        /// The recipient's independently-held membership-set generation (F-3).
+        pub membership_set_generation: u32,
+        /// The recipient's independently-held role-assignments generation (F-3).
+        pub role_assignments_generation: u32,
+    }
+
+    /// Open a `0x6610` group stanza, VERIFYING the B2 ORIGIN-AUTH signature
+    /// post-decrypt against the recipient's INDEPENDENTLY-held set-state.
+    ///
+    /// **F-2 (SOUNDNESS-CRITICAL):** `ctx` is the recipient's own held
+    /// roster + generations; the B2 `audience_set_commitment` + the three
+    /// generation words are recomputed from `ctx`, NEVER from the wire — so a
+    /// re-targeted / stale-generation body fails verify (it was signed over a
+    /// DIFFERENT commitment / generation set). Recovers the inner-sender-DID +
+    /// body post-decrypt, resolves the sender-DID to its hybrid verifying key,
+    /// and cryptographically verifies the per-message signature.
     ///
     /// # Errors
     ///
@@ -1553,9 +2066,13 @@ pub mod group_posture {
     /// dropped / censored / truncated stanzas — SECURITY-PROOFS §3.3/§4.1
     /// truncation-defense; F-01). [`GroupError::AeadAuthenticationFailed`] when
     /// the recipient's stanza does not authenticate.
+    /// [`GroupError::SenderOriginAuthFailed`] when the per-message origin-auth
+    /// signature does not verify (co-member impersonation / re-target / stale-
+    /// generation replay / suite-downgrade).
     pub fn open_membership_set_group(
         sk: &RecipientSecKey,
         my_index: usize,
+        ctx: &GroupVerifyContext,
         env: &GroupSealedEnvelope,
     ) -> Result<(Vec<u8>, SenderDid), GroupError> {
         // F-01 truncation/censorship defense (SECURITY-PROOFS §3.3/§4.1):
@@ -1613,8 +2130,60 @@ pub mod group_posture {
         body_aad.extend_from_slice(&env.body_cid);
         let body_env = AeadEnvelope::from_wire_bytes(&env.body_wire)
             .map_err(|_| GroupError::AeadAuthenticationFailed)?;
-        let body = benten_crypto_suite::aead::unwrap(&body_env, &cek_key, &body_aad)
+        let body_v2 = benten_crypto_suite::aead::unwrap(&body_env, &cek_key, &body_aad)
             .map_err(|_| GroupError::AeadAuthenticationFailed)?;
+
+        // Parse body_v2 = sig_codepoint(u16) ‖ lp_u32(sender_sig) ‖ body.
+        let mut off = 0usize;
+        if body_v2.len() < off + 2 {
+            return Err(GroupError::AeadAuthenticationFailed);
+        }
+        let sig_codepoint = u16::from_be_bytes([body_v2[off], body_v2[off + 1]]);
+        off += 2;
+        if body_v2.len() < off + 4 {
+            return Err(GroupError::AeadAuthenticationFailed);
+        }
+        let sig_len = u32::from_be_bytes([
+            body_v2[off],
+            body_v2[off + 1],
+            body_v2[off + 2],
+            body_v2[off + 3],
+        ]) as usize;
+        off += 4;
+        if off + sig_len > body_v2.len() {
+            return Err(GroupError::AeadAuthenticationFailed);
+        }
+        let sender_sig = body_v2[off..off + sig_len].to_vec();
+        off += sig_len;
+        let body = body_v2[off..].to_vec();
+
+        // B2 ORIGIN-AUTH VERIFY (F-2 + F-3 SOUNDNESS-CRITICAL): re-derive
+        // M_auth from the recovered sender-DID + the recipient's OWN held
+        // roster + held generations (NOT the wire) and cryptographically
+        // verify the hybrid signature. A re-targeted body (different member
+        // set) flips the commitment; a stale-generation body (revoked-member
+        // cross-generation replay) flips a generation word — either makes the
+        // recomputed M_auth differ from the signed one → fail-closed.
+        let body_aad_digest = *blake3::hash(&body_aad).as_bytes();
+        let independent_commitment = audience_set_commitment_str(&ctx.member_dids);
+        let generations = [
+            ctx.member_key_generation,
+            ctx.membership_set_generation,
+            ctx.role_assignments_generation,
+        ];
+        let m_auth = super::build_m_auth(&super::SenderAuthBinding {
+            sig_codepoint,
+            envelope_codepoint: MEMBERSHIP_SET_GROUP_MULTI_STANZA,
+            sender_did: &sender_did,
+            body_cid: &env.body_cid,
+            audience_commitment: &independent_commitment,
+            generations: &generations,
+            stanza_count: env.stanza_count,
+            body_aad_digest,
+        });
+        super::verify_m_auth(sig_codepoint, &sender_did, &m_auth, &sender_sig)
+            .map_err(|()| GroupError::SenderOriginAuthFailed)?;
+
         Ok((body, sender_did))
     }
 

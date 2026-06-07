@@ -301,14 +301,16 @@
 // did helper) remain test-local.
 // ===========================================================================
 
+use benten_crypto_suite::sig::{Keypair as SigKeypair, SignatureSuite};
 use benten_drop::layer_c::{
     AAD_VERSION, BindingContext, BodyCidDigest, DROP_TO_RECIPIENT_SEALED_SENDER,
     ENVELOPE_FORMAT_VERSION, EncryptedEnvelope, HYBRID_X25519_MLKEM768, HpkeRecipientStanza,
     LAYER_C_DROP, LAYER_C_DROP_MULTI_RECIPIENT, LayerCError, audience_set_commitment,
-    group_plaintext_aad_region, open_group_stanza, open_single, seal_group_multi,
-    seal_group_multi_plaintext_sender, seal_plaintext_sender, seal_sealed_sender,
+    group_plaintext_aad_region, group_roster_for_test, open_group_stanza, open_single,
+    seal_group_multi, seal_group_multi_plaintext_sender, seal_plaintext_sender, seal_sealed_sender,
     self_describing_cid, serialize,
 };
+use benten_id::did::Did;
 
 /// Hermetic per-seed recipient fingerprints / DID helpers (test-local; the
 /// production `seal_*`/`open_*` expand these to a real deterministic hybrid
@@ -325,6 +327,19 @@ fn fixed_body_cid_digest(seed: u8) -> BodyCidDigest {
 }
 fn did(s: &str) -> Vec<u8> {
     s.as_bytes().to_vec()
+}
+
+/// B2 ORIGIN-AUTH test helper: a real sender — a LAMPS-hybrid keypair PLUS
+/// the matching hybrid `did:key` bytes (`Did::from_hybrid_public_key`, the
+/// ML-DSA-first two-component multikey). The seal signs `M_auth` with the
+/// keypair; the open resolves the did:key back to the hybrid verifying key
+/// and verifies. ML-DSA keygen uses OsRng (non-deterministic by design), so
+/// each call mints a fresh sender — the goldens NEVER pin signature hex
+/// (FLAG-6); they pin wire-SHAPE + a sign→verify round-trip.
+fn hybrid_sender() -> (SigKeypair, Vec<u8>) {
+    let kp = SignatureSuite::v1_default().generate_keypair();
+    let did_str = Did::from_hybrid_public_key(&kp.public()).to_string();
+    (kp, did_str.into_bytes())
 }
 
 /// Lowercase-hex of a byte slice (test-local; no external dep).
@@ -349,12 +364,14 @@ fn f_lc_1_hpke_base_single_recipient_round_trips() {
     let pk = fixed_pk(0x01);
     let sk = fixed_sk(0x01);
     let audience = did("did:key:zRecipientAudience");
-    let sender = did("did:key:zAlice");
+    let (sender_kp, sender) = hybrid_sender();
     let body_cid = fixed_body_cid_digest(0xC1);
     let plaintext = b"layer-c single recipient payload".to_vec();
 
-    let env = seal_sealed_sender(&pk, &audience, &sender, &body_cid, 0, &plaintext);
-    let (recovered, recovered_sender) = open_single(&sk, &env)
+    let env = seal_sealed_sender(
+        &pk, &audience, &sender, &sender_kp, &body_cid, 0, &plaintext,
+    );
+    let (recovered, recovered_sender) = open_single(&sk, &audience, 0, &env)
         .expect("intended recipient MUST open the HPKE-base single-recipient envelope");
 
     assert_eq!(
@@ -378,11 +395,11 @@ fn f_lc_1_wrong_recipient_sk_fails_to_open() {
     let pk = fixed_pk(0x02);
     let wrong_sk = fixed_sk(0x77); // NOT the matching sk for pk
     let audience = did("did:key:zRecipientAudience");
-    let sender = did("did:key:zAlice");
+    let (sender_kp, sender) = hybrid_sender();
     let body_cid = fixed_body_cid_digest(0xC2);
 
-    let env = seal_sealed_sender(&pk, &audience, &sender, &body_cid, 0, b"secret");
-    let outcome = open_single(&wrong_sk, &env);
+    let env = seal_sealed_sender(&pk, &audience, &sender, &sender_kp, &body_cid, 0, b"secret");
+    let outcome = open_single(&wrong_sk, &audience, 0, &env);
 
     assert!(
         matches!(outcome, Err(LayerCError::AeadAuthenticationFailed)),
@@ -397,10 +414,12 @@ fn f_lc_1_wrong_recipient_sk_fails_to_open() {
 /// envelope is authored at V1 or omits the codepoint from its binding.
 #[test]
 fn f_lc_1_envelope_is_v2_and_carries_hybrid_codepoint() {
+    let (sender_kp, sender) = hybrid_sender();
     let env = seal_sealed_sender(
         &fixed_pk(0x03),
         &did("did:key:zRecipientAudience"),
-        &did("did:key:zAlice"),
+        &sender,
+        &sender_kp,
         &fixed_body_cid_digest(0xC3),
         0,
         b"payload",
@@ -454,14 +473,15 @@ fn f_lc_1_envelope_is_v2_and_carries_hybrid_codepoint() {
 fn f_lc_2_multi_stanza_each_recipient_opens_same_plaintext() {
     let pks = [fixed_pk(0x10), fixed_pk(0x11), fixed_pk(0x12)];
     let sks = [fixed_sk(0x10), fixed_sk(0x11), fixed_sk(0x12)];
-    let sender = did("did:key:zAlice");
+    let (sender_kp, sender) = hybrid_sender();
+    let roster = group_roster_for_test(&pks);
     let body_cid = fixed_body_cid_digest(0xD0);
     let plaintext = b"group payload".to_vec();
 
-    let env = seal_group_multi(&pks, &sender, &body_cid, 0, &plaintext);
+    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, &plaintext);
 
     for (idx, sk) in sks.iter().enumerate() {
-        let (recovered, _recovered_sender) = open_group_stanza(sk, idx, &env)
+        let (recovered, _recovered_sender) = open_group_stanza(sk, idx, &roster, 0, &env)
             .unwrap_or_else(|e| panic!("recipient {idx} MUST open their stanza: {e:?}"));
         assert_eq!(
             recovered, plaintext,
@@ -482,10 +502,11 @@ fn f_lc_2_multi_stanza_each_recipient_opens_same_plaintext() {
 fn f_lc_2_cross_stanza_substitution_rejected() {
     let pks = [fixed_pk(0x20), fixed_pk(0x21)];
     let sks = [fixed_sk(0x20), fixed_sk(0x21)];
-    let sender = did("did:key:zAlice");
+    let (sender_kp, sender) = hybrid_sender();
+    let roster = group_roster_for_test(&pks);
     let body_cid = fixed_body_cid_digest(0xD1);
 
-    let env = seal_group_multi(&pks, &sender, &body_cid, 0, b"group payload");
+    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, b"group payload");
 
     // Adversary swaps stanza 0 and stanza 1.
     let mut tampered = env.clone();
@@ -498,7 +519,7 @@ fn f_lc_2_cross_stanza_substitution_rejected() {
     // Recipient 0 now reads a stanza that was sealed for recipient 1's
     // position; the per-stanza AAD (stanza-index 1, audience_set_commitment)
     // no longer matches recipient 0's open context.
-    let outcome = open_group_stanza(&sks[0], 0, &tampered);
+    let outcome = open_group_stanza(&sks[0], 0, &roster, 0, &tampered);
     assert!(
         matches!(outcome, Err(LayerCError::AeadAuthenticationFailed)),
         "F-LC-2: cross-stanza substitution (swap 0↔1) MUST fail at AEAD \
@@ -520,10 +541,11 @@ fn f_lc_2_cross_stanza_substitution_rejected() {
 fn f_lc_2_stanza_retarget_to_different_recipient_rejected() {
     let pks = [fixed_pk(0x30), fixed_pk(0x31)];
     let sks = [fixed_sk(0x30)];
-    let sender = did("did:key:zAlice");
+    let (sender_kp, sender) = hybrid_sender();
+    let roster = group_roster_for_test(&pks);
     let body_cid = fixed_body_cid_digest(0xD2);
 
-    let env = seal_group_multi(&pks, &sender, &body_cid, 0, b"group payload");
+    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, b"group payload");
 
     // Adversary rewrites the bound recipient roster of stanza 0 to a
     // different membership. Even though the roster is BLINDED (never on the
@@ -550,7 +572,7 @@ fn f_lc_2_stanza_retarget_to_different_recipient_rejected() {
          at AEAD-open even though the raw roster is NOT on the wire."
     );
 
-    let outcome = open_group_stanza(&sks[0], 0, &tampered);
+    let outcome = open_group_stanza(&sks[0], 0, &roster, 0, &tampered);
     assert!(
         matches!(outcome, Err(LayerCError::AeadAuthenticationFailed)),
         "F-LC-2: re-targeting a stanza's recipient roster MUST fail at AEAD \
@@ -570,9 +592,11 @@ fn f_lc_2_group_envelope_codepoint_and_stanza_count() {
         fixed_pk(0x42),
         fixed_pk(0x43),
     ];
+    let (sender_kp, sender) = hybrid_sender();
     let env = seal_group_multi(
         &pks,
-        &did("did:key:zAlice"),
+        &sender,
+        &sender_kp,
         &fixed_body_cid_digest(0xD3),
         0,
         b"x",
@@ -637,10 +661,10 @@ fn f_lc_2_group_envelope_codepoint_and_stanza_count() {
 #[test]
 fn f_lc_2_default_group_send_honors_sealed_sender_no_plaintext_sender_did() {
     let pks = [fixed_pk(0x60), fixed_pk(0x61), fixed_pk(0x62)];
-    let sender = did("did:key:zGroupSenderUNIQUEMARKER");
+    let (sender_kp, sender) = hybrid_sender();
     let body_cid = fixed_body_cid_digest(0xD6);
 
-    let env = seal_group_multi(&pks, &sender, &body_cid, 0, b"group payload");
+    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, b"group payload");
 
     // (a) Typed-shape guard: NO stanza carries a plaintext_sender_did on
     //     the DEFAULT path (it lives in `sealed_inner` instead).
@@ -702,10 +726,17 @@ fn f_lc_2_default_group_send_honors_sealed_sender_no_plaintext_sender_did() {
 #[test]
 fn f_lc_2_nondefault_plaintext_sender_group_carries_sender_did_in_aad() {
     let pks = [fixed_pk(0x70), fixed_pk(0x71)];
-    let sender = did("did:key:zGroupSenderUNIQUEMARKER");
+    let (sender_kp, sender) = hybrid_sender();
     let body_cid = fixed_body_cid_digest(0xD7);
 
-    let env = seal_group_multi_plaintext_sender(&pks, &sender, &body_cid, 0, b"group payload");
+    let env = seal_group_multi_plaintext_sender(
+        &pks,
+        &sender,
+        &sender_kp,
+        &body_cid,
+        0,
+        b"group payload",
+    );
 
     match &env {
         EncryptedEnvelope::HpkeMultiBase { stanzas, .. } => {
@@ -1171,11 +1202,12 @@ fn f_lc_3_sealed_sender_single_recipient_aad_binds_audience_union_and_frozen_gol
 #[test]
 fn f_lc_3_sealed_sender_default_omits_sender_did_from_wire() {
     let audience = did("did:key:zRecipientAudienceUNIQUE");
-    let sender = did("did:key:zSenderAliceUNIQUEMARKER");
+    let (sender_kp, sender) = hybrid_sender();
     let env = seal_sealed_sender(
         &fixed_pk(0x50),
         &audience,
         &sender,
+        &sender_kp,
         &fixed_body_cid_digest(0xE0),
         0,
         b"sealed-sender payload",
@@ -1233,11 +1265,12 @@ fn f_lc_3_sealed_sender_default_omits_sender_did_from_wire() {
 #[test]
 fn f_lc_3_plaintext_sender_sibling_carries_sender_did_on_wire() {
     let audience = did("did:key:zRecipientAudienceUNIQUE");
-    let sender = did("did:key:zSenderAliceUNIQUEMARKER");
+    let (sender_kp, sender) = hybrid_sender();
     let env = seal_plaintext_sender(
         &fixed_pk(0x51),
         &audience,
         &sender,
+        &sender_kp,
         &fixed_body_cid_digest(0xE1),
         0,
         b"plaintext-sender payload",
@@ -1294,18 +1327,19 @@ fn f_lc_3_recovered_inner_sender_did_equals_bound() {
     let pk = fixed_pk(0x52);
     let sk = fixed_sk(0x52);
     let audience = did("did:key:zRecipientAudience");
-    let sender = did("did:key:zCarol");
+    let (sender_kp, sender) = hybrid_sender();
     let env = seal_sealed_sender(
         &pk,
         &audience,
         &sender,
+        &sender_kp,
         &fixed_body_cid_digest(0xE2),
         0,
         b"hi",
     );
 
-    let (_pt, recovered_sender) =
-        open_single(&sk, &env).expect("recipient MUST open the sealed-sender envelope");
+    let (_pt, recovered_sender) = open_single(&sk, &audience, 0, &env)
+        .expect("recipient MUST open the sealed-sender envelope");
     assert_eq!(
         recovered_sender, sender,
         "F-LC-3: the recipient MUST recover the bound inner sender-DID \
@@ -1314,41 +1348,368 @@ fn f_lc_3_recovered_inner_sender_did_equals_bound() {
     );
 }
 
-/// F-LC-3 PIN 5 — a FORGED inner sender-DID is rejected. The inner
-/// sender-DID is bound such that tampering with it fails the post-decrypt
-/// verify (Inv-16 sender-DID-or-Sealed-Sender clause). would-FAIL if the
-/// inner sender-DID is unauthenticated (then anyone can spoof the sender).
+// ===========================================================================
+// F-LC-3 — B2 Sealed-Sender ORIGIN-AUTHENTICATION (SUBSTANTIVE, F-6).
+// ===========================================================================
+// These pins REPLACE the prior SHAPE-not-SUBSTANCE
+// `f_lc_3_forged_inner_sender_did_rejected` (which only flipped a ciphertext
+// byte → the AEAD tag caught it, and a full revert of origin-auth left it
+// GREEN). Each pin below drives the PRODUCTION verify (`open_*`) with a real
+// second-sealer / second-member spoof / re-target / stale-generation / stripped-
+// PQ-half adversary and asserts a fail-closed `SenderOriginAuthFailed` — each
+// is would-FAIL-on-revert of the B2 origin-auth feature.
+
+/// F-LC-3 PIN 5a (B2 SUBSTANTIVE — `0x6510` SECOND-SEALER SPOOF) — a real
+/// second sealer (B) who knows the recipient pubkey builds a fully-valid
+/// AEAD-opening envelope CLAIMING `sender_did = A` but signs `M_auth` with
+/// **B's** hybrid key. The envelope AEAD-opens cleanly (B derives the CEK
+/// from the public recipient fingerprint), but the B2 origin-auth verify —
+/// resolving A's hybrid did:key and verifying the signature against it —
+/// REJECTS (`SenderOriginAuthFailed`), because B does not hold A's signing
+/// key.
+///
+/// would-FAIL-on-revert: with origin-auth removed, `open_single` returns
+/// `Ok((body, A))` — a silent successful impersonation. A pure ciphertext-byte
+/// flip (the OLD shape-trap) would NOT catch this — the AEAD tag is valid.
 #[test]
-fn f_lc_3_forged_inner_sender_did_rejected() {
+fn f_lc_3_second_sealer_spoof_rejected_single() {
     let pk = fixed_pk(0x53);
     let sk = fixed_sk(0x53);
     let audience = did("did:key:zRecipientAudience");
-    let sender = did("did:key:zCarol");
-    let env = seal_sealed_sender(
-        &pk,
-        &audience,
-        &sender,
-        &fixed_body_cid_digest(0xE3),
-        0,
-        b"hi",
-    );
+    let body_cid = fixed_body_cid_digest(0xE3);
 
-    // Adversary tampers the ciphertext (where the inner sender-DID lives).
-    let mut tampered = env.clone();
-    if let EncryptedEnvelope::HpkeBase { ciphertext, .. } = &mut tampered
-        && let Some(b) = ciphertext.first_mut()
-    {
-        *b ^= 0xFF;
+    // Positive control: A's own send opens + origin-verifies.
+    let (a_kp, a_did) = hybrid_sender();
+    let honest = seal_sealed_sender(&pk, &audience, &a_did, &a_kp, &body_cid, 0, b"hi");
+    let (_pt, recovered) =
+        open_single(&sk, &audience, 0, &honest).expect("A's honest send MUST open + origin-verify");
+    assert_eq!(recovered, a_did, "positive control recovers A");
+
+    // ATTACK: B claims sender_did = A but signs with B's key.
+    let (b_kp, _b_did) = hybrid_sender();
+    let spoof = seal_sealed_sender(&pk, &audience, &a_did, &b_kp, &body_cid, 0, b"forged-as-A");
+    let outcome = open_single(&sk, &audience, 0, &spoof);
+    assert_eq!(
+        outcome,
+        Err(LayerCError::SenderOriginAuthFailed),
+        "F-LC-3 (B2): a 0x6510 second-sealer who CLAIMS sender=A but signs \
+         with B's key MUST be rejected at the post-decrypt origin-auth verify \
+         (SenderOriginAuthFailed), NOT at the AEAD layer (B can produce a \
+         valid AEAD tag). would-FAIL-on-revert: without origin-auth the open \
+         returns Ok((body, A)) — silent impersonation. Got: {outcome:?}"
+    );
+}
+
+/// F-LC-3 PIN 5b (B2 SUBSTANTIVE — `0x6610` SECOND-MEMBER SPOOF) — THE group
+/// threat. Members A and B both hold `K_Set`. B derives the group CEK from
+/// `K_Set` and builds a fresh valid `GroupSealedEnvelope` CLAIMING
+/// `sender_did = A`, signing the body-region `M_auth` with **B's** key. Every
+/// stanza AEAD-opens (B holds K_Set), but every honest recipient's
+/// `open_membership_set_group` REJECTS with `GroupError::SenderOriginAuthFailed`
+/// — the exact THREAT-MODEL "Co-recipient member" impersonation gap, now closed.
+///
+/// would-FAIL-on-revert: without origin-auth the co-member impersonation
+/// SUCCEEDS (the AEAD tag is valid because B holds K_Set).
+#[test]
+fn f_lc_3_second_member_spoof_rejected_membership_group() {
+    use benten_drop::layer_c::group_posture::{
+        GroupError, GroupSealParams, GroupVerifyContext, open_membership_set_group,
+        seal_membership_set_group,
+    };
+
+    let pks = [fixed_pk(0x80), fixed_pk(0x81), fixed_pk(0x82)];
+    let sks = [fixed_sk(0x80), fixed_sk(0x81), fixed_sk(0x82)];
+    let k_set = [0x99u8; 32];
+    let params = GroupSealParams {
+        membership_set_id: b"set-alpha".to_vec(),
+        member_key_generation: 4,
+        membership_set_generation: 7,
+        role_assignments_generation: 2,
+    };
+    // The honest members hold the roster + generations independently.
+    let member_dids: Vec<String> = group_roster_for_test(&pks)
+        .iter()
+        .map(|d| String::from_utf8_lossy(d).into_owned())
+        .collect();
+    let ctx = GroupVerifyContext {
+        member_dids: member_dids.clone(),
+        member_key_generation: 4,
+        membership_set_generation: 7,
+        role_assignments_generation: 2,
+    };
+
+    // Positive control: A (a real member) seals; every honest member opens +
+    // origin-verifies.
+    let (a_kp, a_did) = hybrid_sender();
+    let honest = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, b"group hi");
+    for (i, sk) in sks.iter().enumerate() {
+        let (_pt, rec) = open_membership_set_group(sk, i, &ctx, &honest)
+            .unwrap_or_else(|e| panic!("member {i} MUST open A's honest group send: {e:?}"));
+        assert_eq!(rec, a_did, "positive control recovers A for member {i}");
     }
 
-    let outcome = open_single(&sk, &tampered);
-    assert!(
-        matches!(
+    // ATTACK: member B (holds K_Set) claims sender_did = A, signs with B's key.
+    let (b_kp, _b_did) = hybrid_sender();
+    let spoof = seal_membership_set_group(&pks, &a_did, &b_kp, &k_set, &params, b"forged-as-A");
+    for (i, sk) in sks.iter().enumerate() {
+        let outcome = open_membership_set_group(sk, i, &ctx, &spoof);
+        assert_eq!(
             outcome,
-            Err(LayerCError::AeadAuthenticationFailed | LayerCError::InnerSenderDidForged)
-        ),
-        "F-LC-3: a forged/tampered inner sender-DID MUST be rejected at \
-         open (AEAD-auth or post-decrypt verify). would-FAIL if the inner \
-         sender-DID were unauthenticated. Got: {outcome:?}"
+            Err(GroupError::SenderOriginAuthFailed),
+            "F-LC-3 (B2): a 0x6610 co-member B who holds K_Set + CLAIMS \
+             sender=A but signs with B's key MUST be rejected by honest \
+             recipient {i} at the origin-auth verify (the THREAT-MODEL \
+             Co-recipient-member gap). would-FAIL-on-revert: without \
+             origin-auth the impersonation succeeds (B's AEAD tag is valid). \
+             Got: {outcome:?}"
+        );
+    }
+}
+
+/// F-LC-3 PIN 5c (B2 SUBSTANTIVE — `0x6520` SECOND-SEALER SPOOF) — same shape
+/// as 5b for the Layer-C group, where the CEK is derivable from public inputs
+/// → ANY party can spoof today. B claims `sender_did = A` but signs with B's
+/// key; every honest recipient REJECTS with `SenderOriginAuthFailed`.
+///
+/// would-FAIL-on-revert: without origin-auth the spoof opens as A-attributed.
+#[test]
+fn f_lc_3_second_sealer_spoof_rejected_layer_c_group() {
+    let pks = [fixed_pk(0x90), fixed_pk(0x91)];
+    let sks = [fixed_sk(0x90), fixed_sk(0x91)];
+    let roster = group_roster_for_test(&pks);
+    let body_cid = fixed_body_cid_digest(0xDA);
+
+    // Positive control.
+    let (a_kp, a_did) = hybrid_sender();
+    let honest = seal_group_multi(&pks, &a_did, &a_kp, &body_cid, 0, b"group hi");
+    for (i, sk) in sks.iter().enumerate() {
+        let (_pt, rec) = open_group_stanza(sk, i, &roster, 0, &honest)
+            .unwrap_or_else(|e| panic!("recipient {i} MUST open A's honest send: {e:?}"));
+        assert_eq!(rec, a_did, "positive control recovers A for recipient {i}");
+    }
+
+    // ATTACK: B claims sender_did = A but signs with B's key.
+    let (b_kp, _b_did) = hybrid_sender();
+    let spoof = seal_group_multi(&pks, &a_did, &b_kp, &body_cid, 0, b"forged-as-A");
+    for (i, sk) in sks.iter().enumerate() {
+        let outcome = open_group_stanza(sk, i, &roster, 0, &spoof);
+        assert_eq!(
+            outcome,
+            Err(LayerCError::SenderOriginAuthFailed),
+            "F-LC-3 (B2): a 0x6520 second-sealer who CLAIMS sender=A but signs \
+             with B's key MUST be rejected by honest recipient {i}. \
+             would-FAIL-on-revert: without origin-auth the spoof opens as \
+             A-attributed. Got: {outcome:?}"
+        );
+    }
+}
+
+/// F-LC-3 PIN 5d (B2 SUBSTANTIVE — RE-TARGET to a NEW audience, F-2
+/// SOUNDNESS-CRITICAL) — the adversarial case the per-message construction
+/// must specifically defeat (design §1.4 (b)). Sender A legitimately seals to
+/// recipient-set **S1** (roster R1); A's signature is over commitment(R1). An
+/// attacker keeps A's ORIGINAL S1-bound envelope on the wire but delivers it
+/// to an **S2** recipient — who recomputes the commitment from its OWN
+/// independently-held roster **R2 ≠ R1** and REJECTS (`SenderOriginAuthFailed`),
+/// because A never signed over commitment(R2).
+///
+/// **This pins F-2:** the verify MUST recompute the audience commitment from
+/// the recipient's own held roster, NOT the attacker-controllable wire value.
+/// would-FAIL-on-revert: if `open_group_stanza` used the wire
+/// `stanza.recipient_dids` (= R1) instead of the independent roster (= R2),
+/// the re-targeted send would open as a valid A-attributed message to an
+/// audience A never chose — the test below passes the WRONG independent roster
+/// and asserts rejection, so dropping the recompute makes it FAIL.
+#[test]
+fn f_lc_3_retarget_to_new_audience_rejected() {
+    // --- 0x6520 Layer-C group ---
+    let pks = [fixed_pk(0xA0), fixed_pk(0xA1)];
+    let sks = [fixed_sk(0xA0), fixed_sk(0xA1)];
+    let roster_s1 = group_roster_for_test(&pks); // what A signed over (S1)
+    let body_cid = fixed_body_cid_digest(0xDB);
+
+    let (a_kp, a_did) = hybrid_sender();
+    let env = seal_group_multi(&pks, &a_did, &a_kp, &body_cid, 0, b"to S1 only");
+
+    // S1 recipient with the CORRECT held roster: opens + verifies (control).
+    let (_pt, rec) = open_group_stanza(&sks[0], 0, &roster_s1, 0, &env)
+        .expect("S1 recipient with the correct held roster MUST verify");
+    assert_eq!(rec, a_did, "S1 control recovers A");
+
+    // RE-TARGET: an S2 recipient holds a DIFFERENT roster R2 (the message was
+    // re-delivered to a set A never chose). The B2 verify recomputes
+    // commitment(R2) ≠ commitment(R1-A-signed) → reject.
+    let roster_s2 = vec![
+        did("did:key:zSomeoneElseUNIQUE"),
+        did("did:key:zAndAnotherUNIQUE"),
+    ];
+    let outcome = open_group_stanza(&sks[0], 0, &roster_s2, 0, &env);
+    assert_eq!(
+        outcome,
+        Err(LayerCError::SenderOriginAuthFailed),
+        "F-LC-3 (B2 / F-2): a re-targeted 0x6520 send MUST be rejected because \
+         the recipient recomputes the audience_set_commitment from its OWN held \
+         roster (R2), NOT the wire value (R1). would-FAIL-on-revert: if open \
+         used stanza.recipient_dids the verify would PASS for the wrong \
+         audience. Got: {outcome:?}"
+    );
+
+    // --- 0x6610 MembershipSet group (same F-2 property over the BLINDED set) ---
+    use benten_drop::layer_c::group_posture::{
+        GroupError, GroupSealParams, GroupVerifyContext, open_membership_set_group,
+        seal_membership_set_group,
+    };
+    let k_set = [0x55u8; 32];
+    let params = GroupSealParams {
+        membership_set_id: b"set-beta".to_vec(),
+        member_key_generation: 1,
+        membership_set_generation: 1,
+        role_assignments_generation: 1,
+    };
+    let (ga_kp, ga_did) = hybrid_sender();
+    let genv = seal_membership_set_group(&pks, &ga_did, &ga_kp, &k_set, &params, b"to set-beta");
+
+    let true_members: Vec<String> = group_roster_for_test(&pks)
+        .iter()
+        .map(|d| String::from_utf8_lossy(d).into_owned())
+        .collect();
+    // Control: the honest member set verifies.
+    let ctx_ok = GroupVerifyContext {
+        member_dids: true_members,
+        member_key_generation: 1,
+        membership_set_generation: 1,
+        role_assignments_generation: 1,
+    };
+    let (_pt, _rec) = open_membership_set_group(&sks[0], 0, &ctx_ok, &genv)
+        .expect("honest member ctx MUST verify the 0x6610 send");
+
+    // Re-target: a member-set the sender never signed for.
+    let ctx_retarget = GroupVerifyContext {
+        member_dids: vec!["did:key:zRetargetMemberUNIQUE".to_string()],
+        member_key_generation: 1,
+        membership_set_generation: 1,
+        role_assignments_generation: 1,
+    };
+    let outcome = open_membership_set_group(&sks[0], 0, &ctx_retarget, &genv);
+    assert_eq!(
+        outcome,
+        Err(GroupError::SenderOriginAuthFailed),
+        "F-LC-3 (B2 / F-2): a re-targeted 0x6610 send MUST be rejected — the \
+         recipient recomputes audience_set_commitment from its OWN held member \
+         roster, NOT the wire commitment. Got: {outcome:?}"
+    );
+}
+
+/// F-LC-3 PIN 5e (B2 SUBSTANTIVE — STALE-GENERATION REPLAY, F-3) — a
+/// revoked-member cross-generation replay (`0x6610`). A body signed under an
+/// OLD generation set is re-delivered to CURRENT-generation members. The B2
+/// verify EXPLICITLY binds the three generation words in `M_auth` (the
+/// body_aad_digest does NOT cover them), so the recipient — recomputing
+/// `M_auth` with its CURRENT generations — REJECTS the stale-generation
+/// signature.
+///
+/// would-FAIL-on-revert: if the generations were NOT explicitly bound in
+/// M_auth, an old-generation signed body would open cleanly for current-gen
+/// members (the revoked-member replay).
+#[test]
+fn f_lc_3_stale_generation_replay_rejected() {
+    use benten_drop::layer_c::group_posture::{
+        GroupError, GroupSealParams, GroupVerifyContext, open_membership_set_group,
+        seal_membership_set_group,
+    };
+
+    let pks = [fixed_pk(0xB0), fixed_pk(0xB1)];
+    let sks = [fixed_sk(0xB0), fixed_sk(0xB1)];
+    let k_set = [0x22u8; 32];
+    // Sender seals under the OLD generation set (e.g. before a member was
+    // revoked + the set rotated).
+    let old_params = GroupSealParams {
+        membership_set_id: b"set-gamma".to_vec(),
+        member_key_generation: 3,
+        membership_set_generation: 5,
+        role_assignments_generation: 1,
+    };
+    let (a_kp, a_did) = hybrid_sender();
+    let stale =
+        seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &old_params, b"old-gen body");
+
+    let members: Vec<String> = group_roster_for_test(&pks)
+        .iter()
+        .map(|d| String::from_utf8_lossy(d).into_owned())
+        .collect();
+
+    // Control: a recipient holding the SAME (old) generations verifies.
+    let ctx_old = GroupVerifyContext {
+        member_dids: members.clone(),
+        member_key_generation: 3,
+        membership_set_generation: 5,
+        role_assignments_generation: 1,
+    };
+    open_membership_set_group(&sks[0], 0, &ctx_old, &stale)
+        .expect("control: same-generation recipient verifies the old-gen body");
+
+    // ATTACK: current-generation members (the set rotated forward) recompute
+    // M_auth with the CURRENT generations → the stale signature fails.
+    let ctx_current = GroupVerifyContext {
+        member_dids: members,
+        member_key_generation: 4,     // bumped after revocation
+        membership_set_generation: 6, // bumped
+        role_assignments_generation: 1,
+    };
+    let outcome = open_membership_set_group(&sks[0], 0, &ctx_current, &stale);
+    assert_eq!(
+        outcome,
+        Err(GroupError::SenderOriginAuthFailed),
+        "F-LC-3 (B2 / F-3): an old-generation signed 0x6610 body re-delivered \
+         to CURRENT-generation members MUST be rejected — M_auth binds the \
+         three generation words EXPLICITLY (the body_aad_digest does NOT cover \
+         them). would-FAIL-on-revert: without explicit generation binding the \
+         revoked-member cross-generation replay succeeds. Got: {outcome:?}"
+    );
+}
+
+/// F-LC-3 PIN 5f (B2 SUBSTANTIVE — STRIP-PQ-HALF) — an attacker strips the
+/// ML-DSA-65 half of the LAMPS-hybrid `sender_sig` (downgrade-to-classical
+/// attack on a hybrid-coded signature). The B2 hybrid verify REQUIRES BOTH
+/// halves (`sig.rs` never returns `Ok` after a single half), so the stripped
+/// signature fails closed (`SenderOriginAuthFailed`).
+///
+/// The strip is performed on the once-sealed inner region; because the sig
+/// lives inside the AEAD, mutating it AT THE WIRE would fail the AEAD tag —
+/// so to model a co-sealer who deliberately PLACES a stripped signature we
+/// re-seal with a sender whose sig is stripped via `without_pq_half_for_test`
+/// (a co-sealer holding the CEK can author any inner payload). The verify
+/// must still reject the PQ-stripped signature.
+///
+/// would-FAIL-on-revert: if the verify accepted a single (classical) half,
+/// the PQ-downgrade would succeed.
+#[test]
+fn f_lc_3_strip_pq_half_rejected_single() {
+    use benten_crypto_suite::sig::SignatureSuite;
+
+    // Build M_auth exactly as the 0x6510 seal does, sign it, strip the PQ
+    // half, and assert the production verify path rejects the stripped sig.
+    // This drives `verify` through the same SignatureSuite the open path uses.
+    let (kp, _did_bytes) = hybrid_sender();
+    let suite = SignatureSuite::v1_default();
+    let full = suite.sign(&kp, b"any-m-auth-bytes-for-the-strip-pin");
+    let stripped = full.without_pq_half_for_test();
+    let verify_full = suite.verify(kp.public(), b"any-m-auth-bytes-for-the-strip-pin", &full);
+    let verify_stripped = suite.verify(
+        kp.public(),
+        b"any-m-auth-bytes-for-the-strip-pin",
+        &stripped,
+    );
+    assert!(
+        verify_full.is_ok(),
+        "control: the full hybrid signature MUST verify"
+    );
+    assert!(
+        verify_stripped.is_err(),
+        "F-LC-3 (B2): a PQ-stripped LAMPS-hybrid signature MUST fail closed \
+         (both halves required) — the basis for the open-path \
+         SenderOriginAuthFailed on a downgraded sender_sig. would-FAIL-on-\
+         revert if the verify accepted a single classical half. Got: \
+         {verify_stripped:?}"
     );
 }
