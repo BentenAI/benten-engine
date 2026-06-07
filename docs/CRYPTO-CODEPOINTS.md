@@ -153,11 +153,27 @@ symbol; a prose-only mention does not count):
 | `0x6600` | `MEMBERSHIP_SET_ENCRYPTION` | MembershipSet band (RELOCATED from `0x6380`) | **FREEZE** (§0.4 collision fix) |
 | `0x6610` | `MEMBERSHIP_SET_GROUP_MULTI_STANZA` | MembershipSet band | **FREEZE** (group K_Set multi-stanza; R4.6-corrected value) |
 | `0x6520` | `LAYER_C_DROP_MULTI_RECIPIENT` | Layer-C drop / recipient band | **FREEZE** (R0.7-blinded Layer-C group multi-stanza; NOT a MembershipSet) |
+| `0x6310..0x631F` | `DEVICE_LINK_BAND_BASE`/`DEVICE_LINK_BAND_END` | Layer-D DeviceLink (Signal-Provisioning) band | **FREEZE** (R0.7 §4.1; out-of-band integers typed-reject fail-closed) |
 
 The in-code wire-lock for the group-band constants is regression-guarded in
 `crates/benten-crypto-suite/tests/f_cp_codepoint_registry_dispatch.rs`
 (`MEMBERSHIP_SET_GROUP_MULTI_STANZA == 0x6610` and
 `LAYER_C_DROP_MULTI_RECIPIENT == 0x6520`).
+
+The Layer-D DeviceLink band `0x6310..0x631F` is the R0.7 §4.1 Signal-Provisioning
+device-link wire band (`crates/benten-engine/src/layer_d/device_link.rs`
+`DEVICE_LINK_BAND_BASE == 0x6310` / `DEVICE_LINK_BAND_END == 0x631F`; mirrored as
+`crates/benten-crypto-suite/src/registry.rs::DEVICE_LINK_BAND_BASE`). It is a
+DIFFERENT band from the RemotePermission and MembershipSet bands;
+`device_link::dispatch_device_link_codepoint` typed-rejects (fail-closed,
+CLAUDE.md #5) any integer outside `0x6310..=0x631F`. The band base is
+registry-presence-guarded in
+`crates/benten-crypto-suite/tests/f_cp_codepoint_registry_dispatch.rs`
+(`DEVICE_LINK_BAND_BASE` in the scanned codepoint set) + literal-value-locked in
+`crates/benten-engine/tests/f_ld_4_multi_device_key_wrap_provisioning.rs`
+(`DEVICE_LINK_BAND_BASE == 0x6310` wire-lock). This row closes the R6-R2 F-18
+finding (the FREEZE band was absent from this registry doc — a prose-only-not-
+symbol-bound gap).
 
 > **NAMED-CARRY obligation (F-full R6 R1 finding F-12; BELONGS-NAMED-NOW).**
 > The `0x6380` slot carries a **3-way discrete-value reserve obligation** that

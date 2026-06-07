@@ -722,6 +722,40 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
     spec; no `#[non_exhaustive]` cascade at v1-beta to preserve cargo-public-api
     baseline shape]
 
+  **R6-R2 EXTENSION (F-04 / F-05 closure — §11 ↔ §16 reconciliation):** the
+  15th crate `benten-membership-set` shipped at F-full with a §16 freeze
+  section in V1-FROZEN-INTERFACE.md but its pub surface was NEVER added to the
+  §11 `#[non_exhaustive]` sweep table (V1-FROZEN-INTERFACE.md item 11
+  enumerated must-apply table covers the 14 prior crates only). This row
+  carries the §16 pub-surface non_exhaustive disposition (the
+  `crates/benten-membership-set/src/lib.rs` pub-use set; verified at HEAD):
+  - **ALREADY `#[non_exhaustive]` at HEAD (KEEP):** `MembershipSetError`
+    (`crates/benten-membership-set/src/error.rs:31`).
+  - **DELIBERATE CARVE-OUTS (DO NOT APPLY — frozen-cardinality, already
+    documented in V1-FROZEN-INTERFACE.md §16):** `MembershipSetKind`
+    (`src/kind.rs:26` — EXACTLY-3 `VARIANT_COUNT == 3`; a 4th arm is a §15.c
+    HALT-AND-SURFACE, NOT a wildcard) + `RoleId` (`src/member.rs` — 5-value
+    ordinal all-active per Inv-20 clause-j; the `u8` ordinal is keying-AAD-bound
+    golden-vector-pinned).
+  - **REMAINING §11-sweep candidates (APPLY-or-documented-carve-out at the
+    D-17-targeted fix-pass; verified MISSING `#[non_exhaustive]` at HEAD):**
+    `RequestedReserveKind` (`src/kind.rs:76`), `KindDispatchError`
+    (`src/kind.rs:85`), `MemberRef` (`src/member.rs:97` enum), `MemberNature`
+    (`src/member.rs:191`), `MemberEntry` (`src/member.rs:135`), `MembersTable`
+    (`src/member.rs:248`), `Did` (`src/member.rs:36`), `Hlc`
+    (`src/member.rs:56`), `SigPubKey` (`src/member.rs:83`), `MembershipSet`
+    (`src/set.rs:35`). Note the `MemberEntry` / `MembersTable` field ORDER is
+    the canonical CBOR-key-sorted layout (load-bearing per §16) — the
+    `#[non_exhaustive]` decision is orthogonal to field-order (it gates only
+    additive future fields/variants). The R6-R2 CODE half of this work is
+    finding **F-03** (Agent-C §11 sweep on the F-full crates); F-04 / F-05
+    here is the DEFERRED-ledger ENUMERATION half so the §16 surface is
+    registry-discoverable against the §3.12 R7-equivalent audit walk + the
+    workspace-walker enhancement (also deferred in this row).
+  - **Anchor (R6-R2 extension):** R6-R2 council findings F-04 + F-05
+    (§11 ↔ §16 non_exhaustive carry); V1-FROZEN-INTERFACE.md §16 MembershipSet
+    freeze section + item 11 enumerated must-apply table.
+
   **Wire-bytes-load-bearing types CLOSED AT G-CORE-9 R2 (NOT deferred):**
   `TypedOutputProjection` + `KernelOutput` in `benten-ivm/src/subgraph_spec.rs`
   carry the attribute at v1-beta — the 1-byte arm-discriminator at
@@ -1350,6 +1384,166 @@ Row D-15's audit-readiness concern.
   session-id-mismatch arm already rejects substituted payloads).
 - **Anchor:** `crates/benten-engine/src/layer_d/device_link.rs::DeviceLinkError::SessionIdReplayed`
   + the Signal-Provisioning device-link flow (Phase-4-Meta-Composing UX wave).
+
+---
+
+## R6-R2 (post-F-full phase-close, round 2) NAMED-CARRY rows
+
+> The rows below land at the R6-R2 phase-close convergence (council run
+> `wf_040ac861-436`, artifact main `d0ccf606`; triage
+> `.addl/phase-4-meta/R6-R2-TRIAGE-FFULL.md`). Each is a HARD-RULE clause-(b)
+> deferral whose ENTRY lands NOW with a NAMED destination; the substantive
+> change ships in the named downstream wave. All cites verified live at HEAD
+> `35fb9ad6` (post-B2 / PR #1366) at author-time.
+
+### Row D-31 — `privacy.rs::network_observer_can_link_stanzas` input-independent predicate → v1-GM substantive scan (R6-R2 F-14)
+
+- **Frozen surface (v1-beta):**
+  `crates/benten-membership-set/src/privacy.rs::network_observer_can_link_stanzas(stanza_a_wire, stanza_b_wire)`
+  documents its two-byte-slice arguments as "load-bearing" (the predicate is a
+  property of the wire form, and "the answer would have to flip to `true` if a
+  recipient identifier ever leaked onto the wire"), but the body is
+  **input-independent**: it `let _ = (stanza_a_wire, stanza_b_wire);` then
+  unconditionally returns `false`. The function never inspects the wire bytes,
+  so it cannot actually detect a recipient-identifier leak — the regression it
+  is documented to guard against (`f_nat_2` arm) is asserted by the SHAPE
+  (two-slice signature) not the SUBSTANCE (a real cross-stanza-linkage scan).
+- **Deferred consumption (v1-GM destination):** make the predicate genuinely
+  input-dependent — scan the two stanza wire byte-slices for any stable
+  cross-stanza linkage marker (a shared recipient slot / non-blinded field) and
+  return `true` iff such a marker is present, so a future regression where a
+  recipient identifier leaks onto the wire flips the answer to `true` and the
+  `f_nat_2` arm fails. Couples to the §3.6f-ext substantive-arm discipline
+  (would-FAIL-on-revert).
+- **v1-beta posture:** no exploit at v1-beta — the per-recipient stanza wire
+  form IS blinded (the recipient slot is keyed off `K_Set`; the AEAD wrap
+  exposes no recipient identifier in the clear), so the property the predicate
+  DOCUMENTS holds at v1-beta by construction. The gap is test-substance, not a
+  live-confidentiality hole: the predicate is a correct constant TODAY because
+  the wire genuinely carries no marker, but it would NOT catch a future
+  regression that introduced one.
+- **Anchor:** R6-R2 council finding F-14;
+  `crates/benten-membership-set/src/privacy.rs:38` +
+  Inv-20 clause-d (m-7) + Compromise #58 honest-disclosure boundary.
+
+### Row D-32 — `f_aad_2_nine_tuple_*` test-file name stale (9-tuple → BLINDED 11-field) (R6-R2 F-21)
+
+- **Frozen surface (v1-beta):** the test file
+  `crates/benten-membership-set/tests/f_aad_2_nine_tuple_injectivity_opaque_boundary.rs`
+  retains the `nine_tuple` token in its FILENAME, but the `0x6610` group
+  per-stanza AAD it pins is now the **BLINDED 11-field set** (the migration
+  from the raw 9-tuple with a plaintext roster + raw set-id is fully documented
+  in the file body, which uses `11-field` / `BLINDED 11-field` throughout). The
+  filename is the sole residual `nine_tuple` reference; the test bytes + golden
+  are the canonical 11-field shape (127-byte M-20 golden).
+- **Deferred consumption (test-hygiene fix-pass destination):** rename the file
+  to `f_aad_2_eleven_field_injectivity_opaque_boundary.rs` (or equivalent
+  `11_field` token) + update the cross-cites in
+  `docs/V1-FROZEN-INTERFACE.md` §16 carve-out #5 +
+  `crates/benten-membership-set/src/lib.rs` / any rustdoc that names the file.
+  A file rename is a git-mv (not a doc-entry-now fix), hence the carry.
+- **v1-beta posture:** zero functional impact — the test is green and pins the
+  correct 11-field bytes; the filename is cosmetic-stale. No wire/golden change.
+- **Anchor:** R6-R2 council finding F-21;
+  `crates/benten-membership-set/tests/f_aad_2_nine_tuple_injectivity_opaque_boundary.rs`
+  (body documents the 9-tuple → 11-field migration) +
+  `docs/V1-FROZEN-INTERFACE.md` §16 carve-out #5 cite.
+
+### Row D-33 — `f_ld_3` "R5-FOLD-IN" forward-looking comments stale (R5 is past) (R6-R2 F-22)
+
+- **Frozen surface (v1-beta):**
+  `crates/benten-engine/tests/f_ld_3_execute_workflow_aad_binding.rs` carries
+  forward-looking "R5-FOLD-IN" / "folds at R5" / "R5 un-ignores" / "R5-DESTINATION"
+  comments (e.g. the module-level note at `:45` + the per-test note at
+  `:205`) that describe the AAD-version-coherence fold-in as a FUTURE R5 step.
+  R5 is past (the stub-shim was deleted + the real
+  `benten_engine::layer_d::remote_permission` is wired live at `:81`/`:86`);
+  the comments are stale forward-tense in landed-and-green territory.
+- **Deferred consumption (comment-retense fix-pass destination):** retense the
+  R5-prefixed comments to as-built / past-tense (the
+  `pim-N`/§3.6e RED-PHASE-and-forward-looking-comment retense discipline; same
+  class as R6-R1 finding F-19 which retensed stale RED-PHASE doc-comments on
+  landed+green tests). Confirm the `aad_version=0x01` byte-0 prefix coherence
+  claim still matches the enclosing `PermissionRequest` envelope before editing.
+- **v1-beta posture:** zero functional impact — the test is live + green; only
+  the explanatory comments are stale-tense.
+- **Anchor:** R6-R2 council finding F-22;
+  `crates/benten-engine/tests/f_ld_3_execute_workflow_aad_binding.rs:45` +
+  `:205` (R5-FOLD-IN / R5-DESTINATION notes); R6-R1 F-19 retense precedent.
+
+### Row D-34 — wasm-browser bundle forbidden-symbol blocklist coverage for F-full full-peer-only deps (R6-R2 F-23)
+
+- **Frozen surface (v1-beta):** the browser-bundle content-audit guard in
+  `.github/workflows/wasm-browser.yml` (the "Bundle-content audit (forbidden
+  symbols per CLAUDE.md baked-in #17)" step) blocks the 4 full-peer-only crate
+  prefixes `forbidden=( "loro" "iroh" "redb" "wasmtime" )`. The F-full wave
+  added the 15th crate `benten-membership-set`, whose PRODUCTION tree carried a
+  native-only `benten-sync` → iroh/loro edge until the F-02 option-(b) refactor
+  moved it to a dev-dependency (so `benten-drop` is now sync-free). The
+  blocklist was NOT re-audited against the F-full crate graph to confirm no new
+  full-peer-only symbol prefix can leak into the thin-client browser bundle.
+- **Deferred consumption (CI-hardening fix-pass destination):** re-audit the
+  F-full crate graph (`benten-membership-set` / `benten-drop` / `benten-id` /
+  `benten-crypto-suite` libcrux/sha3 native primitives) against the
+  baked-in-#17 full-peer-vs-thin-compute boundary; extend the
+  `forbidden=( ... )` array (and the `bindings/napi/tests/wasm_bundle_content.rs`
+  pin) with any newly-introduced full-peer-only prefix that must never appear in
+  `bindings/napi/dist/browser/benten_engine.wasm`. If the audit confirms the
+  existing 4-prefix set is sufficient (no new full-peer dep reaches the browser
+  bundle), record that confirmation + close this row.
+- **v1-beta posture:** the existing 4-prefix guard is ACTIVE + fail-closed; the
+  carry is a completeness re-audit of the F-full additions, not a known leak.
+  The drop tree is already sync-free (cargo tree -e normal) per the F-02
+  option-(b) refactor, so the most likely outcome is a confirmation.
+- **Anchor:** R6-R2 council finding F-23;
+  `.github/workflows/wasm-browser.yml` forbidden-symbol blocklist +
+  `bindings/napi/tests/wasm_bundle_content.rs` + CLAUDE.md baked-in #17.
+
+### Row D-35 — freeze-record "HEAD `84280d31`" snapshot-SHA currency sweep (R6-R2 F-26)
+
+- **Frozen surface (v1-beta):** three freeze-record docs cite the snapshot SHA
+  `84280d31` as "HEAD" / "AS-BUILT + ENFORCED at HEAD" — `docs/ERROR-CATALOG.md`
+  (catalog-count narrative, ~4 cites), `docs/V1-FROZEN-INTERFACE.md` (CATALOG
+  count + TS-catalog + provenance, ~4 cites), `docs/INVARIANT-COVERAGE.md`
+  (Inv-16..22 AS-BUILT header + body, ~4 cites). HEAD has since advanced
+  (`84280d31` → `d0ccf606` #1365 → `35fb9ad6` #1366); the "HEAD `84280d31`"
+  framing is a stale snapshot reference. The two intervening commits are
+  freeze-affecting (the F-02 11-field group-AAD canonicalization + F-01
+  truncation defense + the B2 sealed-sender origin-authentication), so the
+  snapshot SHA should re-pin to the current freeze-record HEAD at the next
+  freeze-record sweep.
+  - **Inv-21 `::crdt` path sub-item — VERIFIED CORRECT, no carry:** the
+    `docs/INVARIANT-COVERAGE.md` Inv-21 row cites the LARGER-HLC-wins LWW in
+    `crates/benten-sync/src/crdt.rs` (the `cmp_lex != Greater` keep-rule) +
+    `benten_sync::crdt::LoroDoc::winning_attribution`. Ground-truth-verified at
+    HEAD `35fb9ad6`: the `cmp_lex`/`Greater` LWW keep-rule is present in
+    `crdt.rs`; `LoroDoc::winning_attribution` exists; the `crdt` module is
+    declared `pub mod crdt` in `crates/benten-sync/src/lib.rs` so the
+    `benten_sync::crdt::…` path resolves. The `::crdt` path is NOT drifted —
+    only the `84280d31` snapshot-SHA currency carries forward.
+- **Deferred consumption (freeze-record sweep destination — Agent-B
+  freeze-record docs / next reconcile pass):** re-pin the `84280d31`
+  snapshot-SHA cites across `ERROR-CATALOG.md` / `V1-FROZEN-INTERFACE.md` /
+  `INVARIANT-COVERAGE.md` to the then-current freeze-record HEAD as part of the
+  next freeze-record reconcile sweep (the same class as R6-R1 F-03/F-04/F-18
+  which re-pinned `2172cb6d` → `84280d31`). Routed as a CARRY (not a fix-now)
+  because the canonical re-pin target is the freeze-tag HEAD, which is itself
+  Ben-gated (the `phase-4-meta-core-close` tag is HOLD-Ben) — re-pinning to a
+  mid-flight SHA would just drift again at tag-time. The pin should land in the
+  freeze-record sweep that immediately precedes the tag.
+- **v1-beta posture:** no functional impact — the AS-BUILT claims are TRUE
+  (the substrate shipped + is green); only the snapshot-SHA token is stale. The
+  count narratives (199 throwable / 201 catalog) remain accurate at HEAD.
+- **Anchor:** R6-R2 council finding F-26; `docs/ERROR-CATALOG.md` +
+  `docs/V1-FROZEN-INTERFACE.md` + `docs/INVARIANT-COVERAGE.md` `84280d31`
+  cites; R6-R1 `2172cb6d` → `84280d31` re-pin precedent (#1365).
+
+> **NOTE — `docs/SECURITY-POSTURE.md` + `docs/V1-WIRE-FORMAT-INVENTORY.md` are
+> OWNED BY THE R6-R2 FREEZE-RECORD AGENT (Agent B) this wave.** Any `84280d31`
+> snapshot-SHA cites in those two docs are NOT swept by Row D-35 (this row owns
+> only ERROR-CATALOG / V1-FROZEN-INTERFACE / INVARIANT-COVERAGE); the Agent-B
+> shard handles the freeze-record currency of SECURITY-POSTURE +
+> V1-WIRE-FORMAT-INVENTORY.
 
 ---
 
