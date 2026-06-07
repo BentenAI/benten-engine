@@ -160,6 +160,25 @@ The in-code wire-lock for the group-band constants is regression-guarded in
 (`MEMBERSHIP_SET_GROUP_MULTI_STANZA == 0x6610` and
 `LAYER_C_DROP_MULTI_RECIPIENT == 0x6520`).
 
+> **SSOT note (F-24).** `crates/benten-crypto-suite/src/registry.rs` is the
+> single source of truth for the `0x6100..0x6FFF` allocation map (the
+> band-ownership registry). The wire-byte-emitting values, however, are
+> **independently defined in the producing crates** and mirrored back to the
+> registry — they are NOT re-exported from it:
+> `crates/benten-membership-set/src/codepoints.rs` defines the MembershipSet
+> band values (`MEMBERSHIP_SET_ENCRYPTION == 0x6600`,
+> `MEMBERSHIP_SET_GROUP_MULTI_STANZA == 0x6610`,
+> `MEMBERSHIP_SET_RESERVED_0X6620 == 0x6620`), and
+> `crates/benten-drop/src/layer_c.rs` defines the Layer-C drop values
+> (`LAYER_C_DROP == 0x6500`, `DROP_TO_RECIPIENT_SEALED_SENDER == 0x6510`,
+> `LAYER_C_DROP_MULTI_RECIPIENT == 0x6520`) plus the Layer-D DeviceLink base.
+> Because the same integer lives in two places, a single-side edit would drift
+> the registry from the wire. A cross-crate const-equality regression-pin in
+> `crates/benten-drop/tests/f_disc_2_invariant_and_doc_registration_catch_net.rs`
+> (`f_disc_2_codepoint_ssot_cross_crate_const_equality`) asserts the producing
+> crates' values equal `benten_crypto_suite::registry::*`, so a one-sided edit
+> fails the build.
+
 The Layer-D DeviceLink band `0x6310..0x631F` is the R0.7 §4.1 Signal-Provisioning
 device-link wire band (`crates/benten-engine/src/layer_d/device_link.rs`
 `DEVICE_LINK_BAND_BASE == 0x6310` / `DEVICE_LINK_BAND_END == 0x631F`; mirrored as
