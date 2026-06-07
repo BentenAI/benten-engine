@@ -2375,3 +2375,19 @@ pub mod sealed_aad {
 fn vec_static(items: &[&'static str]) -> Vec<&'static str> {
     items.to_vec()
 }
+
+#[cfg(test)]
+mod domain_registry_mirror {
+    /// C-01/C-02 drift defense: `SENDER_AUTH_DOMAIN` is mirrored in the central
+    /// [`benten_crypto_suite::domain_registry`] corpus table over which the
+    /// prefix-free collision check runs. Pin byte-equality so the mirror can
+    /// never silently diverge from this home definition.
+    #[test]
+    fn sender_auth_domain_matches_central_registry() {
+        assert_eq!(
+            super::SENDER_AUTH_DOMAIN,
+            benten_crypto_suite::domain_registry::SENDER_AUTH_DOMAIN,
+            "SENDER_AUTH_DOMAIN drifted from the central domain_registry mirror"
+        );
+    }
+}

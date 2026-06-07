@@ -26,6 +26,7 @@
 
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
+#![allow(clippy::cast_possible_truncation)]
 #![allow(dead_code)]
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -38,10 +39,11 @@
 // wrong recipient secret on B's side and the HPKE unwrap fails closed.
 use benten_crypto_suite::cipher_suite::{CipherSuite, RecipientKeypair};
 use benten_crypto_suite::codepoint::CipherSuiteCodepoint;
+use benten_crypto_suite::domain_registry::PROVISIONING_DOMAIN;
 use benten_engine::layer_d::device_link::{
     DEVICE_LINK_BAND_BASE, DeviceLinkError, PROVISIONING_WIRE_VERSION, ProvisioningInnerPayload,
     ProvisioningOffer, dispatch_device_link_codepoint, fingerprint_recipient,
-    open_provisioning_payload, seal_provisioning_payload,
+    open_provisioning_payload, provisioning_signing_bytes, seal_provisioning_payload,
 };
 use benten_id::keypair::Keypair;
 
@@ -230,6 +232,69 @@ fn f_ld_4_k_principal_has_no_forward_secrecy_documented() {
         "K_principal stays recoverable (no FS) — identity-equivalent by design (§3.4)"
     );
     assert_eq!(recovered_now.k_principal, inner.k_principal);
+}
+
+/// C-01 domain-separation regression guard: the canonical provisioning signing
+/// bytes MUST begin with `PROVISIONING_DOMAIN`, and a domain-LESS (old-format)
+/// signature over `(session_id ‖ wrapped)` — exactly what a pre-C-01 signer
+/// produced — MUST be REJECTED. Drives the production sign+verify; would-FAIL
+/// on a revert that drops the prefix (the old-format bytes would then equal the
+/// production bytes and the forged-class assertion would not hold).
+#[test]
+fn c01_provisioning_signing_bytes_carry_domain_prefix_and_reject_domainless_sig() {
+    let user_did = Keypair::generate();
+    let device_b = fresh_device_keypair();
+    let offer = sample_offer(&device_b);
+    let inner = sample_inner(offer.provisioning_session_id);
+
+    // Drive the production seal so we have a real `WrappedKey` on the wire.
+    let mut payload = seal_provisioning_payload(
+        &user_did,
+        device_b.public(),
+        &offer.provisioning_session_id,
+        &inner,
+    )
+    .expect("seal MUST succeed");
+
+    // (1) The canonical signing bytes begin with the domain tag.
+    let canonical = provisioning_signing_bytes(&payload.provisioning_session_id, &payload.wrapped);
+    assert!(
+        canonical.starts_with(PROVISIONING_DOMAIN),
+        "provisioning signing bytes MUST begin with PROVISIONING_DOMAIN (C-01 domain separation)"
+    );
+
+    // (2) Reconstruct the OLD-format (domain-less) signing bytes — exactly the
+    // pre-C-01 layout `session_id ‖ flattened(wrapped)` with NO domain prefix —
+    // and sign them with the REAL user-DID key. This is the legacy attacker/
+    // old-client signature.
+    let mut domainless = Vec::new();
+    domainless.extend_from_slice(&payload.provisioning_session_id);
+    domainless.extend_from_slice(&payload.wrapped.codepoint.raw().to_be_bytes());
+    domainless.extend_from_slice(&(payload.wrapped.ek_x.len() as u32).to_be_bytes());
+    domainless.extend_from_slice(&payload.wrapped.ek_x);
+    domainless.extend_from_slice(&(payload.wrapped.ek_mlkem.len() as u32).to_be_bytes());
+    domainless.extend_from_slice(&payload.wrapped.ek_mlkem);
+    domainless.extend_from_slice(&payload.wrapped.aead_envelope.to_wire_bytes());
+
+    // Sanity: the domain-less bytes are exactly the canonical bytes minus the
+    // leading domain tag (so this is a faithful old-format reconstruction).
+    assert_eq!(
+        &canonical[PROVISIONING_DOMAIN.len()..],
+        &domainless[..],
+        "domain-less bytes MUST equal canonical bytes minus the domain prefix"
+    );
+
+    let legacy_sig = user_did.sign(&domainless);
+    payload.user_did_signature = legacy_sig.to_bytes().to_vec();
+
+    // (3) B verifies against the user-DID pubkey → MUST reject the domain-less
+    // (old-format) signature as forged-class. On a revert that drops the prefix,
+    // this open would SUCCEED and the test would fail.
+    let result = open_provisioning_payload(user_did.public_key(), device_b.secret(), &payload);
+    assert!(
+        matches!(result, Err(DeviceLinkError::OfferSignatureForged)),
+        "a domain-LESS (old-format) provisioning signature MUST be rejected (C-01); got {result:?}"
+    );
 }
 
 /// F-LD-4 DeviceLink codepoint band pin: the provisioning structs live in the

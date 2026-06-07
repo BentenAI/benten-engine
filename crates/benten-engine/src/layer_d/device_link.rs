@@ -32,6 +32,7 @@
 //! primitive independently — a no-wire-change consolidation.
 
 use benten_crypto_suite::cipher_suite::{RecipientPublic, RecipientSecret, WrappedKey};
+use benten_crypto_suite::domain_registry::PROVISIONING_DOMAIN;
 use benten_crypto_suite::hpke::{unwrap_key_from_recipient, wrap_key_to_recipient};
 use benten_id::keypair::{Keypair, PublicKey, Signature};
 
@@ -135,11 +136,22 @@ pub struct ProvisioningPayload {
 }
 
 /// The canonical signing bytes over which A's user-DID signs the offer:
-/// `session_id ‖ wrapped_inner_bytes`. The `wrapped` bytes flattened so a
-/// tampered ciphertext breaks the signature.
+/// `PROVISIONING_DOMAIN ‖ session_id ‖ wrapped_inner_bytes`. The `wrapped`
+/// bytes flattened so a tampered ciphertext breaks the signature.
+///
+/// The leading [`PROVISIONING_DOMAIN`] domain-separation prefix (C-01) joins
+/// this offer signature to the same-key (user-DID Ed25519) domain-separation
+/// family enumerated in
+/// [`benten_crypto_suite::domain_registry::registered_domain_tags`], so a
+/// provisioning-offer signature can NEVER be reinterpreted as any other Benten
+/// signature surface (and vice-versa). This prefix is part of the FROZEN
+/// provisioning signed-bytes wire: a domain-less (old-format) signature over
+/// the same `(session_id ‖ wrapped)` no longer verifies.
 #[must_use]
 pub fn provisioning_signing_bytes(session_id: &[u8; 32], wrapped: &WrappedKey) -> Vec<u8> {
     let mut b = Vec::new();
+    // C-01 domain-separation prefix — the same-key signature family head.
+    b.extend_from_slice(PROVISIONING_DOMAIN);
     b.extend_from_slice(session_id);
     // Flatten the wrapped key's wire material into the signed bytes.
     b.extend_from_slice(&wrapped.codepoint.raw().to_be_bytes());

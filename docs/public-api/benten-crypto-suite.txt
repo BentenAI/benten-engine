@@ -426,6 +426,17 @@ impl core::marker::Unpin for benten_crypto_suite::discharge::Issue835Discharge
 impl core::marker::UnsafeUnpin for benten_crypto_suite::discharge::Issue835Discharge
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::discharge::Issue835Discharge
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::discharge::Issue835Discharge
+pub mod benten_crypto_suite::domain_registry
+pub const benten_crypto_suite::domain_registry::ENVELOPE_SIG_DOMAIN: &[u8]
+pub const benten_crypto_suite::domain_registry::EXEC_WORKFLOW_AAD_DOMAIN: &[u8]
+pub const benten_crypto_suite::domain_registry::GRANT_DOMAIN: &[u8]
+pub const benten_crypto_suite::domain_registry::LAMPS_LABEL_MLDSA65_ED25519_SHA512: &[u8]
+pub const benten_crypto_suite::domain_registry::PROVISIONING_DOMAIN: &[u8]
+pub const benten_crypto_suite::domain_registry::REQUEST_DOMAIN: &[u8]
+pub const benten_crypto_suite::domain_registry::SENDER_AUTH_DOMAIN: &[u8]
+pub const benten_crypto_suite::domain_registry::SETID_COMMITMENT_LABEL: &[u8]
+pub fn benten_crypto_suite::domain_registry::detects_prefix_collision(&[&[u8]]) -> bool
+pub fn benten_crypto_suite::domain_registry::registered_domain_tags() -> alloc::vec::Vec<&'static [u8]>
 pub mod benten_crypto_suite::envelope
 #[non_exhaustive] pub enum benten_crypto_suite::envelope::BindingContext
 pub benten_crypto_suite::envelope::BindingContext::Recipient

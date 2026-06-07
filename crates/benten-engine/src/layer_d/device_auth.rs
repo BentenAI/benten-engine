@@ -88,6 +88,20 @@ pub trait DeviceAuthBackend: sealed::Sealed {
     /// remote-permission-call).
     fn supports_remote_unlock(&self) -> bool;
     /// Whether the vault is currently unlocked.
+    ///
+    /// # Contract (C-06)
+    ///
+    /// This reflects the FRESHLY-CONSTRUCTED locked state. [`Self::unlock`]
+    /// takes `&self` and RETURNS the recovered [`UnlockedKey`] BY VALUE — it
+    /// does NOT mutate `self` to an "unlocked" state — so on the Benten-vended
+    /// [`HeadlessDeviceAuth`] backend `is_unlocked()` is `false` from
+    /// construction and stays `false` across `unlock` calls (only
+    /// [`Self::lock`], which takes `&mut self`, ever touches the flag, and it
+    /// sets it `false`). The unlocked key material lives in the value
+    /// `unlock` hands back, NOT inside the backend; callers hold and zeroize
+    /// that value themselves. A backend that owns persistent unlocked state
+    /// (a future biometric/IPC backend with interior mutability) MAY report
+    /// `true` here, but no `&self`-`unlock` default can flip this flag.
     fn is_unlocked(&self) -> bool;
 }
 

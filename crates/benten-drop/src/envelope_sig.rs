@@ -147,3 +147,20 @@ pub fn verify_envelope(
     vk.verify(msg, &sig)
         .map_err(|e| EnvelopeSigError::VerifyFailed(format!("{e}")))
 }
+
+#[cfg(test)]
+mod domain_registry_mirror {
+    /// C-01/C-02 drift defense: this module-private `ENVELOPE_SIG_DOMAIN` is
+    /// mirrored in the central
+    /// [`benten_crypto_suite::domain_registry`] corpus table (the prefix-free
+    /// collision check runs over the mirror). If the two ever diverge the
+    /// collision check would silently run over the wrong bytes — pin equality.
+    #[test]
+    fn envelope_sig_domain_matches_central_registry() {
+        assert_eq!(
+            super::ENVELOPE_SIG_DOMAIN,
+            benten_crypto_suite::domain_registry::ENVELOPE_SIG_DOMAIN,
+            "ENVELOPE_SIG_DOMAIN drifted from the central domain_registry mirror"
+        );
+    }
+}

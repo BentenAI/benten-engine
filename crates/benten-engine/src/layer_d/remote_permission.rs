@@ -373,3 +373,30 @@ pub fn dispatch_remote_permission_codepoint(cp: u16) -> Result<(), UnsupportedOp
         Err(UnsupportedOperationCodepoint(cp))
     }
 }
+
+#[cfg(test)]
+mod domain_registry_mirror {
+    /// C-01/C-02 drift defense: the Layer-D remote-permission domain tags are
+    /// mirrored in the central [`benten_crypto_suite::domain_registry`] corpus
+    /// table over which the prefix-free collision check runs. Pin byte-equality
+    /// so the mirror can never silently diverge from these home definitions.
+    #[test]
+    fn remote_permission_domains_match_central_registry() {
+        use benten_crypto_suite::domain_registry as reg;
+        assert_eq!(
+            super::REQUEST_DOMAIN,
+            reg::REQUEST_DOMAIN,
+            "REQUEST_DOMAIN drifted from the central domain_registry mirror"
+        );
+        assert_eq!(
+            super::GRANT_DOMAIN,
+            reg::GRANT_DOMAIN,
+            "GRANT_DOMAIN drifted from the central domain_registry mirror"
+        );
+        assert_eq!(
+            super::EXEC_WORKFLOW_AAD_DOMAIN,
+            reg::EXEC_WORKFLOW_AAD_DOMAIN,
+            "EXEC_WORKFLOW_AAD_DOMAIN drifted from the central domain_registry mirror"
+        );
+    }
+}
