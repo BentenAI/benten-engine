@@ -127,6 +127,19 @@ is frozen at v1-beta; **runtime enforcement** (that a rented executor cannot exf
 `result_recipient_pubkey` via EMIT/WRITE) **stays post-v1-beta — it is NOT freeze-gating** (M-3). Freezing the AAD
 scope now is what makes the post-v1-beta enforcement non-wire-breaking.
 
+**NQ-T3-adjacent — `input_node_cids` is bound into no signed/AEAD surface (NAMED-DEFERRED → v1-GM).** The
+`ExecuteWorkflow` struct (`crates/benten-engine/src/layer_d/remote_permission.rs::ExecuteWorkflow`) carries an
+`input_node_cids: Vec<[u8; 32]>` field (the Node CIDs the rented workflow reads), but `constraint_aad()` binds
+**only** the frozen 3-field tuple `(executor_did, max_decrypt_count, result_recipient_pubkey)` — `input_node_cids`
+(and `workflow_cid`) are **NOT** bound into the AAD or any signature. Consequence: the executor's **input
+READ-scope is not cryptographically bound** at v1-beta. **Disposition (no live exploit at v1-beta):** runtime
+ExecuteWorkflow enforcement is post-v1-beta to begin with (NQ-T3 above); the field is carried for forward-compat
+and the variant is reserved / typed-rejected at the dispatch boundary at v1-beta, so there is no executable
+exfiltration path through an unbound `input_node_cids` today. **Input-READ-scope AAD/signature binding is
+NAMED-DEFERRED to v1-GM** (alongside the NQ-T3 runtime no-egress enforcement it travels with); the deferral is
+recorded in `docs/V1-FROZEN-INTERFACE-DEFERRED.md`. Freezing it now would be premature because the read-scope
+binding shape co-designs with the post-v1-beta runtime enforcement.
+
 ### NQ-T4 — nonce-cache spec + the cross-device replay window (RATIFIED → Compromise #64)
 
 **Rule:** the nonce-cache is **`jti`-keyed**, **durable** (survives engine restart — persisted, not RAM-only), and
@@ -142,6 +155,35 @@ is for replay defense. They are tuned independently — the nonce-cache window d
 bucket. The nonce-cache spec narration (the §3.10 reference) lives here in NQ-T4; the §3.9 unlabelled gossip-topic
 derivation (`blake3::keyed_hash(K_Set, set_id ‖ BE(generation))`) is the SEPARATE construction documented in
 `docs/CRYPTO-CODEPOINTS.md` (§3.9 vs §3.10).
+
+---
+
+## §5 — Cross-surface domain-separation (the prefix-free domain-tag registry)
+
+**Threat (T-DOMSEP).** The substrate derives keys, signs binding messages, and commits AAD across **many
+independent cryptographic surfaces** — the Layer-C single/group CEK derivations
+(`"benten-drop:layer-c:cek"` / `"...:group-cek"` / `"benten-drop:membership-group-cek"`), the chunked-AEAD
+info strings (`"benten-aead:whole:"` / `":chunk:"` / `":recipe:"`), the sender-auth and envelope-signature
+binding domains (`SENDER_AUTH_DOMAIN` / `ENVELOPE_SIG_DOMAIN`), the remote-grant / remote-request / exec-workflow
+AAD domains (`GRANT_DOMAIN` / `REQUEST_DOMAIN` / `EXEC_WORKFLOW_AAD_DOMAIN`), the MembershipSet set-id and
+gossip-topic derivations (`"benten:setid:v1"`, the §3.9 `blake3::keyed_hash(K_Set, set_id ‖ BE(generation))`
+topic), and the `K(V)` keying-glue context. If any two surface tags are **not prefix-free** — i.e. one tag is a
+byte-prefix of another, or two distinct surfaces share a tag — an attacker (or an honest implementation bug)
+could cause bytes authenticated/keyed for surface A to be accepted on surface B (a cross-surface
+key-reuse / binding-confusion attack). Length-extension-style framing, sloppy `info`-string concatenation, or a
+future tag minted as `"<existing-tag>-suffix"` are the concrete failure modes.
+
+**Defense / v1-beta structural shape (T-DOMSEP-MIT).** All cross-surface domain tags are drawn from a **single
+prefix-free domain-tag registry** (the canonical source of separators), and the registry enforces — by
+construction + a workspace regression test — that **no registered tag is a byte-prefix of any other registered
+tag** (mutual prefix-freedom). This makes cross-surface confusion **structurally impossible** rather than
+audited-by-inspection: minting a colliding/prefixing tag fails the build. The prefix-free property is the
+permanent v1-beta commitment; the registry *contents* are additive (new surfaces register new tags, which must
+clear the same prefix-free check). See `docs/SECURITY-PROOFS.md` §4.1 "Cross-surface domain-tag registry
+(prefix-free)" for the property statement and the §4.1 "Inner-format domain-separation (single vs group)" note for
+the single-vs-group instance this generalizes. **Status:** the registry + its prefix-free regression test is the
+F-full / R6-R4 structural shape (the centralizing registry CODE lands in the parallel CODE shard; this row + the
+SECURITY-PROOFS property record the v1-beta commitment the code realizes).
 
 ---
 

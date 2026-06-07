@@ -142,6 +142,25 @@ other (cross-format substitution flips the AEAD tag). The property holds in the 
 prevents a future inner-builder refactor (e.g. unifying or re-laying-out the inner bytes) from silently
 regressing it by accidentally collapsing the CEK separator or AAD distinction.
 
+**Cross-surface domain-tag registry (prefix-free) — the v1-beta structural shape.** The single-vs-group CEK
+separation above is one instance of a **substrate-wide property**: every cryptographic surface that keys, signs,
+or AAD-commits draws its domain tag from a **single prefix-free registry** of separators. The registry's governing
+property is **mutual prefix-freedom** — for any two registered tags `a ≠ b`, neither is a byte-prefix of the
+other. This is what makes cross-surface confusion structurally impossible: because no tag prefixes another, bytes
+derived/authenticated under one surface's tag can never be parsed or re-keyed as another surface's input, even
+under adversarial concatenation/length-extension framing. The registered surfaces span the Layer-C single/group
+CEK derivations, the chunked-AEAD info strings (`benten-aead:{whole,chunk,recipe}:`), the sender-auth /
+envelope-signature binding domains (`SENDER_AUTH_DOMAIN` / `ENVELOPE_SIG_DOMAIN` — see §4.1 `M_auth`), the
+remote-grant / remote-request / exec-workflow AAD domains, the MembershipSet set-id (`benten:setid:v1`) and §3.9
+gossip-topic derivations, and the `K(V)` keying-glue context. **Permanence:** the prefix-free property is the
+PERMANENT v1-beta commitment; the registry contents are additive (a new surface registers a new tag, which MUST
+clear the prefix-free check — a colliding or prefixing tag fails the build). A workspace regression test asserts
+mutual prefix-freedom over the whole registered set, so a future tag mint that would prefix an existing tag
+(e.g. minting `"benten-drop:layer-c:cek-v2"` while `"benten-drop:layer-c:cek"` exists) fails CI rather than
+silently opening a cross-surface confusion path. (Cross-ref: `docs/THREAT-MODEL.md` §5 T-DOMSEP / T-DOMSEP-MIT
+for the threat statement. The centralizing registry CODE + its prefix-free regression test land in the parallel
+CODE shard; this property records the structural shape that code realizes.)
+
 ---
 
 ## §4.2 — Deterministic-CEK confirmation-oracle property (GAP-2 honest disclosure)

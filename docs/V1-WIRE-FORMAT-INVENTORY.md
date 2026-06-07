@@ -82,6 +82,18 @@
 - `crates/benten-crypto-suite/tests/tf3a_pq_hybrid_wasm32_roundtrip.rs` — wasm32 cross-target PQ-hybrid round-trip, **CI-gated under wasm32-wasip1** by the `crypto-suite-wasm-roundtrip` job in `.github/workflows/wasm-conformance.yml` (F-full R6 R1 finding F-06; the encryption layer is now exercised on the wasm target through wasmtime, not just compile-checked / native-run).
 - `crates/benten-graph/src/aead_wrap.rs` — production wrap path; consumed by every encryption-bearing test.
 
+**M-19 endianness conformance scanner (`benten_crypto_suite::conformance::endianness`).** The flagship M-19 gate
+`wire_path_le_survivor_count()` is a REAL source-scanner over `include_str!`-embedded module source (not a
+hand-coded `0`): it counts surviving `to_le_bytes` / `from_le_bytes` on any wire/AAD/keying path and MUST report
+**0** (live survivor count = **0** at HEAD; F-W0-3 pin). The `WIRE_PATH_SOURCES` site-list it scans embeds **8
+crypto-suite source modules** — `aead.rs`, `structural_kdf.rs`, `varsig.rs`, `sizes.rs`, `swap_matrix.rs`,
+`envelope.rs`, `vault.rs`, `cipher_suite.rs` (an earlier framing under-counted this set; the array, not the prose
+list, is authoritative). This gate covers the crypto-suite's OWN wire surfaces; the **cross-crate** M-19
+producers (`benten-graph::aead_wrap`, `benten-platform-foundation::plugin_manifest`) are scanned by their own
+crates' tests today. **Intended widened scope:** consolidating the cross-crate producers under one workspace-wide
+M-19 survivor scan (so a single gate covers every wire/AAD/keying path in the workspace, not just the
+crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZEN-INTERFACE-DEFERRED.md`.
+
 **FREEZE-WAVE status:** ✅ COVERED — `IROH_BLOCK_SIZE = 16 * 1024` constant pin lives in the aead module's golden-constant tests.
 
 ---
@@ -527,7 +539,7 @@
 | 15 | RotationLog + RotationAttestation (DID-rotation chain) | additive-via-record | crates/benten-id/tests/rotation_log_rehydrated_at_engine_open.rs + sibling rotation tests | ✅ COVERED (substrate-level) |
 | 16 | UCAN body canonical bytes (distinct from Varsig header) | UCAN spec v1 | crates/benten-id/tests/ucan.rs + prop_ucan_attenuation.rs | ✅ COVERED (substrate-level) |
 | 17 | ModuleManifest (SANDBOX-module envelope) | manifest schema_version | crates/benten-engine/tests/module_manifest_canonical.rs | ✅ COVERED (substrate-level) |
-| 18 | PluginManifest (2 shapes: shareable + signing-payload) | CID identity (#18) | crates/benten-platform-foundation/tests/plugin_manifest_full_round_trip.rs + crates/benten-engine/tests/admin_ui_v0_install_rejects_substituted_bundle_via_peer_did_signature.rs | ✅ COVERED (substrate-level; PQ-hybrid app-layer sig pending per L2-R6-MAJOR-2 fork) |
+| 18 | PluginManifest (2 shapes: shareable + signing-payload) | CID identity (#18) | crates/benten-platform-foundation/tests/plugin_manifest_full_round_trip.rs + crates/benten-platform-foundation/tests/admin_ui_v0_install_rejects_substituted_bundle_via_peer_did_signature.rs | ✅ COVERED (substrate-level; PQ-hybrid app-layer sig pending per L2-R6-MAJOR-2 fork) |
 | 19 | ManifestStore records (PluginManifestRecord) | record schema_version | crates/benten-platform-foundation/tests/ (manifest-store reopen pins) | ✅ COVERED (substrate-level) |
 | 20 | HandshakeFrame + HandshakePayload + RevocationEntry | `wire_version: u8` | crates/benten-sync/tests/handshake.rs | ✅ COVERED (substrate-level) |
 | 21 | MST proto messages + canonical encoding | message-tagged discriminator | crates/benten-sync/tests/mst_diff.rs + mst_revocation_priority.rs | ✅ COVERED (substrate-level) |
