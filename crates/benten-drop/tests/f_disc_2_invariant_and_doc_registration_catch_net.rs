@@ -360,13 +360,39 @@ fn f_disc_2_records_r46_group_codepoints_0x6610_0x6520() {
 // observable consequences. would-FAIL-if-no-op'd.
 // ===========================================================================
 
+use benten_crypto_suite::sig::{Keypair as SigKeypair, SignatureSuite};
 use benten_drop::layer_c::group_posture::{
-    GroupError, GroupSealParams, open_membership_set_group, seal_membership_set_group,
+    GroupError, GroupSealParams, GroupVerifyContext, open_membership_set_group,
+    seal_membership_set_group,
 };
 use benten_drop::layer_c::{
-    AAD_VERSION, EncryptedEnvelope, LayerCError, RecipientPubKey, open_single, seal_sealed_sender,
-    sealed_aad,
+    AAD_VERSION, EncryptedEnvelope, LayerCError, RecipientPubKey, group_roster_for_test,
+    open_single, seal_sealed_sender, sealed_aad,
 };
+use benten_id::did::Did;
+
+/// B2 ORIGIN-AUTH helper: a real sender (LAMPS-hybrid keypair + matching
+/// hybrid `did:key` bytes). See the `f_lc_hpke` sibling for the rationale.
+fn hybrid_sender() -> (SigKeypair, Vec<u8>) {
+    let kp = SignatureSuite::v1_default().generate_keypair();
+    let did_str = Did::from_hybrid_public_key(&kp.public()).to_string();
+    (kp, did_str.into_bytes())
+}
+
+/// The independently-held `GroupVerifyContext` for a `0x6610` membership-set
+/// round-trip with all generations = 1 (the common fixture shape here).
+fn verify_ctx_gen1(pks: &[RecipientPubKey]) -> GroupVerifyContext {
+    let member_dids = group_roster_for_test(pks)
+        .iter()
+        .map(|d| String::from_utf8_lossy(d).into_owned())
+        .collect();
+    GroupVerifyContext {
+        member_dids,
+        member_key_generation: 1,
+        membership_set_generation: 1,
+        role_assignments_generation: 1,
+    }
+}
 
 /// Inv-16 ENFORCED — the `EncryptedEnvelope` codepoint-dispatch is LIVE and
 /// fails CLOSED on a cross-arm feed (the codepoint-dispatched encryption
@@ -384,10 +410,12 @@ fn f_disc_2_inv16_codepoint_dispatch_enforced_fail_closed() {
     use benten_drop::layer_c::seal_group_multi;
     let pks: [RecipientPubKey; 2] = [[0x21u8; 32], [0x22u8; 32]];
     let body_cid = *blake3::hash(b"inv16 enforced body").as_bytes();
-    let group_env = seal_group_multi(&pks, &b"did:key:zS".to_vec(), &body_cid, 1, b"inv16 body");
+    let (sender_kp, sender) = hybrid_sender();
+    let group_env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 1, b"inv16 body");
 
-    // The single-recipient open arm MUST refuse a group envelope by codepoint.
-    let outcome = open_single(&[0xA1u8; 32], &group_env);
+    // The single-recipient open arm MUST refuse a group envelope by codepoint
+    // (the dispatch strict-rejects BEFORE any decrypt/verify).
+    let outcome = open_single(&[0xA1u8; 32], &b"did:key:zAUD".to_vec(), 1, &group_env);
     assert_eq!(
         outcome,
         Err(LayerCError::UnsupportedCodepoint(
@@ -435,11 +463,12 @@ fn f_disc_2_inv18_sealed_sender_default_metadata_disclosure_enforced() {
     );
 
     // (2) A REAL seal's plaintext AAD region MUST NOT contain the sender-DID.
-    let sender: Vec<u8> = b"did:key:zUNIQUESENDERMARKER42".to_vec();
+    let (sender_kp, sender) = hybrid_sender();
     let env = seal_sealed_sender(
         &[0x31u8; 32],
         &b"did:key:zAUDIENCE".to_vec(),
         &sender,
+        &sender_kp,
         &[0x07u8; 32],
         1,
         b"inv18 enforced plaintext",
@@ -480,9 +509,11 @@ fn f_disc_2_inv20_clause_c_group_aad_field_set_enforced_blinded() {
         membership_set_generation: 1,
         role_assignments_generation: 1,
     };
+    let (sender_kp, sender) = hybrid_sender();
     let env = seal_membership_set_group(
         &pks,
-        &b"did:key:zGroupSender".to_vec(),
+        &sender,
+        &sender_kp,
         &k_set,
         &params,
         b"inv20 enforced group body",
@@ -530,21 +561,24 @@ fn f_disc_2_inv19_inv20_truncation_defense_enforced_fail_closed() {
         membership_set_generation: 1,
         role_assignments_generation: 1,
     };
+    let (sender_kp, sender) = hybrid_sender();
     let env = seal_membership_set_group(
         &pks,
-        &b"did:key:zSender".to_vec(),
+        &sender,
+        &sender_kp,
         &[0x77u8; 32],
         &params,
         b"inv19 body",
     );
+    let ctx = verify_ctx_gen1(&pks);
     // Pre-condition (would-FAIL-on-revert witness): the FULL envelope opens.
     assert!(
-        open_membership_set_group(&sks[1], 1, &env).is_ok(),
+        open_membership_set_group(&sks[1], 1, &ctx, &env).is_ok(),
         "pre-condition: the index-1 survivor opens fine on the FULL envelope \
          (so the failure below is the count check firing, not a decrypt error)"
     );
     let truncated = env.with_last_stanza_dropped_for_test();
-    let outcome = open_membership_set_group(&sks[1], 1, &truncated);
+    let outcome = open_membership_set_group(&sks[1], 1, &ctx, &truncated);
     assert_eq!(
         outcome,
         Err(GroupError::StanzaCountMismatch {

@@ -53,13 +53,17 @@
 
 #![allow(clippy::unwrap_used)]
 
+use benten_crypto_suite::sig::{Keypair as SigKeypair, SignatureSuite};
 use benten_drop::layer_c::group_posture::{
-    GroupAadInputs, GroupError, GroupSealParams, MEMBERSHIP_SET_GROUP_MULTI_STANZA,
-    assemble_group_aad_local, open_membership_set_group, seal_membership_set_group,
+    GroupAadInputs, GroupError, GroupSealParams, GroupVerifyContext,
+    MEMBERSHIP_SET_GROUP_MULTI_STANZA, assemble_group_aad_local, open_membership_set_group,
+    seal_membership_set_group,
 };
 use benten_drop::layer_c::{
-    EncryptedEnvelope, LayerCError, RecipientPubKey, open_group_stanza, seal_group_multi,
+    EncryptedEnvelope, LayerCError, RecipientPubKey, group_roster_for_test, open_group_stanza,
+    seal_group_multi,
 };
+use benten_id::did::Did;
 // F-02 option-(b) TEST-ONLY cross-check (dev-dependency ONLY): the canonical
 // band-owner encoder, aliased to keep it visibly distinct from benten-drop's
 // LOCAL `assemble_group_aad_local`. Asserted byte-equal — zero drift.
@@ -76,8 +80,33 @@ const FIXTURE_PKS: [RecipientPubKey; 3] = [[0x10u8; 32], [0x11u8; 32], [0x12u8; 
 const FIXTURE_SKS: [[u8; 32]; 3] = [[0x90u8; 32], [0x91u8; 32], [0x92u8; 32]];
 const FIXTURE_K_SET: [u8; 32] = [0x33u8; 32];
 const FIXTURE_SET_ID: &[u8] = b"benten:set:test-membership-group";
-const FIXTURE_SENDER: &[u8] = b"did:key:zGroupSenderUNIQUEMARKER";
 const FIXTURE_PLAINTEXT: &[u8] = b"group payload";
+
+/// B2 ORIGIN-AUTH helper: a real sender (LAMPS-hybrid keypair + matching
+/// hybrid `did:key` bytes). The seal signs `M_auth` with the keypair; the open
+/// resolves the did:key back + verifies. (The per-stanza AAD golden is
+/// UNAFFECTED — the sender-DID is sealed inside `sealed_inner`, never in the
+/// AAD — so the F-02 AAD goldens stay byte-identical.)
+fn hybrid_sender() -> (SigKeypair, Vec<u8>) {
+    let kp = SignatureSuite::v1_default().generate_keypair();
+    let did_str = Did::from_hybrid_public_key(&kp.public()).to_string();
+    (kp, did_str.into_bytes())
+}
+
+/// The independently-held `GroupVerifyContext` over the fixture roster (all
+/// generations = 1, matching `fixture_params`).
+fn fixture_verify_ctx() -> GroupVerifyContext {
+    let member_dids = group_roster_for_test(&FIXTURE_PKS)
+        .iter()
+        .map(|d| String::from_utf8_lossy(d).into_owned())
+        .collect();
+    GroupVerifyContext {
+        member_dids,
+        member_key_generation: 1,
+        membership_set_generation: 1,
+        role_assignments_generation: 1,
+    }
+}
 
 fn fixture_params() -> GroupSealParams {
     GroupSealParams {
@@ -192,9 +221,11 @@ const F_02_LIVE_SEAL_STANZA0_AAD_HEX: &str = "01661001711e20632048ee454f9854f70d
 /// equal the canonical band-owner bytes is a SEPARATE dev-dep-only arm below.)
 #[test]
 fn f_02_live_0x6610_seal_binds_canonical_11_field_aad_golden() {
+    let (sender_kp, sender) = hybrid_sender();
     let env = seal_membership_set_group(
         &FIXTURE_PKS,
-        &FIXTURE_SENDER.to_vec(),
+        &sender,
+        &sender_kp,
         &FIXTURE_K_SET,
         &fixture_params(),
         FIXTURE_PLAINTEXT,
@@ -329,22 +360,25 @@ fn f_02_local_assembler_matches_canonical_membership_set_byte_for_byte() {
 /// decrypt fail; this arm proves the 11-field change is consistent across seal+open.
 #[test]
 fn f_02_seal_open_round_trip_under_11_field_aad() {
+    let (sender_kp, sender) = hybrid_sender();
     let env = seal_membership_set_group(
         &FIXTURE_PKS,
-        &FIXTURE_SENDER.to_vec(),
+        &sender,
+        &sender_kp,
         &FIXTURE_K_SET,
         &fixture_params(),
         FIXTURE_PLAINTEXT,
     );
-    let (pt, recovered_sender) = open_membership_set_group(&FIXTURE_SKS[1], 1, &env)
-        .expect("F-02: the 0x6610 group stanza MUST open under the 11-field AAD");
+    let (pt, recovered_sender) =
+        open_membership_set_group(&FIXTURE_SKS[1], 1, &fixture_verify_ctx(), &env).expect(
+            "F-02: the 0x6610 group stanza MUST open + origin-verify under the 11-field AAD",
+        );
     assert_eq!(
         pt, FIXTURE_PLAINTEXT,
         "F-02: round-trip plaintext preserved"
     );
     assert_eq!(
-        recovered_sender,
-        FIXTURE_SENDER.to_vec(),
+        recovered_sender, sender,
         "F-02: the inner-sender-DID is recovered post-decrypt (Sealed-Sender honored)"
     );
 }
@@ -364,9 +398,12 @@ fn f_02_seal_open_round_trip_under_11_field_aad() {
 /// FIRST opening the full (untruncated) envelope successfully.
 #[test]
 fn f_01_0x6610_dropped_stanza_fails_closed() {
+    let (sender_kp, sender) = hybrid_sender();
+    let ctx = fixture_verify_ctx();
     let env = seal_membership_set_group(
         &FIXTURE_PKS,
-        &FIXTURE_SENDER.to_vec(),
+        &sender,
+        &sender_kp,
         &FIXTURE_K_SET,
         &fixture_params(),
         FIXTURE_PLAINTEXT,
@@ -377,7 +414,7 @@ fn f_01_0x6610_dropped_stanza_fails_closed() {
     // would-FAIL-on-revert witness: revert the check and the truncated open
     // would behave just like this Ok).
     assert!(
-        open_membership_set_group(&FIXTURE_SKS[1], 1, &env).is_ok(),
+        open_membership_set_group(&FIXTURE_SKS[1], 1, &ctx, &env).is_ok(),
         "pre-condition: the index-1 survivor opens fine on the FULL envelope"
     );
 
@@ -389,7 +426,7 @@ fn f_01_0x6610_dropped_stanza_fails_closed() {
         "the bound stanza_count is UNCHANGED (the relay only dropped wire stanzas)"
     );
 
-    let outcome = open_membership_set_group(&FIXTURE_SKS[1], 1, &truncated);
+    let outcome = open_membership_set_group(&FIXTURE_SKS[1], 1, &ctx, &truncated);
     assert_eq!(
         outcome,
         Err(GroupError::StanzaCountMismatch {
@@ -436,9 +473,12 @@ fn drop_last_0x6520_stanza(env: &EncryptedEnvelope) -> EncryptedEnvelope {
 #[test]
 fn f_01_0x6520_dropped_stanza_fails_closed() {
     let body_cid = *blake3::hash(FIXTURE_PLAINTEXT).as_bytes();
+    let (sender_kp, sender) = hybrid_sender();
+    let roster = group_roster_for_test(&FIXTURE_PKS);
     let env = seal_group_multi(
         &FIXTURE_PKS,
-        &FIXTURE_SENDER.to_vec(),
+        &sender,
+        &sender_kp,
         &body_cid,
         /* recipient_key_generation = */ 1,
         FIXTURE_PLAINTEXT,
@@ -446,12 +486,12 @@ fn f_01_0x6520_dropped_stanza_fails_closed() {
 
     // Pre-condition: the index-1 survivor opens fine on the FULL envelope.
     assert!(
-        open_group_stanza(&FIXTURE_SKS[1], 1, &env).is_ok(),
+        open_group_stanza(&FIXTURE_SKS[1], 1, &roster, 1, &env).is_ok(),
         "pre-condition: the index-1 survivor opens fine on the FULL 0x6520 envelope"
     );
 
     let truncated = drop_last_0x6520_stanza(&env);
-    let outcome = open_group_stanza(&FIXTURE_SKS[1], 1, &truncated);
+    let outcome = open_group_stanza(&FIXTURE_SKS[1], 1, &roster, 1, &truncated);
     assert_eq!(
         outcome,
         Err(LayerCError::StanzaCountMismatch {

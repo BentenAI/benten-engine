@@ -951,6 +951,18 @@ fn group_roster(recipient_pks: &[RecipientPubKey]) -> Vec<RecipientDid> {
         .collect()
 }
 
+/// **Test-only (B2 / F-2):** the recipient-DID roster the `0x6520` seal
+/// derives from the recipient pubkeys — the INDEPENDENTLY-held roster an
+/// honest `open_group_stanza` recipient passes to recompute the B2
+/// `audience_set_commitment` (NEVER the wire `stanza.recipient_dids`). In
+/// production a recipient holds the actual roster; this mirrors the seal-side
+/// derivation so the round-trip pins model the held-roster faithfully.
+#[cfg(any(test, feature = "testing"))]
+#[must_use]
+pub fn group_roster_for_test(recipient_pks: &[RecipientPubKey]) -> Vec<RecipientDid> {
+    group_roster(recipient_pks)
+}
+
 fn seal_group_impl(
     recipient_pks: &[RecipientPubKey],
     sender_did: &SenderDid,
