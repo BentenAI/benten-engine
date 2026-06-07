@@ -76,8 +76,8 @@ fail CI on a frozen-surface mutation:
 2. **TS-side public-API parity gate (#1204)** for `@benten/engine`.
    **LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 2 (commit `13322df4`).**
    Workflow at `.github/workflows/ts-public-api.yml`; baseline at
-   `packages/engine/etc/public-api.txt` (403 LOC; extract-from-.d.ts
-   structural diff covering all 14 `dist/*.d.ts` files). Migration to
+   `packages/engine/etc/public-api.txt` (410 LOC; extract-from-.d.ts
+   structural diff covering all 15 `dist/*.d.ts` files). Migration to
    `@microsoft/api-extractor` is named for v1-Composing (the workflow
    + baseline-file location ARE the migration seam — swap-in is
    contained).
@@ -94,7 +94,7 @@ fail CI on a frozen-surface mutation:
    post-freeze additions inherit the gate.
 5. **CATALOG_VARIANT_COUNT exhaustive-match dual-tripwire** at
    `crates/benten-errors/tests/stable_shape.rs::catalog_variant_count_matches_enum`.
-   **CATALOG_VARIANT_COUNT = 199 at HEAD `84280d31`** (192 at the
+   **CATALOG_VARIANT_COUNT = 199 at HEAD `fdfda621`** (192 at the
    G-CORE-9 build-out FREEZE milestone → 197 R6-R2-FP G-COMP-1 cohort 8
    → 198 `E_ROLE_STALE_AT_VERIFY` (F-full w-ms-canary) → 199
    `E_KV_TARGET_NOT_IMMUTABLE` (F-full w-gov-audit; Inv-19)). Adding
@@ -778,11 +778,14 @@ G-CORE-9. Pay the ~20-test-file migration cost now per
   `crates/benten-caps/src/policy.rs::ReadContext`,
   `crates/benten-caps/src/policy.rs::PendingOp`) — the cap-policy context types.
 - **Apply `#[non_exhaustive]` to `CapWriteContext` + `ReadContext`** —
-  **DEFERRED to G-COMP-1 per `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-17**
-  (~80+ workspace test-site cascade; the production-side migration to
-  `Default::default()` + field-mutation pattern IS already complete at
-  v1-beta per Bundle 3 of the R1 fix-pass; the attribute landing is the
-  test-cascade half).
+  **LANDED at R6-R2 FP Item 6 per `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-17 (now CLOSED).**
+  The attribute is applied at the type sites at HEAD
+  (`crates/benten-caps/src/policy.rs::CapWriteContext` + `crates/benten-caps/src/policy.rs::ReadContext`;
+  the sibling `SuspensionOutcome` at `crates/benten-engine/src/engine_wait.rs::SuspensionOutcome` landed in the
+  same fix-pass). The full cross-crate test-site cascade migrated to the `Default::default()` + field-mutation
+  pattern, and the `cargo-public-api` baselines `docs/public-api/benten-caps.txt` +
+  `docs/public-api/benten-engine.txt` were regenerated. (The production-side migration had already completed at
+  v1-beta per Bundle 3 of the R1 fix-pass; R6-R2 FP Item 6 landed the attribute + the test-cascade half.)
 
 **What "frozen" means here:**
 - Trait shape (signature, defaulted-vs-required, return types) is locked.
@@ -897,7 +900,7 @@ SURFACE.
 |---|---|---|
 | `packages/engine/src/index.ts` exports | All `export` statements at HEAD | LOCKED as-shipped at the freeze wave; commit the post-freeze `index.d.ts` |
 | `packages/engine/src/engine.ts` `Engine` + `PolicyKind` | As-shipped | LOCKED |
-| `packages/engine/src/errors.generated.ts` `CATALOG_CODES` | The 201-TS-class catalog at HEAD `84280d31` (199 Rust ErrorCode throwable variants + `E_INV_ITERATE_NEST_DEPTH` Phase-2a-retired retained envelope + `E_UNKNOWN` forward-compat sentinel = 201; documented in ERROR-CATALOG.md "Catalog count narrative" table) | LOCKED — mirror item 8's `ErrorCode` mirror discipline; auto-generation contract frozen (regen MUST produce byte-identical file given same input) |
+| `packages/engine/src/errors.generated.ts` `CATALOG_CODES` | The 201-TS-class catalog at HEAD `fdfda621` (199 Rust ErrorCode throwable variants + `E_INV_ITERATE_NEST_DEPTH` Phase-2a-retired retained envelope + `E_UNKNOWN` forward-compat sentinel = 201; documented in ERROR-CATALOG.md "Catalog count narrative" table) | LOCKED — mirror item 8's `ErrorCode` mirror discipline; auto-generation contract frozen (regen MUST produce byte-identical file given same input) |
 | `packages/engine/src/types.ts` typed-call shapes | `TypedCallInputShapes`, `TypedCallOutputShapes`, `ManifestSignature`, the `ed25519_*` / `keypair_*` / `did_resolve` arms | LOCKED — **PQ-hybrid-capable** sizes (NO hardcoded Ed25519 32B-key / 64B-sig assumption; per item 10 PQ-hybrid JS-shape widening + napi-r1-1 atomic mirror) |
 | `packages/engine/src/types.ts` other interface exports | `Subgraph`, `RegisteredHandler`, `AttributionFrame`, `Trace*`, `CapabilityClaim`, `DeviceAttestation`, `CapabilityGrant`, `Edge`, `TypedCallOp`, etc. | LOCKED as-shipped |
 | `packages/engine/src/index.d.ts` | The TS module declaration file; generated from napi-rs via the build pipeline | LOCKED post-regen at the freeze wave |
@@ -912,15 +915,15 @@ SURFACE.
 **#1204 JS-side public-API parity gate LANDED at G-CORE-9
 V1-FROZEN-INTERFACE row 2 (commit `13322df4`).** Workflow at
 `.github/workflows/ts-public-api.yml`; baseline at
-`packages/engine/etc/public-api.txt` (403 LOC; extract-from-.d.ts
-structural diff covering all 14 `dist/*.d.ts` files). Migration to
+`packages/engine/etc/public-api.txt` (410 LOC; extract-from-.d.ts
+structural diff covering all 15 `dist/*.d.ts` files). Migration to
 `@microsoft/api-extractor` is named for v1-Composing (the workflow
 + baseline-file location ARE the migration seam; swap-in is
 contained).
 
 **errors.generated.ts ↔ catalog ↔ Rust `ErrorCode` parity audit
 RESOLVED at G-CORE-9 V1-FROZEN-INTERFACE row 8a (investigation outcome
-in commit `75a1d33a` body).** Counts at HEAD `84280d31`: 199 Rust
+in commit `75a1d33a` body).** Counts at HEAD `fdfda621`: 199 Rust
 ErrorCode throwable variants + 1 `E_INV_ITERATE_NEST_DEPTH`
 Phase-2a-retired retained envelope (catalog ID retained for
 backward-compat string round-trip; Rust enum has no variant) + 1
@@ -1021,7 +1024,7 @@ verification at HEAD):
 | `benten-sync` | §4.71 5-enum cluster | per spec item 11 | AUDIT + APPLY |
 | `benten-caps` | `CapError`, `RestrictedSpec`, `PendingOp` | YES | KEEP |
 | `benten-caps` | `TypedCapGroup` | per spec item 11 | AUDIT + APPLY |
-| `benten-caps` | `CapWriteContext` + `ReadContext` (structs) | TBD | **APPLY** (item 8 coupling) |
+| `benten-caps` | `CapWriteContext` + `ReadContext` (structs) | **YES — applied at HEAD** (`crates/benten-caps/src/policy.rs::CapWriteContext` + `::ReadContext`) | **LANDED** at R6-R2 FP Item 6 per `V1-FROZEN-INTERFACE-DEFERRED.md` Row D-17 (CLOSED); item 8 coupling. The sibling `benten-engine` `SuspensionOutcome` (L1020 row) landed in the same fix-pass. |
 | `benten-caps` | **`Scope`** | NO (deliberate) | **DO NOT APPLY** — explicit carve-out per item 15(c); the EXACTLY-two-arms-by-the-type-system property IS the structural pin |
 | `benten-ivm` | **`Strategy`** | NO (deliberate) | **DO NOT APPLY** — explicit carve-out per G-CORE-9 R1 L8-MAJOR-3 ratification; the 3-arm `{A, B, Reserved}` set IS load-bearing per the spec's audit-pin (item 11 documented carve-out); adding a 4th strategy is a Composing-time architectural decision, NOT a SemVer non-breaking field addition |
 | `benten-graph` | `WriteContext` (struct) | NO at HEAD | **APPLY** (item 5 coupling) |
@@ -1625,13 +1628,13 @@ collapses the encryption-class taxonomy (RATIFIED-S&C §R6 + spec item
 - The HKDF-SHA256 `derive_step` API in
   `crates/benten-crypto-suite/src/structural_kdf.rs`:
   - `K(root) = HKDF-SHA256(K_principal, info = "root" || root_cid)`
-    (line 124 `derive_root`).
+    (line 150 `derive_root`).
   - `K(N) = HKDF-SHA256(K(predecessor), info = "step" || edge_label ||
-    N.cid)` (line 141 `derive_step`).
+    N.cid)` (line 176 `derive_step`).
 - `StructuralKdfKey` zeroize-on-drop output type.
 - **The `"step"` + `"root"` HKDF info-tags** for cross-role domain
   separation (per Spike E correction + R0.8).
-- `derive_step_without_info_tag_for_test` (line 96) — test-only escape;
+- `derive_step_without_info_tag_for_test` (line 97) — test-only escape;
   pinned as `_for_test`-suffixed (cosmetic rename to `_internal` per
   item 1 visibility-cluster pattern is **BELONGS-NAMED-NOW** to
   v1-assessment-window v1-Composing; safety-orthogonal — lock the
@@ -1827,7 +1830,7 @@ semantics in Composing = HALT.
 
 > **⚠️ FLAG-FOR-BEN / FLAG-FOR-ORCHESTRATOR-REVIEW.** This section
 > documents the AS-BUILT shipped MembershipSet surface (F-full TIER-1/2,
-> HEAD `84280d31`). It is added by the R6 R1 doc-reconciler to make the
+> HEAD `fdfda621`). It is added by the R6 R1 doc-reconciler to make the
 > 15th crate's frozen surface referenceable; the freeze-lens + Ben sign
 > off the §1.A.FROZEN inclusion at the freeze gate. Read against
 > `crates/benten-membership-set/src/lib.rs` pub-use set +

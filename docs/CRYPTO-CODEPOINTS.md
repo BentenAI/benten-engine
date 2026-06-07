@@ -58,7 +58,12 @@ This is the NQ-A1 conservative-fallback policy:
 | `0x0000`         | No-encryption (plaintext partition) | RESERVED |
 | `0x6320..0x632F` | RemotePermission band (incl. `ExecuteWorkflow` reserve) | RESERVED |
 | `0x6620`         | `SubsetRef` federation reserve (`MEMBERSHIP_SET_RESERVED_0X6620`) | RESERVED |
-| `0x6380..0x63CF` | FS-future MLS/CGKA bracket (incl. `RotatingGroupKeyChainedMode` + `ChainedStateTlv`) | RESERVED |
+| `0x6380..0x638F` | MLS-Application FS-future bracket (`MLS_APPLICATION_BASE`; NOT MembershipSet) | RESERVED |
+| `0x6390..0x639F` | MLS-Welcome FS-future bracket (`MLS_WELCOME_BASE`; NOT Sealed-Sender) | RESERVED |
+| `0x63A0..0x63AF` | CGKA-Commit FS-future bracket (`CGKA_COMMIT_BASE`; incl. `RotatingGroupKeyChainedMode` + `ChainedStateTlv`) | RESERVED |
+| `0x63B0..0x63BF` | Bird-of-Prey AKEM FS-future bracket (`BIRD_OF_PREY_BASE`) | RESERVED |
+| `0x63C0..0x63CF` | draft-prabel FS-future bracket (`DRAFT_PRABEL_BASE`) | RESERVED |
+| `0x6700..0x67FF` | Lifecycle / revocation band (`LIFECYCLE_BAND_BASE`) | RESERVED |
 | (no Core integer) | `RecoveryArtifact` — reserved-at-Core conceptually; the `RecoveryHook` trait lands in Phase-4-Meta-Composing alongside the allocated codepoint (NQ-W5/m-14) | RESERVED (Composing) |
 
 The reserved set is enumerated in
@@ -148,12 +153,18 @@ symbol; a prose-only mention does not count):
 
 | Codepoint | Symbol | Band | State |
 |---|---|---|---|
-| `0x6380..0x638F` | MLS-Application | FS-future bracket | CODEPOINT-RESERVE (9-eyes; NOT MembershipSet) |
-| `0x6390..0x639F` | MLS-Welcome | FS-future bracket | CODEPOINT-RESERVE (9-eyes; NOT Sealed-Sender) |
+| `0x6100` | `VAULT_ENVELOPE` (`VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT`) | Layer-A vault at-rest band (XChaCha20 24-byte XNonce) | **FREEZE** (vault on-disk; `f_va_1`) |
+| `0x6101` | `SYMMETRIC_AEAD_12B` (`SYMMETRIC_AEAD_12B_CODEPOINT`) | symmetric-AEAD 12-byte-nonce sibling | **FREEZE** (12-byte-nonce variant; NOT the vault codepoint) |
+| `0x6380..0x638F` | `MLS_APPLICATION_BASE` (MLS-Application) | FS-future bracket | CODEPOINT-RESERVE (9-eyes; NOT MembershipSet) |
+| `0x6390..0x639F` | `MLS_WELCOME_BASE` (MLS-Welcome) | FS-future bracket | CODEPOINT-RESERVE (9-eyes; NOT Sealed-Sender) |
+| `0x63A0..0x63AF` | `CGKA_COMMIT_BASE` (CGKA-Commit) | FS-future bracket (incl. `RotatingGroupKeyChainedMode` + `ChainedStateTlv`) | CODEPOINT-RESERVE |
+| `0x63B0..0x63BF` | `BIRD_OF_PREY_BASE` (Bird-of-Prey AKEM) | FS-future bracket | CODEPOINT-RESERVE |
+| `0x63C0..0x63CF` | `DRAFT_PRABEL_BASE` (draft-prabel) | FS-future bracket | CODEPOINT-RESERVE |
 | `0x6600` | `MEMBERSHIP_SET_ENCRYPTION` | MembershipSet band (RELOCATED from `0x6380`) | **FREEZE** (§0.4 collision fix) |
 | `0x6610` | `MEMBERSHIP_SET_GROUP_MULTI_STANZA` | MembershipSet band | **FREEZE** (group K_Set multi-stanza; R4.6-corrected value) |
 | `0x6520` | `LAYER_C_DROP_MULTI_RECIPIENT` | Layer-C drop / recipient band | **FREEZE** (R0.7-blinded Layer-C group multi-stanza; NOT a MembershipSet) |
 | `0x6310..0x631F` | `DEVICE_LINK_BAND_BASE`/`DEVICE_LINK_BAND_END` | Layer-D DeviceLink (Signal-Provisioning) band | **FREEZE** (R0.7 §4.1; out-of-band integers typed-reject fail-closed) |
+| `0x6700..0x67FF` | `LIFECYCLE_BAND_BASE` | Lifecycle / revocation band | CODEPOINT-RESERVE (band base registered; per-slot allocation at Composing) |
 
 The in-code wire-lock for the group-band constants is regression-guarded in
 `crates/benten-crypto-suite/tests/f_cp_codepoint_registry_dispatch.rs`
@@ -171,13 +182,22 @@ The in-code wire-lock for the group-band constants is regression-guarded in
 > `MEMBERSHIP_SET_RESERVED_0X6620 == 0x6620`), and
 > `crates/benten-drop/src/layer_c.rs` defines the Layer-C drop values
 > (`LAYER_C_DROP == 0x6500`, `DROP_TO_RECIPIENT_SEALED_SENDER == 0x6510`,
-> `LAYER_C_DROP_MULTI_RECIPIENT == 0x6520`) plus the Layer-D DeviceLink base.
-> Because the same integer lives in two places, a single-side edit would drift
-> the registry from the wire. A cross-crate const-equality regression-pin in
+> `LAYER_C_DROP_MULTI_RECIPIENT == 0x6520`). The Layer-D DeviceLink base is
+> defined SEPARATELY in `crates/benten-engine/src/layer_d/device_link.rs`
+> (`DEVICE_LINK_BAND_BASE == 0x6310`) and mirrored to
+> `benten_crypto_suite::registry::DEVICE_LINK_BAND_BASE` — it is NOT a `layer_c.rs`
+> const. Because the same integer lives in two places, a single-side edit would
+> drift the registry from the wire. A cross-crate const-equality regression-pin in
 > `crates/benten-drop/tests/f_disc_2_invariant_and_doc_registration_catch_net.rs`
 > (`f_disc_2_codepoint_ssot_cross_crate_const_equality`) asserts the producing
-> crates' values equal `benten_crypto_suite::registry::*`, so a one-sided edit
-> fails the build.
+> crates' values equal `benten_crypto_suite::registry::*` for the MembershipSet
+> band (`MEMBERSHIP_SET_ENCRYPTION` / `MEMBERSHIP_SET_GROUP_MULTI_STANZA` /
+> `MEMBERSHIP_SET_RESERVED_0X6620`) and the Layer-C drop band
+> (`LAYER_C_DROP` + `LAYER_C_DROP_MULTI_RECIPIENT`); a one-sided edit to any of
+> those fails the build. (The `DROP_TO_RECIPIENT_SEALED_SENDER == 0x6510` value is
+> wire-locked by the Layer-C drop-band byte-pins in
+> `crates/benten-drop/tests/f_lc_hpke_encrypt_to_recipient_sealed_sender.rs`, not
+> by this cross-crate const-equality arm.)
 
 The Layer-D DeviceLink band `0x6310..0x631F` is the R0.7 §4.1 Signal-Provisioning
 device-link wire band (`crates/benten-engine/src/layer_d/device_link.rs`
