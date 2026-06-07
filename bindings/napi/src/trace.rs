@@ -238,6 +238,18 @@ fn trace_step_to_json(step: &TraceStep) -> serde_json::Value {
                 ),
             );
         }
+        // Fail-CLOSED forward-compat arm. `benten_engine::TraceStep` is
+        // `#[non_exhaustive]` (V1-FROZEN-INTERFACE.md §11): a future
+        // additive trace-boundary variant must NOT break the napi build
+        // nor silently vanish from the wire. Emit an explicit
+        // `"unknown"` discriminant so the JS side can surface the
+        // forward-compat row rather than mis-parse a missing field.
+        _ => {
+            obj.insert(
+                "type".to_string(),
+                serde_json::Value::String("unknown".to_string()),
+            );
+        }
     }
     serde_json::Value::Object(obj)
 }

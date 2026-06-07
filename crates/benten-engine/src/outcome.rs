@@ -35,7 +35,15 @@ pub struct ViewCreateOptions;
 /// the generalized Algorithm B port. The shape mirrors the TS DSL
 /// `inputPattern` field exactly so the napi bridge round-trips without
 /// renaming.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md §11 — the selector
+/// vocabulary is deliberately narrow at 2b and "the surface widens in
+/// Phase 3 alongside the generalized Algorithm B port" (see above), so
+/// additive variants must not be an external SemVer break. Construction
+/// of the existing variants is unaffected; the napi bridge in
+/// `bindings/napi/src/view.rs` only builds values (no exhaustive match).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum UserViewInputPattern {
     /// Match every change event whose Node carries the given label. Mirrors
     /// the Phase-1 `ContentListingView` shape (`label` selector).
@@ -357,7 +365,15 @@ impl Trace {
 /// per-OperationNode identity for predecessor lookups against
 /// [`HandlerPredecessors`]) and `primitive` (kind label, e.g. `"read"` /
 /// `"write"` / `"respond"`).
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md §11 — this is the
+/// engine-side projection of [`benten_eval::TraceStep`]; future trace
+/// boundary kinds (the eval-side row set is itself additive) must not
+/// be an external SemVer break. The one cross-crate exhaustive consumer
+/// (`bindings/napi/src/trace.rs::trace_step_to_json`) carries a
+/// fail-closed `_` arm.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 #[allow(
     clippy::large_enum_variant,
     reason = "Step is the dominant variant (>99% of trace rows in normal CRUD walks); boxing it would force an allocation per step on the hot path while saving bytes only on the rare boundary / budget rows."

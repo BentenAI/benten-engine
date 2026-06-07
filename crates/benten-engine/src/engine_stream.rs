@@ -146,7 +146,14 @@ pub enum NextChunkPoll {
 /// `Latest` and `Sequence` mirror the SUBSCRIBE cursor surface for
 /// consistency; STREAM does not yet expose the `Persistent` mode
 /// because per-stream resumption is Phase 3 (iroh transport boundary).
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md §11 — the `Persistent`
+/// mode (and any further cursor modes) lands in Phase 3, so the
+/// variant-set is additive and must not be an external SemVer break.
+/// Mirrors the sibling [`SubscribeCursor`](crate::SubscribeCursor)
+/// attribute. No exhaustive consumer exists at HEAD.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum StreamCursor {
     /// Start from the next chunk produced after this call.
     Latest,

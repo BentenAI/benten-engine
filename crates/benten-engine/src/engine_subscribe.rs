@@ -68,7 +68,15 @@ use crate::error::EngineError;
 ///   G12-E SuspensionStore so a re-subscribe across process restart
 ///   resumes from `max_delivered_seq + 1`. Lands once G12-E + G6-A's
 ///   real wiring merge.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md §11 — the cursor-mode
+/// vocabulary is additive (future modes must not break external
+/// SemVer). The in-crate engine→eval cursor lowering in
+/// [`Engine::on_change_with_cursor`] stays exhaustive (same crate, so
+/// `#[non_exhaustive]` does not relax it); cross-crate consumers
+/// (`bindings/napi/src/subscribe.rs`) only construct values.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum SubscribeCursor {
     /// Start from the next event published after this call.
     Latest,
