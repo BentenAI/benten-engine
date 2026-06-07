@@ -38,11 +38,12 @@
 //! non-idempotent merge fails the permutation / duplicate arms; a larger-HLC
 //! fork tie-break fails the F-CRDT-3 fork arm).
 //!
-//! ## RED-PHASE (pim-12 §3.6e) + SELF-CONTAINED stub-shim
+//! ## Wiring (history: pim-12 §3.6e)
 //!
-//! Compiles GREEN behind `#[ignore]`; SELF-CONTAINED stub-shim for
-//! parallel-safe R3. R5 swaps in `benten_membership_set` + the real
-//! Loro/CRDT merge and un-ignores.
+//! LIVE and un-ignored — runs every CI cycle against the REAL
+//! `benten_membership_set` + the real Loro/CRDT merge. (History: this
+//! started as a RED-PHASE self-contained stub-shim for parallel-safe R3;
+//! R5 wired it to the production surfaces and un-ignored it.)
 
 #![allow(clippy::unwrap_used)]
 

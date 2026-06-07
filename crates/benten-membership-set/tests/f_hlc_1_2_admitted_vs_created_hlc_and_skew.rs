@@ -33,11 +33,13 @@
 //! would-FAIL-if-no-op'd (a classifier that accepted the future stamp fails
 //! the skew arm; a tie-break keyed off `admitted_at_hlc` fails F-HLC-1 arm 2).
 //!
-//! ## RED-PHASE (pim-12 §3.6e) + SELF-CONTAINED stub-shim
+//! ## Wiring (history: pim-12 §3.6e)
 //!
-//! Compiles GREEN behind `#[ignore]`; SELF-CONTAINED stub-shim for
-//! parallel-safe R3. R5 swaps in `benten_membership_set` + the real
-//! `benten_core::hlc` clock and un-ignores.
+//! LIVE and un-ignored — runs every CI cycle against the REAL
+//! `benten_membership_set` + the real `benten_core::hlc` clock.
+//! (History: this started as a RED-PHASE self-contained stub-shim for
+//! parallel-safe R3; R5 wired it to the production surfaces and
+//! un-ignored it.)
 
 #![allow(clippy::unwrap_used)]
 

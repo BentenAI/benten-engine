@@ -125,7 +125,9 @@ mod f_kat_4_stub {
 
     /// A deterministic-synthesized LAMPS composite signature fixture. The
     /// `ed25519_half ‖ mldsa65_half` shape + the OID binding are what the
-    /// interop pins inspect. R5 swaps in the real cross-ecosystem bytes.
+    /// shape/OID-binding pins inspect; the real cross-ecosystem bytes are
+    /// exercised by the LIVE inbound-acceptance arm
+    /// (`benten_accepts_cross_ecosystem_lamps_signatures`).
     #[derive(Debug, Clone)]
     pub struct LampsCompositeSig {
         pub ecosystem: Ecosystem,
