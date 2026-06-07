@@ -49,9 +49,11 @@
 //!   verify over the shared `M'` (ML-DSA with `mldsa_ctx = Label`), which
 //!   binds them — no separate commitment trailer.
 //! - **Strip-resistance** on hybrid encryption (X-Wing combiner): mixing
-//!   BOTH shared secrets into the HKDF-SHA256 derivation means stripping
+//!   BOTH shared secrets into the SHA3-256 combiner means stripping
 //!   either half yields a different key → AEAD authenticated decrypt
-//!   fails closed.
+//!   fails closed. (The X-Wing combiner is `SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖
+//!   pk_X ‖ XWingLabel)` per `draft-connolly-cfrg-xwing-kem-10` §6 —
+//!   [`crate::cipher_suite::combine_x_wing`] — NOT HKDF.)
 //! - **No-silent-downgrade**: hybrid-signed content handed to a
 //!   `classical_only` decrypt path surfaces [`SwapMatrixError::ConfigMismatch`]
 //!   — the bidirectional-swap F-2 contract.
