@@ -118,8 +118,12 @@ own AAD field-set under its own HPKE-derived AEAD key, so **each stanza independ
   so a re-target (re-wrap to a new set) flips the commitment and a stale-generation replay (revoked-member
   cross-generation) flips a generation word, both fail-closed. Forging an attribution requires the target's
   hybrid signing key (post-quantum-secure). The construction (`benten_drop::layer_c` seal/open + the substantive
-  `f_lc_3` pins: second-sealer-spoof / second-member-spoof / re-target / stale-generation / strip-PQ-half) makes
-  this claim TRUE; design record `.addl/phase-4-meta/sealed-sender-auth-design.md`.
+  `f_lc_3_*` pins in `crates/benten-drop/tests/f_lc_hpke_encrypt_to_recipient_sealed_sender.rs`:
+  `f_lc_3_second_sealer_spoof_rejected_single` / `f_lc_3_second_member_spoof_rejected_membership_group` /
+  `f_lc_3_second_sealer_spoof_rejected_layer_c_group` / `f_lc_3_retarget_to_new_audience_rejected` /
+  `f_lc_3_stale_generation_replay_rejected` / `f_lc_3_strip_pq_half_rejected_single`) makes this claim TRUE; design
+  record `.addl/phase-4-meta/sealed-sender-auth-design.md`. Positive cross-records: `docs/THREAT-MODEL.md` §1 +
+  `docs/SECURITY-POSTURE.md` Compromise #43 (the inter-member non-forgeability positive-property notes).
 
 These properties hold **per stanza, independently** for the per-stanza defenses (U17 / truncation), and **per
 message** for the origin-auth signature (one signature authenticates the body to the whole audience-SET at

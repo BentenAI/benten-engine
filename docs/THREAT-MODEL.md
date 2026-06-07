@@ -34,6 +34,18 @@ nonce per send** and the CEK is HPKE-wrapped to the recipient, so the relay sees
 plaintext-equality test (the Tier-1 "sees plaintext = NO" row is unchanged). Full cryptographic narration:
 `docs/SECURITY-PROOFS.md` §4.2.
 
+**Inter-member sender-origin non-forgeability (positive as-built property; B2 ORIGIN-AUTHENTICATION — ENFORCED in
+code).** A **co-recipient member** (and, on the multi-recipient group path, a co-sealer) — even one holding `K_Set`
+and thus able to derive the CEK and produce valid AEAD tags — **CANNOT forge the sender origin** on the online
+Layer-C path: it can neither mint a send attributed to another member nor re-target another member's real body to a
+recipient set that member never chose. The "Co-recipient member" / "Admin" tiers above see content they are
+entitled to but get **no forgery power over attribution**. Each Sealed-Sender send carries a per-MESSAGE
+LAMPS-hybrid (`id-MLDSA65-Ed25519-SHA512`) sender signature inside the once-sealed body, verified post-decrypt
+against the recipient-INDEPENDENTLY-held set-state, **fail-closed** (`SenderOriginAuthFailed`); forging requires the
+target's hybrid (post-quantum) signing key. Full cryptographic narration: `docs/SECURITY-PROOFS.md` §4.1
+(inter-member non-forgeability decomposition + the substantive `f_lc_3_*` spoof/re-target/stale-generation/strip-PQ
+defense arms).
+
 ---
 
 ## §2 — O-6 blast-radius ladder (what each compromise exposes)
