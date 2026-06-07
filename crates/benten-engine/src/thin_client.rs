@@ -593,7 +593,16 @@ fn production_signature_verifier(
 /// Per CLAUDE.md baked-in #17: shape (b) browser tab uses HTTP; shape
 /// (c) Tauri-embedded webview uses in-process IPC; both share the same
 /// `DidKeyedSession` contract.
+///
+/// `#[non_exhaustive]` per V1-FROZEN-INTERFACE.md §11 — the variant-set
+/// names the wire-substrate for observability only (the cryptographic
+/// contract is identical across variants), and the doc-cited future wire
+/// framings make this additive, NOT a load-bearing frozen cardinality
+/// (unlike the `Strategy` / `MembershipSetKind` carve-outs). The sole
+/// cross-crate consumer (`benten-renderer-tauri`) only constructs
+/// `Transport::Ipc`; no exhaustive match exists at HEAD.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Transport {
     /// Shape (b) — HTTP / fetch from a wasm32 browser tab. Wire framing
     /// lands at G24-D-FP-2 + the bindings layer.

@@ -75,6 +75,7 @@
 use rand_core::OsRng as RandOsRng;
 use sha3::Digest as _;
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey, StaticSecret};
+use zeroize::Zeroizing;
 
 use crate::aead::{
     AeadEnvelope, AeadError, AeadKeyMaterial, aad_whole_content, unwrap as aead_unwrap,
@@ -287,9 +288,12 @@ impl CipherSuite {
                 // ML-KEM-768 encapsulation → (mlkem_ct, ss_mlkem). The OS
                 // RNG supplies the 32-byte `m` randomness inside the wrapper
                 // (same randomness source as the prior RustCrypto path).
+                // `ss_mlkem` is a KEM shared secret — wrap in `Zeroizing` so
+                // the `Vec<u8>` is wiped when this scope ends (F-08).
                 let (mlkem_ct, ss_mlkem) = mlkem::encapsulate(mlkem_ek_bytes).ok_or(
                     AeadError::MalformedEnvelope("recipient ML-KEM-768 ek malformed"),
                 )?;
+                let ss_mlkem = Zeroizing::new(ss_mlkem);
 
                 // Real draft-connolly X-Wing combiner:
                 // SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel).
@@ -297,12 +301,15 @@ impl CipherSuite {
                 // secret; ct_X = the X25519 ephemeral public key (ek_x);
                 // pk_X = the recipient X25519 public key. The ML-KEM
                 // ciphertext is bound transitively via ss_M (decapsulation).
-                let combined = combine_x_wing(
+                // `combined` is the wrapping KEK — `Zeroizing` wipes the raw
+                // [u8; 32] after it is copied into the (also-zeroizing)
+                // `AeadKeyMaterial` (F-08).
+                let combined = Zeroizing::new(combine_x_wing(
                     &ss_mlkem,
                     ss_x.as_bytes(),
                     ek_x.as_bytes(),
                     x_recipient.as_bytes(),
-                );
+                ));
 
                 // AEAD-encrypt k_root under the combined key.
                 let combined_key = AeadKeyMaterial::from_bytes(self.codepoint, combined.to_vec());
@@ -330,8 +337,14 @@ impl CipherSuite {
                 // X25519_CLASSICAL_INFO) via `classical_combine` — same
                 // hash family as the hybrid arm but with the classical-only
                 // inputs (no HKDF; the prior HKDF-SHA256 label was a mislabel).
-                let combined =
-                    classical_combine(ss_x.as_bytes(), ek_x.as_bytes(), x_recipient.as_bytes());
+                // `combined` is the classical wrapping KEK — `Zeroizing`
+                // wipes the raw [u8; 32] after the copy into `AeadKeyMaterial`
+                // (F-08, combiner-KEK-output parity with the hybrid arm).
+                let combined = Zeroizing::new(classical_combine(
+                    ss_x.as_bytes(),
+                    ek_x.as_bytes(),
+                    x_recipient.as_bytes(),
+                ));
                 let combined_key = AeadKeyMaterial::from_bytes(self.codepoint, combined.to_vec());
                 let aad = aad_whole_content(b"x25519-classical-wrap:k_root");
                 let env = aead_wrap(k_root, &combined_key, &aad)?;
@@ -392,15 +405,25 @@ impl CipherSuite {
                 // a typed MalformedEnvelope (the strip-resistance contract
                 // routes the zeroed-PQ-half F-2 case through a *different
                 // derived key* → AEAD fails closed, not through this arm).
-                let ss_mlkem = mlkem::decapsulate(mlkem_dk_bytes, wrapped.ek_mlkem.as_slice())
-                    .ok_or(AeadError::MalformedEnvelope("ML-KEM-768 dk/ct malformed"))?;
+                // `ss_mlkem` is the recovered KEM shared secret — `Zeroizing`
+                // wipes the `Vec<u8>` at scope end (F-08).
+                let ss_mlkem = Zeroizing::new(
+                    mlkem::decapsulate(mlkem_dk_bytes, wrapped.ek_mlkem.as_slice())
+                        .ok_or(AeadError::MalformedEnvelope("ML-KEM-768 dk/ct malformed"))?,
+                );
 
                 // Recover the recipient's public material to feed the
                 // combiner symmetrically (it bound them at wrap-time).
                 let x_pub = X25519PublicKey::from(x_sec);
 
-                let combined =
-                    combine_x_wing(&ss_mlkem, ss_x.as_bytes(), &ek_x_bytes, x_pub.as_bytes());
+                // `combined` is the recovered KEK — `Zeroizing` wipes the raw
+                // [u8; 32] after the copy into `AeadKeyMaterial` (F-08).
+                let combined = Zeroizing::new(combine_x_wing(
+                    &ss_mlkem,
+                    ss_x.as_bytes(),
+                    &ek_x_bytes,
+                    x_pub.as_bytes(),
+                ));
 
                 let combined_key = AeadKeyMaterial::from_bytes(self.codepoint, combined.to_vec());
                 let aad = aad_whole_content(b"x-wing-wrap:k_root");
@@ -420,7 +443,14 @@ impl CipherSuite {
                 let ek_x_pub = X25519PublicKey::from(ek_x_bytes);
                 let ss_x = x_sec.diffie_hellman(&ek_x_pub);
                 let x_pub = X25519PublicKey::from(x_sec);
-                let combined = classical_combine(ss_x.as_bytes(), &ek_x_bytes, x_pub.as_bytes());
+                // `combined` is the recovered classical KEK — `Zeroizing`
+                // wipes the raw [u8; 32] after the copy into `AeadKeyMaterial`
+                // (F-08).
+                let combined = Zeroizing::new(classical_combine(
+                    ss_x.as_bytes(),
+                    &ek_x_bytes,
+                    x_pub.as_bytes(),
+                ));
                 let combined_key = AeadKeyMaterial::from_bytes(self.codepoint, combined.to_vec());
                 let aad = aad_whole_content(b"x25519-classical-wrap:k_root");
                 let plaintext = aead_unwrap(&wrapped.aead_envelope, &combined_key, &aad)?;

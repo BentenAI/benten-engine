@@ -348,8 +348,19 @@ impl UnlockedKeyMaterial {
 
     /// The structural-KDF root key seed — the structural-KDF chain seeds from
     /// the vault `K_principal` (F-LB-1 keying-root binding).
+    ///
+    /// **TEST-ONLY seam** (R6-R3 F-07, mirroring the `aead.rs` mr-major-2
+    /// twin fix). This wraps the raw `K_principal` directly into a
+    /// `StructuralKdfKey` newtype — it exposes the structural-KDF ROOT seam
+    /// and has NO production callers (the production keying path routes
+    /// `K_principal` through `structural_kdf::derive_root`, which binds the
+    /// cipher-suite codepoint + root CID, NOT a raw-bytes wrap). Gated to
+    /// `test`/`testing` so the raw root is not reachable from the frozen
+    /// production surface. Used only by the F-LB-1 pins (which build under
+    /// `--features testing`).
     #[must_use]
-    pub fn structural_kdf_root_key(&self) -> StructuralKdfKey {
+    #[cfg(any(test, feature = "testing"))]
+    pub fn structural_kdf_root_key_for_test(&self) -> StructuralKdfKey {
         StructuralKdfKey::from_bytes_for_test(self.k_principal.expose_secret())
     }
 }

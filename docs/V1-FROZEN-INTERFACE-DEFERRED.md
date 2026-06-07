@@ -1499,7 +1499,9 @@ Row D-15's audit-readiness concern.
   `.github/workflows/wasm-browser.yml` forbidden-symbol blocklist +
   `bindings/napi/tests/wasm_bundle_content.rs` + CLAUDE.md baked-in #17.
 
-### Row D-35 — freeze-record "HEAD `84280d31`" snapshot-SHA currency sweep (R6-R2 F-26)
+### Row D-35 — freeze-record "HEAD `84280d31`" snapshot-SHA currency sweep (R6-R2 F-26) — RE-PINNED at R6-R3 (F-33/F-67)
+
+> **STATUS (R6-R3, F-33/F-67):** the deferred re-pin is **DONE for this round** — the `84280d31` "HEAD"/"AS-BUILT + ENFORCED at HEAD" snapshot-SHA cites in `docs/ERROR-CATALOG.md` (~4), `docs/V1-FROZEN-INTERFACE.md` (~4), and `docs/INVARIANT-COVERAGE.md` (~4) are re-pinned to the current freeze-record HEAD `fdfda621` (origin/main this round). The AS-BUILT claims + count narratives (199 throwable / 201 catalog) were ground-truth-re-verified at `fdfda621` before re-pinning. The historical SHA mentions BELOW (the `2172cb6d` → `84280d31` → … provenance chain) are intentionally retained as the audit trail. The pin re-floats to the freeze-tag HEAD at the final pre-tag freeze-record sweep if HEAD advances again before the Ben-gated `phase-4-meta-core-close` tag.
 
 - **Frozen surface (v1-beta):** three freeze-record docs cite the snapshot SHA
   `84280d31` as "HEAD" / "AS-BUILT + ENFORCED at HEAD" — `docs/ERROR-CATALOG.md`
@@ -1544,6 +1546,47 @@ Row D-15's audit-readiness concern.
 > only ERROR-CATALOG / V1-FROZEN-INTERFACE / INVARIANT-COVERAGE); the Agent-B
 > shard handles the freeze-record currency of SECURITY-POSTURE +
 > V1-WIRE-FORMAT-INVENTORY.
+
+---
+
+## R6-R3 (post-F-full phase-close, round 3) NAMED-CARRY rows
+
+> The rows below land at the R6-R3 phase-close convergence (doc-reconciliation +
+> OBS shard). Each is a HARD-RULE clause-(b) deferral OR an OBS/disclosure
+> observation whose ENTRY lands NOW with a NAMED destination; the substantive
+> change (or the decision that none is needed) ships in the named downstream
+> wave / is dispositioned by a downstream reviewer. Code-behavior + cite/comment
+> OBS rows are recorded here so a later reviewer or the G-COMP-1 wave can pick
+> them up; they are NOT freeze-blocking at v1-beta. All cites verified live at
+> HEAD `fdfda621` at author-time. The bare `F-NN` labels are the R6-R3 council
+> finding IDs carried conservatively from the council brief.
+
+### Row D-36 — GAP-D: `audience_set_commitment` is unkeyed → membership-guess-confirmable (sharpens U25 / SECURITY-PROOFS §4.2)
+
+- **Observation (NAMED, not fixed this round):** the Layer-C group `audience_set_commitment` (`crates/benten-drop/src/layer_c.rs`, the BLAKE3 commitment over the *sorted* recipient roster) is **unkeyed** — a party that can enumerate candidate rosters can **confirm** a guessed audience by recomputing the commitment (the recipient-INDEPENDENT-recompute soundness property that defends re-target is the same property that makes a low-entropy roster guess-confirmable). This is the audience-axis sibling of the deterministic-CEK confirmation-oracle (SECURITY-PROOFS §4.2 / GAP-2) and sharpens the U25 full-per-send-unlinkability reserve.
+- **Destination:** SECURITY-PROOFS §4.2 disclosure extension + the U25 v1-GM-reserve (a keyed/blinded audience commitment is additive over the wire — codepoint-reserve, no v1-beta wire-break). A downstream reviewer decides whether to add the explicit §4.2 disclosure note OR fold under U25; recorded here so the guess-confirmability is not silent.
+- **v1-beta posture:** no network-observer plaintext break (the roster is not on the wire; the commitment is opaque to an observer who cannot enumerate the candidate set); the residual is the enumerable-low-entropy-roster confirmation advantage, same class as §4.2.
+
+### Row D-37 — GAP-E: `classical_half_for_test` / `pq_half_for_test` ungated in the frozen crypto-suite baseline (PRE-EXISTING-on-main)
+
+- **Observation (NAMED, not fixed this round):** the frozen `cargo-public-api` baseline `docs/public-api/benten-crypto-suite.txt` carries `benten_crypto_suite::sig::HybridSignature::classical_half_for_test` + `::pq_half_for_test` (plus `SyntheticVector::ml_dsa65_for_test` + `StructuralKdfKey::from_bytes_for_test`) as ungated `pub` `_for_test` accessors — i.e. they are in the v1-beta frozen public surface, not behind `#[cfg(test)]` / a `testing` feature gate. **PRE-EXISTING-on-main** (not introduced by R6-R3).
+- **Destination:** the `_for_test` visibility-cluster v1-Composing tightening pass (same class as the §15.f `derive_step_without_info_tag_for_test` → `_internal` BELONGS-NAMED-NOW item already recorded in `docs/V1-FROZEN-INTERFACE.md` §15.f). A downstream reviewer decides gate-vs-rename-vs-accept; locked AS-IS at v1-beta per the freeze (a gate/rename is itself a public-surface change requiring a baseline-update + Ben sign-off).
+
+### Row D-38 — GAP-F: `--omit blanket-impls` regen-determinism doc vs committed crypto-suite baseline
+
+- **Observation (NAMED, not fixed this round):** `docs/V1-FROZEN-INTERFACE.md` (~L865) + `docs/V1-FROZEN-INTERFACE-BUILD-BACKLOG.md` row 1 document the baseline regen command as `cargo public-api -p <crate> --simplified --omit blanket-impls`, but the committed `docs/public-api/benten-crypto-suite.txt` baseline **contains auto-trait blanket-impl lines** (`impl<'a> core::marker::{Freeze,Send,Sync,Unpin,RefUnwindSafe,UnwindSafe} for …`) that `--omit blanket-impls` would strip. So the committed baseline was NOT produced with `--omit blanket-impls` (or the documented command is wrong) — a regen-determinism inconsistency: a fresh `--omit blanket-impls` regen would NOT byte-match the committed file, which weakens the "regen MUST produce byte-identical file" contract claim.
+- **Destination:** the freeze-record build-out / cargo-public-api regen pass (the wave that owns `docs/public-api/*.txt`). Reconcile by EITHER re-regenerating all baselines WITH the documented flag-set (and re-committing the stripped output) OR correcting the documented command to match the committed baselines (drop `--omit blanket-impls` from the doc). A code/baseline change, so NAMED-not-fixed in this doc-only shard.
+
+### Row D-39 — R6-R3 code-behavior OBS cluster (F-26 / F-39 / F-40 / F-41 / F-43 / F-44 / F-46 / F-60 / F-61 / F-62 / F-63 / F-64)
+
+- **Observation (NAMED, not fixed this round):** the R6-R3 council surfaced a cluster of **code-behavior** observations (finding IDs F-26, F-39, F-40, F-41, F-43, F-44, F-46, F-60, F-61, F-62, F-63, F-64). These describe runtime / construction-site behaviors (NOT doc-reconciliation), so they are out of scope for the doc-only shard that authored this row and are carried for a code-owning reviewer.
+- **Destination:** the R6-R3 code-fix shard (the sibling shard that owns Rust src) / the next phase-close convergence round. Each ID is dispositioned by the code reviewer as fix-now / OUT-OF-SCOPE / NAMED-downstream per HARD RULE 12 when picked up. Recorded here so none is silently dropped between rounds (pim-N-prior-phase-explicit-preflight discipline).
+
+### Row D-40 — R6-R3 cite/comment/disclosure OBS cluster (F-10 / F-11 / F-16 / F-17 / F-20 / F-27 / F-29 / F-31 / F-32 / F-34 / F-35 / F-37 / F-38 / F-42 / F-45 / F-49 / F-50 / F-51 / F-52 / F-53 / F-54 / F-56 / F-57 / F-59 / F-65 / F-66)
+
+- **Observation (NAMED, not fixed this round):** the R6-R3 council surfaced a cluster of **cite / comment / disclosure** observations (finding IDs F-10, F-11, F-16, F-17, F-20, F-27, F-29, F-31, F-32, F-34, F-35, F-37, F-38, F-42, F-45, F-49, F-50, F-51, F-52, F-53, F-54, F-56, F-57, F-59, F-65, F-66). These are minor cite-precision / comment-accuracy / disclosure-completeness observations that a downstream reviewer can address; they are not freeze-blocking and were below the fix-now threshold for this shard (which prioritized the MAJOR + cheap-cite fixes named in its brief).
+- **Destination:** the next phase-close convergence round / the freeze-record reconcile sweep that precedes the Ben-gated tag. Each ID is dispositioned when picked up. Recorded here so the cluster survives between rounds.
+- **Note — F-58 = NO-ACTION:** the `repr(u8)` frozen-cardinality carve-out is correct as-built; no row needed (carried here only to record the explicit NO-ACTION disposition so it is not re-raised).
 
 ---
 

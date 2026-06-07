@@ -71,13 +71,10 @@ Drop bundles are **forever-valid once distributed**: revocation of the embedded 
 
 Discoverable via `git ls-files crates/benten-drop/tests/tf3f_*.rs`. The G-CORE-3f wave shipped pins covering:
 
-- **`tf3f_envelope_plus_per_node_sig_defense_in_depth.rs`** — PIN 3 measures the <12% defense-in-depth overhead validated at Spike G.
-- **`tf3f_envelope_sig_tamper_rejected.rs`** — envelope-sig forgery detection.
-- **`tf3f_per_node_aead_tamper_rejected.rs`** — per-Node AEAD authentication tag rejects payload-tampering even with valid envelope-sig.
-- **`tf3f_mode3_inline_rejected.rs`** — Mode-3 inline-tiny rejected at construct + parse time (defer-to-post-v1 contract).
-- **`tf3f_version_unsupported_*.rs`** — unknown `DropBundleVersion` rejection on the read side.
+- **`tf3f_envelope_plus_per_node_sig_defense_in_depth.rs`** — the per-Node-AEAD-plus-envelope-sig defense-in-depth family (the G-CORE-3f wave consolidated the separate tamper pins here): `tf3f_per_node_ciphertext_tamper_detected_envelope_sig_still_valid` (per-Node AEAD authentication tag rejects payload-tampering even with a still-valid envelope-sig), `tf3f_tampered_envelope_sig_fails_before_per_node_decrypt` (envelope-sig forgery detection), and `tf3f_per_node_attestation_size_overhead_under_12_percent` (the <12% defense-in-depth overhead validated at Spike G).
+- **`tf3f_no_mode3_inline_tiny_arm.rs`** — Mode-3 inline-tiny rejected at construct + parse time (defer-to-post-v1 contract): `tf3f_drop_content_mode_no_inline_tiny_arm` + `tf3f_inline_tiny_synthetic_rejected_via_unsupported_version_or_mode_typed`.
+- **`tf3f_drop_bundle_offline_consume.rs`** — offline-consume round-trip + the size-cap measurement (`tf3f_dropbundle_5_recipe_bundle_within_size_envelope`, against `DROP_BUNDLE_MAX_SIZE_BYTES`) + unknown-`DropBundleVersion` rejection on the read side (`tf3f_dropbundle_future_version_yields_typed_unsupported_drop_version`).
 - **`tf3f_revocation_reach_forever_valid_documented.rs`** — Spike G + RATIFIED-S&C §R6 reality documented + asserted at the codebase boundary (the *behavioral* assertion is that the bundle remains decryptable after upstream UCAN revocation, with the security narrative pointing the reader to the documented compromise + tight-`nbf`/`exp` mitigation).
-- **`tf3f_*_bundle_under_4k_bytes.rs`** — size-cap measurement against `DROP_BUNDLE_MAX_SIZE_BYTES`.
 
 ---
 

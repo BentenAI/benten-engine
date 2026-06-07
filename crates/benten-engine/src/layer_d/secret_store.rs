@@ -22,7 +22,11 @@
 use std::collections::HashMap;
 
 /// Typed secret-store rejections (fail-closed; never silent data loss).
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future secret-store failure
+/// mode lands ADDITIVELY without a breaking SemVer bump on the frozen v1 API.
 #[derive(Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SecretStoreError {
     /// The requested key was not present in the store.
     NotFound,

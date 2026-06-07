@@ -324,3 +324,233 @@ fn graph_aead_wrap_error_audit_arm_coverage() {
     }
     let _: fn(&AeadError) -> &'static str = audit;
 }
+
+// =========================================================================
+// R6-R3 fix-b — engine `layer_d` `#[non_exhaustive]` audit arm-coverage pins.
+// =========================================================================
+//
+// The layer_d frozen-v1 error + dispatch-operation enums now carry
+// `#[non_exhaustive]` so a future variant lands ADDITIVELY without a SemVer
+// break. The `_` catch-all arm is reachable ONLY while the attribute is present
+// (this integration-test crate is a SEPARATE crate from `benten_engine`, so the
+// cross-crate `#[non_exhaustive]` semantics apply); removing the attribute turns
+// the catch-all into an `unreachable_patterns` build break (§11 HALT-AND-SURFACE).
+//
+// `GrantRejection` is DELIBERATELY EXCLUDED — it is a §11 documented carve-out
+// (the frozen M-12 six-pass-class roster; the non-wildcard `roster_index` match
+// IS the structural roster-drift guard, mirroring `Strategy` / `MembershipSetKind`).
+
+#[test]
+fn layer_d_device_auth_error_audit_arm_coverage_non_exhaustive() {
+    use benten_engine::layer_d::device_auth::DeviceAuthError;
+    fn audit(e: &DeviceAuthError) -> &'static str {
+        match e {
+            DeviceAuthError::NoPasswordSource => "NoPasswordSource",
+            DeviceAuthError::VaultDecryptFailed => "VaultDecryptFailed",
+            DeviceAuthError::Locked => "Locked",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(
+        audit(&DeviceAuthError::NoPasswordSource),
+        "NoPasswordSource"
+    );
+}
+
+#[test]
+fn layer_d_device_link_error_audit_arm_coverage_non_exhaustive() {
+    use benten_engine::layer_d::device_link::DeviceLinkError;
+    fn audit(e: &DeviceLinkError) -> &'static str {
+        match e {
+            DeviceLinkError::OfferSignatureForged => "OfferSignatureForged",
+            DeviceLinkError::HpkeUnwrapFailed => "HpkeUnwrapFailed",
+            DeviceLinkError::SessionIdMismatch => "SessionIdMismatch",
+            DeviceLinkError::SessionIdReplayed => "SessionIdReplayed",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(
+        audit(&DeviceLinkError::HpkeUnwrapFailed),
+        "HpkeUnwrapFailed"
+    );
+}
+
+#[test]
+fn layer_d_secret_store_error_audit_arm_coverage_non_exhaustive() {
+    use benten_engine::layer_d::secret_store::SecretStoreError;
+    fn audit(e: &SecretStoreError) -> &'static str {
+        match e {
+            SecretStoreError::NotFound => "NotFound",
+            SecretStoreError::KeychainUnavailable => "KeychainUnavailable",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(audit(&SecretStoreError::NotFound), "NotFound");
+}
+
+#[test]
+fn layer_d_permission_operation_audit_arm_coverage_non_exhaustive() {
+    use benten_engine::layer_d::remote_permission::PermissionOperation;
+    fn audit(o: &PermissionOperation) -> &'static str {
+        match o {
+            PermissionOperation::Decrypt { .. } => "Decrypt",
+            PermissionOperation::SignUcanDelegation { .. } => "SignUcanDelegation",
+            PermissionOperation::RemoteUnlock => "RemoteUnlock",
+            PermissionOperation::ExecuteWorkflow { .. } => "ExecuteWorkflow",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(audit(&PermissionOperation::RemoteUnlock), "RemoteUnlock");
+}
+
+/// `GrantRejection` §11 carve-out pin — EXACTLY-6 frozen-cardinality roster.
+///
+/// This match is DELIBERATELY non-wildcard (no `_` arm): `GrantRejection` is a
+/// documented §11 carve-out that does NOT carry `#[non_exhaustive]`, so a 7th
+/// pass-class added without updating this audit (and `GrantRejection::ALL` +
+/// `roster_index`) is a compile-fail HERE — the HALT-AND-SURFACE roster-drift
+/// guard. Mirrors `strategy_carve_out_3_arms_exhaustive_pin` above.
+#[test]
+fn layer_d_grant_rejection_carve_out_6_arms_exhaustive_pin() {
+    use benten_engine::layer_d::grant_acceptance::GrantRejection;
+    fn audit(r: GrantRejection) -> usize {
+        match r {
+            GrantRejection::Replay => 0,
+            GrantRejection::DeviceKeyRevoked => 1,
+            GrantRejection::Expired => 2,
+            GrantRejection::ConfusedDeputy => 3,
+            GrantRejection::UiSummaryMismatch => 4,
+            GrantRejection::AuditNodeMissing => 5,
+        }
+    }
+    for (i, r) in GrantRejection::ALL.iter().enumerate() {
+        assert_eq!(audit(*r), i);
+    }
+}
+
+// =========================================================================
+// R6-R3 fix-integration fold-in — residual NON-layer_d `benten-engine`
+// `#[non_exhaustive]` audit arm-coverage pins (V1-FROZEN-INTERFACE.md §11
+// ~L1030 row closure).
+// =========================================================================
+//
+// These five enums were the MIXED-STATE residual the §11 row flagged
+// ("12+ verified MISSING at HEAD"): the fix-b layer_d sweep did not touch
+// them (they live in non-layer_d engine src). Each now carries
+// `#[non_exhaustive]`. This integration-test crate is SEPARATE from
+// `benten_engine`, so the `_` catch-all arm is reachable ONLY while the
+// attribute is present — removing it turns the catch-all into an
+// `unreachable_patterns` build break (§11 HALT-AND-SURFACE).
+//
+// `Transport` is the sixth row-listed type closed at the same fold-in
+// (additive, NOT a frozen-cardinality carve-out: observability-only,
+// identical crypto contract across variants).
+
+#[test]
+fn user_view_input_pattern_audit_arm_coverage_non_exhaustive() {
+    use benten_engine::UserViewInputPattern;
+    fn audit(p: &UserViewInputPattern) -> &'static str {
+        match p {
+            UserViewInputPattern::Label(_) => "Label",
+            UserViewInputPattern::AnchorPrefix(_) => "AnchorPrefix",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(
+        audit(&UserViewInputPattern::Label("x".to_string())),
+        "Label"
+    );
+    assert_eq!(
+        audit(&UserViewInputPattern::AnchorPrefix("y".to_string())),
+        "AnchorPrefix"
+    );
+}
+
+#[test]
+fn trace_step_audit_arm_coverage_non_exhaustive() {
+    use benten_engine::TraceStep;
+    // The named-arm coverage exercises the `#[non_exhaustive]` wildcard
+    // guard required of cross-crate consumers (the production napi
+    // consumer `bindings/napi/src/trace.rs::trace_step_to_json` carries
+    // the equivalent fail-CLOSED `_` arm).
+    fn audit(s: &TraceStep) -> &'static str {
+        match s {
+            TraceStep::Step { .. } => "Step",
+            TraceStep::SuspendBoundary { .. } => "SuspendBoundary",
+            TraceStep::ResumeBoundary { .. } => "ResumeBoundary",
+            TraceStep::BudgetExhausted { .. } => "BudgetExhausted",
+            _ => "Unknown",
+        }
+    }
+    let _: fn(&TraceStep) -> &'static str = audit;
+    assert_eq!(
+        audit(&TraceStep::SuspendBoundary {
+            state_cid: benten_core::Cid::from_blake3_digest([0u8; 32]),
+        }),
+        "SuspendBoundary"
+    );
+}
+
+#[test]
+fn stream_cursor_audit_arm_coverage_non_exhaustive() {
+    use benten_engine::engine_stream::StreamCursor;
+    fn audit(c: &StreamCursor) -> &'static str {
+        match c {
+            StreamCursor::Latest => "Latest",
+            StreamCursor::Sequence(_) => "Sequence",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(audit(&StreamCursor::Latest), "Latest");
+    assert_eq!(audit(&StreamCursor::Sequence(7)), "Sequence");
+}
+
+#[test]
+fn subscribe_cursor_audit_arm_coverage_non_exhaustive() {
+    use benten_engine::SubscribeCursor;
+    fn audit(c: &SubscribeCursor) -> &'static str {
+        match c {
+            SubscribeCursor::Latest => "Latest",
+            SubscribeCursor::Sequence(_) => "Sequence",
+            SubscribeCursor::Persistent(_) => "Persistent",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(audit(&SubscribeCursor::Latest), "Latest");
+    assert_eq!(
+        audit(&SubscribeCursor::Persistent("s".to_string())),
+        "Persistent"
+    );
+}
+
+#[test]
+fn transport_audit_arm_coverage_non_exhaustive() {
+    use benten_engine::thin_client::Transport;
+    fn audit(t: Transport) -> &'static str {
+        match t {
+            Transport::Http => "Http",
+            Transport::Ipc => "Ipc",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(audit(Transport::Http), "Http");
+    assert_eq!(audit(Transport::Ipc), "Ipc");
+}
+
+#[test]
+fn manifest_envelope_recheck_outcome_audit_arm_coverage_non_exhaustive() {
+    use benten_engine::manifest_envelope_recheck::ManifestEnvelopeRecheckOutcome as Outcome;
+    // Pre-existing `#[non_exhaustive]` (applied before the R6-R3 fold-in);
+    // pinned here to bring the §11 row's full set under audit coverage.
+    fn audit(o: &Outcome) -> &'static str {
+        match o {
+            Outcome::NotApplicable => "NotApplicable",
+            Outcome::UnresolvedDeny => "UnresolvedDeny",
+            Outcome::Admitted => "Admitted",
+            Outcome::OutsideEnvelope { .. } => "OutsideEnvelope",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(audit(&Outcome::NotApplicable), "NotApplicable");
+    assert_eq!(audit(&Outcome::Admitted), "Admitted");
+}

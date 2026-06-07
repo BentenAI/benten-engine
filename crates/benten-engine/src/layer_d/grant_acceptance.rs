@@ -27,6 +27,17 @@ use std::collections::HashSet;
 /// non-wildcard `match` in [`GrantRejection::roster_index`] is the
 /// compiler-enforced roster-drift guard: a future 7th variant fails to compile
 /// until [`GrantRejection::ALL`] + every consumer is updated in lock-step.
+///
+/// **§11 `#[non_exhaustive]` CARVE-OUT (documented; registered in
+/// `docs/V1-FROZEN-INTERFACE.md` item 11 carve-out registry).** This enum is
+/// DELIBERATELY exhaustive-by-design — applying `#[non_exhaustive]` would
+/// defeat the [`GrantRejection::roster_index`] non-wildcard roster-drift guard
+/// (the whole point of the M-12 roster: a 7th pass-class must HALT-AND-SURFACE
+/// at every consumer match site, not slip in additively). Structurally
+/// identical to the `benten-ivm::Strategy` / `MembershipSetKind` frozen-
+/// cardinality carve-outs: the EXACTLY-6-arms-by-the-type-system property IS
+/// the structural pin. Adding a 7th class is a Composing-time architectural
+/// decision, NOT a SemVer non-breaking variant addition.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum GrantRejection {
     /// Class 1 — replayed `jti` (nonce-cache hit).

@@ -498,7 +498,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::keying_k
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::keying_kv::KvError
 pub fn benten_membership_set::keying_kv::derive_kv(benten_membership_set::keying_kv::CidTarget) -> core::result::Result<[u8; 32], benten_membership_set::keying_kv::KvError>
 pub mod benten_membership_set::kind
-pub enum benten_membership_set::kind::KindDispatchError
+#[non_exhaustive] pub enum benten_membership_set::kind::KindDispatchError
 pub benten_membership_set::kind::KindDispatchError::ReserveTypedReject
 impl core::clone::Clone for benten_membership_set::kind::KindDispatchError
 pub fn benten_membership_set::kind::KindDispatchError::clone(&self) -> benten_membership_set::kind::KindDispatchError
@@ -923,7 +923,7 @@ impl core::marker::UnsafeUnpin for benten_membership_set::verify::Stanza
 impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::verify::Stanza
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::verify::Stanza
 pub fn benten_membership_set::verify::verify_stanza(&benten_membership_set::verify::Stanza, u32) -> core::result::Result<(), benten_membership_set::verify::RoleStaleError>
-pub enum benten_membership_set::KindDispatchError
+#[non_exhaustive] pub enum benten_membership_set::KindDispatchError
 pub benten_membership_set::KindDispatchError::ReserveTypedReject
 impl core::clone::Clone for benten_membership_set::kind::KindDispatchError
 pub fn benten_membership_set::kind::KindDispatchError::clone(&self) -> benten_membership_set::kind::KindDispatchError

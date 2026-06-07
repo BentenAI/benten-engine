@@ -81,6 +81,13 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 
+// R6-R3 (F-03/F-13): drive the REAL crypto-suite reserve surface (not just
+// name-greps). `benten-crypto-suite` is a production dependency of
+// `benten-drop`, so the behavioral arms below exercise the actual
+// `ReservedCodepoint::resolve()` typed-reject + the GAP-6b
+// `chained_state_tlv_aad_binding` AAD assembly byte-for-byte.
+use benten_crypto_suite::codepoint::{ReservedCodepoint, chained_state_tlv_aad_binding};
+
 // ===========================================================================
 // SELF-CONTAINED ADDITIVE-DECODE STUB-SHIM (no cross-wave deps).
 // Models a V2 envelope as: [VERSION(1)=2][CODEPOINT(2, BE)][BODY...].
@@ -459,6 +466,29 @@ fn f_nqa1_1_reserved_slots_registered_in_codepoint_module() {
          trait, chained-mode in 0x6380..0x63CF).",
         missing
     );
+
+    // R6-R3 (F-13) BEHAVIORAL ARM — drive the REAL registry, not just a
+    // name-grep. EVERY enumerated `ReservedCodepoint` MUST typed-reject via
+    // its production `resolve()` at v1-beta (NEVER a silent accept). A revert
+    // that made any slot LIVE-accept (`Ok(())`) fails HERE, loudly. The
+    // `#[non_exhaustive]` enum's variants are listed explicitly so a future
+    // variant addition that ships an accepting `resolve()` arm is also caught
+    // (the match below would need updating + the assertion would fire).
+    for reserved in [
+        ReservedCodepoint::ExecuteWorkflow,
+        ReservedCodepoint::SubsetRef,
+        ReservedCodepoint::RecoveryArtifact,
+        ReservedCodepoint::RotatingGroupKeyChainedMode,
+        ReservedCodepoint::ChainedStateTlv,
+    ] {
+        assert!(
+            reserved.resolve().is_err(),
+            "reserved codepoint {reserved:?} MUST typed-reject via its \
+             production `resolve()` at v1-beta (NEVER a silent accept). A \
+             reserve that returns Ok(()) is a silent wire-acceptance — the \
+             exact NQ-A1 failure this freeze contract forbids."
+        );
+    }
 }
 
 /// PIN 2 — `RecoveryArtifact` codepoint RESERVED at Core, while the
@@ -533,5 +563,47 @@ fn f_nqa1_1_chained_state_tlv_aad_bound_sub_slot() {
          present/absent flip is detectable at decrypt (GAP-6b). No \
          AAD-binding site found among: {:?}.",
         tlv_sites
+    );
+
+    // R6-R3 (F-03/F-13) BEHAVIORAL ARM — drive the REAL GAP-6b AAD assembly
+    // (`chained_state_tlv_aad_binding`) and byte-assert the exact wire bytes,
+    // not just a name-grep. A present sub-slot pushes `0x01 ‖ band_base_be`
+    // (FS-future bracket base `0x6380`, big-endian per M-19); an absent
+    // sub-slot pushes `0x00`. The present/absent prefix byte DIFFERS, which is
+    // precisely what makes a present-vs-absent flip detectable when these
+    // bytes are folded into the AEAD AAD. A revert that stopped binding the
+    // codepoint (e.g. emitted `[0x01]` with no band base, or carried the
+    // sub-slot OUTSIDE the AAD) fails these byte-asserts loudly.
+    let present = chained_state_tlv_aad_binding(true);
+    assert_eq!(
+        present,
+        vec![0x01, 0x63, 0x80],
+        "GAP-6b: a PRESENT `ChainedStateTlv` sub-slot MUST AAD-bind as \
+         `0x01 ‖ 0x6380_be` (present-flag ‖ FS-future bracket base, BE)."
+    );
+    let absent = chained_state_tlv_aad_binding(false);
+    assert_eq!(
+        absent,
+        vec![0x00],
+        "GAP-6b: an ABSENT `ChainedStateTlv` sub-slot MUST AAD-bind as a \
+         single `0x00` present-flag byte."
+    );
+    assert_ne!(
+        present[0], absent[0],
+        "GAP-6b: the present/absent flag byte MUST differ so a relay that \
+         strips (or injects) the sub-slot flips the AAD and fails AEAD-open \
+         — the sub-slot cannot be silently removed."
+    );
+    // Provenance: the bound band base MUST be the §4.0 FS-future bracket base
+    // the `ReservedCodepoint::ChainedStateTlv` reserve dispatches from.
+    let band_base_be = ReservedCodepoint::ChainedStateTlv
+        .band_base()
+        .expect("ChainedStateTlv reserve dispatches from a §4.0 band base")
+        .to_be_bytes();
+    assert_eq!(
+        &present[1..3],
+        &band_base_be,
+        "the AAD-bound band base MUST equal the `ChainedStateTlv` reserve's \
+         own §4.0 `band_base()` (no fabricated integer)."
     );
 }

@@ -129,12 +129,12 @@ fn fixed_cid(byte: u8) -> [u8; 32] {
 #[test]
 fn structural_kdf_5_node_walk_parity_on_real_k_principal() {
     let vault = UnlockedKeyMaterialStub::from_vault_bytes_for_test([0x6Au8; 32]);
-    let k_principal = vault.structural_kdf_root_key();
+    let k_principal = vault.structural_kdf_root_key_for_test();
 
     let root_cid = fixed_cid(0xE0);
     let k_root_owner = derive_root(&k_principal, &root_cid, CODEPOINT_HYBRID);
     let k_root_recip = derive_root(
-        &vault.structural_kdf_root_key(),
+        &vault.structural_kdf_root_key_for_test(),
         &root_cid,
         CODEPOINT_HYBRID,
     );
@@ -182,7 +182,7 @@ fn structural_kdf_5_node_walk_parity_on_real_k_principal() {
 fn structural_kdf_path_divergence_on_real_k_principal() {
     let vault = UnlockedKeyMaterialStub::from_vault_bytes_for_test([0x7Bu8; 32]);
     let k_root = derive_root(
-        &vault.structural_kdf_root_key(),
+        &vault.structural_kdf_root_key_for_test(),
         &fixed_cid(0xF0),
         CODEPOINT_HYBRID,
     );
@@ -218,7 +218,7 @@ fn structural_kdf_path_divergence_on_real_k_principal() {
 fn structural_kdf_step_info_tag_load_bearing_on_real_k_principal() {
     let vault = UnlockedKeyMaterialStub::from_vault_bytes_for_test([0x2Du8; 32]);
     let k_root = derive_root(
-        &vault.structural_kdf_root_key(),
+        &vault.structural_kdf_root_key_for_test(),
         &fixed_cid(0x10),
         CODEPOINT_HYBRID,
     );
@@ -250,12 +250,12 @@ fn structural_kdf_root_bound_to_real_k_principal_seed() {
     let root_cid = fixed_cid(0x20);
 
     let k_root_a = derive_root(
-        &vault_a.structural_kdf_root_key(),
+        &vault_a.structural_kdf_root_key_for_test(),
         &root_cid,
         CODEPOINT_HYBRID,
     );
     let k_root_b = derive_root(
-        &vault_b.structural_kdf_root_key(),
+        &vault_b.structural_kdf_root_key_for_test(),
         &root_cid,
         CODEPOINT_HYBRID,
     );
@@ -308,7 +308,7 @@ fn structural_kdf_clause_h_sibling_walk_scope_confinement_on_real_k_principal() 
 
     // The OWNER holds K_principal and derives the shared root.
     let k_root = derive_root(
-        &vault.structural_kdf_root_key(),
+        &vault.structural_kdf_root_key_for_test(),
         &fixed_cid(0xA0),
         CODEPOINT_HYBRID,
     );
