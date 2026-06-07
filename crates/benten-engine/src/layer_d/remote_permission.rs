@@ -79,7 +79,16 @@ fn be_u32_len(n: usize) -> [u8; 4] {
 /// ladder (O-6): `Decrypt`=1 Node < `SignUcanDelegation`=attenuated-exp-bounded
 /// < `ExecuteWorkflow`=bounded-decrypt-count <
 /// `RemoteUnlock`/device-link=full `K_principal`-permanent.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future remote-permission
+/// operation lands ADDITIVELY without a breaking SemVer bump. The wire-tag
+/// space (`to_wire_be` discriminant bytes `0x00..`) is NOT a frozen-cardinality
+/// roster (no `ALL` const / non-wildcard roster-index guard exists, unlike
+/// `GrantRejection`); the same-crate `to_wire_be` match stays exhaustive so a
+/// new variant still forces its wire-tag here at compile time, while
+/// cross-crate consumers get additive forward-compat.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PermissionOperation {
     /// Decrypt a single Node (`node_cid`).
     Decrypt {

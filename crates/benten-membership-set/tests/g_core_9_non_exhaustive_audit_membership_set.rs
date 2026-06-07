@@ -26,6 +26,8 @@
 //! - `keying_kv::KvError`
 //! - `federation::AcquisitionError`
 //! - `federation::FederationError`
+//! - `kind::KindDispatchError` (R6-R3 fix-b — was MISSING `#[non_exhaustive]`
+//!   while its 5 sibling error enums carried it)
 //!
 //! Carve-out preserved: `kind::MembershipSetKind` is INTENTIONALLY
 //! exhaustive-by-design (the EXACTLY-3 frozen-cardinality enum — §15.c
@@ -112,5 +114,26 @@ fn federation_error_audit_arm_coverage_non_exhaustive() {
     assert_eq!(
         audit(&FederationError::FederationReserved),
         "FederationReserved"
+    );
+}
+
+#[test]
+fn kind_dispatch_error_audit_arm_coverage_non_exhaustive() {
+    // R6-R3 fix-b (F-01): `KindDispatchError` now carries `#[non_exhaustive]`,
+    // mirroring its 5 sibling error enums. `KindDispatchError` is `Copy`, so
+    // take by value (clippy `trivially_copy_pass_by_ref`). The `_` catch-all
+    // arm is reachable ONLY while the attribute is present; removing it turns
+    // the catch-all into an `unreachable_patterns` build break (§11
+    // HALT-AND-SURFACE).
+    use benten_membership_set::kind::KindDispatchError;
+    fn audit(e: KindDispatchError) -> &'static str {
+        match e {
+            KindDispatchError::ReserveTypedReject => "ReserveTypedReject",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(
+        audit(KindDispatchError::ReserveTypedReject),
+        "ReserveTypedReject"
     );
 }
