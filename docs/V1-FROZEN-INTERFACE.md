@@ -94,7 +94,7 @@ fail CI on a frozen-surface mutation:
    post-freeze additions inherit the gate.
 5. **CATALOG_VARIANT_COUNT exhaustive-match dual-tripwire** at
    `crates/benten-errors/tests/stable_shape.rs::catalog_variant_count_matches_enum`.
-   **CATALOG_VARIANT_COUNT = 199 at HEAD `fdfda621`** (192 at the
+   **CATALOG_VARIANT_COUNT = 199 at HEAD `b93b2efc`** (192 at the
    G-CORE-9 build-out FREEZE milestone → 197 R6-R2-FP G-COMP-1 cohort 8
    → 198 `E_ROLE_STALE_AT_VERIFY` (F-full w-ms-canary) → 199
    `E_KV_TARGET_NOT_IMMUTABLE` (F-full w-gov-audit; Inv-19)). Adding
@@ -313,7 +313,7 @@ re-open).
 | Sub-clause | Surface | Frozen shape |
 |---|---|---|
 | §4.60 | `crates/benten-graph/src/graph_backend.rs:269` `GraphBackend::transaction(&self) -> Self::Transaction` (umbrella trait at `:238`; associated `type Transaction` at `:262`) | The owned-handle transaction surface stays as-shipped; backends enter via `RedbBackend::transaction(\|tx\| ...)`. `Self::Transaction` is an owned handle type (no lifetime parameter); the closure-entry lives on the concrete backend, not as a `run<F, R>` trait method |
-| §4.61 | `GraphBackend::snapshot()` + `register_subscriber()` | Both **DECIDED infallible** (`-> SnapshotHandle` and `-> ()`); fail-modes route through the typed `GraphError` channel on dependent operations, NOT through `Result` on these allocation methods. Lock as-shipped per `c4a37bb`-era baseline. |
+| §4.61 | `GraphBackend::snapshot()` + `register_subscriber()` | Both **DECIDED infallible** (`-> SnapshotHandle` and `-> ()`); fail-modes route through the typed `GraphError` channel on dependent operations, NOT through `Result` on these allocation methods. Lock as-shipped per the trait surface at `crates/benten-graph/src/graph_backend.rs:318` (`fn snapshot`) + `:290` (`fn register_subscriber`). |
 | §4.62 | `crates/benten-graph/src/backends/blob_backend_trait.rs:120` `BlobBackend` | **DECIDED additive-default** (NOT a split). The trait carries `put_blob`/`get_blob`/`has_blob` with `Send + Sync + 'static`; future additive methods land as defaulted methods. |
 | §4.63 | `crates/benten-graph/src/backend.rs:306` `KVBackend: Send + Sync` | **DECIDED sync** (NOT RPITIT). RPITIT adds 2024-edition feature-gate complexity v1-beta cannot absorb; future-Composing-async migration is an additive `AsyncKVBackend` trait. |
 | §4.64 | `crates/benten-sync/src/transport_trait.rs:85` `Transport` + `TransportEndpoint` + `TransportConnection` family | `Transport` family stays in `benten-sync` per §8-B (b). The trait surface is `pub` + `Send + Sync + 'static`. **`MerkleRangeProofBackend` trait DEFERRED to G-COMP-1 per V1-FROZEN-INTERFACE row 5 outcome (commit `d2616800`)** — Option A per Planner-B; verified not-built at HEAD; freezing a phantom shape is overcommit. Tracked at `docs/future/phase-4-backlog.md §4.64` (the named-NOW destination per HARD RULE 12 clause-(b)). The §4.64 row received an explicit verify-or-defer outcome paragraph at the G-CORE-9 row 5 commit. |
@@ -443,7 +443,7 @@ freeze wave SURFACES the decision; Ben makes it.
 - Byte-pin tests under `tests/canonical_bytes_v1_*.rs`. **G-CORE-9 R1 Bundle 5
   PARTIAL outcome (2026-05-24):** 2 of 8 hex-pinned tests landed at v1-beta —
   (a) `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs::codepoint_table_integer_values_pinned`
-  (hex-pins the 9-codepoint integer table) + (b) the per-chunk AAD layout pin
+  (hex-pins the 11-codepoint integer table) + (b) the per-chunk AAD layout pin
   in the same file. The remaining 6 hex-pinned tests (SnapshotBlob v2,
   per-chunk-AEAD canonical hex, UCAN-Varsig v1 header, AuthorizationGrant CBOR,
   Drop bundle CBOR, encryption envelope per codepoint, signature envelope per
@@ -627,7 +627,7 @@ each codepoint = SWAPPABLE within the framing):**
 8. **Codepoint-typed constructors** — `SigCodepoint` / `CipherSuiteCodepoint`
    / `HashCodepoint` are wrapper structs around `u16` (`pub struct
    SigCodepoint(pub(crate) u16)`). The `from_raw(raw: u16) -> Self`
-   constructor at codepoint.rs:64 is `pub` for deserializer use, paired
+   constructor at `codepoint.rs::from_raw` (line 82) is `pub` for deserializer use, paired
    with `resolve()` → `Result<(), UnsupportedAlgorithm>` at every
    dispatch site — i.e. you can construct any codepoint but you can't
    USE one that doesn't typed-resolve. This is the C11b safety property
@@ -900,7 +900,7 @@ SURFACE.
 |---|---|---|
 | `packages/engine/src/index.ts` exports | All `export` statements at HEAD | LOCKED as-shipped at the freeze wave; commit the post-freeze `index.d.ts` |
 | `packages/engine/src/engine.ts` `Engine` + `PolicyKind` | As-shipped | LOCKED |
-| `packages/engine/src/errors.generated.ts` `CATALOG_CODES` | The 201-TS-class catalog at HEAD `fdfda621` (199 Rust ErrorCode throwable variants + `E_INV_ITERATE_NEST_DEPTH` Phase-2a-retired retained envelope + `E_UNKNOWN` forward-compat sentinel = 201; documented in ERROR-CATALOG.md "Catalog count narrative" table) | LOCKED — mirror item 8's `ErrorCode` mirror discipline; auto-generation contract frozen (regen MUST produce byte-identical file given same input) |
+| `packages/engine/src/errors.generated.ts` `CATALOG_CODES` | The 201-TS-class catalog at HEAD `b93b2efc` (199 Rust ErrorCode throwable variants + `E_INV_ITERATE_NEST_DEPTH` Phase-2a-retired retained envelope + `E_UNKNOWN` forward-compat sentinel = 201; documented in ERROR-CATALOG.md "Catalog count narrative" table) | LOCKED — mirror item 8's `ErrorCode` mirror discipline; auto-generation contract frozen (regen MUST produce byte-identical file given same input) |
 | `packages/engine/src/types.ts` typed-call shapes | `TypedCallInputShapes`, `TypedCallOutputShapes`, `ManifestSignature`, the `ed25519_*` / `keypair_*` / `did_resolve` arms | LOCKED — **PQ-hybrid-capable** sizes (NO hardcoded Ed25519 32B-key / 64B-sig assumption; per item 10 PQ-hybrid JS-shape widening + napi-r1-1 atomic mirror) |
 | `packages/engine/src/types.ts` other interface exports | `Subgraph`, `RegisteredHandler`, `AttributionFrame`, `Trace*`, `CapabilityClaim`, `DeviceAttestation`, `CapabilityGrant`, `Edge`, `TypedCallOp`, etc. | LOCKED as-shipped |
 | `packages/engine/src/index.d.ts` | The TS module declaration file; generated from napi-rs via the build pipeline | LOCKED post-regen at the freeze wave |
@@ -923,7 +923,7 @@ contained).
 
 **errors.generated.ts ↔ catalog ↔ Rust `ErrorCode` parity audit
 RESOLVED at G-CORE-9 V1-FROZEN-INTERFACE row 8a (investigation outcome
-in commit `75a1d33a` body).** Counts at HEAD `fdfda621`: 199 Rust
+in commit `75a1d33a` body).** Counts at HEAD `b93b2efc`: 199 Rust
 ErrorCode throwable variants + 1 `E_INV_ITERATE_NEST_DEPTH`
 Phase-2a-retired retained envelope (catalog ID retained for
 backward-compat string round-trip; Rust enum has no variant) + 1
@@ -1842,7 +1842,7 @@ semantics in Composing = HALT.
 
 > **⚠️ FLAG-FOR-BEN / FLAG-FOR-ORCHESTRATOR-REVIEW.** This section
 > documents the AS-BUILT shipped MembershipSet surface (F-full TIER-1/2,
-> HEAD `fdfda621`). It is added by the R6 R1 doc-reconciler to make the
+> HEAD `b93b2efc`). It is added by the R6 R1 doc-reconciler to make the
 > 15th crate's frozen surface referenceable; the freeze-lens + Ben sign
 > off the §1.A.FROZEN inclusion at the freeze gate. Read against
 > `crates/benten-membership-set/src/lib.rs` pub-use set +
