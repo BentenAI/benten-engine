@@ -129,6 +129,15 @@ device-link / remote-permission flows admit a chosen-recipient-pubkey surface �
 **external-cryptographer-audit deliverable** (§9.3 audit line; Compromise #45 / #59), NOT a unit-test "proof" in
 this doc.
 
+**Inner-format domain-separation (single vs group).** The single (`benten_drop::layer_c::seal_inner`) and group
+(`benten_drop::layer_c::seal_group_impl`) inner formats are domain-separated by the distinct CEK
+domain-separators (`"benten-drop:layer-c:cek"` vs `"benten-drop:layer-c:group-cek"`) plus the outer per-stanza
+AAD context, **NOT** by the inner payload bytes themselves: a single-format inner and a group-format inner are
+sealed under independently-derived CEKs and bound to distinct AAD shapes, so neither can be reinterpreted as the
+other (cross-format substitution flips the AEAD tag). The property holds in the current code; documenting it here
+prevents a future inner-builder refactor (e.g. unifying or re-laying-out the inner bytes) from silently
+regressing it by accidentally collapsing the CEK separator or AAD distinction.
+
 ---
 
 ## §4.2 — Deterministic-CEK confirmation-oracle property (GAP-2 honest disclosure)
