@@ -46,6 +46,15 @@ pub const AAD_VERSION: u8 = 0x01;
 /// "benten:setid:v1" || id)`.
 pub const SETID_COMMITMENT_LABEL: &[u8] = b"benten:setid:v1";
 
+/// The frozen byte width of the inline self-describing CIDv1 the group AAD
+/// binds: `0x01 0x71 0x1e 0x20 || 32-byte BLAKE3` = **36 bytes**. The
+/// `body_cid` field is encoded INLINE (no external length prefix) and sits
+/// before fixed-width integer fields, so a malformed (wrong-width) CID would
+/// shift every following field boundary. [`assemble_group_aad`] asserts this
+/// exact width at the assembly site (U3 length-injectivity). Mirrors the
+/// drop-side `benten_drop::layer_c::group_posture::SELF_DESCRIBING_CID_LEN`.
+pub const SELF_DESCRIBING_CID_LEN: usize = 36;
+
 /// Serialize the AAD-bound `members_table` snapshot to canonical DAG-CBOR (the
 /// NQ-W4 length-injective (U3) wire contract).
 ///
@@ -167,8 +176,10 @@ pub fn membership_set_id_commitment(k_set: &[u8; 32], membership_set_id: &[u8]) 
 ///
 /// # Panics
 ///
-/// Panics only if the member count exceeds `u32::MAX` (the #46 ceiling makes
-/// this unreachable in practice).
+/// Panics if the member count exceeds `u32::MAX` (the #46 ceiling makes this
+/// unreachable in practice), or if `body_cid` is not exactly
+/// [`SELF_DESCRIBING_CID_LEN`] (36) bytes — a malformed CID is a programming
+/// error that would shift every later field boundary, so it fails loud here.
 #[must_use]
 pub fn assemble_group_aad(t: &GroupAadInputs) -> Vec<u8> {
     let mut buf = Vec::new();
@@ -177,7 +188,16 @@ pub fn assemble_group_aad(t: &GroupAadInputs) -> Vec<u8> {
     // codepoint — BE u16 (U1; committed in AAD).
     buf.extend_from_slice(&t.codepoint.to_be_bytes());
     // body_cid — INLINE self-describing CIDv1 (self-delimiting multihash; no
-    // redundant external lp — uniform with 0x6510/0x6520).
+    // redundant external lp — uniform with 0x6510/0x6520). WIDTH-ASSERT the
+    // canonical 36-byte CIDv1: the field is inline + boundary-load-bearing
+    // (the fixed-width integers that follow are positionally addressed off
+    // it), so a malformed CID MUST NOT silently shift every later field
+    // boundary (U3 length-injectivity). Fail loud at the assembly site.
+    assert_eq!(
+        t.body_cid.len(),
+        SELF_DESCRIBING_CID_LEN,
+        "0x6610 AAD body_cid MUST be a canonical {SELF_DESCRIBING_CID_LEN}-byte self-describing CIDv1 (0x01 0x71 0x1e 0x20 || 32-byte BLAKE3)"
+    );
     buf.extend_from_slice(&t.body_cid);
     // member_count — BE u32 over the member set. The roster itself is BLINDED
     // into audience_set_commitment.

@@ -329,6 +329,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::group_pos
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::group_posture::GroupVerifyContext
 pub const benten_drop::layer_c::group_posture::LAYER_C_DROP_MULTI_RECIPIENT: u16
 pub const benten_drop::layer_c::group_posture::MEMBERSHIP_SET_GROUP_MULTI_STANZA: u16
+pub const benten_drop::layer_c::group_posture::SELF_DESCRIBING_CID_LEN: usize
 pub fn benten_drop::layer_c::group_posture::assemble_group_aad_local(&benten_drop::layer_c::group_posture::GroupAadInputs) -> alloc::vec::Vec<u8>
 pub fn benten_drop::layer_c::group_posture::dispatch_group(&[u8], u16, u16) -> core::result::Result<(), benten_drop::layer_c::group_posture::GroupError>
 pub fn benten_drop::layer_c::group_posture::open_membership_set_group(&benten_drop::layer_c::group_posture::RecipientSecKey, usize, &benten_drop::layer_c::group_posture::GroupVerifyContext, &benten_drop::layer_c::group_posture::GroupSealedEnvelope) -> core::result::Result<(alloc::vec::Vec<u8>, benten_drop::layer_c::group_posture::SenderDid), benten_drop::layer_c::group_posture::GroupError>
