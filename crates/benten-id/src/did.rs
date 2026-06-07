@@ -401,6 +401,32 @@ impl Did {
         candidate.resolve()?;
         Ok(candidate)
     }
+
+    /// Validate-on-construct typed constructor for a **PQ-hybrid** `did:key`
+    /// (the LAMPS Composite Ed25519⊕ML-DSA-65 two-registered-component
+    /// multikey form). The hybrid sibling of [`Did::parse_validated`].
+    ///
+    /// Validates the input string round-trips through [`Did::resolve_hybrid`]
+    /// (`did:key:z` prefix + multibase-decodable + the ML-DSA-first
+    /// two-component multikey layout + valid component keys) before
+    /// construction. The **production-safe** path for callers (e.g.
+    /// `benten-drop`'s Sealed-Sender ORIGIN-AUTH verify) that receive a
+    /// hybrid sender-DID string from the wire and need to resolve its hybrid
+    /// verifying key — distinct from the Ed25519-only [`Did::parse_validated`]
+    /// (which would reject a hybrid DID at the leading `0x1211` multicodec)
+    /// and from the test-only [`Did::from_string_for_test_fixture`].
+    ///
+    /// # Errors
+    ///
+    /// Surfaces the [`Did::resolve_hybrid`] typed-reject set (wrong prefix /
+    /// base58 / unknown component multicodec / body-too-short / trailing
+    /// bytes / invalid composite half) rather than swallowing bad input.
+    pub fn parse_validated_hybrid(s: impl Into<String>) -> Result<Self, DidError> {
+        let s = s.into();
+        let candidate = Self(s);
+        candidate.resolve_hybrid()?;
+        Ok(candidate)
+    }
 }
 
 impl fmt::Display for Did {
