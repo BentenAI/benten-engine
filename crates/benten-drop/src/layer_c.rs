@@ -503,7 +503,11 @@ pub enum EncryptedEnvelope {
 // ---------------------------------------------------------------------------
 
 /// Typed Layer-C failure modes.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future failure mode lands as
+/// an additive variant without a breaking change for downstream `match` sites.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LayerCError {
     /// AEAD authentication failed (wrong key, tampered AAD, stanza
     /// substitution/reorder/re-target, wrong recipient sk).
@@ -1408,7 +1412,11 @@ pub mod abuse_control {
     }
 
     /// Typed admission failure modes.
+    ///
+    /// `#[non_exhaustive]` (§11 SemVer-readiness): a future admission failure
+    /// mode lands as an additive variant, never a downstream wire/match break.
     #[derive(Clone, Debug, PartialEq, Eq)]
+    #[non_exhaustive]
     pub enum AdmitError {
         /// No token presented for a Sealed-Sender envelope.
         MissingDeliveryToken,
@@ -1596,7 +1604,11 @@ pub mod group_posture {
     }
 
     /// Typed group failure modes.
+    ///
+    /// `#[non_exhaustive]` (§11 SemVer-readiness): a future group failure mode
+    /// lands as an additive variant, never a downstream wire/match break.
     #[derive(Clone, Debug, PartialEq, Eq)]
+    #[non_exhaustive]
     pub enum GroupError {
         /// AEAD authentication failed.
         AeadAuthenticationFailed,

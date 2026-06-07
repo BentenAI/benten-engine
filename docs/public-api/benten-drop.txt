@@ -171,7 +171,7 @@ pub fn benten_drop::envelope_sig::sign_envelope(&benten_id::keypair::Keypair, &[
 pub fn benten_drop::envelope_sig::verify_envelope(&[u8], &[u8], &[u8]) -> core::result::Result<(), benten_drop::envelope_sig::EnvelopeSigError>
 pub mod benten_drop::layer_c
 pub mod benten_drop::layer_c::abuse_control
-pub enum benten_drop::layer_c::abuse_control::AdmitError
+#[non_exhaustive] pub enum benten_drop::layer_c::abuse_control::AdmitError
 pub benten_drop::layer_c::abuse_control::AdmitError::MissingDeliveryToken
 pub benten_drop::layer_c::abuse_control::AdmitError::RateLimitExceeded
 pub benten_drop::layer_c::abuse_control::AdmitError::TokenBindingMismatch
@@ -234,7 +234,7 @@ pub fn benten_drop::layer_c::abuse_control::admit_sealed_sender_bound(&benten_dr
 pub fn benten_drop::layer_c::abuse_control::decrypt_was_attempted_for_last_admit() -> bool
 pub fn benten_drop::layer_c::abuse_control::serialize_token_binding_aad(&benten_drop::layer_c::abuse_control::TokenBindingAad) -> alloc::vec::Vec<u8>
 pub mod benten_drop::layer_c::group_posture
-pub enum benten_drop::layer_c::group_posture::GroupError
+#[non_exhaustive] pub enum benten_drop::layer_c::group_posture::GroupError
 pub benten_drop::layer_c::group_posture::GroupError::AeadAuthenticationFailed
 pub benten_drop::layer_c::group_posture::GroupError::SenderOriginAuthFailed
 pub benten_drop::layer_c::group_posture::GroupError::StanzaCountMismatch
@@ -418,7 +418,7 @@ impl core::marker::Unpin for benten_drop::layer_c::EncryptedEnvelope
 impl core::marker::UnsafeUnpin for benten_drop::layer_c::EncryptedEnvelope
 impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::EncryptedEnvelope
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::EncryptedEnvelope
-pub enum benten_drop::layer_c::LayerCError
+#[non_exhaustive] pub enum benten_drop::layer_c::LayerCError
 pub benten_drop::layer_c::LayerCError::AeadAuthenticationFailed
 pub benten_drop::layer_c::LayerCError::InnerSenderDidForged
 pub benten_drop::layer_c::LayerCError::SenderOriginAuthFailed

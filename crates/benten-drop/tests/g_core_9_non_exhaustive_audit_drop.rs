@@ -44,3 +44,64 @@ fn drop_envelope_sig_error_audit_arm_coverage() {
         "VerifyFailed"
     );
 }
+
+// F-full R6-R2 F-03 (Shard C): the Layer-C error enums are SemVer-frozen
+// `#[non_exhaustive]` so a future failure mode lands additively. The `_` arm
+// only stays reachable while the attribute is present — REMOVING
+// `#[non_exhaustive]` would make the catch-all a `unreachable_patterns`
+// warning that `-D warnings` turns into a build break (§11 HALT-AND-SURFACE).
+
+#[test]
+fn layer_c_error_audit_arm_coverage_non_exhaustive() {
+    use benten_drop::layer_c::LayerCError;
+    fn audit(e: &LayerCError) -> &'static str {
+        match e {
+            LayerCError::AeadAuthenticationFailed => "AeadAuthenticationFailed",
+            LayerCError::InnerSenderDidForged => "InnerSenderDidForged",
+            LayerCError::SenderOriginAuthFailed => "SenderOriginAuthFailed",
+            LayerCError::UnsupportedCodepoint(_) => "UnsupportedCodepoint",
+            LayerCError::StanzaCountMismatch { .. } => "StanzaCountMismatch",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(
+        audit(&LayerCError::AeadAuthenticationFailed),
+        "AeadAuthenticationFailed"
+    );
+}
+
+#[test]
+fn admit_error_audit_arm_coverage_non_exhaustive() {
+    use benten_drop::layer_c::abuse_control::AdmitError;
+    fn audit(e: &AdmitError) -> &'static str {
+        match e {
+            AdmitError::MissingDeliveryToken => "MissingDeliveryToken",
+            AdmitError::TokenExpiredOrNotYetValid => "TokenExpiredOrNotYetValid",
+            AdmitError::RateLimitExceeded => "RateLimitExceeded",
+            AdmitError::TokenBindingMismatch => "TokenBindingMismatch",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(
+        audit(&AdmitError::MissingDeliveryToken),
+        "MissingDeliveryToken"
+    );
+}
+
+#[test]
+fn group_error_audit_arm_coverage_non_exhaustive() {
+    use benten_drop::layer_c::group_posture::GroupError;
+    fn audit(e: &GroupError) -> &'static str {
+        match e {
+            GroupError::AeadAuthenticationFailed => "AeadAuthenticationFailed",
+            GroupError::SenderOriginAuthFailed => "SenderOriginAuthFailed",
+            GroupError::WrongGroupCodepoint { .. } => "WrongGroupCodepoint",
+            GroupError::StanzaCountMismatch { .. } => "StanzaCountMismatch",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(
+        audit(&GroupError::AeadAuthenticationFailed),
+        "AeadAuthenticationFailed"
+    );
+}
