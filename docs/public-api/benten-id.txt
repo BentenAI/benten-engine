@@ -155,6 +155,7 @@ pub fn benten_id::did::Did::from_hybrid_public_key(&benten_crypto_suite::sig::Pu
 pub fn benten_id::did::Did::from_public_key(&benten_id::keypair::PublicKey) -> Self
 pub fn benten_id::did::Did::from_string_for_test_fixture(alloc::string::String) -> Self
 pub fn benten_id::did::Did::parse_validated(impl core::convert::Into<alloc::string::String>) -> core::result::Result<Self, benten_id::errors::DidError>
+pub fn benten_id::did::Did::parse_validated_hybrid(impl core::convert::Into<alloc::string::String>) -> core::result::Result<Self, benten_id::errors::DidError>
 pub fn benten_id::did::Did::resolve(&self) -> core::result::Result<benten_id::keypair::PublicKey, benten_id::errors::DidError>
 pub fn benten_id::did::Did::resolve_hybrid(&self) -> core::result::Result<benten_crypto_suite::sig::PublicKey, benten_id::errors::DidError>
 impl core::clone::Clone for benten_id::did::Did

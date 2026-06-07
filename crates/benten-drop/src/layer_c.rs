@@ -522,7 +522,7 @@ pub enum LayerCError {
     /// validly-sealed-but-WRONG-SIGNER (impersonation / re-target / suite-
     /// downgrade / stripped-PQ-half) envelope. Fail-closed; NEVER accepted on
     /// a parse alone (design §1.4; `f_lc_3` substantive pins).
-    SenderOriginAuthFailed,
+    SenderOriginAuthFailed, // drift-detect: internal-only — layer_c-internal; no napi/wire ErrorCode boundary (§3.5g precedent: StanzaCountMismatch / DidError).
     /// Codepoint dispatch hit an unknown/reserved arm.
     UnsupportedCodepoint(u16),
     /// The number of stanzas actually DELIVERED does not equal the
@@ -610,6 +610,11 @@ fn decode_wrapped_key(bytes: &[u8]) -> Option<WrappedKey> {
 /// `inner_v2 = lp_u32(sender_did) ‖ sig_codepoint(u16 BE) ‖ lp_u32(sender_sig) ‖ body`.
 /// `M_auth` binds the `audience_did` the sender is sending TO (the recipient
 /// re-derives it from its OWN audience — F-2). Returns `(enc, ciphertext)`.
+// The B2 origin-auth binding genuinely needs all of {recipient_pk, sender_did,
+// sender_kp, envelope_codepoint, audience_did, body_cid, recipient_key_generation,
+// aad, body}; bundling them into a params struct would obscure the seal flow's
+// 1:1 correspondence with M_auth's fields. Internal (crate-private) helper.
+#[allow(clippy::too_many_arguments)]
 fn seal_inner(
     recipient_pk: &RecipientPubKey,
     sender_did: &SenderDid,
@@ -684,6 +689,9 @@ fn seal_inner(
 /// audience DID — the recipient re-derives the audience commitment from it,
 /// NEVER the wire `audience_did` (F-2). `recipient_key_generation` is the
 /// recipient's independently-held key epoch.
+// Mirrors seal_inner's input set for the post-decrypt M_auth re-derivation
+// (F-2); internal (crate-private) helper. See seal_inner's note.
+#[allow(clippy::too_many_arguments)]
 fn open_inner(
     recipient_sk: &RecipientSecKey,
     enc: &[u8],
@@ -1592,7 +1600,7 @@ pub mod group_posture {
         /// attributed to another member, nor re-target / replay a stale-
         /// generation body. Fail-closed; NEVER accepted on a parse alone
         /// (design §1.4 / §4.1; `f_lc_3` substantive pins).
-        SenderOriginAuthFailed,
+        SenderOriginAuthFailed, // drift-detect: internal-only — layer_c-internal; no napi/wire ErrorCode boundary (§3.5g precedent: StanzaCountMismatch / DidError).
         /// `0x6610` bytes fed to the `0x6520` dispatch arm (or vice versa).
         WrongGroupCodepoint {
             /// The codepoint declared by the bytes.
