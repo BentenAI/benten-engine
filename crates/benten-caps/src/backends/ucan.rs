@@ -200,6 +200,14 @@ fn cap_err_from_ucan(err: UcanError) -> CapError {
             required,
             entity: format!("UCAN leaf does not grant required cap; leaf_caps={leaf_caps:?}"),
         },
+        // `UcanError` is `#[non_exhaustive]` (V1-FROZEN-INTERFACE §11): a future
+        // additive variant lands here. Fail CLOSED — any unrecognized chain-walk
+        // failure denies (NEVER admits), preserving the typed message so the
+        // durable-layer caller still sees the discriminant via `Display`.
+        ref other => CapError::Denied {
+            required: String::new(),
+            entity: format!("UCAN chain-walk rejected: {other}"),
+        },
     }
 }
 

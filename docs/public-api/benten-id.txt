@@ -266,7 +266,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_id::did_rotation::Rotati
 impl core::panic::unwind_safe::UnwindSafe for benten_id::did_rotation::RotationLog
 pub fn benten_id::did_rotation::rotate_keypair(&benten_id::did::Did, &benten_id::keypair::Keypair, &benten_id::keypair::Keypair, u64) -> core::result::Result<benten_id::did_rotation::RotationAttestation, benten_id::errors::DidRotationError>
 pub mod benten_id::errors
-pub enum benten_id::errors::DeviceAttestationError
+#[non_exhaustive] pub enum benten_id::errors::DeviceAttestationError
 pub benten_id::errors::DeviceAttestationError::BadSignature
 pub benten_id::errors::DeviceAttestationError::DecodeFailed
 pub benten_id::errors::DeviceAttestationError::DeviceRevoked
@@ -301,7 +301,7 @@ impl core::marker::Unpin for benten_id::errors::DeviceAttestationError
 impl core::marker::UnsafeUnpin for benten_id::errors::DeviceAttestationError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::DeviceAttestationError
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::DeviceAttestationError
-pub enum benten_id::errors::DidError
+#[non_exhaustive] pub enum benten_id::errors::DidError
 pub benten_id::errors::DidError::Base58Decode
 pub benten_id::errors::DidError::BodyTooShort
 pub benten_id::errors::DidError::BodyTooShort::got: usize
@@ -332,7 +332,7 @@ impl core::marker::Unpin for benten_id::errors::DidError
 impl core::marker::UnsafeUnpin for benten_id::errors::DidError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::DidError
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::DidError
-pub enum benten_id::errors::DidRotationError
+#[non_exhaustive] pub enum benten_id::errors::DidRotationError
 pub benten_id::errors::DidRotationError::BadSignature
 pub benten_id::errors::DidRotationError::DecodeFailed
 pub benten_id::errors::DidRotationError::HlcNotStrictlyMonotonic
@@ -361,7 +361,7 @@ impl core::marker::Unpin for benten_id::errors::DidRotationError
 impl core::marker::UnsafeUnpin for benten_id::errors::DidRotationError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::DidRotationError
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::DidRotationError
-pub enum benten_id::errors::KeypairError
+#[non_exhaustive] pub enum benten_id::errors::KeypairError
 pub benten_id::errors::KeypairError::Csprng(alloc::string::String)
 pub benten_id::errors::KeypairError::SeedImport(benten_id::errors::SeedImportError)
 impl core::convert::From<benten_id::errors::SeedImportError> for benten_id::errors::KeypairError
@@ -379,7 +379,7 @@ impl core::marker::Unpin for benten_id::errors::KeypairError
 impl core::marker::UnsafeUnpin for benten_id::errors::KeypairError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::KeypairError
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::KeypairError
-pub enum benten_id::errors::MultiSigError
+#[non_exhaustive] pub enum benten_id::errors::MultiSigError
 pub benten_id::errors::MultiSigError::BadSignature
 pub benten_id::errors::MultiSigError::PostPhase3
 pub benten_id::errors::MultiSigError::Rejected(&'static str)
@@ -399,7 +399,7 @@ impl core::marker::Unpin for benten_id::errors::MultiSigError
 impl core::marker::UnsafeUnpin for benten_id::errors::MultiSigError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::MultiSigError
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::MultiSigError
-pub enum benten_id::errors::SeedImportError
+#[non_exhaustive] pub enum benten_id::errors::SeedImportError
 pub benten_id::errors::SeedImportError::EnvelopeMalformed
 pub benten_id::errors::SeedImportError::InvalidSecret
 pub benten_id::errors::SeedImportError::LongInput
@@ -430,7 +430,7 @@ impl core::marker::Unpin for benten_id::errors::SeedImportError
 impl core::marker::UnsafeUnpin for benten_id::errors::SeedImportError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::SeedImportError
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::SeedImportError
-pub enum benten_id::errors::UcanError
+#[non_exhaustive] pub enum benten_id::errors::UcanError
 pub benten_id::errors::UcanError::AttenuationViolated
 pub benten_id::errors::UcanError::AttenuationViolated::child_cap: alloc::string::String
 pub benten_id::errors::UcanError::AttenuationViolated::link_index: usize
@@ -481,7 +481,7 @@ impl core::marker::Unpin for benten_id::errors::UcanError
 impl core::marker::UnsafeUnpin for benten_id::errors::UcanError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::UcanError
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::UcanError
-pub enum benten_id::errors::VcError
+#[non_exhaustive] pub enum benten_id::errors::VcError
 pub benten_id::errors::VcError::BadSignature
 pub benten_id::errors::VcError::DecodeFailed
 pub benten_id::errors::VcError::Expired
@@ -513,7 +513,7 @@ impl core::marker::UnsafeUnpin for benten_id::errors::VcError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::VcError
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::VcError
 pub mod benten_id::grant_reader
-pub enum benten_id::grant_reader::ReaderError
+#[non_exhaustive] pub enum benten_id::grant_reader::ReaderError
 pub benten_id::grant_reader::ReaderError::BackendFailed
 pub benten_id::grant_reader::ReaderError::BackendFailed::detail: alloc::string::String
 pub benten_id::grant_reader::ReaderError::RecordMalformed
@@ -948,7 +948,7 @@ pub fn benten_id::vc::verify_at(&benten_id::vc::Credential, &benten_id::did::Did
 pub fn benten_id::vc::verify_bytes_in_trust_domain(&[u8], &benten_id::vc::TrustDomain) -> core::result::Result<(), benten_id::errors::VcError>
 pub fn benten_id::vc::verify_in_trust_domain(&benten_id::vc::Credential, &benten_id::vc::TrustDomain) -> core::result::Result<(), benten_id::errors::VcError>
 pub fn benten_id::vc::verify_with_registry(&benten_id::vc::Credential, &benten_id::did::Did, &benten_id::vc::RevocationRegistry) -> core::result::Result<(), benten_id::errors::VcError>
-pub enum benten_id::DeviceAttestationError
+#[non_exhaustive] pub enum benten_id::DeviceAttestationError
 pub benten_id::DeviceAttestationError::BadSignature
 pub benten_id::DeviceAttestationError::DecodeFailed
 pub benten_id::DeviceAttestationError::DeviceRevoked
@@ -983,7 +983,7 @@ impl core::marker::Unpin for benten_id::errors::DeviceAttestationError
 impl core::marker::UnsafeUnpin for benten_id::errors::DeviceAttestationError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::DeviceAttestationError
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::DeviceAttestationError
-pub enum benten_id::DidError
+#[non_exhaustive] pub enum benten_id::DidError
 pub benten_id::DidError::Base58Decode
 pub benten_id::DidError::BodyTooShort
 pub benten_id::DidError::BodyTooShort::got: usize
@@ -1014,7 +1014,7 @@ impl core::marker::Unpin for benten_id::errors::DidError
 impl core::marker::UnsafeUnpin for benten_id::errors::DidError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::DidError
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::DidError
-pub enum benten_id::DidRotationError
+#[non_exhaustive] pub enum benten_id::DidRotationError
 pub benten_id::DidRotationError::BadSignature
 pub benten_id::DidRotationError::DecodeFailed
 pub benten_id::DidRotationError::HlcNotStrictlyMonotonic
@@ -1043,7 +1043,7 @@ impl core::marker::Unpin for benten_id::errors::DidRotationError
 impl core::marker::UnsafeUnpin for benten_id::errors::DidRotationError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::DidRotationError
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::DidRotationError
-pub enum benten_id::KeypairError
+#[non_exhaustive] pub enum benten_id::KeypairError
 pub benten_id::KeypairError::Csprng(alloc::string::String)
 pub benten_id::KeypairError::SeedImport(benten_id::errors::SeedImportError)
 impl core::convert::From<benten_id::errors::SeedImportError> for benten_id::errors::KeypairError
@@ -1061,7 +1061,7 @@ impl core::marker::Unpin for benten_id::errors::KeypairError
 impl core::marker::UnsafeUnpin for benten_id::errors::KeypairError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::KeypairError
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::KeypairError
-pub enum benten_id::MultiSigError
+#[non_exhaustive] pub enum benten_id::MultiSigError
 pub benten_id::MultiSigError::BadSignature
 pub benten_id::MultiSigError::PostPhase3
 pub benten_id::MultiSigError::Rejected(&'static str)
@@ -1081,7 +1081,7 @@ impl core::marker::Unpin for benten_id::errors::MultiSigError
 impl core::marker::UnsafeUnpin for benten_id::errors::MultiSigError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::MultiSigError
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::MultiSigError
-pub enum benten_id::ReaderError
+#[non_exhaustive] pub enum benten_id::ReaderError
 pub benten_id::ReaderError::BackendFailed
 pub benten_id::ReaderError::BackendFailed::detail: alloc::string::String
 pub benten_id::ReaderError::RecordMalformed
@@ -1102,7 +1102,7 @@ impl core::marker::Unpin for benten_id::grant_reader::ReaderError
 impl core::marker::UnsafeUnpin for benten_id::grant_reader::ReaderError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::grant_reader::ReaderError
 impl core::panic::unwind_safe::UnwindSafe for benten_id::grant_reader::ReaderError
-pub enum benten_id::SeedImportError
+#[non_exhaustive] pub enum benten_id::SeedImportError
 pub benten_id::SeedImportError::EnvelopeMalformed
 pub benten_id::SeedImportError::InvalidSecret
 pub benten_id::SeedImportError::LongInput
@@ -1133,7 +1133,7 @@ impl core::marker::Unpin for benten_id::errors::SeedImportError
 impl core::marker::UnsafeUnpin for benten_id::errors::SeedImportError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::SeedImportError
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::SeedImportError
-pub enum benten_id::UcanError
+#[non_exhaustive] pub enum benten_id::UcanError
 pub benten_id::UcanError::AttenuationViolated
 pub benten_id::UcanError::AttenuationViolated::child_cap: alloc::string::String
 pub benten_id::UcanError::AttenuationViolated::link_index: usize
@@ -1184,7 +1184,7 @@ impl core::marker::Unpin for benten_id::errors::UcanError
 impl core::marker::UnsafeUnpin for benten_id::errors::UcanError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::UcanError
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::UcanError
-pub enum benten_id::VcError
+#[non_exhaustive] pub enum benten_id::VcError
 pub benten_id::VcError::BadSignature
 pub benten_id::VcError::DecodeFailed
 pub benten_id::VcError::Expired

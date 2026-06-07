@@ -58,6 +58,7 @@ pub(crate) fn sanitize_untrusted(s: &str) -> String {
 
 /// Errors emitted by [`crate::keypair::Keypair`] construction paths.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum KeypairError {
     /// The seed-import path failed.
     #[error("seed import failed: {0}")]
@@ -78,6 +79,7 @@ pub enum KeypairError {
 /// `crates/benten-id/tests/keypair_seed.rs` test pins assert that each variant fires
 /// for its corresponding adversarial input.
 #[derive(Debug, Error, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SeedImportError {
     /// Input too short to contain a valid envelope.
     #[error("seed envelope too short: got {got} bytes, expected at least {min}")]
@@ -134,6 +136,7 @@ pub enum SeedImportError {
 
 /// Errors emitted by [`crate::did::Did`] resolution paths.
 #[derive(Debug, Error, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DidError {
     /// DID string does not start with `did:key:z` (W3C did:key spec
     /// requires multibase prefix `z` for base58btc).
@@ -196,6 +199,7 @@ pub enum DidError {
 /// Per `crypto-blocker-2` BLOCKER, `nbf` and `exp` enforcement happens
 /// at chain-walk site (every link in the chain), not just on the leaf.
 #[derive(Debug, Error, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum UcanError {
     /// Token presented before its `nbf` (not-before) field.
     #[error("UCAN not yet valid: nbf={nbf} > now={now}")]
@@ -342,6 +346,7 @@ pub enum UcanError {
 /// branch on the failure mode (expired / revoked / issuer-not-trusted
 /// / signature-invalid / parse-error).
 #[derive(Debug, Error, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum VcError {
     /// VC `expirationDate` rejected at validation time.
     #[error("VC expired: exp={exp} <= now={now}")]
@@ -389,6 +394,7 @@ pub enum VcError {
 
 /// Errors emitted by [`crate::multi_sig::MultiSigSurface`] paths.
 #[derive(Debug, Error, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MultiSigError {
     /// Signature verification failed.
     #[error("multi-sig signature verification failed")]
@@ -404,6 +410,7 @@ pub enum MultiSigError {
 
 /// Errors emitted by [`crate::did_rotation`] paths.
 #[derive(Debug, Error, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DidRotationError {
     /// The OLD keypair did not sign the rotation attestation
     /// (verifier rejection).
@@ -454,6 +461,7 @@ pub enum DidRotationError {
 /// device-DID-attestation-replay defect-class, every reject path on
 /// the attestation acceptor returns a distinct typed variant.
 #[derive(Debug, Error, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DeviceAttestationError {
     /// Attestation signature is invalid (parent key mismatch / tamper).
     #[error("device attestation signature invalid")]

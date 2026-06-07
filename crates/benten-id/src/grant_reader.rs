@@ -74,6 +74,7 @@ use thiserror::Error;
 /// the BACKEND read failed (a substrate / I/O error), or the lookup
 /// surfaced a structural inconsistency that demands fail-CLOSED.
 #[derive(Debug, Error, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ReaderError {
     /// The backing store rejected the read or returned a malformed
     /// record. Per the §13.11 structural lesson + the PR #199
