@@ -1007,6 +1007,16 @@ WRONG):
   attribute presence is the freeze defense).
 - Per `benten_graph::GraphError::TxAborted` (in `crates/benten-graph/src/lib.rs`) Fwd-2 #997 / #1207 explicit
   decision NOT to apply — preserve the explicit reason at the cite.
+- **`benten-engine::layer_d::grant_acceptance::GrantRejection`**
+  (`crates/benten-engine/src/layer_d/grant_acceptance.rs`) — the frozen M-12
+  six-pass-class roster. `#[non_exhaustive]` would defeat the deliberate
+  non-wildcard `match` in `GrantRejection::roster_index` (the
+  compiler-enforced roster-drift guard: a 7th pass-class MUST HALT-AND-SURFACE
+  at every consumer, not slip in additively). Structurally identical to the
+  `Strategy` / `MembershipSetKind` frozen-cardinality carve-outs — the
+  EXACTLY-6-arms-by-the-type-system property IS the structural pin. **CARVE-OUT
+  (documented; per the doc-block at `grant_acceptance.rs` + the
+  `GrantRejection::ALL` / `roster_index` const-assert pin). R6-R3 ratification.**
 
 **The enumerated must-apply set** (from §1.A.FROZEN item 11 + workspace
 verification at HEAD):
@@ -1015,6 +1025,8 @@ verification at HEAD):
 |---|---|---|---|
 | `benten-engine` | `EngineError`, `engine_config::*`, `engine_sync::*` | YES | KEEP |
 | `benten-engine` | `UserViewInputPattern` / `TraceStep` / `Transport` (thin_client) / `AtriumMode` / `SuspensionOutcome` / `DelegationResolution` / `NextChunkPoll` / `StreamCursor` / `SubscribeCursor` / `WriteBoundaryChainOutcome` / `ManifestEnvelopeRecheckOutcome` / `ManifestVerifyMode` | **12+ verified MISSING at HEAD** | APPLY |
+| `benten-engine` (layer_d) | `device_auth::DeviceAuthError` / `device_link::DeviceLinkError` / `secret_store::SecretStoreError` / `remote_permission::PermissionOperation` | NO at HEAD (new frozen-v1 layer_d enums) | **APPLY** (R6-R3 fix-b comprehensive sweep). `PermissionOperation`'s same-crate `to_wire_be` match stays exhaustive (forces a wire-tag for any new variant); cross-crate consumers get additive forward-compat. |
+| `benten-engine` (layer_d) | **`grant_acceptance::GrantRejection`** | NO (deliberate) | **DO NOT APPLY** — explicit carve-out (R6-R3): the frozen M-12 six-pass-class roster; the non-wildcard `roster_index` match IS the structural roster-drift guard (a 7th class HALT-AND-SURFACEs at every consumer). Mirrors `Strategy` / `MembershipSetKind`. |
 | `benten-core` | `WriteAuthority`, `ChangeEvent`, `ChangeKind`, `subgraph_spec::Spec`+`SpecError`, `version_dag::*`, `Subgraph::PrimitiveKind` | YES (except `Spec` which uses private-fields-plus-builder pattern for equivalent SemVer-safety per L17-r2-1) | KEEP |
 | `benten-core` | new `RestrictedSpec` enum variants (`subgraph_spec/spec.rs:126`) | TBD | APPLY |
 | `benten-ivm` | `AlgorithmError` | per spec item 11 | AUDIT + APPLY |

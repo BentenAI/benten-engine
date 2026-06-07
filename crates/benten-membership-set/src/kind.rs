@@ -81,7 +81,13 @@ pub enum RequestedReserveKind {
 }
 
 /// The typed error for the Kind-dispatch surface.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future dispatch-failure mode
+/// lands ADDITIVELY without a breaking SemVer bump. Mirrors its 5 sibling
+/// error enums (`MembershipSetError`, `AuditChainError`, `AcquisitionError`,
+/// `FederationError`, `KvError`), which already carry the attribute.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum KindDispatchError {
     /// A reserved keying-Kind was selected at v1-beta (reserved-not-selectable).
     #[error("a reserved keying-Kind is not selectable at v1-beta")]

@@ -40,7 +40,11 @@ pub type UnlockedKey = UnlockedKeyMaterial;
 
 /// Typed device-auth rejections (fail-closed; CLAUDE.md #5 — never a silent
 /// default key).
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future device-auth failure
+/// mode lands ADDITIVELY without a breaking SemVer bump on the frozen v1 API.
 #[derive(Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DeviceAuthError {
     /// Headless: neither the [`BENTEN_VAULT_PASSWORD`] env-var nor the IPC
     /// channel supplied a password (NOT a silent default key, NOT a TTY hang).

@@ -1128,7 +1128,7 @@ impl !core::panic::unwind_safe::RefUnwindSafe for benten_engine::ivm_view_read_g
 impl !core::panic::unwind_safe::UnwindSafe for benten_engine::ivm_view_read_gate::IvmViewReadGate
 pub mod benten_engine::layer_d
 pub mod benten_engine::layer_d::device_auth
-pub enum benten_engine::layer_d::device_auth::DeviceAuthError
+#[non_exhaustive] pub enum benten_engine::layer_d::device_auth::DeviceAuthError
 pub benten_engine::layer_d::device_auth::DeviceAuthError::Locked
 pub benten_engine::layer_d::device_auth::DeviceAuthError::NoPasswordSource
 pub benten_engine::layer_d::device_auth::DeviceAuthError::VaultDecryptFailed
@@ -1177,7 +1177,7 @@ pub fn benten_engine::layer_d::device_auth::HeadlessDeviceAuth::unlock(&self, co
 pub fn benten_engine::layer_d::device_auth::expose_unlocked_key(&benten_engine::layer_d::device_auth::UnlockedKey) -> [u8; 32]
 pub type benten_engine::layer_d::device_auth::UnlockedKey = benten_crypto_suite::vault::UnlockedKeyMaterial
 pub mod benten_engine::layer_d::device_link
-pub enum benten_engine::layer_d::device_link::DeviceLinkError
+#[non_exhaustive] pub enum benten_engine::layer_d::device_link::DeviceLinkError
 pub benten_engine::layer_d::device_link::DeviceLinkError::HpkeUnwrapFailed
 pub benten_engine::layer_d::device_link::DeviceLinkError::OfferSignatureForged
 pub benten_engine::layer_d::device_link::DeviceLinkError::SessionIdMismatch
@@ -1344,7 +1344,7 @@ impl<'a> core::panic::unwind_safe::RefUnwindSafe for benten_engine::layer_d::gra
 impl<'a> !core::panic::unwind_safe::UnwindSafe for benten_engine::layer_d::grant_acceptance::GrantAcceptanceContext<'a>
 pub fn benten_engine::layer_d::grant_acceptance::accept_grant(benten_engine::layer_d::grant_acceptance::GrantAcceptanceContext<'_>) -> core::result::Result<(), benten_engine::layer_d::grant_acceptance::GrantRejection>
 pub mod benten_engine::layer_d::remote_permission
-pub enum benten_engine::layer_d::remote_permission::PermissionOperation
+#[non_exhaustive] pub enum benten_engine::layer_d::remote_permission::PermissionOperation
 pub benten_engine::layer_d::remote_permission::PermissionOperation::Decrypt
 pub benten_engine::layer_d::remote_permission::PermissionOperation::Decrypt::node_cid: [u8; 32]
 pub benten_engine::layer_d::remote_permission::PermissionOperation::ExecuteWorkflow
@@ -1466,7 +1466,7 @@ pub fn benten_engine::layer_d::remote_permission::exec_workflow_open(&benten_eng
 pub fn benten_engine::layer_d::remote_permission::exec_workflow_seal(&benten_engine::layer_d::remote_permission::ExecuteWorkflow, &[u8; 32], &[u8]) -> core::result::Result<benten_crypto_suite::aead::AeadEnvelope, benten_crypto_suite::aead::AeadError>
 pub fn benten_engine::layer_d::remote_permission::verify_canonical(&benten_id::keypair::PublicKey, &[u8], &ed25519::Signature) -> core::result::Result<(), ed25519_dalek::errors::SignatureError>
 pub mod benten_engine::layer_d::secret_store
-pub enum benten_engine::layer_d::secret_store::SecretStoreError
+#[non_exhaustive] pub enum benten_engine::layer_d::secret_store::SecretStoreError
 pub benten_engine::layer_d::secret_store::SecretStoreError::KeychainUnavailable
 pub benten_engine::layer_d::secret_store::SecretStoreError::NotFound
 impl core::cmp::Eq for benten_engine::layer_d::secret_store::SecretStoreError

@@ -61,7 +61,13 @@ pub struct ProvisioningOffer {
 
 /// e2r §7.2 — the secret payload A HPKE-encrypts to B's pubkey. Carries the
 /// identity-equivalent `K_principal` (NO forward-secrecy by design).
-#[derive(Clone, PartialEq, Eq, Debug)]
+///
+/// `Debug` is implemented MANUALLY (NOT derived) so the secret key material —
+/// `k_principal` (identity-equivalent root key) + `user_did_signing_key` —
+/// is REDACTED out of any Debug/log surface (a derived `Debug` would print the
+/// raw 32-byte secret). The non-secret fields (pubkey, membership CIDs,
+/// session id, time bucket) print normally.
+#[derive(Clone, PartialEq, Eq)]
 pub struct ProvisioningInnerPayload {
     /// The principal root key (identity-equivalent; no FS).
     pub k_principal: [u8; 32],
@@ -75,6 +81,22 @@ pub struct ProvisioningInnerPayload {
     pub provisioning_session_id: [u8; 32],
     /// Coarse 1-hour bucket of grant time (Layer-D metadata; M-14).
     pub granted_at_bucket: u64,
+}
+
+impl core::fmt::Debug for ProvisioningInnerPayload {
+    /// Redacts the secret key material (`k_principal` +
+    /// `user_did_signing_key`) so it can never leak through a Debug/log
+    /// surface. The non-secret fields print normally.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("ProvisioningInnerPayload")
+            .field("k_principal", &"[REDACTED]")
+            .field("user_did_signing_key", &"[REDACTED]")
+            .field("user_did_pubkey", &self.user_did_pubkey)
+            .field("atrium_memberships", &self.atrium_memberships)
+            .field("provisioning_session_id", &self.provisioning_session_id)
+            .field("granted_at_bucket", &self.granted_at_bucket)
+            .finish()
+    }
 }
 
 impl ProvisioningInnerPayload {
@@ -132,7 +154,11 @@ pub fn provisioning_signing_bytes(session_id: &[u8; 32], wrapped: &WrappedKey) -
 }
 
 /// Errors raised on the device-link path.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future device-link failure
+/// mode lands ADDITIVELY without a breaking SemVer bump on the frozen v1 API.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DeviceLinkError {
     /// The user-DID signature on the provisioning offer did not verify
     /// (forged / unsigned offer — `E_DEVICE_ATTESTATION_FORGED`-class).

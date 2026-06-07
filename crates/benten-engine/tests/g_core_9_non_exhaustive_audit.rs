@@ -324,3 +324,106 @@ fn graph_aead_wrap_error_audit_arm_coverage() {
     }
     let _: fn(&AeadError) -> &'static str = audit;
 }
+
+// =========================================================================
+// R6-R3 fix-b — engine `layer_d` `#[non_exhaustive]` audit arm-coverage pins.
+// =========================================================================
+//
+// The layer_d frozen-v1 error + dispatch-operation enums now carry
+// `#[non_exhaustive]` so a future variant lands ADDITIVELY without a SemVer
+// break. The `_` catch-all arm is reachable ONLY while the attribute is present
+// (this integration-test crate is a SEPARATE crate from `benten_engine`, so the
+// cross-crate `#[non_exhaustive]` semantics apply); removing the attribute turns
+// the catch-all into an `unreachable_patterns` build break (§11 HALT-AND-SURFACE).
+//
+// `GrantRejection` is DELIBERATELY EXCLUDED — it is a §11 documented carve-out
+// (the frozen M-12 six-pass-class roster; the non-wildcard `roster_index` match
+// IS the structural roster-drift guard, mirroring `Strategy` / `MembershipSetKind`).
+
+#[test]
+fn layer_d_device_auth_error_audit_arm_coverage_non_exhaustive() {
+    use benten_engine::layer_d::device_auth::DeviceAuthError;
+    fn audit(e: &DeviceAuthError) -> &'static str {
+        match e {
+            DeviceAuthError::NoPasswordSource => "NoPasswordSource",
+            DeviceAuthError::VaultDecryptFailed => "VaultDecryptFailed",
+            DeviceAuthError::Locked => "Locked",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(
+        audit(&DeviceAuthError::NoPasswordSource),
+        "NoPasswordSource"
+    );
+}
+
+#[test]
+fn layer_d_device_link_error_audit_arm_coverage_non_exhaustive() {
+    use benten_engine::layer_d::device_link::DeviceLinkError;
+    fn audit(e: &DeviceLinkError) -> &'static str {
+        match e {
+            DeviceLinkError::OfferSignatureForged => "OfferSignatureForged",
+            DeviceLinkError::HpkeUnwrapFailed => "HpkeUnwrapFailed",
+            DeviceLinkError::SessionIdMismatch => "SessionIdMismatch",
+            DeviceLinkError::SessionIdReplayed => "SessionIdReplayed",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(
+        audit(&DeviceLinkError::HpkeUnwrapFailed),
+        "HpkeUnwrapFailed"
+    );
+}
+
+#[test]
+fn layer_d_secret_store_error_audit_arm_coverage_non_exhaustive() {
+    use benten_engine::layer_d::secret_store::SecretStoreError;
+    fn audit(e: &SecretStoreError) -> &'static str {
+        match e {
+            SecretStoreError::NotFound => "NotFound",
+            SecretStoreError::KeychainUnavailable => "KeychainUnavailable",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(audit(&SecretStoreError::NotFound), "NotFound");
+}
+
+#[test]
+fn layer_d_permission_operation_audit_arm_coverage_non_exhaustive() {
+    use benten_engine::layer_d::remote_permission::PermissionOperation;
+    fn audit(o: &PermissionOperation) -> &'static str {
+        match o {
+            PermissionOperation::Decrypt { .. } => "Decrypt",
+            PermissionOperation::SignUcanDelegation { .. } => "SignUcanDelegation",
+            PermissionOperation::RemoteUnlock => "RemoteUnlock",
+            PermissionOperation::ExecuteWorkflow { .. } => "ExecuteWorkflow",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(audit(&PermissionOperation::RemoteUnlock), "RemoteUnlock");
+}
+
+/// `GrantRejection` §11 carve-out pin — EXACTLY-6 frozen-cardinality roster.
+///
+/// This match is DELIBERATELY non-wildcard (no `_` arm): `GrantRejection` is a
+/// documented §11 carve-out that does NOT carry `#[non_exhaustive]`, so a 7th
+/// pass-class added without updating this audit (and `GrantRejection::ALL` +
+/// `roster_index`) is a compile-fail HERE — the HALT-AND-SURFACE roster-drift
+/// guard. Mirrors `strategy_carve_out_3_arms_exhaustive_pin` above.
+#[test]
+fn layer_d_grant_rejection_carve_out_6_arms_exhaustive_pin() {
+    use benten_engine::layer_d::grant_acceptance::GrantRejection;
+    fn audit(r: GrantRejection) -> usize {
+        match r {
+            GrantRejection::Replay => 0,
+            GrantRejection::DeviceKeyRevoked => 1,
+            GrantRejection::Expired => 2,
+            GrantRejection::ConfusedDeputy => 3,
+            GrantRejection::UiSummaryMismatch => 4,
+            GrantRejection::AuditNodeMissing => 5,
+        }
+    }
+    for (i, r) in GrantRejection::ALL.iter().enumerate() {
+        assert_eq!(audit(*r), i);
+    }
+}
