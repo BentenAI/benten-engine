@@ -24,11 +24,13 @@ pub use ed25519_dalek;
 /// bump closed the upstream ecosystem fork.
 pub use ml_dsa;
 
-// NF-1 PQ⊕PQ end-state signature primitive — SLH-DSA via `slh-dsa` —
-// dep reserved for G-CORE-3c (workspace `sha2 0.10` vs slh-dsa's
-// required `sha2 0.11` is a deliberate G-CORE-3c bump-and-light wave).
-// The codepoint `SigCodepoint::HYBRID_MLDSA65_SLHDSA = 0x0003` is
-// reserved + typed-rejects in this wave.
+// NF-1 PQ⊕PQ end-state signature primitive — SLH-DSA via `slh-dsa`.
+// SHIPPED at G-CORE-3c: the `slh-dsa 0.2.0-rc.5` direct dep is live in
+// `Cargo.toml` and the codepoint `SigCodepoint::HYBRID_MLDSA65_SLHDSA =
+// 0x0003` is a built sign+verify arm (`swap_matrix::SwapMatrix`'s
+// pure-PQ-sole-trust-path). It is NOT re-exported here (used internally
+// in `swap_matrix.rs` only); the arm is STRUCTURALLY NON-DEFAULT until
+// the audit-landed flag flips (C11b safety invariant; NF-2 / C-GM-AUDIT).
 
 /// v1-default hash primitive — BLAKE3 via `blake3`.
 pub use blake3;
@@ -40,9 +42,11 @@ pub use sha2;
 /// commitment hash.
 pub use sha3;
 
-// G-CORE-3 #1301 deps (x25519-dalek / ml-kem / chacha20poly1305 / hkdf)
-// land HERE at G-CORE-3 — adding them in G-CORE-2 triggered an unrelated
-// `pkcs8 0.11.0-rc.10 → 0.11.0` lockfile re-resolution that broke iroh's
-// `ed25519 3.0.0-rc.4` (pinned via iroh-base `=ed25519-dalek 3.0.0-pre.6`).
-// Reserved-but-unimplemented codepoint dispatch typed-rejects them in
-// this wave; G-CORE-3 will add the deps and route the live impls.
+// G-CORE-3 #1301 encryption-side deps (x25519-dalek / libcrux-ml-kem /
+// chacha20poly1305 / hkdf) are SHIPPED: all are live direct deps in
+// `Cargo.toml` and routed to production impls — x25519-dalek +
+// libcrux-ml-kem in `mlkem.rs` + `cipher_suite.rs` (X-Wing-hybrid wrap),
+// chacha20poly1305 in `aead.rs` (bulk AEAD), hkdf in `structural_kdf.rs`
+// + `vault.rs` (HKDF-SHA256 derivation). They are used internally and NOT
+// re-exported here (external consumers route through the typed wrap/seal/
+// derive APIs, not the raw primitive crates).
