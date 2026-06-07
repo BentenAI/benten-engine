@@ -1229,7 +1229,6 @@ impl benten_crypto_suite::vault::UnlockedKeyMaterial
 pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::expose_k_principal(&self) -> &[u8; 32]
 pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::k_principal_len(&self) -> usize
 pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::new([u8; 32], alloc::vec::Vec<u8>) -> Self
-pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::structural_kdf_root_key(&self) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::user_did_signing_key(&self) -> &[u8]
 impl core::fmt::Debug for benten_crypto_suite::vault::UnlockedKeyMaterial
 pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -2020,7 +2019,6 @@ impl benten_crypto_suite::vault::UnlockedKeyMaterial
 pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::expose_k_principal(&self) -> &[u8; 32]
 pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::k_principal_len(&self) -> usize
 pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::new([u8; 32], alloc::vec::Vec<u8>) -> Self
-pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::structural_kdf_root_key(&self) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::user_did_signing_key(&self) -> &[u8]
 impl core::fmt::Debug for benten_crypto_suite::vault::UnlockedKeyMaterial
 pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result

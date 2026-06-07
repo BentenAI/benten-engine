@@ -55,6 +55,27 @@ use alloc::vec::Vec;
 use benten_crypto_suite::cipher_suite::{CipherSuite, CipherSuiteCodepoint, WrappedKey};
 use benten_crypto_suite::{AeadEnvelope, AeadKeyMaterial};
 
+/// Fail-closed length-prefix range end (F-12).
+///
+/// Post-decrypt inner-payload parsing reads `u32-BE` length prefixes from
+/// attacker-influenced ciphertext-plaintext. A length is `u32`-sourced (cast
+/// to `usize`) and added to a running `usize` offset to bound a slice. On a
+/// 32-bit target (wasm32 / 32-bit native) `off + len` can OVERFLOW `usize`
+/// and WRAP to a small value that spuriously passes a naive `off + len >
+/// total` bounds check — the subsequent `buf[off..off + len]` slice then
+/// panics (a co-recipient-only DoS, since the attacker must already be a
+/// valid AEAD-opening recipient). This helper performs the addition with
+/// `checked_add` and verifies the end is within `total`, returning `None`
+/// (→ fail-closed typed reject) on EITHER overflow OR out-of-bounds. There is
+/// no behavioral change on 64-bit where the lengths cannot overflow.
+#[inline]
+fn lp_range_end(off: usize, len: usize, total: usize) -> Option<usize> {
+    match off.checked_add(len) {
+        Some(end) if end <= total => Some(end),
+        _ => None,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Sender ORIGIN-AUTHENTICATION (B2) — the per-MESSAGE LAMPS-hybrid signature.
 // ---------------------------------------------------------------------------
@@ -587,17 +608,13 @@ fn decode_wrapped_key(bytes: &[u8]) -> Option<WrappedKey> {
         usize::try_from(v).ok()
     };
     let ek_x_len = take_u32(bytes, &mut off)?;
-    if off + ek_x_len > bytes.len() {
-        return None;
-    }
-    let ek_x = bytes[off..off + ek_x_len].to_vec();
-    off += ek_x_len;
+    let ek_x_end = lp_range_end(off, ek_x_len, bytes.len())?;
+    let ek_x = bytes[off..ek_x_end].to_vec();
+    off = ek_x_end;
     let ek_mlkem_len = take_u32(bytes, &mut off)?;
-    if off + ek_mlkem_len > bytes.len() {
-        return None;
-    }
-    let ek_mlkem = bytes[off..off + ek_mlkem_len].to_vec();
-    off += ek_mlkem_len;
+    let ek_mlkem_end = lp_range_end(off, ek_mlkem_len, bytes.len())?;
+    let ek_mlkem = bytes[off..ek_mlkem_end].to_vec();
+    off = ek_mlkem_end;
     let aead_envelope = AeadEnvelope::from_wire_bytes(&bytes[off..]).ok()?;
     Some(WrappedKey {
         codepoint: CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
@@ -740,11 +757,9 @@ fn open_inner(
     let sd_len =
         u32::from_be_bytes([inner[off], inner[off + 1], inner[off + 2], inner[off + 3]]) as usize;
     off += 4;
-    if off + sd_len > inner.len() {
-        return Err(LayerCError::InnerSenderDidForged);
-    }
-    let sender_did = inner[off..off + sd_len].to_vec();
-    off += sd_len;
+    let sd_end = lp_range_end(off, sd_len, inner.len()).ok_or(LayerCError::InnerSenderDidForged)?;
+    let sender_did = inner[off..sd_end].to_vec();
+    off = sd_end;
     if inner.len() < off + 2 {
         return Err(LayerCError::InnerSenderDidForged);
     }
@@ -756,11 +771,10 @@ fn open_inner(
     let sig_len =
         u32::from_be_bytes([inner[off], inner[off + 1], inner[off + 2], inner[off + 3]]) as usize;
     off += 4;
-    if off + sig_len > inner.len() {
-        return Err(LayerCError::InnerSenderDidForged);
-    }
-    let sender_sig = inner[off..off + sig_len].to_vec();
-    off += sig_len;
+    let sig_end =
+        lp_range_end(off, sig_len, inner.len()).ok_or(LayerCError::InnerSenderDidForged)?;
+    let sender_sig = inner[off..sig_end].to_vec();
+    off = sig_end;
     let body = inner[off..].to_vec();
 
     // B2 ORIGIN-AUTH VERIFY: re-derive M_auth from the recovered sender-DID +
@@ -1226,10 +1240,8 @@ pub fn open_group_stanza(
         return Err(LayerCError::InnerSenderDidForged);
     }
     let sd_len = u32::from_be_bytes([inner[0], inner[1], inner[2], inner[3]]) as usize;
-    if 4 + sd_len > inner.len() {
-        return Err(LayerCError::InnerSenderDidForged);
-    }
-    let sender_did = inner[4..4 + sd_len].to_vec();
+    let sd_end = lp_range_end(4, sd_len, inner.len()).ok_or(LayerCError::InnerSenderDidForged)?;
+    let sender_did = inner[4..sd_end].to_vec();
 
     // Decrypt the shared bulk body (binds the body-CID + group codepoint).
     let cid = stanza.body_cid.clone();
@@ -1259,11 +1271,10 @@ pub fn open_group_stanza(
         body_v2[off + 3],
     ]) as usize;
     off += 4;
-    if off + sig_len > body_v2.len() {
-        return Err(LayerCError::InnerSenderDidForged);
-    }
-    let sender_sig = body_v2[off..off + sig_len].to_vec();
-    off += sig_len;
+    let sig_end =
+        lp_range_end(off, sig_len, body_v2.len()).ok_or(LayerCError::InnerSenderDidForged)?;
+    let sender_sig = body_v2[off..sig_end].to_vec();
+    off = sig_end;
     let body = body_v2[off..].to_vec();
 
     // B2 ORIGIN-AUTH VERIFY (F-2 SOUNDNESS-CRITICAL): re-derive M_auth from
@@ -1543,7 +1554,7 @@ pub mod abuse_control {
 /// group wire; `0x6610` (MembershipSet) is distinct from `0x6520` (Layer-C
 /// group) and the dispatch strict-rejects a cross-band feed.
 pub mod group_posture {
-    use super::{AAD_VERSION, Vec, audience_set_commitment, self_describing_cid};
+    use super::{AAD_VERSION, Vec, audience_set_commitment, lp_range_end, self_describing_cid};
     use benten_crypto_suite::cipher_suite::{CipherSuite, CipherSuiteCodepoint, WrappedKey};
     use benten_crypto_suite::{AeadEnvelope, AeadKeyMaterial};
 
@@ -1715,17 +1726,13 @@ pub mod group_posture {
             usize::try_from(v).ok()
         };
         let ek_x_len = take(bytes, &mut off)?;
-        if off + ek_x_len > bytes.len() {
-            return None;
-        }
-        let ek_x = bytes[off..off + ek_x_len].to_vec();
-        off += ek_x_len;
+        let ek_x_end = lp_range_end(off, ek_x_len, bytes.len())?;
+        let ek_x = bytes[off..ek_x_end].to_vec();
+        off = ek_x_end;
         let ek_m_len = take(bytes, &mut off)?;
-        if off + ek_m_len > bytes.len() {
-            return None;
-        }
-        let ek_mlkem = bytes[off..off + ek_m_len].to_vec();
-        off += ek_m_len;
+        let ek_m_end = lp_range_end(off, ek_m_len, bytes.len())?;
+        let ek_mlkem = bytes[off..ek_m_end].to_vec();
+        off = ek_m_end;
         let aead_envelope = AeadEnvelope::from_wire_bytes(&bytes[off..]).ok()?;
         Some(WrappedKey {
             codepoint: CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
@@ -2153,10 +2160,9 @@ pub mod group_posture {
             return Err(GroupError::AeadAuthenticationFailed);
         }
         let sd_len = u32::from_be_bytes([inner[0], inner[1], inner[2], inner[3]]) as usize;
-        if 4 + sd_len > inner.len() {
-            return Err(GroupError::AeadAuthenticationFailed);
-        }
-        let sender_did = inner[4..4 + sd_len].to_vec();
+        let sd_end =
+            lp_range_end(4, sd_len, inner.len()).ok_or(GroupError::AeadAuthenticationFailed)?;
+        let sender_did = inner[4..sd_end].to_vec();
 
         // Decrypt the bulk body (shared AAD = aad_version + codepoint + cid).
         let mut body_aad = Vec::new();
@@ -2185,11 +2191,10 @@ pub mod group_posture {
             body_v2[off + 3],
         ]) as usize;
         off += 4;
-        if off + sig_len > body_v2.len() {
-            return Err(GroupError::AeadAuthenticationFailed);
-        }
-        let sender_sig = body_v2[off..off + sig_len].to_vec();
-        off += sig_len;
+        let sig_end = lp_range_end(off, sig_len, body_v2.len())
+            .ok_or(GroupError::AeadAuthenticationFailed)?;
+        let sender_sig = body_v2[off..sig_end].to_vec();
+        off = sig_end;
         let body = body_v2[off..].to_vec();
 
         // B2 ORIGIN-AUTH VERIFY (F-2 + F-3 SOUNDNESS-CRITICAL): re-derive
