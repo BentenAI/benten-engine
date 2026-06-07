@@ -373,6 +373,8 @@ receiver side, so the frame remains the invariant's source of truth.
 
 Each layer changes orthogonally; you can upgrade authentication (e.g. add Bird-of-Prey-class SUF-CMA-preserving codepoint at `0x0002` when WG-adopted + impl-audited) without touching identity or revocation; you can refine revocation semantics without touching identity or authentication; you can extend identity without touching either of the others.
 
+**R6-R2 phase-close re-surface (GAP-4; council run `wf_040ac861-436`, artifact `d0ccf606`, 2026-06-06):** the R6-R2 post-F-full phase-close council re-surfaced this as GAP-4 — "Inv-15 REGISTERED but NOT-YET-FULLY-ENFORCED-BY-AUTOMATION." Disposition = NAMED-CARRY (HARD-RULE clause-(b)): the gap is correctly carried to the **G-CORE-PQ-WIRE-1 enforcement-completion path enumerated below** (this section IS that ledger). No new destination is minted — the four-part path (cross-surface audit + per-surface MallorySigner property tests + `cite-drift-detector` `LoadBearingSigBundleCidPattern` scanner + dispatch-conventions pim-N codification) is the registered closure. The two load-bearing surfaces verified favorable at 2026-05-26 (Q1+Q2) still hold the SUF-CMA-equivalent property structurally at HEAD; the systematic cross-surface enforcement is on the G-CORE-PQ-WIRE-1 critical path, NOT a v1-beta gate. This re-surface annotation keeps GAP-4 registry-discoverable against the §3.12 R7-equivalent audit walk.
+
 **Enforcement-completion path** (G-CORE-PQ-WIRE-1 brief bundles all of these):
 
 1. **Cross-surface audit** of every signature-touching surface to verify payload-CID discipline:
