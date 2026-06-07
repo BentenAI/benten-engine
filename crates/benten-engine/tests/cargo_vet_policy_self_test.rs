@@ -105,8 +105,8 @@ fn cargo_vet_workflow_non_vacuity_self_test_passes() {
 }
 
 /// `cargo_vet_exemption_budget_within_ratified_cap` —
-/// sec-r1-5 onboarding policy (cap raised 5 → 18, ratified Ben
-/// 2026-06-06, for the libcrux-ml-kem adoption; see FLAG below).
+/// sec-r1-5 onboarding policy (cap raised 5 → 18, pending Ben
+/// ratification, for the libcrux-ml-kem adoption; see FLAG below).
 ///
 /// Counts entries in `supply-chain/exemptions.toml` and asserts the
 /// total is ≤ the ratified budget cap. The Phase-3 G20-A3 onboarding
@@ -114,8 +114,9 @@ fn cargo_vet_workflow_non_vacuity_self_test_passes() {
 /// Phase-4-Meta-Core libcrux-ml-kem adoption (Compromise #32 →
 /// mitigated-live) added 13 net-new Cryspen transitive crates (all
 /// Apache-2.0 / MIT-OR-Apache-2.0; cargo deny clean) as
-/// accepted-unaudited exemptions, raising the cap to 18 (5 prior + 13
-/// new). An audit certified into `audits.toml` is the budget-free path;
+/// accepted-unaudited exemptions against a 13-of-18 cap (0 prior
+/// entries; 13 libcrux entries against an 18 cap). An audit certified
+/// into `audits.toml` is the budget-free path;
 /// an unaudited dep can be exempted but the exemption costs against the
 /// cap. Quarterly review per the config policy re-evaluates whether
 /// existing exemptions can be upgraded to certified audits (the
@@ -124,8 +125,8 @@ fn cargo_vet_workflow_non_vacuity_self_test_passes() {
 /// (the value lives in `EXEMPTION_BUDGET_CAP`).
 ///
 /// ⚠️ FLAG-FOR-BEN: the 5 → 18 cap raise is a security-policy change
-/// tied to the libcrux substrate adoption; **ratified by Ben
-/// 2026-06-06**. Open follow-up: upgrade the libcrux family to certified
+/// tied to the libcrux substrate adoption; **pending Ben
+/// ratification**. Open follow-up: upgrade the libcrux family to certified
 /// `audits.toml` entries once `cargo vet` is installed in CI (then drop
 /// the cap back toward 5).
 #[test]
@@ -159,7 +160,7 @@ fn cargo_vet_exemption_budget_within_ratified_cap() {
         count <= EXEMPTION_BUDGET_CAP,
         "supply-chain/exemptions.toml carries {count} exemptions; the \
          exemption-budget cap is {EXEMPTION_BUDGET_CAP} (raised 5 → 18 for \
-         the libcrux-ml-kem adoption, ratified Ben 2026-06-06; see \
+         the libcrux-ml-kem adoption, pending Ben ratification; see \
          FLAG-FOR-BEN). Quarterly review must upgrade unaudited exemptions \
          to certified `audits.toml` entries before adding new ones."
     );
