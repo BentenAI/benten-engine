@@ -28,8 +28,10 @@ use crate::sig::HybridSignature;
 // (a `hybrid_array::Array<u8, SignatureSize<MlDsa65>>` whose `len()` is
 // the type-level USIZE). **NOT a Benten redefinition** (CLAUDE.md
 // baked-in #5 "never hardcode key/sig/ciphertext sizes"). The FIPS-204
-// reference dimensions are 1952 B-key / 3309 B-sig; the
-// `debug_assert_eq!` arms below validate this at test time.
+// reference dimensions are 1952 B-key / 3309 B-sig; the `assert_eq!`
+// arms in `tests/tf2_no_hardcoded_sizes_ml_dsa65_vector.rs`
+// (`ml_dsa65_synthetic`) validate `ml_dsa_65_pubkey_len()` == 1952 +
+// `ml_dsa_65_sig_len()` == 3309 at test time.
 //
 // These are exposed via the public no-arg `ml_dsa_65_pubkey_len()` /
 // `ml_dsa_65_sig_len()` `pub fn`s (NOT `pub const` — the upstream sizes
