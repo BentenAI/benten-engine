@@ -26,6 +26,14 @@ The trust tiers, from least- to most-trusted relative to a principal's plaintext
 **encryption** (per-Node AEAD + Layer-A vault) is the load-bearing confidentiality substrate (CLAUDE.md baked-in
 #18 — the confidentiality half of the Principal primitive).
 
+**Deterministic-CEK confirmation-oracle (additive disclosure; GAP-2).** The Layer-C content-encryption key is
+deterministically derived from the plaintext, so a party that **already holds the CEK** (the sealer, or a
+co-recipient that recovers it) can **confirm a guessed plaintext** — a confirmation oracle for low-entropy bodies.
+This does **NOT** extend to the **Tier-1 network observer / untrusted relay**: the bulk AEAD uses a **fresh random
+nonce per send** and the CEK is HPKE-wrapped to the recipient, so the relay sees neither the CEK nor a
+plaintext-equality test (the Tier-1 "sees plaintext = NO" row is unchanged). Full cryptographic narration:
+`docs/SECURITY-PROOFS.md` §4.2.
+
 ---
 
 ## §2 — O-6 blast-radius ladder (what each compromise exposes)

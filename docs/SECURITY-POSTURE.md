@@ -2473,10 +2473,14 @@ discretionary post-spike decision-point).
 **C-GM-AUDIT scope addition (libcrux/Cryspen dependency landing).** The
 production ML-KEM-768 impl is now `libcrux-ml-kem` (Compromise #32), which
 pulls in **13 new Cryspen/libcrux crates**. These are added to the v1-GM
-C-GM-AUDIT scope as honest `cargo-vet` exemptions (the ratified exemption
-budget was raised **5 → 18** by Ben 2026-06-06 to cover them; see
-`supply-chain/exemptions.toml` +
-`crates/benten-engine/tests/cargo_vet_policy_self_test.rs`). They are
+C-GM-AUDIT scope as honest `cargo-vet` exemptions (the exemption-budget
+*cap* was raised **5 → 18** on 2026-06-05 to cover them — a **FLAG-FOR-BEN
+policy decision, pending ratification** (see the consolidated flag at
+Compromise #39); pinned by `supply-chain/exemptions.toml` +
+`crates/benten-engine/tests/cargo_vet_policy_self_test.rs`). The `5 → 18`
+is a *cap* raise, not an entry count: the file holds the **13** libcrux
+exemption entries (13-of-18 cap used; the prior cap was 5, with zero
+exemption entries carried over). They are
 under the same audit-gated window: the v1-GM independent audit must cover
 the `libcrux-ml-kem` trust path alongside `ml-dsa`/`ml-kem`.
 
@@ -2730,10 +2734,13 @@ disclosure (2026-06-05):** the production ML-KEM-768 swap to **libcrux-ml-kem** 
 13 net-new transitive crates (the `libcrux-*` / `hax-lib*` / `pastey` / `proc-macro-error2*` / `core-models`
 family — all Cryspen / well-known, all Apache-2.0 / MIT-OR-Apache-2.0). These are **unaudited-by-Benten** and
 recorded HONESTLY as accepted-unaudited `cargo-vet` exemptions in `supply-chain/exemptions.toml` (the
-exemption-budget raised 5 → 18 — a FLAG-FOR-BEN policy decision, pending ratification; pinned by
+exemption-budget raised 5 → 18 on 2026-06-05 — a FLAG-FOR-BEN policy decision, **pending Ben ratification**;
+pinned by
 `crates/benten-engine/tests/cargo_vet_policy_self_test.rs::cargo_vet_exemption_budget_within_ratified_cap`).
-They are interim until the independent ML-DSA/ML-KEM audit (NF-2 / C-GM-AUDIT) that GATES v1-GM covers the
-pinned ML-KEM impl. Full reproducible-builds + SLSA-3+ provenance is the SEPARATE post-v1-GM commitment (#40).
+**⚠️ FLAG-FOR-BEN (authoritative flag site):** the 5 → 18 exemption-budget raise is the one supply-chain
+policy decision awaiting Ben's ratification; until ratified it remains a pending/unresolved status, and every
+other site referencing the budget bump defers to this flag. They are interim until the independent
+ML-DSA/ML-KEM audit (NF-2 / C-GM-AUDIT) that GATES v1-GM covers the pinned ML-KEM impl. Full reproducible-builds + SLSA-3+ provenance is the SEPARATE post-v1-GM commitment (#40).
 This row discloses the partial-pinning substrate honestly; it is not a closed guarantee. **Cross-ref:**
 Compromise #32 (ML-KEM production impl); Compromise #40 (reproducible-builds); R0.7 §2.2 (tactical picks);
 §5.2 (O-1).
@@ -2775,6 +2782,21 @@ via application-layer key rotation; full per-message / per-epoch FS is the CGKA/
 (codepoint-bracket-reserved `0x6380..0x63CF` per U13). The journalist per-message-FS threat is a **SEPARATE** design
 class (#56), kept sharply distinct so the audit does not read the two as duplicates. **Cross-ref:** Compromise #35
 (compromised-device retro-decrypt); Compromise #56 (journalist per-message FS); R0.7 §3.3.
+
+### Compromise #43 — Envelope metadata leakage to untrusted relays — IMPROVED by Sealed-Sender DEFAULT
+
+**Status.** ACCEPTED TRADE-OFF (`ATO`); IMPROVED. **Source.** 9-eyes (L6); BR-1; #61 (R0.7 §3.8 / §5.2).
+
+Envelope metadata observable to an untrusted relay is an **accepted trade-off**, materially **IMPROVED** by the
+Sealed-Sender DEFAULT (BR-1). The default Layer-C path (`0x6510`, Sealed-Sender) **removes the plaintext sender-DID**
+from the wire; there is **NO coarse-epoch on the Drop wire** (the 1-hour bucket is Layer-D-only per RULING-1 / M-14);
+and group-AAD set-identifying material is **BLINDED** (`audience_set_commitment` + `membership_set_id_commitment` per
+Compromise #61's BLAKE3-keyed-blinding construction). The **residual** observable on the default Drop wire is the recipient
+DID plus linkable-but-blinded group tags. Full per-send unlinkability is roadmap (U22–U28; **U25 is the v1-GM-reserve**
+for full per-send unlinkability). Disclosed as an honest, scoped residual — not an over-claim of network-observer
+invisibility. **Cross-ref:** Compromise #58 (insider-correlation boundary — unlinkability is network-observer-only);
+Compromise #61 (gossip-topic blinding); Compromise #63 (Sealed-Sender abuse-control trade-off); `THREAT-MODEL.md`
+(network-observer-only unlinkability scoping); R0.7 §3.8.
 
 ### Compromise #44 — Long-term-confidentiality posture (BSI TR-02102-1; acceptable-migration-window)
 

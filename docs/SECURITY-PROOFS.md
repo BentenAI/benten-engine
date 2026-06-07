@@ -131,6 +131,40 @@ this doc.
 
 ---
 
+## §4.2 — Deterministic-CEK confirmation-oracle property (GAP-2 honest disclosure)
+
+**Property (additive disclosure; does NOT weaken any claim above).** The Layer-C content-encryption key (CEK) is
+**deterministically derived** from the plaintext context, not freshly random:
+`CEK = BLAKE3("benten-drop:layer-c:cek" ‖ recipient_pk ‖ sender_did ‖ aad ‖ body)` (`benten_drop::layer_c::seal_inner`).
+Because the CEK is a deterministic function of the body, **a party that holds (or can recompute) the CEK can
+*confirm* a guessed plaintext**: re-deriving the CEK over a candidate `body` and checking it matches the bound
+key (equivalently, re-sealing the guess and comparing the recovered CEK / AEAD-decryptability) reveals whether
+the guess equals the real plaintext. This is the standard **confirmation-oracle** consequence of
+deterministic-key derivation — it gives a guess-checking advantage to a party who ALREADY holds the CEK-derivation
+inputs (the sealer itself, or a co-recipient that legitimately recovers the CEK), it does **NOT** grant plaintext
+recovery to a party who does not.
+
+**Why this does NOT break confidentiality against the relay.** The bulk AEAD seal uses a **fresh random nonce per
+send** (`ChaCha20Poly1305::generate_nonce(&mut OsRng)`, `benten_crypto_suite::aead::wrap`), and the CEK is
+**HPKE-key-wrapped to the recipient** — the relay never sees the CEK. Consequently:
+
+- A **network observer / untrusted relay** (Tier-1; holds neither the CEK nor its derivation inputs) gains **no
+  confirmation oracle and no equality test**: the random nonce makes two seals of the same plaintext produce
+  distinct ciphertext bytes, and the wrapped CEK is opaque. The relay-facing confidentiality claim of §3.3 /
+  §4.1 is **UNCHANGED**.
+- The confirmation advantage is bounded to a party that can already reconstruct the CEK-derivation inputs
+  (`recipient_pk`, `sender_did`, `aad`, and a *candidate* `body`) — i.e. the sealer, or a co-recipient holding the
+  recovered CEK. For low-entropy / guessable plaintexts (short enumerable messages, known templates) such a party
+  can **confirm** a guess. This is an accepted property at v1-beta: senders with low-entropy-plaintext concerns
+  should pad / randomize the body (application-layer mitigation), and a future per-send CEK salt is additive over
+  the field (codepoint-reserve, no wire-break) if the oracle is later judged load-bearing.
+
+**Scope.** This is an honest disclosure of a known deterministic-encryption property, NOT a confidentiality break
+against the wire adversary the threat model targets. Cross-link `docs/THREAT-MODEL.md` §1 (Tier-1 network observer
+sees no plaintext) + Compromise #43 (envelope-metadata leakage) in `docs/SECURITY-POSTURE.md`.
+
+---
+
 ## Cross-references
 
 - `docs/CRYPTO-CODEPOINTS.md` — the codepoint allocation (`0x6510` / `0x6610` / `0x6520` rows) + the
