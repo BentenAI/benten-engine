@@ -225,6 +225,42 @@ impl PublicKey {
         self.pq.is_some()
     }
 
+    /// Serialize a hybrid public-key handle to the raw IETF LAMPS composite
+    /// public key `mldsaPK(1952) || tradPK(32)` (the
+    /// `id-MLDSA65-Ed25519-SHA512` composite pk serialization — ML-DSA
+    /// FIRST). The byte-exact inverse of [`Self::from_lamps_composite_bytes`]
+    /// (round-trip: `from_lamps_composite_bytes(pk.to_lamps_composite_bytes())
+    /// == pk`).
+    ///
+    /// This is the **outbound cross-ecosystem surface** — it lets a hybrid
+    /// verifying key be carried in a `did:key` (two registered-component
+    /// multikeys per `crates/benten-id/src/did.rs`) or handed to another
+    /// ecosystem. The ML-DSA half flows through the upstream `ml_dsa`
+    /// type-level `VerifyingKey::encode()` + Ed25519 through
+    /// `ed25519_dalek::VerifyingKey::to_bytes()` — NO hardcoded sizes
+    /// (CLAUDE.md baked-in #5); the component lengths are the same
+    /// upstream-sourced dimensions [`Self::from_lamps_composite_bytes`]
+    /// consumes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VerifyError::MalformedKey`] if this handle does not carry a
+    /// PQ half (i.e. it came from a classical-only keypair, so there is no
+    /// composite to serialize — fail-closed rather than emitting a truncated
+    /// classical-only buffer).
+    pub fn to_lamps_composite_bytes(&self) -> Result<Vec<u8>, VerifyError> {
+        let pq = self.pq.as_ref().ok_or(VerifyError::MalformedKey(
+            "public key carries no PQ half (classical-only) — no LAMPS composite to serialize",
+        ))?;
+        let pq_bytes = pq.encode();
+        let pq_slice = pq_bytes.as_slice();
+        let trad_bytes = self.classical.to_bytes();
+        let mut out = Vec::with_capacity(pq_slice.len() + trad_bytes.len());
+        out.extend_from_slice(pq_slice);
+        out.extend_from_slice(&trad_bytes);
+        Ok(out)
+    }
+
     /// Reconstruct a hybrid public-key handle from a raw IETF LAMPS
     /// composite public key `mldsaPK(1952) || tradPK(32)` (the
     /// `id-MLDSA65-Ed25519-SHA512` composite pk serialization — ML-DSA

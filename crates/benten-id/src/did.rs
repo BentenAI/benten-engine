@@ -10,6 +10,20 @@
 //! this encoding is byte-stable across spec-conformant implementations
 //! (didkit / ssi / our crate all produce byte-identical strings for
 //! the same pubkey).
+//!
+//! ## PQ-hybrid did:key (NQ-C4 / U15)
+//!
+//! The v1-beta default signature key is the LAMPS Composite
+//! Ed25519⊕ML-DSA-65 hybrid. Its `did:key` uses the **two-registered-
+//! component-multikey** form — `varint(0x1211) ‖ mldsaPK(1952) ‖
+//! varint(0xed) ‖ tradPK(32)`, ML-DSA-FIRST — so every component algorithm
+//! ID references a REGISTERED multiformats multicodec
+//! ([`MLDSA65_PUB_MULTICODEC`] = `0x1211` + [`ED25519_MULTICODEC`] = `0xed`)
+//! rather than a Benten-private number (CLAUDE.md baked-in #5). See
+//! [`Did::from_hybrid_public_key`] / [`Did::resolve_hybrid`]. The single-byte
+//! [`HYBRID_SIG_MULTICODEC`] / [`HYBRID_KEM_MULTICODEC`] private values
+//! (the G-CORE-9 NQ-C4 interim, reserved before registered codes existed) are
+//! retained as documented fallback-only and are #5-risky.
 
 use core::fmt;
 
@@ -25,24 +39,61 @@ use crate::keypair::PublicKey;
 /// — `ed25519-pub` = `0xed`, varint-encoded as `0xed 0x01`.
 pub const ED25519_MULTICODEC: [u8; 2] = [0xed, 0x01];
 
-/// Multicodec varint prefix for the **PQ-hybrid signature** public key
-/// (Ed25519⊕ML-DSA-65 — the v1-beta LAMPS Composite default), distinct from
-/// [`ED25519_MULTICODEC`] so a `did:key` resolver does NOT mis-type the
-/// hybrid key as a bare Ed25519 key (NQ-C4 / U15).
+/// Multicodec varint prefix for the **ML-DSA-65** public-key COMPONENT —
+/// the registered `mldsa-65-pub = 0x1211`, unsigned-varint-encoded as
+/// `[0x91, 0x24]`. Per the multicodec table:
+/// <https://github.com/multiformats/multicodec/blob/master/table.csv>
 ///
-/// **OPEN-SPEC (NQ-C4 / §5.D-9):** the multiformats registry has no assigned
-/// value for this PQ-hybrid pubkey shape at the time of writing, so this is a
-/// **reserved private-value-with-fallback** (reserved at G-CORE-9) — swapped
-/// for the registered multiformats value once one is allocated, an additive
-/// change, never a wire-break. See `docs/CRYPTO-CODEPOINTS.md`. Sits alongside
-/// the W3C `[byte, 0x01]` varint shape.
+/// This is a REGISTERED multiformats value (NOT a Benten-private number),
+/// so it satisfies CLAUDE.md baked-in #5 ("component algorithm IDs reference
+/// the multiformats/IANA registry — never a Benten-private number"). It is
+/// the FIRST of the two component multikeys the v1 hybrid `did:key`
+/// concatenates (ML-DSA FIRST, consistent with the LAMPS composite pubkey
+/// serialization `mldsaPK(1952) ‖ tradPK(32)`).
+pub const MLDSA65_PUB_MULTICODEC: [u8; 2] = [0x91, 0x24];
+
+/// Length (bytes) of the ML-DSA-65 public-key component the hybrid `did:key`
+/// carries — sourced from the upstream `benten_crypto_suite` size witness
+/// (NOT a hardcoded redefinition; CLAUDE.md baked-in #5 "never hardcode
+/// key/sig/ciphertext sizes"). FIPS-204 Category-3 reference dimension is
+/// 1952 B.
+fn mldsa65_pubkey_len() -> usize {
+    benten_crypto_suite::sizes::ml_dsa_65_pubkey_len()
+}
+
+/// Length (bytes) of the Ed25519 public-key component (the W3C `did:key`
+/// Ed25519 body is always 32 B; sourced from the upstream
+/// `ed25519_dalek::PUBLIC_KEY_LENGTH` constant via the crypto-suite re-export
+/// — NOT a Benten redefinition).
+const ED25519_PUBKEY_LEN: usize = 32;
+
+/// Multicodec varint prefix for the **PQ-hybrid signature** public key
+/// (Ed25519⊕ML-DSA-65 — the v1-beta LAMPS Composite default).
+///
+/// **FALLBACK-ONLY interim (NQ-C4 / §5.D-9 — RESOLVED).** This single-byte
+/// private value (`0xef`, varint `[0xef, 0x01]`) was reserved at G-CORE-9
+/// (the NQ-C4 reserved-private interim) when **no registered multiformats
+/// code existed** for the hybrid shape. Registered COMPONENT codes now DO
+/// exist ([`MLDSA65_PUB_MULTICODEC`] = `0x1211` + [`ED25519_MULTICODEC`] =
+/// `0xed`), so the v1 hybrid `did:key` encoding ([`Did::from_hybrid_public_key`]
+/// / [`Did::resolve_hybrid`]) uses the **two-component-multikey form**
+/// (`varint(0x1211) ‖ mldsaPK ‖ varint(0xed) ‖ tradPK`) — #5-clean, no
+/// invented number. This `0xef` const is **RETAINED as documented
+/// fallback-only**; it is #5-RISKY (a single-byte squat over the registered
+/// single-byte multicodec range) and is NOT the v1 wire encoding. See
+/// `docs/CRYPTO-CODEPOINTS.md` (NQ-C4 section).
 pub const HYBRID_SIG_MULTICODEC: [u8; 2] = [0xef, 0x01];
 
 /// Multicodec varint prefix for the **PQ-hybrid KEM** public key
-/// (X25519⊕ML-KEM-768), distinct from [`ED25519_MULTICODEC`] +
-/// [`HYBRID_SIG_MULTICODEC`] (NQ-C4 / U15). Reserved private-value-with-
-/// fallback (open-spec; see [`HYBRID_SIG_MULTICODEC`] +
-/// `docs/CRYPTO-CODEPOINTS.md`).
+/// (X25519⊕ML-KEM-768).
+///
+/// **FALLBACK-ONLY interim (NQ-C4 / §5.D-9 — RESOLVED).** Same status as
+/// [`HYBRID_SIG_MULTICODEC`]: the single-byte private value (`0xf0`, varint
+/// `[0xf0, 0x01]`) was the G-CORE-9 reserved-private interim. The KEM hybrid
+/// `did:key` (when wired) uses the two-registered-component-multikey form
+/// (the registered `ml-kem-768-pub` component code + `x25519-pub`), so this
+/// const is RETAINED as documented fallback-only and is #5-RISKY (single-byte
+/// squat). See `docs/CRYPTO-CODEPOINTS.md`.
 pub const HYBRID_KEM_MULTICODEC: [u8; 2] = [0xf0, 0x01];
 
 /// `did:key` URI prefix (literal string the W3C spec mandates).
@@ -129,6 +180,165 @@ impl Did {
         pk_bytes.copy_from_slice(&decoded[2..2 + 32]);
 
         PublicKey::from_bytes(&pk_bytes).ok_or(DidError::InvalidPublicKey)
+    }
+
+    /// Encode a **PQ-hybrid** verifying key (Ed25519⊕ML-DSA-65 — the v1-beta
+    /// LAMPS Composite default signature key) as a `did:key` DID using the
+    /// **two-registered-component-multikey** form.
+    ///
+    /// The multibase body is:
+    ///
+    /// ```text
+    /// "did:key:z" + base58btc(
+    ///     varint(0x1211) || mldsaPK(1952) || varint(0xed) || tradPK(32)
+    /// )
+    /// ```
+    ///
+    /// i.e. ML-DSA FIRST (consistent with
+    /// [`benten_crypto_suite::sig::PublicKey::from_lamps_composite_bytes`],
+    /// which expects `mldsaPK ‖ tradPK`), each component carried as its
+    /// REGISTERED multiformats multicodec ([`MLDSA65_PUB_MULTICODEC`] =
+    /// `0x1211`, [`ED25519_MULTICODEC`] = `0xed`) — NOT a Benten-private
+    /// number (CLAUDE.md baked-in #5). The single-byte private
+    /// [`HYBRID_SIG_MULTICODEC`] is fallback-only and is NOT used here.
+    ///
+    /// The reverse direction is [`Did::resolve_hybrid`]; round-trip:
+    /// `resolve_hybrid(from_hybrid_public_key(pk))` recovers a byte-identical
+    /// composite public key.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `pk` carries no PQ half (a classical-only key handed to the
+    /// hybrid encoder is a caller contract violation — encode a classical key
+    /// via [`Did::from_public_key`] instead). The hybrid keys produced by the
+    /// v1-beta default suite always carry the PQ half.
+    #[must_use]
+    pub fn from_hybrid_public_key(pk: &benten_crypto_suite::sig::PublicKey) -> Self {
+        // Extract the two component pubkeys via the crypto-suite's symmetric
+        // serializer (`mldsaPK(1952) ‖ tradPK(32)`, ML-DSA FIRST). This is the
+        // ONLY place the composite byte layout is sourced — never re-derived
+        // here.
+        let composite = pk.to_lamps_composite_bytes().expect(
+            "from_hybrid_public_key requires a hybrid (PQ-carrying) key; \
+             classical-only keys encode via Did::from_public_key",
+        );
+        let mldsa_len = mldsa65_pubkey_len();
+        let (mldsa_pk, trad_pk) = composite.split_at(mldsa_len);
+
+        let mut payload = Vec::with_capacity(
+            MLDSA65_PUB_MULTICODEC.len()
+                + mldsa_pk.len()
+                + ED25519_MULTICODEC.len()
+                + trad_pk.len(),
+        );
+        // ML-DSA-65 component multikey (FIRST).
+        payload.extend_from_slice(&MLDSA65_PUB_MULTICODEC);
+        payload.extend_from_slice(mldsa_pk);
+        // Ed25519 component multikey (SECOND).
+        payload.extend_from_slice(&ED25519_MULTICODEC);
+        payload.extend_from_slice(trad_pk);
+
+        let body = bs58::encode(&payload).into_string();
+        Self(format!("{DID_KEY_PREFIX}{body}"))
+    }
+
+    /// Resolve a **PQ-hybrid** `did:key` string back to its underlying
+    /// composite verifying key (Ed25519⊕ML-DSA-65).
+    ///
+    /// Decodes the multibase body and varint-dispatches the two component
+    /// multikeys IN ORDER: leading varint MUST be [`MLDSA65_PUB_MULTICODEC`]
+    /// (`0x1211`) → consume the ML-DSA-65 pubkey; next varint MUST be
+    /// [`ED25519_MULTICODEC`] (`0xed`) → consume the Ed25519 pubkey; then
+    /// reconstruct via
+    /// [`benten_crypto_suite::sig::PublicKey::from_lamps_composite_bytes`]
+    /// (`mldsaPK ‖ tradPK`).
+    ///
+    /// Typed-rejects (NEVER panics, NEVER a silent fallback) on: a non-`z`
+    /// prefix ([`DidError::InvalidPrefix`]); base58 decode failure
+    /// ([`DidError::Base58Decode`]); a wrong/unknown component codec
+    /// ([`DidError::UnknownMulticodec`]); a body too short for either
+    /// component ([`DidError::HybridBodyTooShort`]); trailing bytes after
+    /// both components ([`DidError::HybridTrailingBytes`]); or a reconstructed
+    /// composite key one of whose halves is not a valid key encoding
+    /// ([`DidError::InvalidHybridPublicKey`]).
+    ///
+    /// This is additive to [`Did::resolve`] (the Ed25519-only path) — both
+    /// remain available; a hybrid `did:key` resolved via [`Did::resolve`]
+    /// surfaces [`DidError::UnknownMulticodec`] (the leading `0x1211` varint
+    /// is not the Ed25519 `0xed01`), so callers select the resolver matching
+    /// the key shape they expect.
+    ///
+    /// # Errors
+    ///
+    /// See the typed-reject list above.
+    pub fn resolve_hybrid(&self) -> Result<benten_crypto_suite::sig::PublicKey, DidError> {
+        let body = self
+            .0
+            .strip_prefix(DID_KEY_PREFIX)
+            .ok_or_else(|| DidError::InvalidPrefix(self.0.clone()))?;
+
+        let decoded = bs58::decode(body)
+            .into_vec()
+            .map_err(|_| DidError::Base58Decode)?;
+
+        let mldsa_len = mldsa65_pubkey_len();
+        let mut cursor = 0usize;
+
+        // --- Component 1: ML-DSA-65 (FIRST). ---
+        // varint prefix (2 bytes) + mldsaPK(mldsa_len).
+        let mldsa_min = MLDSA65_PUB_MULTICODEC.len() + mldsa_len;
+        if decoded.len() < cursor + mldsa_min {
+            return Err(DidError::HybridBodyTooShort {
+                component: "ML-DSA-65",
+                got: decoded.len().saturating_sub(cursor),
+                min: mldsa_min,
+            });
+        }
+        if decoded[cursor] != MLDSA65_PUB_MULTICODEC[0]
+            || decoded[cursor + 1] != MLDSA65_PUB_MULTICODEC[1]
+        {
+            return Err(DidError::UnknownMulticodec(
+                decoded[cursor],
+                decoded[cursor + 1],
+            ));
+        }
+        cursor += MLDSA65_PUB_MULTICODEC.len();
+        let mldsa_pk = &decoded[cursor..cursor + mldsa_len];
+        cursor += mldsa_len;
+
+        // --- Component 2: Ed25519 (SECOND). ---
+        let ed_min = ED25519_MULTICODEC.len() + ED25519_PUBKEY_LEN;
+        if decoded.len() < cursor + ed_min {
+            return Err(DidError::HybridBodyTooShort {
+                component: "Ed25519",
+                got: decoded.len().saturating_sub(cursor),
+                min: ed_min,
+            });
+        }
+        if decoded[cursor] != ED25519_MULTICODEC[0] || decoded[cursor + 1] != ED25519_MULTICODEC[1]
+        {
+            return Err(DidError::UnknownMulticodec(
+                decoded[cursor],
+                decoded[cursor + 1],
+            ));
+        }
+        cursor += ED25519_MULTICODEC.len();
+        let trad_pk = &decoded[cursor..cursor + ED25519_PUBKEY_LEN];
+        cursor += ED25519_PUBKEY_LEN;
+
+        // --- Reject trailing bytes (a well-formed body is EXACT). ---
+        if cursor != decoded.len() {
+            return Err(DidError::HybridTrailingBytes {
+                extra: decoded.len() - cursor,
+            });
+        }
+
+        // --- Reconstruct the composite key (mldsaPK ‖ tradPK, ML-DSA-first). ---
+        let mut composite = Vec::with_capacity(mldsa_pk.len() + trad_pk.len());
+        composite.extend_from_slice(mldsa_pk);
+        composite.extend_from_slice(trad_pk);
+        benten_crypto_suite::sig::PublicKey::from_lamps_composite_bytes(&composite)
+            .map_err(|_| DidError::InvalidHybridPublicKey("LAMPS composite half not a valid key"))
     }
 
     /// Construct from a pre-resolved string. Caller must have already

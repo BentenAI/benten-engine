@@ -207,6 +207,69 @@ fn did_key_rejects_wrong_multicodec_per_w3c_spec() {
     }
 }
 
+/// PQ-hybrid `did:key` (NQ-C4 / U15) — the two-registered-component-multikey
+/// form round-trips a real Ed25519⊕ML-DSA-65 verifying key byte-for-byte
+/// through `Did::from_hybrid_public_key` → `Did::resolve_hybrid`. This is the
+/// owning-crate pin (the cross-crate driver lives in
+/// `crates/benten-drop/tests/f_nqc4_1_did_key_hybrid_pubkey_multicodec.rs`).
+#[test]
+fn did_key_hybrid_round_trips_composite_pubkey() {
+    use benten_crypto_suite::sig::SignatureSuite;
+
+    let pk = SignatureSuite::v1_default().generate_keypair().public();
+    assert!(pk.is_hybrid(), "v1-beta default suite mints a hybrid key");
+
+    let did = Did::from_hybrid_public_key(&pk);
+    assert!(
+        did.as_str().starts_with("did:key:z"),
+        "hybrid did:key MUST use the `z` multibase prefix; got: {}",
+        did.as_str()
+    );
+
+    // Body MUST lead with the registered ML-DSA-65 component multicodec
+    // (0x1211 = [0x91, 0x24]), ML-DSA FIRST — never a Benten-private prefix.
+    let body = did.as_str().strip_prefix("did:key:z").unwrap();
+    let decoded = bs58::decode(body).into_vec().unwrap();
+    assert_eq!(
+        &decoded[0..2],
+        &benten_id::did::MLDSA65_PUB_MULTICODEC,
+        "hybrid did:key MUST lead with the registered ML-DSA-65 component \
+         multicodec (0x1211)"
+    );
+
+    let recovered = did.resolve_hybrid().expect("hybrid did:key MUST resolve");
+    assert_eq!(
+        recovered.to_lamps_composite_bytes().unwrap(),
+        pk.to_lamps_composite_bytes().unwrap(),
+        "hybrid did:key encode/decode MUST round-trip the composite pubkey \
+         byte-for-byte (mldsaPK ‖ tradPK, ML-DSA-first)"
+    );
+}
+
+/// A hybrid `did:key` resolved via the Ed25519-only [`Did::resolve`] MUST
+/// typed-reject (the leading `0x1211` component varint is not the Ed25519
+/// `0xed01`) — the two resolvers are additive + independent, never a silent
+/// cross-accept.
+#[test]
+fn did_key_ed25519_resolver_rejects_hybrid_body() {
+    use benten_crypto_suite::sig::SignatureSuite;
+
+    let pk = SignatureSuite::v1_default().generate_keypair().public();
+    let did = Did::from_hybrid_public_key(&pk);
+
+    let err = did
+        .resolve()
+        .expect_err("the Ed25519-only resolver MUST reject a hybrid did:key body");
+    assert!(
+        matches!(
+            err,
+            benten_id::errors::DidError::UnknownMulticodec(0x91, 0x24)
+        ),
+        "Did::resolve MUST surface UnknownMulticodec for the hybrid 0x1211 \
+         leading varint; got {err:?}"
+    );
+}
+
 /// Decode a hex-encoded byte string. Inlined here so the W3C-vector
 /// test file does not pull in a `hex` dep; the workspace already
 /// avoids that crate at the test boundary.

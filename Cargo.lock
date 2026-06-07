@@ -432,6 +432,7 @@ dependencies = [
  "benten-membership-set",
  "benten-sync",
  "blake3",
+ "bs58",
  "serde",
  "serde_bytes",
  "serde_ipld_dagcbor",

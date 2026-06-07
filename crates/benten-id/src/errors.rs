@@ -160,6 +160,35 @@ pub enum DidError {
     /// valid Edwards point).
     #[error("did:key body holds invalid Ed25519 public key bytes")]
     InvalidPublicKey,
+    /// Hybrid `did:key` body too short to hold the next component multikey
+    /// (component varint prefix + the component's pubkey bytes). Fired by
+    /// [`crate::did::Did::resolve_hybrid`] before any slice index.
+    #[error(
+        "did:key hybrid body too short for the {component} component: got {got} bytes, expected at least {min}"
+    )]
+    HybridBodyTooShort {
+        /// Which component slot ran short (`"ML-DSA-65"` / `"Ed25519"`).
+        component: &'static str,
+        /// Bytes remaining when the read was attempted.
+        got: usize,
+        /// Minimum bytes the component needs (varint prefix + pubkey).
+        min: usize,
+    },
+    /// Hybrid `did:key` body carried trailing bytes after the two
+    /// component multikeys were consumed — fail-closed (a well-formed
+    /// hybrid body is EXACTLY `varint(0x1211) ‖ mldsaPK ‖ varint(0xed) ‖
+    /// tradPK`, no slack). Defends against payload-stuffing.
+    #[error("did:key hybrid body has {extra} trailing bytes after both component multikeys")]
+    HybridTrailingBytes {
+        /// Count of unexpected trailing bytes.
+        extra: usize,
+    },
+    /// The hybrid component bytes were structurally well-formed (correct
+    /// component codecs + lengths) but [`benten_crypto_suite::sig::PublicKey::from_lamps_composite_bytes`]
+    /// rejected the reconstructed `mldsaPK ‖ tradPK` (one half is not a
+    /// valid key encoding). Fail-closed.
+    #[error("did:key hybrid body holds an invalid LAMPS composite public key: {0}")]
+    InvalidHybridPublicKey(&'static str),
 }
 
 /// Errors emitted by [`crate::ucan`] chain-walk validation.
