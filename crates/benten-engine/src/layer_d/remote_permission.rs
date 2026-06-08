@@ -260,6 +260,10 @@ impl PermissionGrant {
 /// result_recipient_pubkey)` are FROZEN at v1-beta; runtime enforcement is
 /// post-v1-beta. The frozen 3-field AAD is SUFFICIENT to express the
 /// no-egress / bounded-decrypt constraint (the wire freeze IS the AAD scope).
+/// The 3-field constraint AAD binds at **result-seal time** (NQ-T3-ratified
+/// envelope-fold) via [`exec_workflow_seal`] / [`exec_workflow_open`] over the
+/// result envelope — it is NOT folded into [`PermissionRequest::signing_bytes`]
+/// at v1-beta.
 #[derive(Clone, Debug)]
 pub struct ExecuteWorkflow {
     /// The workflow subgraph CID.
