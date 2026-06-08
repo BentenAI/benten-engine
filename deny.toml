@@ -107,7 +107,7 @@ ignore = [
     { id = "RUSTSEC-2025-0081", reason = "transitive via tauri-utils -> urlpattern -> unic-ucd-* family; informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream urlpattern/unic-ucd successor migration)" },
     { id = "RUSTSEC-2025-0098", reason = "transitive via tauri-utils -> urlpattern -> unic-ucd-* family; informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream urlpattern/unic-ucd successor migration)" },
     { id = "RUSTSEC-2025-0100", reason = "transitive via tauri-utils -> urlpattern -> unic-ucd-* family; informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream urlpattern/unic-ucd successor migration)" },
-    { id = "RUSTSEC-2026-0173", reason = "proc-macro-error2 newly-flagged unmaintained (successor to proc-macro-error RUSTSEC-2024-0370, also ignored); transitive via tauri 2.x / gtk-rs proc-macro deps; informational unmaintained, no exploit; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream proc-macro-error2 successor migration)" },
+    { id = "RUSTSEC-2026-0173", reason = "proc-macro-error2 newly-flagged unmaintained (successor to proc-macro-error RUSTSEC-2024-0370, also ignored); transitive via tauri 2.x / gtk-rs proc-macro deps AND via hax-lib-macros (the hax formal-verification macro crate's proc-macro-error2 dep); informational unmaintained, no exploit; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream proc-macro-error2 successor migration)" },
 ]
 
 # ---------------------------------------------------------------------------

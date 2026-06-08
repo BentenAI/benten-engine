@@ -105,3 +105,26 @@ fn group_error_audit_arm_coverage_non_exhaustive() {
         "AeadAuthenticationFailed"
     );
 }
+
+#[test]
+fn drop_bundle_error_audit_arm_coverage_non_exhaustive() {
+    use benten_drop::bundle::DropBundleError;
+    fn audit(e: &DropBundleError) -> &'static str {
+        match e {
+            DropBundleError::EnvelopeSignatureInvalid { .. } => "EnvelopeSignatureInvalid",
+            DropBundleError::UnsupportedDropVersion { .. } => "UnsupportedDropVersion",
+            DropBundleError::UnsupportedDropMode { .. } => "UnsupportedDropMode",
+            DropBundleError::PerNodeAeadAuthenticationFailed { .. } => {
+                "PerNodeAeadAuthenticationFailed"
+            }
+            DropBundleError::PerNodeSignatureInvalid { .. } => "PerNodeSignatureInvalid",
+            DropBundleError::AuthorizationGrantFailed(_) => "AuthorizationGrantFailed",
+            DropBundleError::CodecError(_) => "CodecError",
+            _ => "Unknown",
+        }
+    }
+    assert_eq!(
+        audit(&DropBundleError::CodecError("test".to_string())),
+        "CodecError"
+    );
+}

@@ -1720,6 +1720,38 @@ Row D-15's audit-readiness concern.
   or a missing test pin), it migrates to the sibling CODE shard / a Rust test
   target at pickup rather than being closed in this doc shard.
 
+### Row D-54 — R6-R6 doc/cite/OBS NAMED cluster (F-14 / F-15 / F-18 + F-19..F-37) — per-row disposition
+
+- **Observation (NAMED, HARD-RULE clause-b; not fixed this round):** the R6-R6
+  phase-close council surfaced a residual cluster of doc/cite/OBS findings —
+  **F-14, F-15, F-18, and F-19 through F-37** — that fall below the fix-now
+  threshold for SHARD B (which closed the two Ben-ratified freeze-forks F-04
+  band-move + F-07 domain-tag registration, the MINOR cluster F-05/F-06/F-10,
+  and the cheap cite/comment fixes F-11/F-12/F-13/F-16/F-17). Each carries one of
+  the three valid HARD-RULE-12 dispositions — **named-carry** (doc-tense /
+  cite-currency / cosmetic comment hygiene that is byte-correct at HEAD and not
+  freeze-gating), **out-of-scope** (code-adjacent items owned by the sibling
+  CODE shard / a Rust test target, migrated at pickup), or **disagree-with-
+  explanation** (a finding the reviewer rebuts as already-correct). **All are
+  byte-correct at HEAD** — none is a wire/golden/codepoint defect; the freeze
+  bytes are correct and these are doc/comment/cite hygiene or code-shard items
+  only.
+- **F-27 / F-28 carve-out (LEAVE AS-IS — do NOT re-resolve here):** the `5 → 18`
+  budget item (F-27 / F-28) is the already-tracked **Ben pre-tag ratification
+  surface** — it is a Ben-gated freeze-decision held open by design, NOT a
+  sub-threshold doc finding. It is intentionally not dispositioned in this row;
+  it stays on the pre-tag Ben item list (the same posture as Row D-51's gossip
+  §3.9 `FLAGGED-FOR-BEN` residue).
+- **Destination:** the next phase-close convergence round / the freeze-record
+  reconcile sweep that precedes the Ben-gated tag. Each `F-NN` ID is
+  dispositioned when picked up (fixed-then-struck OR re-confirmed
+  no-change-needed OR migrated to the CODE shard). Recorded here so none is
+  silently dropped between rounds (§3.6i no-defer discipline +
+  pim-N-prior-phase-explicit-preflight). Continues the Row D-39 / D-40 / D-53
+  cluster-row precedent.
+- **Anchor:** R6-R6 phase-close council; HARD-RULE clause-b; Row D-53 (R6-R5
+  cluster) precedent.
+
 ---
 
 ## Update discipline

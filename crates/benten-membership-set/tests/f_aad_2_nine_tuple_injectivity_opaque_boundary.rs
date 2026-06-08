@@ -152,8 +152,11 @@
 // freeze-byte gate): the real assembler reproduces the frozen `EXPECTED_AAD_HEX`
 // golden BYTE-FOR-BYTE (recomputed off-line at impl-time via the real
 // `assemble_group_aad`; the frozen literal is UNCHANGED — no drift). The two
-// commitments route through the SAME §3.9 BLAKE3 / `blake3::keyed_hash`
-// primitives. The fixtures (which build the real `GroupAadInputs`) move from an
+// §3.10 (labelled) commitments MIRROR the SAME `blake3::keyed_hash` primitive
+// the §3.9 gossip-topic derivation uses — they do NOT delegate to (or share a
+// preimage with) the §3.9 construction; conflating §3.9 (unlabelled) with §3.10
+// (labelled) would be the exact error CRYPTO-CODEPOINTS.md warns against. The
+// fixtures (which build the real `GroupAadInputs`) move from an
 // inherent impl (impossible on a foreign type) to a local extension trait.
 use benten_membership_set::aad::{
     AAD_VERSION, GroupAadInputs, assemble_group_aad, audience_set_commitment,

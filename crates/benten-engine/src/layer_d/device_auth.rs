@@ -145,8 +145,8 @@ impl HeadlessDeviceAuth {
             user_did_signing_key: vec![0x22u8; 64],
             user_did_creation_time: 0,
         };
-        let vault_bytes =
-            serialize_vault(&payload, &dak).expect("vault seal is infallible for OWASP params");
+        let vault_bytes = serialize_vault(&payload, dak.expose())
+            .expect("vault seal is infallible for OWASP params");
         Self {
             vault_bytes,
             salt,
@@ -172,7 +172,7 @@ impl HeadlessDeviceAuth {
         // constant-time inside `decode_vault`). Every failure cause (AEAD tag,
         // malformed, wrong-width, …) collapses to the single typed rejection —
         // no salt/params/tag error-variant side-channel.
-        match decode_vault(&self.vault_bytes, &dak) {
+        match decode_vault(&self.vault_bytes, dak.expose()) {
             Ok(decoded) => Ok(UnlockedKeyMaterial::new(
                 decoded.payload.k_principal,
                 decoded.payload.user_did_signing_key,

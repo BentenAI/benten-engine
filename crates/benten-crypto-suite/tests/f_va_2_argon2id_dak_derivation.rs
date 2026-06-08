@@ -45,6 +45,8 @@
 #![allow(dead_code)]
 
 // R5: wired to the LIVE vault DAK derivation (Argon2id v0x13 + HKDF-SHA256).
+// `derive_dak` returns a zeroize-on-drop `Dak` newtype (F-10); `Dak::expose`
+// borrows the raw bytes to compare DAKs across derivations (no `secrecy` dep).
 use benten_crypto_suite::vault::{Argon2idParams, DAK_HKDF_INFO_TAG, OWASP_DEFAULT, derive_dak};
 
 fn fixture_password() -> &'static [u8] {
@@ -76,7 +78,8 @@ fn derive_dak_is_deterministic() {
         DAK_HKDF_INFO_TAG,
     );
     assert_eq!(
-        dak_a, dak_b,
+        dak_a.expose(),
+        dak_b.expose(),
         "derive_dak MUST be deterministic for the same (password, salt, \
          params, info-tag) — vault unlock depends on it. would-FAIL on a \
          randomized derivation."
@@ -109,7 +112,8 @@ fn param_change_yields_different_dak() {
         DAK_HKDF_INFO_TAG,
     );
     assert_ne!(
-        dak_default, dak_stronger,
+        dak_default.expose(),
+        dak_stronger.expose(),
         "changing the Argon2id params (m/t/p) MUST change the DAK — params are \
          persisted-alongside-salt because they are load-bearing. would-FAIL \
          while the stub ignores params and returns a constant."
@@ -136,7 +140,8 @@ fn hkdf_info_tag_is_load_bearing() {
         b"benten-dak-v2",
     );
     assert_ne!(
-        dak_canonical, dak_other_tag,
+        dak_canonical.expose(),
+        dak_other_tag.expose(),
         "the HKDF info-tag `benten-dak-v1` MUST be load-bearing — it is the \
          codepoint slot for a future Argon2id-v2 param set (R0 §3.1). \
          Deriving under a different tag MUST yield a different DAK. would-FAIL \
