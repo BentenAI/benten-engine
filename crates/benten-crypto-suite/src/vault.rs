@@ -60,8 +60,19 @@ pub const SYMMETRIC_AEAD_12B_CODEPOINT: u16 = 0x6101;
 pub const VAULT_XNONCE_LEN: usize = 24;
 
 /// The frozen DAK HKDF info-tag (codepoint slot for a future Argon2id-v2
-/// param set per R0.5 §3.1).
+/// param set per R0.5 §3.1). A registered cross-surface domain-separation tag
+/// mirrored in [`crate::domain_registry::DAK_HKDF_INFO_TAG`]; the intra-crate
+/// `vault_domain_tags_match_central_registry` test pins byte-equality.
+/// Canonical home is HERE.
 pub const DAK_HKDF_INFO_TAG: &[u8] = b"benten-dak-v1";
+
+/// The vault AEAD AAD domain-separation label — domain-separates the vault
+/// seal from every other envelope and is prefixed into the AAD ahead of the
+/// vault codepoint. A registered cross-surface domain-separation tag mirrored
+/// in [`crate::domain_registry::VAULT_AAD_DOMAIN`]; the intra-crate
+/// `vault_domain_tags_match_central_registry` test pins byte-equality.
+/// Canonical home is HERE.
+pub const VAULT_AAD_DOMAIN: &[u8] = b"benten-vault:";
 
 /// RFC-9106 / OWASP Argon2id params (R0.5 §2.2 tactical pick).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,6 +92,33 @@ pub const OWASP_DEFAULT: Argon2idParams = Argon2idParams {
     p_cost: 1,
 };
 
+/// The Device-Authentication Key — a zeroize-on-drop 32-byte secret.
+///
+/// Wraps a [`secrecy::SecretBox<[u8; 32]>`] so the DAK Debug-redacts and its
+/// bytes are **wiped on drop** rather than lingering in freed heap/stack (the
+/// same at-rest-secret coredump hygiene the unlocked `K_principal` enjoys).
+/// `secrecy` is a [forbidden direct dep](crate::boundary) outside this crate
+/// (crypto-agility-contract:6), so this owned newtype is the cross-crate
+/// handle: production callers (`layer_d::device_auth`) obtain the raw
+/// `&[u8; 32]` via [`Dak::expose`] at the AEAD seal/open call site **without**
+/// importing `secrecy` themselves.
+pub struct Dak(SecretBox<[u8; 32]>);
+
+impl Dak {
+    /// Borrow the raw DAK bytes for the AEAD seal/open call site. The borrow
+    /// does not outlive the `Dak`, so the bytes stay zeroize-governed.
+    #[must_use]
+    pub fn expose(&self) -> &[u8; 32] {
+        self.0.expose_secret()
+    }
+}
+
+impl core::fmt::Debug for Dak {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_tuple("Dak").field(&"<redacted>").finish()
+    }
+}
+
 /// Derive the Device-Authentication Key (DAK):
 /// `HKDF-SHA256( Argon2id(pw, salt; params), info )`.
 ///
@@ -88,6 +126,13 @@ pub const OWASP_DEFAULT: Argon2idParams = Argon2idParams {
 /// change or an info-tag change yields a different DAK (both are load-bearing
 /// in the derivation). Per CLAUDE.md baked-in #5 the Argon2id + HKDF
 /// primitives are wrapped from the vetted upstream `argon2` + `hkdf` crates.
+///
+/// The DAK is returned as a [`Dak`] (zeroize-on-drop [`secrecy::SecretBox`]
+/// newtype) so it Debug-redacts and is **wiped on drop** — production callers
+/// (`device_auth::unlock_with_password` / `seal_and_build`) let the DAK fall
+/// out of scope, and the `Dak` guarantees its bytes are scrubbed rather than
+/// lingering in freed heap/stack. Borrow the raw `&[u8; 32]` via [`Dak::expose`]
+/// at the AEAD seal/open call site.
 ///
 /// # Panics
 ///
@@ -100,7 +145,7 @@ pub fn derive_dak(
     salt: &[u8; 16],
     params: Argon2idParams,
     info_tag: &[u8],
-) -> [u8; 32] {
+) -> Dak {
     // Step 1 — Argon2id(pw, salt; m/t/p) → 32-byte seed.
     let argon_params = Params::new(params.m_cost, params.t_cost, params.p_cost, Some(32))
         .expect("Argon2id params valid (m/t/p within RFC-9106 bounds)");
@@ -118,7 +163,11 @@ pub fn derive_dak(
     hk.expand(info_tag, &mut dak)
         .expect("HKDF-SHA256 expand to 32 B is infallible");
     seed.zeroize();
-    dak
+    // Move the raw bytes into the zeroize-on-drop SecretBox, then wipe the
+    // local copy so no un-zeroized duplicate is left on the stack.
+    let boxed = Dak(SecretBox::new(Box::new(dak)));
+    dak.zeroize();
+    boxed
 }
 
 /// Vault CBOR payload (R0.5 §3.1). Field order is FROZEN:
@@ -293,7 +342,7 @@ pub fn decode_vault_strict(codepoint: u16, nonce_len: usize) -> Result<(), Vault
 /// envelope; binds the vault codepoint).
 fn vault_aad() -> Vec<u8> {
     let mut aad = Vec::new();
-    aad.extend_from_slice(b"benten-vault:");
+    aad.extend_from_slice(VAULT_AAD_DOMAIN);
     aad.extend_from_slice(&VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT.to_be_bytes());
     aad
 }
@@ -489,15 +538,21 @@ mod tests {
         let salt: [u8; 16] = core::array::from_fn(|i| (i as u8) ^ 0x5A);
         let a = derive_dak(&pw, &salt, OWASP_DEFAULT, DAK_HKDF_INFO_TAG);
         let b = derive_dak(&pw, &salt, OWASP_DEFAULT, DAK_HKDF_INFO_TAG);
-        assert_eq!(a, b);
+        assert_eq!(a.expose(), b.expose());
         let stronger = Argon2idParams {
             m_cost: 65536,
             t_cost: 3,
             p_cost: 1,
         };
-        assert_ne!(a, derive_dak(&pw, &salt, stronger, DAK_HKDF_INFO_TAG));
+        assert_ne!(
+            a.expose(),
+            derive_dak(&pw, &salt, stronger, DAK_HKDF_INFO_TAG).expose()
+        );
         let alt_info: Vec<u8> = b"benten-dak-v2".to_vec();
-        assert_ne!(a, derive_dak(&pw, &salt, OWASP_DEFAULT, &alt_info));
+        assert_ne!(
+            a.expose(),
+            derive_dak(&pw, &salt, OWASP_DEFAULT, &alt_info).expose()
+        );
     }
 
     #[test]
@@ -554,5 +609,25 @@ mod tests {
         let km = UnlockedKeyMaterial::new([0xDEu8; 32], vec![0x11u8; 64]);
         let rendered = format!("{km:?}");
         assert!(!rendered.contains("222")); // 0xDE decimal
+    }
+
+    /// Drift defense: the vault at-rest domain tags are registered
+    /// cross-surface domain-separation tags in the central
+    /// [`crate::domain_registry`] table over which the prefix-free invariant
+    /// runs. Pin byte-equality so a mirror can never silently diverge from the
+    /// home definitions here.
+    #[test]
+    fn vault_domain_tags_match_central_registry() {
+        use crate::domain_registry as reg;
+        assert_eq!(
+            VAULT_AAD_DOMAIN,
+            reg::VAULT_AAD_DOMAIN,
+            "VAULT_AAD_DOMAIN drifted from the central domain_registry mirror"
+        );
+        assert_eq!(
+            DAK_HKDF_INFO_TAG,
+            reg::DAK_HKDF_INFO_TAG,
+            "DAK_HKDF_INFO_TAG drifted from the central domain_registry mirror"
+        );
     }
 }

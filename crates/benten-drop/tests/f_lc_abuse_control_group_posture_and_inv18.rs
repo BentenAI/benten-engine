@@ -871,7 +871,8 @@ fn f_lc_7_hpke_non_fs_old_envelope_still_opens_with_recovered_sk() {
             &audience,
             &sender,
             &sender_kp,
-            &[0xF5u8; 32],
+            // HONEST sender: body_cid = BLAKE3(body) (F-01 content-CID contract).
+            blake3::hash(b"old 2026 content").as_bytes(),
             0,
             b"old 2026 content",
         );

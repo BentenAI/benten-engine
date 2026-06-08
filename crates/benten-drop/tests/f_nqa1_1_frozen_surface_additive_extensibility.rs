@@ -50,8 +50,10 @@
 //!     pinned by the source-scan arms (PIN 0c /
 //!     PIN 2), not by an integer.
 //!   - `RotatingGroupKeyChainedMode` / `ChainedStateTlv` → the chained-mode
-//!     reserve lives in the FS-future
-//!     `0x6380..0x63CF` MLS/CGKA brackets +
+//!     reserve lives in the §4.0 CGKA-Commit
+//!     bracket (`CGKA_COMMIT_BASE == 0x63A0`),
+//!     a sub-bracket of the `0x6380..0x63CF`
+//!     MLS/CGKA FS-future super-bracket +
 //!     the per-stanza `Option<ChainedStateTlv>`
 //!     sub-slot (§3.3 line "Per-stanza
 //!     `Option<ChainedStateTlv>` codepoint-
@@ -60,9 +62,10 @@
 //!     LIVE-FREEZE `MEMBERSHIP_SET_GROUP_MULTI_
 //!     STANZA`, so `0x6611` would alias the
 //!     membership band). We register the
-//!     FS-future bracket base `0x6380` for the
-//!     typed-reject property and pin the
-//!     sub-slot AAD-binding by NAME (PIN 4).
+//!     FS-future super-bracket base `0x6380` for
+//!     the typed-reject property and pin the
+//!     sub-slot AAD-binding (band base `0x63A0`)
+//!     in PIN 4.
 //! The prior corpus (`0x6321`/`0x6330`/`0x6611`) invented three integers
 //! no §4.0 row blesses — an additive-extensibility test must not invent
 //! the very codepoints it claims are reserved.
@@ -87,6 +90,7 @@
 // `ReservedCodepoint::resolve()` typed-reject + the GAP-6b
 // `chained_state_tlv_aad_binding` AAD assembly byte-for-byte.
 use benten_crypto_suite::codepoint::{ReservedCodepoint, chained_state_tlv_aad_binding};
+use benten_crypto_suite::registry::CGKA_COMMIT_BASE;
 
 // ===========================================================================
 // SELF-CONTAINED ADDITIVE-DECODE STUB-SHIM (no cross-wave deps).
@@ -115,11 +119,14 @@ const CP_RESERVED_SUBSET_REF: u16 = 0x6620; // §4.0 MembershipSet band
 
 /// `RotatingGroupKeyChainedMode` / `ChainedStateTlv` chained-mode reserve.
 /// §4.0 places the FS-future / chained reserves in the
-/// **`0x6380..0x63CF`** MLS/CGKA brackets (NOT a standalone `0x6611`;
-/// `0x6610` is the LIVE-FREEZE `MEMBERSHIP_SET_GROUP_MULTI_STANZA`). We
-/// register the bracket BASE for the typed-reject property; the per-stanza
-/// sub-slot AAD-binding is pinned by NAME (PIN 4).
-const CP_BAND_FS_FUTURE_BASE: u16 = 0x6380; // §4.0 MLS-Application / FS-future bracket
+/// **`0x6380..0x63CF`** MLS/CGKA super-bracket (NOT a standalone `0x6611`;
+/// `0x6610` is the LIVE-FREEZE `MEMBERSHIP_SET_GROUP_MULTI_STANZA`). The
+/// chained-mode reserve itself dispatches from the CGKA-Commit sub-bracket
+/// (`CGKA_COMMIT_BASE == 0x63A0`; cross-checked in PIN 4). We register the
+/// super-bracket BASE below for the typed-reject property (the whole
+/// `0x6380..0x63CF` span typed-rejects at v1-beta); the per-stanza sub-slot
+/// AAD-binding (and its `0x63A0` band base) is pinned by PIN 4.
+const CP_BAND_FS_FUTURE_BASE: u16 = 0x6380; // §4.0 MLS-Application / FS-future super-bracket base
 
 // NOTE (F4-010): `RecoveryArtifact` has NO §4.0 codepoint integer at Core
 // (it is a conceptual reserve-at-Core per §3.4 / §9.2-10; the integer is
@@ -148,8 +155,9 @@ const S40_NAMED_STANDALONE_RESERVES: &[u16] = &[CP_RESERVED_SUBSET_REF];
 
 /// The §4.0-named BAND `(base, end)` ranges this test uses a base of.
 /// `0x6320..0x632F` RemotePermission (holds `ExecuteWorkflow`); the
-/// `0x6380..0x63CF` FS-future bracket (holds the chained-mode reserve —
-/// §4.0 spans MLS-Application `0x6380` through draft-prabel `0x63CF`).
+/// `0x6380..0x63CF` FS-future super-bracket (holds the chained-mode reserve
+/// in its CGKA-Commit sub-bracket `0x63A0..0x63AF` — §4.0 spans
+/// MLS-Application `0x6380` through draft-prabel `0x63CF`).
 const S40_NAMED_BANDS: &[(u16, u16)] = &[
     (
         CP_BAND_REMOTE_PERMISSION_BASE,
@@ -306,9 +314,10 @@ fn f_nqa1_1_new_codepoint_does_not_break_old_decode_baseline() {
 ///
 /// The reserved set uses ONLY §4.0-blessed values (F4-010): the
 /// RemotePermission band base (`0x6320`, holds `ExecuteWorkflow`), the
-/// `SubsetRef` integer (`0x6620`), and the FS-future bracket base
-/// (`0x6380`, holds the chained-mode reserve). `RecoveryArtifact` is
-/// intentionally absent (no §4.0 integer at Core).
+/// `SubsetRef` integer (`0x6620`), and the FS-future super-bracket base
+/// (`0x6380`; the chained-mode reserve dispatches from its CGKA-Commit
+/// sub-bracket `0x63A0`). `RecoveryArtifact` is intentionally absent (no
+/// §4.0 integer at Core).
 ///
 /// This arm ALSO carries the F4-010 self-enforcing guard: it asserts every
 /// reserved codepoint is §4.0-traceable via `cp_blessed_by_s40`, and that
@@ -320,7 +329,7 @@ fn f_nqa1_1_reserved_and_unknown_codepoints_typed_reject_baseline() {
     let reserved = [
         CP_BAND_REMOTE_PERMISSION_BASE, // ExecuteWorkflow reserve (band base)
         CP_RESERVED_SUBSET_REF,         // 0x6620, §4.0-named
-        CP_BAND_FS_FUTURE_BASE,         // RotatingGroupKeyChainedMode reserve (bracket base)
+        CP_BAND_FS_FUTURE_BASE, // FS-future super-bracket base (0x6380; chained-mode reserve dispatches from 0x63A0)
     ];
 
     // F4-010 SELF-ENFORCING GUARD: every codepoint we treat as RESERVED MUST
@@ -400,8 +409,9 @@ fn f_nqa1_1_reserved_and_unknown_codepoints_typed_reject_baseline() {
     assert_eq!(
         stub_decode_v2(&chained, &[CP_LIVE_HPKE_BASE], &reserved),
         Err(StubDecodeError::ReservedAtV1Beta(CP_BAND_FS_FUTURE_BASE)),
-        "RotatingGroupKeyChainedMode reserve (in the §4.0 0x6380..0x63CF \
-         FS-future bracket) MUST typed-reject at v1-beta."
+        "FS-future super-bracket base 0x6380 (the §4.0 0x6380..0x63CF span \
+         whose CGKA-Commit sub-bracket 0x63A0 holds the \
+         RotatingGroupKeyChainedMode reserve) MUST typed-reject at v1-beta."
     );
 
     // A truly unknown codepoint → UnsupportedAlgorithm (typed, no fallback).
@@ -568,18 +578,19 @@ fn f_nqa1_1_chained_state_tlv_aad_bound_sub_slot() {
     // R6-R3 (F-03/F-13) BEHAVIORAL ARM — drive the REAL GAP-6b AAD assembly
     // (`chained_state_tlv_aad_binding`) and byte-assert the exact wire bytes,
     // not just a name-grep. A present sub-slot pushes `0x01 ‖ band_base_be`
-    // (FS-future bracket base `0x6380`, big-endian per M-19); an absent
-    // sub-slot pushes `0x00`. The present/absent prefix byte DIFFERS, which is
-    // precisely what makes a present-vs-absent flip detectable when these
-    // bytes are folded into the AEAD AAD. A revert that stopped binding the
-    // codepoint (e.g. emitted `[0x01]` with no band base, or carried the
+    // (CGKA-Commit FS-future bracket base `0x63A0`, big-endian per M-19); an
+    // absent sub-slot pushes `0x00`. The present/absent prefix byte DIFFERS,
+    // which is precisely what makes a present-vs-absent flip detectable when
+    // these bytes are folded into the AEAD AAD. A revert that stopped binding
+    // the codepoint (e.g. emitted `[0x01]` with no band base, or carried the
     // sub-slot OUTSIDE the AAD) fails these byte-asserts loudly.
     let present = chained_state_tlv_aad_binding(true);
     assert_eq!(
         present,
-        vec![0x01, 0x63, 0x80],
+        vec![0x01, 0x63, 0xa0],
         "GAP-6b: a PRESENT `ChainedStateTlv` sub-slot MUST AAD-bind as \
-         `0x01 ‖ 0x6380_be` (present-flag ‖ FS-future bracket base, BE)."
+         `0x01 ‖ 0x63A0_be` (present-flag ‖ CGKA-Commit FS-future bracket \
+         base, BE)."
     );
     let absent = chained_state_tlv_aad_binding(false);
     assert_eq!(
@@ -594,16 +605,31 @@ fn f_nqa1_1_chained_state_tlv_aad_bound_sub_slot() {
          strips (or injects) the sub-slot flips the AAD and fails AEAD-open \
          — the sub-slot cannot be silently removed."
     );
-    // Provenance: the bound band base MUST be the §4.0 FS-future bracket base
-    // the `ReservedCodepoint::ChainedStateTlv` reserve dispatches from.
-    let band_base_be = ReservedCodepoint::ChainedStateTlv
-        .band_base()
-        .expect("ChainedStateTlv reserve dispatches from a §4.0 band base")
-        .to_be_bytes();
+    // Provenance (de-tautologized): cross-check the AAD-bound band base against
+    // the INDEPENDENT §4.0 registry source-of-truth (`registry::CGKA_COMMIT_BASE
+    // == 0x63A0`), NOT against `ChainedStateTlv::band_base()` itself (which
+    // would be same-source-both-sides). The CGKA-Commit bracket is where the
+    // §4.0 registry assigns `RotatingGroupKeyChainedMode` + `ChainedStateTlv`.
+    assert_eq!(
+        CGKA_COMMIT_BASE, 0x63A0,
+        "registry SSOT: CGKA-Commit FS-future bracket base is 0x63A0 (§4.0)."
+    );
     assert_eq!(
         &present[1..3],
-        &band_base_be,
-        "the AAD-bound band base MUST equal the `ChainedStateTlv` reserve's \
-         own §4.0 `band_base()` (no fabricated integer)."
+        &CGKA_COMMIT_BASE.to_be_bytes(),
+        "the AAD-bound band base MUST equal the §4.0 registry CGKA-Commit \
+         bracket base (`registry::CGKA_COMMIT_BASE`), where the registry \
+         assigns the `ChainedStateTlv` reserve — independent of \
+         `band_base()`, so a future single-side edit drifts and fails here."
+    );
+    // Belt-and-braces: the reserve's own `band_base()` accessor MUST itself
+    // agree with the registry assignment (catches a one-sided accessor edit).
+    assert_eq!(
+        ReservedCodepoint::ChainedStateTlv
+            .band_base()
+            .expect("ChainedStateTlv reserve dispatches from a §4.0 band base"),
+        CGKA_COMMIT_BASE,
+        "`ChainedStateTlv::band_base()` MUST equal the §4.0 registry \
+         CGKA-Commit bracket base (`registry::CGKA_COMMIT_BASE == 0x63A0`)."
     );
 }

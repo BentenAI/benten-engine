@@ -325,6 +325,15 @@ fn fixed_sk(seed: u8) -> [u8; 32] {
 fn fixed_body_cid_digest(seed: u8) -> BodyCidDigest {
     [seed; 32]
 }
+/// The CANONICAL content-CID DIGEST of a body — `BLAKE3(body)`. Per the design
+/// (`body_cid` = "self-describing CIDv1 over the body — binds the CONTENT") an
+/// HONEST sender ALWAYS supplies this; the F-01 content-splice guard recomputes
+/// it from the recovered body and fail-closes on mismatch. Tests that actually
+/// `open_*` MUST seal with the real content CID (an arbitrary digest would now
+/// — correctly — be rejected as a content-splice).
+fn body_cid_of(body: &[u8]) -> BodyCidDigest {
+    *blake3::hash(body).as_bytes()
+}
 fn did(s: &str) -> Vec<u8> {
     s.as_bytes().to_vec()
 }
@@ -365,8 +374,8 @@ fn f_lc_1_hpke_base_single_recipient_round_trips() {
     let sk = fixed_sk(0x01);
     let audience = did("did:key:zRecipientAudience");
     let (sender_kp, sender) = hybrid_sender();
-    let body_cid = fixed_body_cid_digest(0xC1);
     let plaintext = b"layer-c single recipient payload".to_vec();
+    let body_cid = body_cid_of(&plaintext);
 
     let env = seal_sealed_sender(
         &pk, &audience, &sender, &sender_kp, &body_cid, 0, &plaintext,
@@ -475,8 +484,8 @@ fn f_lc_2_multi_stanza_each_recipient_opens_same_plaintext() {
     let sks = [fixed_sk(0x10), fixed_sk(0x11), fixed_sk(0x12)];
     let (sender_kp, sender) = hybrid_sender();
     let roster = group_roster_for_test(&pks);
-    let body_cid = fixed_body_cid_digest(0xD0);
     let plaintext = b"group payload".to_vec();
+    let body_cid = body_cid_of(&plaintext);
 
     let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, &plaintext);
 
@@ -1333,7 +1342,7 @@ fn f_lc_3_recovered_inner_sender_did_equals_bound() {
         &audience,
         &sender,
         &sender_kp,
-        &fixed_body_cid_digest(0xE2),
+        &body_cid_of(b"hi"),
         0,
         b"hi",
     );
@@ -1376,18 +1385,27 @@ fn f_lc_3_second_sealer_spoof_rejected_single() {
     let pk = fixed_pk(0x53);
     let sk = fixed_sk(0x53);
     let audience = did("did:key:zRecipientAudience");
-    let body_cid = fixed_body_cid_digest(0xE3);
 
     // Positive control: A's own send opens + origin-verifies.
     let (a_kp, a_did) = hybrid_sender();
-    let honest = seal_sealed_sender(&pk, &audience, &a_did, &a_kp, &body_cid, 0, b"hi");
+    let honest = seal_sealed_sender(&pk, &audience, &a_did, &a_kp, &body_cid_of(b"hi"), 0, b"hi");
     let (_pt, recovered) =
         open_single(&sk, &audience, 0, &honest).expect("A's honest send MUST open + origin-verify");
     assert_eq!(recovered, a_did, "positive control recovers A");
 
-    // ATTACK: B claims sender_did = A but signs with B's key.
+    // ATTACK: B claims sender_did = A but signs with B's key (B seals an
+    // HONESTLY-CID'd body so the rejection is specifically the WRONG-SIGNER
+    // origin-auth failure, NOT the F-01 content-splice guard).
     let (b_kp, _b_did) = hybrid_sender();
-    let spoof = seal_sealed_sender(&pk, &audience, &a_did, &b_kp, &body_cid, 0, b"forged-as-A");
+    let spoof = seal_sealed_sender(
+        &pk,
+        &audience,
+        &a_did,
+        &b_kp,
+        &body_cid_of(b"forged-as-A"),
+        0,
+        b"forged-as-A",
+    );
     let outcome = open_single(&sk, &audience, 0, &spoof);
     assert_eq!(
         outcome,
@@ -1477,20 +1495,35 @@ fn f_lc_3_second_sealer_spoof_rejected_layer_c_group() {
     let pks = [fixed_pk(0x90), fixed_pk(0x91)];
     let sks = [fixed_sk(0x90), fixed_sk(0x91)];
     let roster = group_roster_for_test(&pks);
-    let body_cid = fixed_body_cid_digest(0xDA);
 
     // Positive control.
     let (a_kp, a_did) = hybrid_sender();
-    let honest = seal_group_multi(&pks, &a_did, &a_kp, &body_cid, 0, b"group hi");
+    let honest = seal_group_multi(
+        &pks,
+        &a_did,
+        &a_kp,
+        &body_cid_of(b"group hi"),
+        0,
+        b"group hi",
+    );
     for (i, sk) in sks.iter().enumerate() {
         let (_pt, rec) = open_group_stanza(sk, i, &roster, 0, &honest)
             .unwrap_or_else(|e| panic!("recipient {i} MUST open A's honest send: {e:?}"));
         assert_eq!(rec, a_did, "positive control recovers A for recipient {i}");
     }
 
-    // ATTACK: B claims sender_did = A but signs with B's key.
+    // ATTACK: B claims sender_did = A but signs with B's key (B HONESTLY-CIDs
+    // its forged body so the rejection is specifically the WRONG-SIGNER
+    // origin-auth failure, NOT the F-01 content-splice guard).
     let (b_kp, _b_did) = hybrid_sender();
-    let spoof = seal_group_multi(&pks, &a_did, &b_kp, &body_cid, 0, b"forged-as-A");
+    let spoof = seal_group_multi(
+        &pks,
+        &a_did,
+        &b_kp,
+        &body_cid_of(b"forged-as-A"),
+        0,
+        b"forged-as-A",
+    );
     for (i, sk) in sks.iter().enumerate() {
         let outcome = open_group_stanza(sk, i, &roster, 0, &spoof);
         assert_eq!(
@@ -1500,6 +1533,135 @@ fn f_lc_3_second_sealer_spoof_rejected_layer_c_group() {
              with B's key MUST be rejected by honest recipient {i}. \
              would-FAIL-on-revert: without origin-auth the spoof opens as \
              A-attributed. Got: {outcome:?}"
+        );
+    }
+}
+
+/// F-LC-3 PIN 5e (B2 SUBSTANTIVE — `0x6610` CONTENT-SPLICE, F-01
+/// SOUNDNESS-CRITICAL) — THE content-splice threat. A co-member B who holds
+/// `K_Set` captures the VICTIM A's HONEST send. M_auth binds the body ONLY
+/// through `body_cid`, so B KEEPS A's real `sender_sig` + the ORIGINAL
+/// (unchanged) `body_cid` and re-seals a DIFFERENT body under the K_Set-derived
+/// CEK (which B holds). Every stanza (sender_did = A) and the wire `body_cid`
+/// are byte-unchanged. An honest recipient MUST REJECT with
+/// `GroupError::SenderOriginAuthFailed` because the recovered body no longer
+/// hashes to the wire `body_cid`.
+///
+/// would-FAIL-on-revert: WITHOUT the F-01 content-splice guard (the recompute +
+/// byte-equality of `self_describing_cid(BLAKE3(body))` against the wire
+/// `body_cid`), `open_membership_set_group` recovers the SUBSTITUTED body,
+/// rebuilds M_auth from the WIRE `body_cid` (= A's original), and verifies A's
+/// REAL sig → the forged body opens A-attributed. This test would then read
+/// `Ok((b"FORGED ...", a_did))` instead of the asserted `Err`.
+#[test]
+fn f_lc_3_content_splice_rejected_membership_group() {
+    use benten_drop::layer_c::group_posture::{
+        GroupError, GroupSealParams, GroupVerifyContext, open_membership_set_group,
+        seal_membership_set_group,
+    };
+
+    let pks = [fixed_pk(0xB0), fixed_pk(0xB1), fixed_pk(0xB2)];
+    let sks = [fixed_sk(0xB0), fixed_sk(0xB1), fixed_sk(0xB2)];
+    let k_set = [0x5Au8; 32];
+    let params = GroupSealParams {
+        membership_set_id: b"set-splice".to_vec(),
+        member_key_generation: 3,
+        membership_set_generation: 9,
+        role_assignments_generation: 1,
+    };
+    let member_dids: Vec<String> = group_roster_for_test(&pks)
+        .iter()
+        .map(|d| String::from_utf8_lossy(d).into_owned())
+        .collect();
+    let ctx = GroupVerifyContext {
+        member_dids,
+        member_key_generation: 3,
+        membership_set_generation: 9,
+        role_assignments_generation: 1,
+    };
+
+    // Positive control: A's honest send opens + verifies for every member, and
+    // recovers A's EXACT body (the F-01 guard does NOT reject honest sends —
+    // the honest body's recomputed cid == its wire body_cid).
+    let (a_kp, a_did) = hybrid_sender();
+    let honest = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, b"honest body");
+    for (i, sk) in sks.iter().enumerate() {
+        let (pt, rec) = open_membership_set_group(sk, i, &ctx, &honest)
+            .unwrap_or_else(|e| panic!("member {i} MUST open A's honest group send: {e:?}"));
+        assert_eq!(rec, a_did, "positive control recovers A for member {i}");
+        assert_eq!(pt, b"honest body", "honest body recovered byte-exact");
+    }
+
+    // ATTACK: member B (holds K_Set) keeps A's REAL sender_sig + the ORIGINAL
+    // body_cid, but re-seals a DIFFERENT body under the K_Set-derived CEK.
+    let spliced =
+        honest.with_spliced_body_for_test(&k_set, &a_did, b"FORGED splice attributed to A");
+    for (i, sk) in sks.iter().enumerate() {
+        let outcome = open_membership_set_group(sk, i, &ctx, &spliced);
+        assert_eq!(
+            outcome,
+            Err(GroupError::SenderOriginAuthFailed),
+            "F-LC-3 (B2 / F-01): a 0x6610 co-member B who holds K_Set + KEEPS \
+             A's real sender_sig + the ORIGINAL body_cid but splices a DIFFERENT \
+             body MUST be rejected by honest recipient {i} (the recovered body no \
+             longer hashes to the wire body_cid). would-FAIL-on-revert: without \
+             the content-splice guard the forged body opens A-attributed. \
+             Got: {outcome:?}"
+        );
+    }
+}
+
+/// F-LC-3 PIN 5f (B2 SUBSTANTIVE — `0x6520` CONTENT-SPLICE, F-01
+/// SOUNDNESS-CRITICAL) — same shape as 5e for the Layer-C group, where the CEK
+/// is derivable from PUBLIC inputs → ANY party can splice. B keeps A's real
+/// `sender_sig` + the ORIGINAL `body_cid` but substitutes a DIFFERENT body;
+/// every honest recipient REJECTS with `LayerCError::SenderOriginAuthFailed`.
+///
+/// would-FAIL-on-revert: WITHOUT the F-01 content-splice guard,
+/// `open_group_stanza` recovers the SUBSTITUTED body, rebuilds M_auth from the
+/// WIRE `body_cid` (= A's original), and verifies A's REAL sig → the forged
+/// body opens A-attributed (this test would read `Ok((b"FORGED ...", a_did))`).
+#[test]
+fn f_lc_3_content_splice_rejected_layer_c_group() {
+    use benten_drop::layer_c::splice_group_multi_body_for_test;
+
+    let pks = [fixed_pk(0xC0), fixed_pk(0xC1)];
+    let sks = [fixed_sk(0xC0), fixed_sk(0xC1)];
+    let roster = group_roster_for_test(&pks);
+    // HONEST sender: body_cid = BLAKE3(body) (the design's content-CID contract).
+    let body_cid = body_cid_of(b"honest body");
+
+    // Positive control: A's honest send recovers A's EXACT body for every
+    // recipient (the F-01 guard does NOT reject the honest send).
+    let (a_kp, a_did) = hybrid_sender();
+    let honest = seal_group_multi(&pks, &a_did, &a_kp, &body_cid, 0, b"honest body");
+    for (i, sk) in sks.iter().enumerate() {
+        let (pt, rec) = open_group_stanza(sk, i, &roster, 0, &honest)
+            .unwrap_or_else(|e| panic!("recipient {i} MUST open A's honest send: {e:?}"));
+        assert_eq!(rec, a_did, "positive control recovers A for recipient {i}");
+        assert_eq!(pt, b"honest body", "honest body recovered byte-exact");
+    }
+
+    // ATTACK: keep A's REAL sender_sig + the ORIGINAL body_cid, splice a
+    // DIFFERENT body under the public-input-derived CEK.
+    let spliced = splice_group_multi_body_for_test(
+        &honest,
+        &a_did,
+        &body_cid,
+        0,
+        b"FORGED splice attributed to A",
+    );
+    for (i, sk) in sks.iter().enumerate() {
+        let outcome = open_group_stanza(sk, i, &roster, 0, &spliced);
+        assert_eq!(
+            outcome,
+            Err(LayerCError::SenderOriginAuthFailed),
+            "F-LC-3 (B2 / F-01): a 0x6520 second-sealer who KEEPS A's real \
+             sender_sig + the ORIGINAL body_cid but splices a DIFFERENT body \
+             MUST be rejected by honest recipient {i} (the recovered body no \
+             longer hashes to the wire body_cid). would-FAIL-on-revert: without \
+             the content-splice guard the forged body opens A-attributed. \
+             Got: {outcome:?}"
         );
     }
 }
@@ -1526,7 +1688,7 @@ fn f_lc_3_retarget_to_new_audience_rejected() {
     let pks = [fixed_pk(0xA0), fixed_pk(0xA1)];
     let sks = [fixed_sk(0xA0), fixed_sk(0xA1)];
     let roster_s1 = group_roster_for_test(&pks); // what A signed over (S1)
-    let body_cid = fixed_body_cid_digest(0xDB);
+    let body_cid = body_cid_of(b"to S1 only");
 
     let (a_kp, a_did) = hybrid_sender();
     let env = seal_group_multi(&pks, &a_did, &a_kp, &body_cid, 0, b"to S1 only");

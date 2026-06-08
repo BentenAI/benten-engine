@@ -217,6 +217,7 @@ impl core::marker::Unpin for benten_crypto_suite::cipher_suite::WrappedKey
 impl core::marker::UnsafeUnpin for benten_crypto_suite::cipher_suite::WrappedKey
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::cipher_suite::WrappedKey
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::cipher_suite::WrappedKey
+pub const benten_crypto_suite::cipher_suite::RECIPIENT_SEED_LABEL: &[u8]
 pub const benten_crypto_suite::cipher_suite::X_WING_LABEL: [u8; 6]
 pub fn benten_crypto_suite::cipher_suite::classical_combine(&[u8], &[u8], &[u8]) -> [u8; 32]
 pub fn benten_crypto_suite::cipher_suite::combine_x_wing(&[u8], &[u8], &[u8], &[u8]) -> [u8; 32]
@@ -433,6 +434,7 @@ pub mod benten_crypto_suite::domain_registry
 pub const benten_crypto_suite::domain_registry::AEAD_CHUNK_CONTEXT: &[u8]
 pub const benten_crypto_suite::domain_registry::AEAD_RECIPE_CONTEXT: &[u8]
 pub const benten_crypto_suite::domain_registry::AEAD_WHOLE_CONTEXT: &[u8]
+pub const benten_crypto_suite::domain_registry::DAK_HKDF_INFO_TAG: &[u8]
 pub const benten_crypto_suite::domain_registry::ENVELOPE_SIG_DOMAIN: &[u8]
 pub const benten_crypto_suite::domain_registry::EXEC_WORKFLOW_AAD_DOMAIN: &[u8]
 pub const benten_crypto_suite::domain_registry::GRANT_DOMAIN: &[u8]
@@ -443,9 +445,11 @@ pub const benten_crypto_suite::domain_registry::LAYER_C_CEK_CONTEXT: &[u8]
 pub const benten_crypto_suite::domain_registry::LAYER_C_GROUP_CEK_CONTEXT: &[u8]
 pub const benten_crypto_suite::domain_registry::MEMBERSHIP_GROUP_CEK_CONTEXT: &[u8]
 pub const benten_crypto_suite::domain_registry::PROVISIONING_DOMAIN: &[u8]
+pub const benten_crypto_suite::domain_registry::RECIPIENT_SEED_LABEL: &[u8]
 pub const benten_crypto_suite::domain_registry::REQUEST_DOMAIN: &[u8]
 pub const benten_crypto_suite::domain_registry::SENDER_AUTH_DOMAIN: &[u8]
 pub const benten_crypto_suite::domain_registry::SETID_COMMITMENT_LABEL: &[u8]
+pub const benten_crypto_suite::domain_registry::VAULT_AAD_DOMAIN: &[u8]
 pub fn benten_crypto_suite::domain_registry::detects_prefix_collision(&[&[u8]]) -> bool
 pub fn benten_crypto_suite::domain_registry::registered_domain_tags() -> alloc::vec::Vec<&'static [u8]>
 pub mod benten_crypto_suite::envelope
@@ -1231,6 +1235,18 @@ impl core::marker::Unpin for benten_crypto_suite::vault::Argon2idParams
 impl core::marker::UnsafeUnpin for benten_crypto_suite::vault::Argon2idParams
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::vault::Argon2idParams
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::Argon2idParams
+pub struct benten_crypto_suite::vault::Dak(_)
+impl benten_crypto_suite::vault::Dak
+pub fn benten_crypto_suite::vault::Dak::expose(&self) -> &[u8; 32]
+impl core::fmt::Debug for benten_crypto_suite::vault::Dak
+pub fn benten_crypto_suite::vault::Dak::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for benten_crypto_suite::vault::Dak
+impl core::marker::Send for benten_crypto_suite::vault::Dak
+impl core::marker::Sync for benten_crypto_suite::vault::Dak
+impl core::marker::Unpin for benten_crypto_suite::vault::Dak
+impl core::marker::UnsafeUnpin for benten_crypto_suite::vault::Dak
+impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::vault::Dak
+impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::Dak
 pub struct benten_crypto_suite::vault::DecodedVault
 pub benten_crypto_suite::vault::DecodedVault::codepoint: u16
 pub benten_crypto_suite::vault::DecodedVault::nonce: alloc::vec::Vec<u8>
@@ -1305,11 +1321,12 @@ impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::VaultP
 pub const benten_crypto_suite::vault::DAK_HKDF_INFO_TAG: &[u8]
 pub const benten_crypto_suite::vault::OWASP_DEFAULT: benten_crypto_suite::vault::Argon2idParams
 pub const benten_crypto_suite::vault::SYMMETRIC_AEAD_12B_CODEPOINT: u16
+pub const benten_crypto_suite::vault::VAULT_AAD_DOMAIN: &[u8]
 pub const benten_crypto_suite::vault::VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT: u16
 pub const benten_crypto_suite::vault::VAULT_XNONCE_LEN: usize
 pub fn benten_crypto_suite::vault::decode_vault(&[u8], &[u8; 32]) -> core::result::Result<benten_crypto_suite::vault::DecodedVault, benten_crypto_suite::vault::VaultError>
 pub fn benten_crypto_suite::vault::decode_vault_strict(u16, usize) -> core::result::Result<(), benten_crypto_suite::vault::VaultError>
-pub fn benten_crypto_suite::vault::derive_dak(&[u8], &[u8; 16], benten_crypto_suite::vault::Argon2idParams, &[u8]) -> [u8; 32]
+pub fn benten_crypto_suite::vault::derive_dak(&[u8], &[u8; 16], benten_crypto_suite::vault::Argon2idParams, &[u8]) -> benten_crypto_suite::vault::Dak
 pub fn benten_crypto_suite::vault::serialize_vault(&benten_crypto_suite::vault::VaultPayload, &[u8; 32]) -> core::result::Result<alloc::vec::Vec<u8>, benten_crypto_suite::vault::VaultError>
 #[non_exhaustive] pub enum benten_crypto_suite::AeadError
 pub benten_crypto_suite::AeadError::AeadAuthFailed
@@ -2104,7 +2121,7 @@ pub const fn benten_crypto_suite::audit_landed_pure_pq_flag() -> bool
 pub fn benten_crypto_suite::canonical_tlv_encode(u16, &benten_crypto_suite::envelope::BindingContext) -> alloc::vec::Vec<u8>
 pub fn benten_crypto_suite::classical_combine(&[u8], &[u8], &[u8]) -> [u8; 32]
 pub fn benten_crypto_suite::combine_x_wing(&[u8], &[u8], &[u8], &[u8]) -> [u8; 32]
-pub fn benten_crypto_suite::derive_dak(&[u8], &[u8; 16], benten_crypto_suite::vault::Argon2idParams, &[u8]) -> [u8; 32]
+pub fn benten_crypto_suite::derive_dak(&[u8], &[u8; 16], benten_crypto_suite::vault::Argon2idParams, &[u8]) -> benten_crypto_suite::vault::Dak
 pub fn benten_crypto_suite::derive_root(&benten_crypto_suite::structural_kdf::StructuralKdfKey, &[u8], u16) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub fn benten_crypto_suite::derive_step(&benten_crypto_suite::structural_kdf::StructuralKdfKey, &[u8], &[u8]) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub const fn benten_crypto_suite::layer_c_and_d_share_one_hpke_primitive() -> bool

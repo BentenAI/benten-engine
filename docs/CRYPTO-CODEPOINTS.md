@@ -73,6 +73,19 @@ The reserved set is enumerated in
 (`chained_state_tlv_aad_binding`) so a present-vs-absent flip is detectable at
 decrypt (not advisory).
 
+> **Band-base reconciliation (R6 R6 F-04).** `ReservedCodepoint::band_base()`
+> for both `RotatingGroupKeyChainedMode` and `ChainedStateTlv` dispatches from
+> the **CGKA-Commit FS-future bracket** (`CGKA_COMMIT_BASE == 0x63A0`; the §4.0
+> row above), NOT the MLS-Application bracket `0x6380`. Earlier code returned
+> `Some(0x6380)`, which disagreed with the §4.0 registry assignment; it is now
+> `Some(0x63A0)`. Consequently the GAP-6b AAD binding a PRESENT `ChainedStateTlv`
+> sub-slot emits is `0x01 ‖ 0x63A0_be` = bytes `01 63 a0` (was `01 63 80`). No
+> LIVE codepoint moved — these are RESERVED, typed-rejected slots, and the
+> AAD-byte change touches only the (not-yet-emitted) reserve binding. The byte
+> is pinned + cross-checked against `registry::CGKA_COMMIT_BASE` in
+> `crates/benten-drop/tests/f_nqa1_1_frozen_surface_additive_extensibility.rs`
+> (PIN 4).
+
 ## did:key hybrid-pubkey multicodec (NQ-C4 / U15) — RESOLVED
 
 The PQ-**hybrid** public keys carried in `did:key` must reference REGISTERED
@@ -274,8 +287,9 @@ Benten has two extension categories (CLAUDE.md baked-in #18 + #19), recognized
 
 At v1-beta the Layer-C `0x647a` X-Wing KEM is implemented as **Benten's own
 KEM-DEM** over vetted upstream primitives (`ml-kem` + `x25519-dalek` + `sha3`
-for the X-Wing SHA3-256 combiner; `chacha20poly1305` for the DEM; `hkdf` for
-the key-schedule) — the **"Benten-supplies-the-KEM"** branch. The
+for the X-Wing SHA3-256 combiner, which directly derives the wrap key — there is
+no separate HKDF key-schedule on this path; `chacha20poly1305` for the DEM) —
+the **"Benten-supplies-the-KEM"** branch. The
 `rozbb/rust-hpke` crate's KEM roster is effectively closed to the
 RFC-9180-registered KEMs (a custom X-Wing KEM is not a first-class extension
 point there), so X25519MLKEM768 does **not** plug into that crate's KEM trait

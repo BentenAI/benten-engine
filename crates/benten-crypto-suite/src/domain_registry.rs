@@ -37,6 +37,10 @@
 //!   [`AEAD_CHUNK_CONTEXT`], [`AEAD_RECIPE_CONTEXT`].
 //! - **MembershipSet KDF contexts** — [`KV_DERIVE_CONTEXT`] (`K(V)`),
 //!   [`KN_DERIVE_CONTEXT`] (`K(N)`).
+//! - **Vault at-rest contexts** — [`VAULT_AAD_DOMAIN`] (the Layer-A vault
+//!   AEAD AAD label), [`DAK_HKDF_INFO_TAG`] (the DAK HKDF info-tag).
+//! - **Deterministic recipient-seed expansion** — [`RECIPIENT_SEED_LABEL`]
+//!   (the Layer-C deterministic-keypair BLAKE3 expansion label).
 //!
 //! The §3.9 gossip-topic derivation is deliberately NOT a registered tag: it is
 //! a `blake3::keyed_hash(K_Set, membership_set_id || BE(generation))` with NO
@@ -162,6 +166,32 @@ pub const KV_DERIVE_CONTEXT: &[u8] = b"benten-membership-set:K(V):v1";
 /// per-Node content-key KDF context). Home: `benten-membership-set`.
 pub const KN_DERIVE_CONTEXT: &[u8] = b"benten-membership-set:K(N):v1";
 
+// ---------------------------------------------------------------------------
+// Vault at-rest (Layer-A) domain tags. Home: `crate::vault`. The intra-crate
+// `vault::tests::vault_domain_tags_match_central_registry` drift-asserts
+// equality against these mirrors.
+// ---------------------------------------------------------------------------
+
+/// Mirror of `crate::vault::VAULT_AAD_DOMAIN` (the Layer-A vault AEAD AAD
+/// domain-separation label, prefixed ahead of the vault codepoint). Home:
+/// `crate::vault`.
+pub const VAULT_AAD_DOMAIN: &[u8] = b"benten-vault:";
+
+/// Mirror of `crate::vault::DAK_HKDF_INFO_TAG` (the Device-Auth-Key HKDF
+/// info-tag, R0.5 §3.1). Home: `crate::vault`.
+pub const DAK_HKDF_INFO_TAG: &[u8] = b"benten-dak-v1";
+
+// ---------------------------------------------------------------------------
+// Deterministic recipient-seed expansion label. Home: `crate::cipher_suite`.
+// The intra-crate `cipher_suite::tests::cipher_suite_domain_tags_match_central_registry`
+// drift-asserts equality against this mirror.
+// ---------------------------------------------------------------------------
+
+/// Mirror of `crate::cipher_suite::RECIPIENT_SEED_LABEL` (the Layer-C
+/// deterministic recipient-keypair BLAKE3 expansion domain-separation label).
+/// Home: `crate::cipher_suite`.
+pub const RECIPIENT_SEED_LABEL: &[u8] = b"benten-crypto-suite:recipient-seed";
+
 /// The complete corpus of domain-separation tags (the single enumerable table).
 ///
 /// The cross-surface prefix-free / no-collision invariant
@@ -192,6 +222,11 @@ pub fn registered_domain_tags() -> Vec<&'static [u8]> {
         // MembershipSet BLAKE3-KDF contexts:
         KV_DERIVE_CONTEXT,
         KN_DERIVE_CONTEXT,
+        // Vault at-rest (Layer-A) domain tags:
+        VAULT_AAD_DOMAIN,
+        DAK_HKDF_INFO_TAG,
+        // Deterministic recipient-seed expansion label:
+        RECIPIENT_SEED_LABEL,
     ]
 }
 
@@ -264,7 +299,7 @@ mod tests {
         assert!(registered_domain_tags().contains(&PROVISIONING_DOMAIN));
     }
 
-    /// The widened corpus enumerates EXACTLY the 16 cross-surface tags the
+    /// The widened corpus enumerates EXACTLY the 19 cross-surface tags the
     /// SECURITY-PROOFS §4.1 / THREAT-MODEL §5 scope names. Locking the count
     /// makes the prefix-free invariant forward-fire on ANY tag change: adding a
     /// tag without updating this count fails the build (forcing a deliberate
@@ -276,7 +311,7 @@ mod tests {
         let tags = registered_domain_tags();
         assert_eq!(
             tags.len(),
-            16,
+            19,
             "registered_domain_tags() count changed — re-confirm the new/removed tag is \
              prefix-free and update SECURITY-PROOFS §4.1 / THREAT-MODEL §5 scope"
         );
@@ -303,6 +338,11 @@ mod tests {
             // MembershipSet KDF contexts:
             KV_DERIVE_CONTEXT,
             KN_DERIVE_CONTEXT,
+            // Vault at-rest (Layer-A) domain tags:
+            VAULT_AAD_DOMAIN,
+            DAK_HKDF_INFO_TAG,
+            // Deterministic recipient-seed expansion label:
+            RECIPIENT_SEED_LABEL,
         ] {
             assert!(
                 tags.contains(&expected),

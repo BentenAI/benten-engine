@@ -97,6 +97,15 @@ pub const X_WING_LABEL: [u8; 6] = [0x5c, 0x2e, 0x2f, 0x2f, 0x5e, 0x5c];
 /// NOT an integer wire/AAD field (m-1: not flagged by the BE scanner).
 const X25519_CLASSICAL_INFO_V1: &[u8] = b"x25519-classical-v1-benten-0x6400";
 
+/// Deterministic-recipient-seed BLAKE3 expansion domain-separation label —
+/// prefixed into the keyed-hash that expands a recipient `seed` into the three
+/// 32-byte key-derivation blocks (X25519 + ML-KEM `d`/`z`). A registered
+/// cross-surface domain-separation tag mirrored in
+/// [`crate::domain_registry::RECIPIENT_SEED_LABEL`]; the intra-crate
+/// `cipher_suite_domain_tags_match_central_registry` test pins byte-equality.
+/// Canonical home is HERE.
+pub const RECIPIENT_SEED_LABEL: &[u8] = b"benten-crypto-suite:recipient-seed";
+
 /// G-CORE-3-hook cipher-suite dispatcher. **G-CORE-3a flips `0x647a` +
 /// `0x6400` to LIVE.** Other codepoints typed-reject; G-CORE-3c (full
 /// swap matrix) lights the rest.
@@ -199,7 +208,7 @@ impl CipherSuite {
         // blocks the two key halves need.
         let block = |tag: u8| -> [u8; 32] {
             let mut h = blake3::Hasher::new();
-            h.update(b"benten-crypto-suite:recipient-seed");
+            h.update(RECIPIENT_SEED_LABEL);
             h.update(&[tag]);
             h.update(seed);
             *h.finalize().as_bytes()
@@ -725,6 +734,21 @@ impl DecryptedPlaintext {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Drift defense: the deterministic-recipient-seed expansion label is a
+    /// registered cross-surface domain-separation tag in the central
+    /// [`crate::domain_registry`] table over which the prefix-free invariant
+    /// runs. Pin byte-equality so the mirror can never silently diverge from
+    /// the home definition here.
+    #[test]
+    fn cipher_suite_domain_tags_match_central_registry() {
+        use crate::domain_registry as reg;
+        assert_eq!(
+            RECIPIENT_SEED_LABEL,
+            reg::RECIPIENT_SEED_LABEL,
+            "RECIPIENT_SEED_LABEL drifted from the central domain_registry mirror"
+        );
+    }
 
     #[test]
     fn hybrid_wrap_unwrap_round_trips() {

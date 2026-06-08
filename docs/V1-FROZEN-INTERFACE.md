@@ -1047,7 +1047,7 @@ verification at HEAD):
 | `benten-graph` | per `benten_graph::GraphError::TxAborted` Fwd-2 #997/#1207 explicit no-apply | NO (explicit reason) | DO NOT APPLY |
 | `benten-crypto-suite` | `UnsupportedAlgorithm` | TBD | APPLY |
 | `benten-crypto-suite` | `SwapMatrixError` | TBD | APPLY |
-| `benten-drop` | `DropBundleVersion`, `DropContentMode`, `DropBundleError`, `EnvelopeSigError` | TBD | APPLY each |
+| `benten-drop` | `DropBundleVersion`, `DropContentMode`, `DropBundleError`, `EnvelopeSigError` (+ the Layer-C `LayerCError` / `AdmitError` / `GroupError` consumer enums) | YES — `#[non_exhaustive]` applied to `DropBundleVersion`, `DropBundleError`, `EnvelopeSigError`, `LayerCError`, `AdmitError`, `GroupError`; `DropContentMode` is the intentional exhaustive-by-design carve-out (item 15(c) + `tf3f_drop_content_mode_no_inline_tiny_arm`). Audit arm-coverage at `crates/benten-drop/tests/g_core_9_non_exhaustive_audit_drop.rs` (6/6 covered enums PASS) | APPLY each (KEEP) |
 | `benten-renderer-tauri` | `IpcMethod` (per-method allowlist) | TBD | APPLY |
 | `benten-dsl-compiler` | `CompileError`, `CompiledSubgraph`, `CompiledPrimitive`, `Diagnostic`, `Span` | YES (5/5 applied per L9-DSL-MAJOR-2 closure at G-CORE-9 R2; audit test at `crates/benten-dsl-compiler/tests/g_core_9_non_exhaustive_audit_dsl.rs` 2/2 PASS) | KEEP |
 | `benten-errors` | `ErrorCode` | YES (per Phase-4-Foundation freeze) | KEEP |
