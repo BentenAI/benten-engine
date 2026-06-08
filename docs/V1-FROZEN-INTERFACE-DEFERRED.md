@@ -1657,6 +1657,71 @@ Row D-15's audit-readiness concern.
 
 ---
 
+## R6-R5 (post-F-full phase-close, round 5) NAMED-CARRY rows
+
+> The rows below land at the R6-R5 phase-close convergence (doc shard B —
+> Inv-21 honest-disclosure + Composing deferral + doc-tense + named-carry). Each
+> is a HARD-RULE clause-(b) deferral OR an OBS/disclosure observation whose ENTRY
+> lands NOW with a NAMED destination; the substantive change (or the decision
+> that none is needed) ships in the named downstream wave / is dispositioned by a
+> downstream reviewer. They are NOT freeze-blocking at v1-beta. All cites verified
+> live at HEAD `6d340944` at author-time. The bare `F-NN` labels are the R6-R5
+> council finding IDs.
+
+### Row D-52 — F-03: Inv-21 fork-tie-break production-merge wiring → Phase-4-Meta-Composing
+
+- **Frozen surface (v1-beta):** the fork-tie-break COMPARATOR
+  `crates/benten-membership-set/src/set.rs::crdt::{fork_total_order_key, fork_a_wins}`
+  (`set.rs:194-216`) is AS-BUILT at HEAD and property-pinned (totality /
+  antisymmetry / transitivity + smaller-`created_at_hlc`-wins asymmetry +
+  archival-half) by the `F-INV21-*` proptest family at
+  `crates/benten-membership-set/tests/f_inv21_fork_tie_break_totality_version_node_cid.rs`.
+  The comparator + its proptest are FROZEN at Core.
+- **Deferred consumption (Phase-4-Meta-Composing destination):** wire the
+  comparator into the LIVE distributed merge path. At HEAD the comparator has
+  **zero production callers** (verified by §3.5n grep 2026-06-07: the only
+  non-test references are the `set.rs` definitions + their rustdoc); the live
+  merge is benten-sync LWW (`crates/benten-sync/src/crdt.rs:535`,
+  LARGER-HLC-wins), and the test-local `resolve_fork` in
+  `f_inv21_fork_tie_break_totality_version_node_cid.rs` is the
+  PRODUCTION-stand-in. The concurrent same-anchor set-creation fork scenario is
+  exercised by the Composing distributed-sync path; that is where the comparator
+  becomes load-bearing on the live merge.
+- **v1-beta posture:** the SMALLER-`created_at_hlc`-wins set-identity-fork rule
+  (Inv-21) is comparator-AS-BUILT + proptest-pinned but is NOT consumed by the
+  live merge path in the shipped binary — `INVARIANT-COVERAGE.md` discloses this
+  as the register-then-enforce carve-out (the same honest disclosure Inv-15
+  uses). No live exploit at v1-beta: distributed concurrent same-anchor
+  set-creation forks are a Composing-path scenario, not a Core single-node
+  scenario; the LWW property merge over member properties (the live rule) is
+  correct for its object class (`F-CRDT-3` pins the two-rule co-existence).
+- **Anchor:** M-7 / M-8; Inv-21 row + the "register-then-enforce" carve-out in
+  `docs/INVARIANT-COVERAGE.md`; F-03 R6-R5 council finding.
+
+### Row D-53 — F-07..F-39: R6-R5 MINOR/OBS doc-tense / cite-currency / missing-pin / cosmetic cluster
+
+- **Observation (NAMED, not fixed this round):** the R6-R5 phase-close council
+  surfaced a residual cluster of MINOR/OBS findings (finding IDs **F-07 through
+  F-39**) — doc-tense (forward-looking R5/R3-future prose where the phase is
+  past), cite-currency (snapshot-SHA / line-anchor freshness below the fix-now
+  threshold), missing-pin (a regression-guard pin named but not yet landed), and
+  cosmetic (comment/disclosure wording) observations. **All are byte-correct at
+  HEAD `6d340944`** — none is a freeze-gating defect; the wire/golden/codepoint
+  bytes are correct, the findings are doc/comment/cite hygiene only. The MAJOR +
+  named findings (F-01 domain-registry-prose verify, F-03 Inv-21 down-classify,
+  F-04 Inv-16 typed-layer hygiene, F-05 ExecuteWorkflow result-seal doc-tense)
+  were resolved in this shard; this row carries the sub-threshold remainder.
+- **Destination:** the next phase-close convergence round / the freeze-record
+  reconcile sweep that precedes the Ben-gated tag. Each `F-NN` ID is
+  dispositioned when picked up (fixed-then-struck OR re-confirmed
+  no-change-needed). Recorded here so none is silently dropped between rounds
+  (pim-N-prior-phase-explicit-preflight + §3.6i no-defer discipline). Where a
+  specific F-NN proves to be a code-adjacent item (e.g. a Rust test-file header
+  or a missing test pin), it migrates to the sibling CODE shard / a Rust test
+  target at pickup rather than being closed in this doc shard.
+
+---
+
 ## Update discipline
 
 This document updates via PR:

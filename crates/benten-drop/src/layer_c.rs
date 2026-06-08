@@ -105,6 +105,21 @@ pub const SENDER_AUTH_DOMAIN: &[u8] = b"benten/layer-c/sealed-sender-origin-auth
 /// wire-break (CLAUDE.md baked-in #5).
 pub const SENDER_AUTH_SIG_CODEPOINT: u16 = 0x0001;
 
+/// Layer-C single-recipient CEK BLAKE3 derivation context (the `0x6500` /
+/// `0x6510` per-send content-encryption-key domain prefix). A registered
+/// cross-surface domain-separation tag: mirrored in the central
+/// [`benten_crypto_suite::domain_registry::LAYER_C_CEK_CONTEXT`] corpus table
+/// over which the prefix-free / no-collision invariant runs (the
+/// `domain_registry_mirror` test pins byte-equality). Canonical home is HERE.
+pub const LAYER_C_CEK_CONTEXT: &[u8] = b"benten-drop:layer-c:cek";
+
+/// Layer-C `0x6520` group bulk-CEK BLAKE3 derivation context (the shared
+/// per-send content-encryption-key domain prefix for the `HpkeMultiBase`
+/// group send). A registered cross-surface domain-separation tag mirrored in
+/// [`benten_crypto_suite::domain_registry::LAYER_C_GROUP_CEK_CONTEXT`].
+/// Canonical home is HERE.
+pub const LAYER_C_GROUP_CEK_CONTEXT: &[u8] = b"benten-drop:layer-c:group-cek";
+
 /// The fields bound by the per-message `M_auth` ORIGIN-AUTH binding.
 ///
 /// The sender signs `M_auth` ONCE per message (design §1.1, R0.2). The
@@ -652,7 +667,7 @@ fn seal_inner(
     // recipient pubkey + sender + AAD so it is deterministic per (recipient,
     // send) while still HPKE-wrapped (the relay never sees it).
     let mut cek_h = blake3::Hasher::new();
-    cek_h.update(b"benten-drop:layer-c:cek");
+    cek_h.update(LAYER_C_CEK_CONTEXT);
     cek_h.update(recipient_pk);
     cek_h.update(sender_did);
     cek_h.update(aad);
@@ -1006,7 +1021,7 @@ fn seal_group_impl(
     // One shared CEK seals the bulk body ONCE; each recipient gets a wrapped
     // copy (the Q4 share-to-N efficiency property).
     let mut cek_h = blake3::Hasher::new();
-    cek_h.update(b"benten-drop:layer-c:group-cek");
+    cek_h.update(LAYER_C_GROUP_CEK_CONTEXT);
     cek_h.update(body_cid);
     cek_h.update(sender_did);
     cek_h.update(&recipient_key_generation.to_be_bytes());
@@ -1590,6 +1605,14 @@ pub mod group_posture {
     /// the frozen public surface; the byte-equality cross-check is the contract.
     const SETID_COMMITMENT_LABEL: &[u8] = b"benten:setid:v1";
 
+    /// The `0x6610` MembershipSet group bulk-CEK BLAKE3 derivation context (the
+    /// `K_Set`-derived per-send content-encryption-key domain prefix). A
+    /// registered cross-surface domain-separation tag mirrored in the central
+    /// [`benten_crypto_suite::domain_registry::MEMBERSHIP_GROUP_CEK_CONTEXT`]
+    /// corpus table over which the prefix-free invariant runs (the
+    /// `domain_registry_mirror` test pins byte-equality). Canonical home is HERE.
+    pub const MEMBERSHIP_GROUP_CEK_CONTEXT: &[u8] = b"benten-drop:membership-group-cek";
+
     /// A sender DID, as raw bytes.
     pub type SenderDid = Vec<u8>;
     /// A recipient pubkey fingerprint.
@@ -1955,7 +1978,7 @@ pub mod group_posture {
         // set key itself never goes on the wire).
         let cek = {
             let mut h = blake3::Hasher::new();
-            h.update(b"benten-drop:membership-group-cek");
+            h.update(MEMBERSHIP_GROUP_CEK_CONTEXT);
             h.update(k_set);
             h.update(sender_did);
             *h.finalize().as_bytes()
@@ -2388,6 +2411,30 @@ mod domain_registry_mirror {
             super::SENDER_AUTH_DOMAIN,
             benten_crypto_suite::domain_registry::SENDER_AUTH_DOMAIN,
             "SENDER_AUTH_DOMAIN drifted from the central domain_registry mirror"
+        );
+    }
+
+    /// Drift defense for the Layer-C single/group CEK derivation contexts — each
+    /// is a registered cross-surface domain-separation tag in the central
+    /// [`benten_crypto_suite::domain_registry`] table over which the prefix-free
+    /// invariant runs. Pin byte-equality so a mirror can never silently diverge.
+    #[test]
+    fn layer_c_cek_contexts_match_central_registry() {
+        use benten_crypto_suite::domain_registry as reg;
+        assert_eq!(
+            super::LAYER_C_CEK_CONTEXT,
+            reg::LAYER_C_CEK_CONTEXT,
+            "LAYER_C_CEK_CONTEXT drifted from the central domain_registry mirror"
+        );
+        assert_eq!(
+            super::LAYER_C_GROUP_CEK_CONTEXT,
+            reg::LAYER_C_GROUP_CEK_CONTEXT,
+            "LAYER_C_GROUP_CEK_CONTEXT drifted from the central domain_registry mirror"
+        );
+        assert_eq!(
+            super::group_posture::MEMBERSHIP_GROUP_CEK_CONTEXT,
+            reg::MEMBERSHIP_GROUP_CEK_CONTEXT,
+            "MEMBERSHIP_GROUP_CEK_CONTEXT drifted from the central domain_registry mirror"
         );
     }
 }

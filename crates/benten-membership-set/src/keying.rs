@@ -96,3 +96,33 @@ pub fn gossip_topic(k_set: &[u8; 32], membership_set_id: &[u8], generation: u32)
     msg.extend_from_slice(&generation.to_be_bytes());
     blake3::keyed_hash(k_set, &msg).into()
 }
+
+#[cfg(test)]
+mod domain_registry_mirror {
+    /// Drift defense: the `K(V)` / `K(N)` BLAKE3-KDF context labels are
+    /// registered cross-surface domain-separation tags in the central
+    /// [`benten_crypto_suite::domain_registry`] corpus table over which the
+    /// prefix-free invariant runs. Pin byte-equality (the registry stores the
+    /// label bytes) so a mirror can never silently diverge from the home
+    /// definitions here.
+    ///
+    /// The §3.9 gossip-topic derivation ([`super::gossip_topic`]) is NOT a
+    /// registered tag: it is a `blake3::keyed_hash(K_Set, set_id || BE(gen))`
+    /// with NO domain-separation label (R0.7 §3.9 authoritative, golden
+    /// byte-confirmed), so there is no tag to mirror — its preimage shape is
+    /// the separator, not a label string.
+    #[test]
+    fn kv_kn_contexts_match_central_registry() {
+        use benten_crypto_suite::domain_registry as reg;
+        assert_eq!(
+            super::KV_DERIVE_CONTEXT.as_bytes(),
+            reg::KV_DERIVE_CONTEXT,
+            "KV_DERIVE_CONTEXT drifted from the central domain_registry mirror"
+        );
+        assert_eq!(
+            super::KN_DERIVE_CONTEXT.as_bytes(),
+            reg::KN_DERIVE_CONTEXT,
+            "KN_DERIVE_CONTEXT drifted from the central domain_registry mirror"
+        );
+    }
+}

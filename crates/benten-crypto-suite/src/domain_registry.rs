@@ -1,14 +1,14 @@
 //! The central domain-separation-tag registry — the single source-of-truth
-//! table enumerating EVERY signing / AAD domain-separation tag minted across
-//! the Benten corpus, plus the **prefix-free / no-collision** cross-surface
-//! invariant (C-01 / C-02).
+//! table enumerating EVERY cross-surface domain/context tag (signing, KDF, and
+//! AEAD-AAD) minted across the Benten corpus, plus the **prefix-free /
+//! no-collision** cross-surface invariant (C-01 / C-02).
 //!
 //! # Why a central table
 //!
-//! Six Benten surfaces sign with the SAME user-DID Ed25519 key (or bind the
-//! SAME key material into an AEAD AAD). Each prefixes a per-surface
-//! domain-separation tag into the signed/bound bytes so a signature produced on
-//! one surface can NEVER be reinterpreted as a signature on another
+//! Many Benten surfaces derive keys, sign binding messages, or AAD-commit over
+//! the SAME key material. Each prefixes a per-surface domain/context tag into
+//! the derived/signed/bound bytes so bytes produced on one surface can NEVER be
+//! reinterpreted (re-keyed / re-parsed) as another surface's input
 //! (cross-context resistance). The safety property is corpus-wide: **no tag may
 //! be a byte-prefix of another tag** (prefix-freedom strictly implies
 //! distinctness). A lone surface that forgets its prefix — the C-01 origin,
@@ -19,21 +19,46 @@
 //! (`all_domain_tags_are_prefix_free`) that fails the build if any future tag
 //! collides.
 //!
-//! # The single source of truth vs. the frozen mirrors
+//! # The corpus-wide registered scope (the widened set)
+//!
+//! `SECURITY-PROOFS.md` §4.1 + `THREAT-MODEL.md` §5 commit this registry to
+//! span EVERY cross-surface domain/context tag, not just the same-key signature
+//! family. The registered surfaces, by family:
+//!
+//! - **Same-key (user-DID) signature / AAD domains** — [`PROVISIONING_DOMAIN`],
+//!   [`ENVELOPE_SIG_DOMAIN`], [`SENDER_AUTH_DOMAIN`], [`REQUEST_DOMAIN`],
+//!   [`GRANT_DOMAIN`], [`EXEC_WORKFLOW_AAD_DOMAIN`].
+//! - **Set-id commitment + composite-signature label** —
+//!   [`SETID_COMMITMENT_LABEL`], [`LAMPS_LABEL_MLDSA65_ED25519_SHA512`].
+//! - **Layer-C content-encryption-key (CEK) derivation contexts** —
+//!   [`LAYER_C_CEK_CONTEXT`] (`0x6500`/`0x6510`), [`LAYER_C_GROUP_CEK_CONTEXT`]
+//!   (`0x6520`), [`MEMBERSHIP_GROUP_CEK_CONTEXT`] (`0x6610`).
+//! - **Chunked-AEAD AAD info strings** — [`AEAD_WHOLE_CONTEXT`],
+//!   [`AEAD_CHUNK_CONTEXT`], [`AEAD_RECIPE_CONTEXT`].
+//! - **MembershipSet KDF contexts** — [`KV_DERIVE_CONTEXT`] (`K(V)`),
+//!   [`KN_DERIVE_CONTEXT`] (`K(N)`).
+//!
+//! The §3.9 gossip-topic derivation is deliberately NOT a registered tag: it is
+//! a `blake3::keyed_hash(K_Set, membership_set_id || BE(generation))` with NO
+//! domain-separation label (R0.7 §3.9 authoritative, golden byte-confirmed) —
+//! its preimage shape, not a label string, is the separator, so there is no tag
+//! to register.
+//!
+//! # The single source of truth vs. the home-crate mirrors
 //!
 //! [`PROVISIONING_DOMAIN`] is NEW (minted here at C-01) and is defined
 //! canonically in THIS module — `device_link::provisioning_signing_bytes`
 //! references it directly, so there is exactly one definition and zero drift
 //! surface for the new tag.
 //!
-//! The five pre-existing tags are FROZEN public constants that live in their
-//! home crates (`benten-drop`, `benten-engine`, `benten-membership-set`) — all
-//! of which depend on this crate, so this crate cannot import them (the
-//! dependency edge points the wrong way, and the byte values are permanent
-//! anyway). They are mirrored here as the canonical corpus table; each
-//! downstream home crate carries a `domain_registry`-equality drift-defense
-//! assertion in its own test surface (each can see BOTH its local const and
-//! this registry mirror), so the mirror can never silently drift from its home.
+//! Every OTHER registered tag is a FROZEN constant whose canonical home is the
+//! crate that uses it (`benten-drop`, `benten-engine`, `benten-membership-set`,
+//! and `benten-crypto-suite`'s own `aead` / `sig` modules) — all home crates
+//! depend on (or are) this crate, so the byte values are mirrored here as the
+//! canonical corpus collision table. Each home carries a `domain_registry`-
+//! equality drift-defense assertion in its own test surface (it can see BOTH
+//! its local const and this registry mirror), so the mirror can never silently
+//! drift from its home.
 
 /// Provisioning (Layer-D device-link) user-DID-signature domain tag (C-01).
 ///
@@ -87,6 +112,56 @@ pub const SETID_COMMITMENT_LABEL: &[u8] = b"benten:setid:v1";
 /// Home: this crate (`sig.rs`, module-private there).
 pub const LAMPS_LABEL_MLDSA65_ED25519_SHA512: &[u8] = b"COMPSIG-MLDSA65-Ed25519-SHA512";
 
+// ---------------------------------------------------------------------------
+// Layer-C content-encryption-key (CEK) BLAKE3 derivation contexts. Home:
+// `benten-drop` (`layer_c.rs`). Each home const carries a `domain_registry`-
+// equality drift assertion in its own test surface.
+// ---------------------------------------------------------------------------
+
+/// Mirror of `benten_drop::layer_c::LAYER_C_CEK_CONTEXT` (the single-recipient
+/// `0x6500`/`0x6510` per-send CEK derivation context). Home: `benten-drop`.
+pub const LAYER_C_CEK_CONTEXT: &[u8] = b"benten-drop:layer-c:cek";
+
+/// Mirror of `benten_drop::layer_c::LAYER_C_GROUP_CEK_CONTEXT` (the `0x6520`
+/// group bulk-CEK derivation context). Home: `benten-drop`.
+pub const LAYER_C_GROUP_CEK_CONTEXT: &[u8] = b"benten-drop:layer-c:group-cek";
+
+/// Mirror of `benten_drop::layer_c::group_posture::MEMBERSHIP_GROUP_CEK_CONTEXT`
+/// (the `0x6610` MembershipSet group bulk-CEK derivation context). Home:
+/// `benten-drop`.
+pub const MEMBERSHIP_GROUP_CEK_CONTEXT: &[u8] = b"benten-drop:membership-group-cek";
+
+// ---------------------------------------------------------------------------
+// Chunked-AEAD AAD info strings. Home: this crate (`aead.rs`). The intra-crate
+// `aead::tests::aead_contexts_match_central_registry` drift-asserts equality.
+// ---------------------------------------------------------------------------
+
+/// Mirror of `crate::aead::AEAD_WHOLE_CONTEXT` (whole-content AEAD AAD info
+/// string). Home: `crate::aead`.
+pub const AEAD_WHOLE_CONTEXT: &[u8] = b"benten-aead:whole:";
+
+/// Mirror of `crate::aead::AEAD_CHUNK_CONTEXT` (per-chunk AEAD AAD info
+/// string). Home: `crate::aead`.
+pub const AEAD_CHUNK_CONTEXT: &[u8] = b"benten-aead:chunk:";
+
+/// Mirror of `crate::aead::AEAD_RECIPE_CONTEXT` (per-Recipe AEAD AAD info
+/// string). Home: `crate::aead`.
+pub const AEAD_RECIPE_CONTEXT: &[u8] = b"benten-aead:recipe:";
+
+// ---------------------------------------------------------------------------
+// MembershipSet BLAKE3-KDF contexts. Home: `benten-membership-set`
+// (`keying.rs`, as `&str` consts; the registry stores the label bytes). The
+// home `keying::domain_registry_mirror` test drift-asserts equality.
+// ---------------------------------------------------------------------------
+
+/// Mirror of `benten_membership_set::keying::KV_DERIVE_CONTEXT` (the `K(V)`
+/// membership version-node key KDF context). Home: `benten-membership-set`.
+pub const KV_DERIVE_CONTEXT: &[u8] = b"benten-membership-set:K(V):v1";
+
+/// Mirror of `benten_membership_set::keying::KN_DERIVE_CONTEXT` (the `K(N)`
+/// per-Node content-key KDF context). Home: `benten-membership-set`.
+pub const KN_DERIVE_CONTEXT: &[u8] = b"benten-membership-set:K(N):v1";
+
 /// The complete corpus of domain-separation tags (the single enumerable table).
 ///
 /// The cross-surface prefix-free / no-collision invariant
@@ -103,9 +178,20 @@ pub fn registered_domain_tags() -> Vec<&'static [u8]> {
         REQUEST_DOMAIN,
         GRANT_DOMAIN,
         EXEC_WORKFLOW_AAD_DOMAIN,
-        // Related AAD / composite-signature label namespaces:
+        // Set-id commitment + composite-signature label namespaces:
         SETID_COMMITMENT_LABEL,
         LAMPS_LABEL_MLDSA65_ED25519_SHA512,
+        // Layer-C content-encryption-key (CEK) derivation contexts:
+        LAYER_C_CEK_CONTEXT,
+        LAYER_C_GROUP_CEK_CONTEXT,
+        MEMBERSHIP_GROUP_CEK_CONTEXT,
+        // Chunked-AEAD AAD info strings:
+        AEAD_WHOLE_CONTEXT,
+        AEAD_CHUNK_CONTEXT,
+        AEAD_RECIPE_CONTEXT,
+        // MembershipSet BLAKE3-KDF contexts:
+        KV_DERIVE_CONTEXT,
+        KN_DERIVE_CONTEXT,
     ]
 }
 
@@ -176,5 +262,61 @@ mod tests {
     #[test]
     fn provisioning_domain_is_in_the_registry() {
         assert!(registered_domain_tags().contains(&PROVISIONING_DOMAIN));
+    }
+
+    /// The widened corpus enumerates EXACTLY the 16 cross-surface tags the
+    /// SECURITY-PROOFS §4.1 / THREAT-MODEL §5 scope names. Locking the count
+    /// makes the prefix-free invariant forward-fire on ANY tag change: adding a
+    /// tag without updating this count fails the build (forcing a deliberate
+    /// re-confirmation that the new tag clears the prefix-free check), and the
+    /// per-family membership assertion below catches an accidental drop of any
+    /// named surface.
+    #[test]
+    fn registry_spans_the_full_corpus_wide_scope() {
+        let tags = registered_domain_tags();
+        assert_eq!(
+            tags.len(),
+            16,
+            "registered_domain_tags() count changed — re-confirm the new/removed tag is \
+             prefix-free and update SECURITY-PROOFS §4.1 / THREAT-MODEL §5 scope"
+        );
+        // Every named cross-surface surface MUST be present (drop-detection).
+        for expected in [
+            // same-key signature / AAD family:
+            PROVISIONING_DOMAIN,
+            ENVELOPE_SIG_DOMAIN,
+            SENDER_AUTH_DOMAIN,
+            REQUEST_DOMAIN,
+            GRANT_DOMAIN,
+            EXEC_WORKFLOW_AAD_DOMAIN,
+            // set-id commitment + composite-signature label:
+            SETID_COMMITMENT_LABEL,
+            LAMPS_LABEL_MLDSA65_ED25519_SHA512,
+            // Layer-C CEK derivation contexts:
+            LAYER_C_CEK_CONTEXT,
+            LAYER_C_GROUP_CEK_CONTEXT,
+            MEMBERSHIP_GROUP_CEK_CONTEXT,
+            // chunked-AEAD AAD info strings:
+            AEAD_WHOLE_CONTEXT,
+            AEAD_CHUNK_CONTEXT,
+            AEAD_RECIPE_CONTEXT,
+            // MembershipSet KDF contexts:
+            KV_DERIVE_CONTEXT,
+            KN_DERIVE_CONTEXT,
+        ] {
+            assert!(
+                tags.contains(&expected),
+                "a registered cross-surface domain tag is missing from registered_domain_tags()"
+            );
+        }
+    }
+
+    /// Injecting a `"<existing-tag>-suffix"` style mint fires the scanner — the
+    /// concrete SECURITY-PROOFS §4.1 example over a widened-set tag.
+    #[test]
+    fn injection_of_a_suffix_extended_cek_tag_fires_the_scanner() {
+        let mut injected = registered_domain_tags();
+        injected.push(b"benten-drop:layer-c:cek-v2"); // prefixed by LAYER_C_CEK_CONTEXT
+        assert!(detects_prefix_collision(&injected));
     }
 }

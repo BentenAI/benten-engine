@@ -328,6 +328,7 @@ impl core::marker::UnsafeUnpin for benten_drop::layer_c::group_posture::GroupVer
 impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::group_posture::GroupVerifyContext
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::group_posture::GroupVerifyContext
 pub const benten_drop::layer_c::group_posture::LAYER_C_DROP_MULTI_RECIPIENT: u16
+pub const benten_drop::layer_c::group_posture::MEMBERSHIP_GROUP_CEK_CONTEXT: &[u8]
 pub const benten_drop::layer_c::group_posture::MEMBERSHIP_SET_GROUP_MULTI_STANZA: u16
 pub const benten_drop::layer_c::group_posture::SELF_DESCRIBING_CID_LEN: usize
 pub fn benten_drop::layer_c::group_posture::assemble_group_aad_local(&benten_drop::layer_c::group_posture::GroupAadInputs) -> alloc::vec::Vec<u8>
@@ -488,8 +489,10 @@ pub const benten_drop::layer_c::AAD_VERSION: u8
 pub const benten_drop::layer_c::DROP_TO_RECIPIENT_SEALED_SENDER: u16
 pub const benten_drop::layer_c::ENVELOPE_FORMAT_VERSION: u8
 pub const benten_drop::layer_c::HYBRID_X25519_MLKEM768: u16
+pub const benten_drop::layer_c::LAYER_C_CEK_CONTEXT: &[u8]
 pub const benten_drop::layer_c::LAYER_C_DROP: u16
 pub const benten_drop::layer_c::LAYER_C_DROP_MULTI_RECIPIENT: u16
+pub const benten_drop::layer_c::LAYER_C_GROUP_CEK_CONTEXT: &[u8]
 pub const benten_drop::layer_c::SENDER_AUTH_DOMAIN: &[u8]
 pub const benten_drop::layer_c::SENDER_AUTH_SIG_CODEPOINT: u16
 pub fn benten_drop::layer_c::audience_set_commitment(&[benten_drop::layer_c::RecipientDid]) -> [u8; 32]

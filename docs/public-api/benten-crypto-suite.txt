@@ -56,6 +56,9 @@ impl core::marker::Unpin for benten_crypto_suite::aead::AeadKeyMaterial
 impl core::marker::UnsafeUnpin for benten_crypto_suite::aead::AeadKeyMaterial
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::aead::AeadKeyMaterial
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::aead::AeadKeyMaterial
+pub const benten_crypto_suite::aead::AEAD_CHUNK_CONTEXT: &[u8]
+pub const benten_crypto_suite::aead::AEAD_RECIPE_CONTEXT: &[u8]
+pub const benten_crypto_suite::aead::AEAD_WHOLE_CONTEXT: &[u8]
 pub const benten_crypto_suite::aead::ENVELOPE_FORMAT_VERSION_V1: u8
 pub const benten_crypto_suite::aead::ENVELOPE_MAGIC: u8
 pub const benten_crypto_suite::aead::IROH_BLOCK_SIZE: usize
@@ -427,10 +430,18 @@ impl core::marker::UnsafeUnpin for benten_crypto_suite::discharge::Issue835Disch
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::discharge::Issue835Discharge
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::discharge::Issue835Discharge
 pub mod benten_crypto_suite::domain_registry
+pub const benten_crypto_suite::domain_registry::AEAD_CHUNK_CONTEXT: &[u8]
+pub const benten_crypto_suite::domain_registry::AEAD_RECIPE_CONTEXT: &[u8]
+pub const benten_crypto_suite::domain_registry::AEAD_WHOLE_CONTEXT: &[u8]
 pub const benten_crypto_suite::domain_registry::ENVELOPE_SIG_DOMAIN: &[u8]
 pub const benten_crypto_suite::domain_registry::EXEC_WORKFLOW_AAD_DOMAIN: &[u8]
 pub const benten_crypto_suite::domain_registry::GRANT_DOMAIN: &[u8]
+pub const benten_crypto_suite::domain_registry::KN_DERIVE_CONTEXT: &[u8]
+pub const benten_crypto_suite::domain_registry::KV_DERIVE_CONTEXT: &[u8]
 pub const benten_crypto_suite::domain_registry::LAMPS_LABEL_MLDSA65_ED25519_SHA512: &[u8]
+pub const benten_crypto_suite::domain_registry::LAYER_C_CEK_CONTEXT: &[u8]
+pub const benten_crypto_suite::domain_registry::LAYER_C_GROUP_CEK_CONTEXT: &[u8]
+pub const benten_crypto_suite::domain_registry::MEMBERSHIP_GROUP_CEK_CONTEXT: &[u8]
 pub const benten_crypto_suite::domain_registry::PROVISIONING_DOMAIN: &[u8]
 pub const benten_crypto_suite::domain_registry::REQUEST_DOMAIN: &[u8]
 pub const benten_crypto_suite::domain_registry::SENDER_AUTH_DOMAIN: &[u8]
