@@ -208,12 +208,27 @@ impl AeadEnvelope {
     }
 }
 
+/// Whole-content AEAD AAD domain-separation info string. A registered
+/// cross-surface domain-separation tag mirrored in the central
+/// [`crate::domain_registry::AEAD_WHOLE_CONTEXT`] corpus table over which the
+/// prefix-free invariant runs (intra-crate `domain_registry_mirror` test pins
+/// byte-equality). Canonical home is HERE.
+pub const AEAD_WHOLE_CONTEXT: &[u8] = b"benten-aead:whole:";
+
+/// Per-chunk AEAD AAD domain-separation info string (registered tag; mirrored
+/// in [`crate::domain_registry::AEAD_CHUNK_CONTEXT`]). Canonical home is HERE.
+pub const AEAD_CHUNK_CONTEXT: &[u8] = b"benten-aead:chunk:";
+
+/// Per-Recipe AEAD AAD domain-separation info string (registered tag; mirrored
+/// in [`crate::domain_registry::AEAD_RECIPE_CONTEXT`]). Canonical home is HERE.
+pub const AEAD_RECIPE_CONTEXT: &[u8] = b"benten-aead:recipe:";
+
 /// Build the canonical AAD for whole-content AEAD: binds plaintext-CID
 /// (item 15(g) AAD-binds-plaintext-CID contract).
 #[must_use]
 pub fn aad_whole_content(plaintext_cid: &[u8]) -> Vec<u8> {
-    let mut aad = Vec::with_capacity(b"benten-aead:whole:".len() + plaintext_cid.len());
-    aad.extend_from_slice(b"benten-aead:whole:");
+    let mut aad = Vec::with_capacity(AEAD_WHOLE_CONTEXT.len() + plaintext_cid.len());
+    aad.extend_from_slice(AEAD_WHOLE_CONTEXT);
     aad.extend_from_slice(plaintext_cid);
     aad
 }
@@ -243,8 +258,8 @@ pub fn aad_whole_content(plaintext_cid: &[u8]) -> Vec<u8> {
 /// seal + unwrap call site.
 #[must_use]
 pub fn aad_per_chunk(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32) -> Vec<u8> {
-    let mut aad = Vec::with_capacity(b"benten-aead:chunk:".len() + plaintext_cid.len() + 8 + 4);
-    aad.extend_from_slice(b"benten-aead:chunk:");
+    let mut aad = Vec::with_capacity(AEAD_CHUNK_CONTEXT.len() + plaintext_cid.len() + 8 + 4);
+    aad.extend_from_slice(AEAD_CHUNK_CONTEXT);
     aad.extend_from_slice(plaintext_cid);
     // M-19: chunk_index + total_chunks BIG-ENDIAN (migrated from LE at
     // F-full Wave-0). The integer bytes are the discriminating suffix.
@@ -279,8 +294,8 @@ pub fn aad_per_chunk(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32) 
 /// `total_recipes` exceeds `u32::MAX`.
 #[must_use]
 pub fn aad_per_recipe(plaintext_cid: &[u8], recipe_index: u32, total_recipes: u32) -> Vec<u8> {
-    let mut aad = Vec::with_capacity(b"benten-aead:recipe:".len() + plaintext_cid.len() + 4 + 4);
-    aad.extend_from_slice(b"benten-aead:recipe:");
+    let mut aad = Vec::with_capacity(AEAD_RECIPE_CONTEXT.len() + plaintext_cid.len() + 4 + 4);
+    aad.extend_from_slice(AEAD_RECIPE_CONTEXT);
     aad.extend_from_slice(plaintext_cid);
     // M-19: recipe_index + total_recipes BIG-ENDIAN (migrated from LE at
     // F-full Wave-0).
@@ -423,6 +438,31 @@ pub enum AeadError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Drift defense: the three chunked-AEAD info strings are registered
+    /// cross-surface domain-separation tags in the central
+    /// [`crate::domain_registry`] table over which the prefix-free invariant
+    /// runs. Pin byte-equality so a mirror can never silently diverge from the
+    /// home definitions here.
+    #[test]
+    fn aead_contexts_match_central_registry() {
+        use crate::domain_registry as reg;
+        assert_eq!(
+            AEAD_WHOLE_CONTEXT,
+            reg::AEAD_WHOLE_CONTEXT,
+            "AEAD_WHOLE_CONTEXT drifted from the central domain_registry mirror"
+        );
+        assert_eq!(
+            AEAD_CHUNK_CONTEXT,
+            reg::AEAD_CHUNK_CONTEXT,
+            "AEAD_CHUNK_CONTEXT drifted from the central domain_registry mirror"
+        );
+        assert_eq!(
+            AEAD_RECIPE_CONTEXT,
+            reg::AEAD_RECIPE_CONTEXT,
+            "AEAD_RECIPE_CONTEXT drifted from the central domain_registry mirror"
+        );
+    }
 
     #[test]
     fn wrap_unwrap_round_trips_at_hybrid_codepoint() {

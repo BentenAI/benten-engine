@@ -335,8 +335,14 @@ function parseAnnotation(commentBody: string): VariantAnnotation {
 /**
  * Heuristic check: for the given variant, find construction sites of the
  * form `TypeName::Variant(` or `TypeName::Variant {` or `TypeName::Variant,`
- * across all production files. Filter out lines that look like match-arm
- * LHS (followed by `=>`) — those are dispatchers, not constructors.
+ * — INCLUDING a unit variant immediately followed by `)`, the shape of the
+ * combinator-argument idioms `.ok_or(TypeName::Variant)` /
+ * `.map_err(|_| TypeName::Variant)` / `Err(TypeName::Variant)` (the `\b`
+ * word-boundary handles the leading `(` / `| ` / `Err(`). Without `)` in the
+ * follow-set a unit variant constructed ONLY via these combinators reads as
+ * "no production construction" and the §3.5g mirror requirement silently
+ * never fires. Filter out lines that look like match-arm LHS (followed by
+ * `=>`) — those are dispatchers, not constructors.
  *
  * A construction-site is "production-reachable" if its line is NOT inside
  * a `#[cfg(test)]`-gated function. We use a coarse line-window check: walk
@@ -351,7 +357,7 @@ function isVariantConstructedInProduction(
 ): { found: boolean; sites: { file: string; line: number }[] } {
   // Match construction OR match-arm. We distinguish by post-context.
   const ctorRx = new RegExp(
-    `\\b${typeName}::${variant}\\s*(?:\\(|\\{|,|;|\\s|$)`,
+    `\\b${typeName}::${variant}\\s*(?:\\(|\\)|\\{|,|;|\\s|$)`,
     "g",
   );
   const sites: { file: string; line: number }[] = [];
@@ -636,7 +642,13 @@ impl FooError {
 }
 
 pub fn make_ok() -> FooError { FooError::Ok }
-pub fn make_missing() -> FooError { FooError::Missing }
+// Construct ONLY via the combinator-argument shape \`.ok_or(FooError::Missing)\`
+// (unit variant immediately followed by \`)\`). This is the F-06 regression
+// fixture: under the pre-fix follow-set (no \`)\`) this site read as
+// "no production construction" and FooError::Missing wrongly came back
+// \`skipped\`; the \`)\`-extended follow-set correctly detects it as a
+// production construction → \`violation\` (constructed but not mirrored).
+pub fn make_missing(x: Option<()>) -> Result<(), FooError> { x.ok_or(FooError::Missing) }
 pub fn make_opted_out() -> FooError { FooError::OptedOut }
 `,
     },

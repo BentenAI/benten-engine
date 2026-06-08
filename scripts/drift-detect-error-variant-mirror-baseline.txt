@@ -240,3 +240,78 @@ WorkflowEditorError::UnknownPrimitiveKind
 # variants already grandfathered above). Observable as a fail-closed open() Err.
 LayerCError::StanzaCountMismatch
 GroupError::StanzaCountMismatch
+
+# ---------------------------------------------------------------------------
+# F-06 (R6 R5): scanner-soundness fix exposed these PRE-EXISTING gaps.
+# ---------------------------------------------------------------------------
+# These variants were ALWAYS constructed in production via the
+# combinator-argument shapes `.ok_or(Type::Variant)` / `.map_err(|_| Type::Variant)`
+# / `Err(Type::Variant)` (a unit variant immediately followed by `)`), but the
+# scanner's construction-site regex omitted `)` from its follow-set, so they
+# read as "no production construction" and were silently never flagged. The
+# F-06 follow-set fix (adding `\)`) makes the scanner SOUND; these 57 are the
+# same class as the entries grandfathered above — pre-existing pub-error-variant
+# first-class-mirror gaps, NOT new code. Grandfathered onto the SAME
+# NAMED-DEFERRED remediation as the rest of this baseline:
+#   `.addl/phase-4-meta/PRE-FREEZE-BACKLOG.md` row
+#   "DEFERRED: §3.5g item 6 baseline drain (pre-existing pub-error-variant
+#    catalog-mirror gaps)". Adding 57 ErrorCode catalog entries is the same
+#   scope-explosion the FREEZE window must not absorb; the scanner now SEES
+#   them so the drain wave can close them.
+AdmitError::MissingDeliveryToken
+AdmitError::RateLimitExceeded
+AdmitError::TokenBindingMismatch
+AdmitError::TokenExpiredOrNotYetValid
+AuditChainError::NonMonotonicAppend
+ChainValidationError::EmptyChain
+DeviceAttestationError::BadSignature
+DeviceAttestationError::DecodeFailed
+DeviceAuthError::NoPasswordSource
+DeviceAuthError::VaultDecryptFailed
+DeviceLinkError::HpkeUnwrapFailed
+DeviceLinkError::OfferSignatureForged
+DeviceLinkError::SessionIdMismatch
+DidError::Base58Decode
+DidError::InvalidPublicKey
+DidRotationError::BadSignature
+EnvelopeError::CrossVariantBinding
+EnvelopeError::Truncated
+FederationError::FederationReserved
+FederationError::ModelAUnavailable
+GroupError::AeadAuthenticationFailed
+KeypairError::SeedImport
+KindDispatchError::ReserveTypedReject
+LayerCError::AeadAuthenticationFailed
+LayerCError::InnerSenderDidForged
+ManifestError::RuntimeRegistrationDeferred
+ManifestVerifyError::NoPathPresent
+ManifestVerifyError::RegistryInvalid
+ManifestVerifyError::RegistryRequiredByModeAll
+ManifestVerifyError::UcanRequiredByModeAll
+ManifestVerifyError::Unsigned
+MembershipSetError::AdminCardinality
+MembershipSetError::AuthorityMissingPubkey
+MembershipSetError::MemberCardinality
+MembershipSetError::MemberRefKindMismatch
+MembershipSetError::WireCostCeilingExceeded
+MultiSigError::BadSignature
+MultiSigError::PostPhase3
+NonceCacheError::ReplayedNonce
+PublisherRegistryError::UcanRequired
+SecretStoreError::KeychainUnavailable
+SecretStoreError::NotFound
+SeedImportError::EnvelopeMalformed
+SubgraphSpecError::EmptyIntersection
+SubgraphSpecError::SelfReferentialCycle
+SwapMatrixError::AeadAuthFailed
+SwapMatrixError::Unsupported
+ThinClientError::AttestationRequired
+ThinClientError::DeviceRevoked
+VarsigError::Truncated
+VaultError::AeadFailed
+VaultError::EngineLocked
+VaultError::MalformedCbor
+VaultError::NonceWidthMismatch
+VaultError::UnknownCodepoint
+VcError::BadSignature
+VcError::DecodeFailed

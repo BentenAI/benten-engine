@@ -153,8 +153,14 @@ impl SizeTouchingSurfaces {
 
     /// Surface 3 — redb persistence handle. Backed by a redb in-memory
     /// store with a `Vec<u8>` value column (NOT a fixed-width column).
+    ///
+    /// Native-only: `redb` + `tempfile` (the durable-KV + scratch-dir deps)
+    /// have no wasm32 target, so the whole surface-3 region is gated
+    /// `not(target_arch = "wasm32")` to match the engine pattern (no live
+    /// leak today — crypto-suite is native-only by dep-graph — but this
+    /// removes the latent footgun).
     #[must_use]
-    #[cfg(any(test, feature = "testing"))]
+    #[cfg(all(any(test, feature = "testing"), not(target_arch = "wasm32")))]
     pub fn redb_store_for_test() -> RedbSigHandle {
         RedbSigHandle::new()
     }
@@ -216,15 +222,23 @@ impl SizeTouchingSurfaces {
 
 /// Surface 3 — redb persistence handle for a hybrid signature column.
 ///
-/// Uses a temporary on-disk redb (per dev-deps `tempfile` + `redb`) with
-/// a `(&str, &[u8])` mapping so the value column has NO fixed-width.
+/// Uses a temporary on-disk redb (per native-only deps `tempfile` + `redb`)
+/// with a `(&str, &[u8])` mapping so the value column has NO fixed-width.
+///
+/// Native-only (`not(target_arch = "wasm32")`): `redb` + `tempfile` have no
+/// wasm32 target. The entire region (struct + `SIG_TABLE` + impls + the
+/// `redb_store_for_test` helper) is gated so a future wasm build can never
+/// pull these deps — matching the engine pattern.
+#[cfg(not(target_arch = "wasm32"))]
 pub struct RedbSigHandle {
     _tmpdir: tempfile::TempDir,
     db: redb::Database,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 const SIG_TABLE: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("sigs");
 
+#[cfg(not(target_arch = "wasm32"))]
 impl RedbSigHandle {
     /// Create a fresh in-tempdir redb handle.
     #[must_use]
@@ -263,6 +277,7 @@ impl RedbSigHandle {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Default for RedbSigHandle {
     fn default() -> Self {
         Self::new()

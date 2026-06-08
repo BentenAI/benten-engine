@@ -204,11 +204,16 @@ rand_core = { workspace = true }
 # `ed25519 3.0.0` stable → `pkcs8 0.11.0` stable. No further pin
 # needed; transitive resolution unifies on the stable chain.
 
-# `tempfile` + `redb` are used by the `sizes` module's
-# `RedbSigHandle` for the TF-2 surface-3 size-touching pin. NOT
-# crypto primitives — `redb` is the workspace-standard durable KV
-# (Phase-1 baked-in) and `tempfile` is the standard scratch-dir
-# crate used across the workspace.
+# `tempfile` + `redb` are used by the `sizes` module's `RedbSigHandle`
+# (gated `#[cfg(not(target_arch = "wasm32"))]`) for the TF-2 surface-3
+# size-touching pin. NOT crypto primitives — `redb` is the
+# workspace-standard durable KV (Phase-1 baked-in) and `tempfile` is the
+# standard scratch-dir crate used across the workspace. They live under the
+# native-only target table (matching the engine pattern): `redb` + `tempfile`
+# have no wasm32 target, so this removes the latent footgun of a future wasm
+# build pulling them. No live leak today (crypto-suite is native-only by
+# dep-graph) — this is defense-in-depth.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tempfile = { workspace = true }
 redb = { workspace = true }
 
