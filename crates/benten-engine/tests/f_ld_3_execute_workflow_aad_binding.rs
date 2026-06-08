@@ -42,34 +42,37 @@
 //! R5 swaps in the real AEAD and un-ignores. The sufficiency assertion is final
 //! per the ratified default — no longer gated on an open question.
 //!
-//! ## R5-DESTINATION: ExecuteWorkflow inherits the `aad_version` prefix from the
-//! ## enclosing `PermissionRequest` envelope — it does NOT freeze a standalone
-//! ## prefix-less AAD (F-LD-3-AADVER-COHERENCE, R4.4)
+//! ## ExecuteWorkflow constraint-AAD binds at RESULT-SEAL time (NQ-T3-ratified
+//! ## envelope-fold) — NOT folded into `PermissionRequest::signing_bytes`
+//! ## (F-LD-3-AADVER-COHERENCE, R4.4)
 //!
-//! The `constraint_aad()` below uses an ASCII string-prefix
+//! The `constraint_aad()` here uses an ASCII string-prefix
 //! (`b"benten-exec-workflow-v1:"`) as a domain-separation tag. This is NOT a
 //! freeze of a top-level wire envelope: per R0.5 §3.4 (`...:530-536`) + §4.1
 //! freeze table (`...:894` variant row + `...:883` `aad_version` row),
-//! `ExecuteWorkflow` is a `PermissionOperation` VARIANT
+//! the `PermissionOperation::ExecuteWorkflow { workflow_cid }` VARIANT is
 //! carried INSIDE the codepoint-dispatched `PermissionRequest` envelope (the
-//! Layer-D `f_ld_2_permission_request_*` family). The §4.1 dedicated
+//! Layer-D `f_ld_2_permission_request_*` family) and contributes only
+//! `workflow_cid` to `PermissionRequest::signing_bytes`. The §4.1 dedicated
 //! `aad_version: u8` prefix byte (= `0x01`, DISTINCT from
 //! `ENVELOPE_FORMAT_VERSION_V2`; see the F4-004/005 reconciliation in
 //! `f_aad_2` / `f_lc_abuse` / `f_lc_hpke`) is frozen on that ENCLOSING
-//! `PermissionRequest` envelope AAD — `f_ld_2` carries it as byte-0 — and
-//! `ExecuteWorkflow`'s 3-field constraint binding is folded into that envelope
-//! AAD at R5, INHERITING the `aad_version=0x01` prefix.
+//! `PermissionRequest` envelope AAD — `f_ld_2` carries it as byte-0.
 //!
-//! Therefore, when un-ignoring at R5, the implementer MUST fold this
-//! `constraint_aad()` into the `f_ld_2 PermissionRequest` envelope AAD
-//! (which begins with the `aad_version=0x01` byte) — and MUST NOT freeze a
-//! standalone, prefix-less, top-level `ExecuteWorkflow` AAD. The string-prefix
-//! here is an intra-variant domain-separation tag for the RED-PHASE stub-shim
-//! only; the cross-layer `aad_version:u8` prefix convention (§4.1) is satisfied
-//! by the enclosing envelope, not by this variant. This is a doc-coherence note
-//! only: the variant's 3-field constraint substrate is correct and freeze-final
-//! per NQ-T3; the prefix arrives via the envelope, so there is no freeze-gating
-//! defect in this file.
+//! The 3-field constraint binding `(executor_did, max_decrypt_count,
+//! result_recipient_pubkey)` is a DISTINCT, separate construct from that enum
+//! variant: per the NQ-T3-ratified envelope-fold, it is bound at **RESULT-SEAL
+//! time** as the AEAD AAD over the result envelope via
+//! `benten_engine::layer_d::remote_permission::exec_workflow_seal` /
+//! `exec_workflow_open` (which call `ExecuteWorkflow::constraint_aad()`). It is
+//! **NOT** folded into `PermissionRequest::signing_bytes` at v1-beta. Mutating
+//! any of the three constraint fields between seal and open makes the open fail
+//! (NQ-T3 — bound, not advisory). The string-prefix here is the intra-variant
+//! domain-separation tag for that result-seal AAD; the cross-layer
+//! `aad_version:u8` prefix convention (§4.1) applies to the enclosing
+//! `PermissionRequest` envelope, a separate axis. The variant's 3-field
+//! constraint substrate is correct and freeze-final per NQ-T3, so there is no
+//! freeze-gating defect in this file.
 
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
