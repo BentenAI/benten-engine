@@ -44,6 +44,8 @@ mod shim {
     use benten_crypto_suite::vault::{
         Argon2idParams, DAK_HKDF_INFO_TAG, VaultPayload, decode_vault, derive_dak, serialize_vault,
     };
+    // `derive_dak` returns a zeroize-on-drop `Dak` newtype (F-10); `Dak::expose`
+    // borrows the raw bytes at the AEAD seal/open call site (no `secrecy` dep).
 
     /// A reduced Argon2id param set so the 200-iter timing harness completes
     /// quickly. The no-early-return / single-typed-error / no-gross-timing
@@ -86,8 +88,8 @@ mod shim {
                 user_did_signing_key: vec![0x22; 64],
                 user_did_creation_time: 0,
             };
-            let ciphertext =
-                serialize_vault(&payload, &dak).expect("vault seal is infallible for valid params");
+            let ciphertext = serialize_vault(&payload, dak.expose())
+                .expect("vault seal is infallible for valid params");
             Self {
                 salt,
                 sealed_under_password: password.to_vec(),
@@ -111,7 +113,7 @@ mod shim {
             // Stage 2: REAL AEAD-open (ALWAYS attempted; the AEAD tag compare is
             // constant-time inside `decode_vault`).
             trace.aead_open_attempted.fetch_add(1, Ordering::SeqCst);
-            match decode_vault(&self.ciphertext, &dak) {
+            match decode_vault(&self.ciphertext, dak.expose()) {
                 // Every failure cause collapses to the single typed rejection.
                 Ok(decoded) => Ok(decoded.payload.k_principal),
                 Err(_) => Err(UnlockError::VaultDecryptFailed),

@@ -330,8 +330,8 @@ impl CipherSuiteCodepoint {
 /// - [`Self::RecoveryArtifact`] — codepoint RESERVED at Core (NQ-W5/m-14);
 ///   the `RecoveryHook` trait is NOT frozen at Core — it lands in
 ///   Phase-4-Meta-Composing alongside the allocated codepoint.
-/// - [`Self::RotatingGroupKeyChainedMode`] — FS-future `0x6380..0x63CF`
-///   MLS/CGKA bracket.
+/// - [`Self::RotatingGroupKeyChainedMode`] — CGKA-Commit FS-future bracket
+///   (`CGKA_COMMIT_BASE == 0x63A0`; §4.0).
 /// - [`Self::ChainedStateTlv`] — the per-stanza `Option<ChainedStateTlv>`
 ///   codepoint-reserve sub-slot (GAP-6b), AAD-bound when present (see
 ///   [`chained_state_tlv_aad_binding`]).
@@ -344,7 +344,8 @@ pub enum ReservedCodepoint {
     SubsetRef,
     /// `RecoveryArtifact` reserve (codepoint at Core; trait in Composing).
     RecoveryArtifact,
-    /// `RotatingGroupKeyChainedMode` reserve (FS-future `0x6380..0x63CF`).
+    /// `RotatingGroupKeyChainedMode` reserve (CGKA-Commit FS-future bracket,
+    /// `CGKA_COMMIT_BASE == 0x63A0`).
     RotatingGroupKeyChainedMode,
     /// `ChainedStateTlv` per-stanza sub-slot reserve (GAP-6b; AAD-bound).
     ChainedStateTlv,
@@ -359,7 +360,10 @@ impl ReservedCodepoint {
         match self {
             Self::ExecuteWorkflow => Some(0x6320),
             Self::SubsetRef => Some(0x6620),
-            Self::RotatingGroupKeyChainedMode | Self::ChainedStateTlv => Some(0x6380),
+            // `RotatingGroupKeyChainedMode` + `ChainedStateTlv` dispatch from
+            // the §4.0 CGKA-Commit FS-future bracket (`CGKA_COMMIT_BASE ==
+            // 0x63A0`), NOT the MLS-Application bracket `0x6380`.
+            Self::RotatingGroupKeyChainedMode | Self::ChainedStateTlv => Some(0x63A0),
             Self::RecoveryArtifact => None,
         }
     }
@@ -390,7 +394,8 @@ pub fn chained_state_tlv_aad_binding(present: bool) -> Vec<u8> {
     let mut aad = Vec::new();
     if present {
         aad.push(0x01u8);
-        // The ChainedStateTlv reserve dispatches from the FS-future band base.
+        // The ChainedStateTlv reserve dispatches from the CGKA-Commit FS-future
+        // band base (`CGKA_COMMIT_BASE == 0x63A0`; §4.0).
         aad.extend_from_slice(
             &ReservedCodepoint::ChainedStateTlv
                 .band_base()
