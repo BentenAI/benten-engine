@@ -1655,6 +1655,16 @@ fn pure_pq_mlkem_decapsulate(
     ))
 }
 
+// C-11: this helper intentionally does NOT route through the shared
+// `crate::aead::wrap`. That primitive dispatches ONLY on the live AEAD
+// codepoints `0x647a | 0x6400` and typed-REJECTS everything else — including
+// the reserved pure-PQ `0x647c`, which is deliberately quarantined (it
+// typed-rejects at `CipherSuite::resolve` per the C11b safety gate and is only
+// reachable via the audit-gated / `#[cfg(test)]` pure-PQ constructors). Adding
+// `0x647c` to the shared dispatcher to dedup this ChaCha20-Poly1305 block would
+// WIDEN the shared primitive's accepted-codepoint set to a codepoint the rest
+// of the suite refuses — a safety-gate regression, not a no-wire-change
+// consolidation. The block is kept local to the quarantined arm on purpose.
 fn aead_wrap_pure_pq(
     plaintext: &[u8],
     key: &AeadKeyMaterial,

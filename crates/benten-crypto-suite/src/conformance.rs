@@ -20,7 +20,7 @@
 //!
 //! The embedded modules are exactly the wire/AAD/keying-path producers per
 //! the R0.7 §4.1 M-19 site-list (`aead.rs`, `structural_kdf.rs`, `varsig.rs`,
-//! `sizes.rs`, `swap_matrix.rs`, `envelope.rs`, `vault.rs`).
+//! `sizes.rs`, `swap_matrix.rs`, `envelope.rs`, `vault.rs`, `cipher_suite.rs`).
 
 /// Endianness conformance scanner (M-19).
 pub mod endianness {

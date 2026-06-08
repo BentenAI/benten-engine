@@ -1501,7 +1501,7 @@ Row D-15's audit-readiness concern.
 
 ### Row D-35 — freeze-record "HEAD `84280d31`" snapshot-SHA currency sweep (R6-R2 F-26) — RE-PINNED at R6-R3 (F-33/F-67)
 
-> **STATUS (R6-R3, F-33/F-67):** the deferred re-pin is **DONE for this round** — the `84280d31` "HEAD"/"AS-BUILT + ENFORCED at HEAD" snapshot-SHA cites in `docs/ERROR-CATALOG.md` (~4), `docs/V1-FROZEN-INTERFACE.md` (~4), and `docs/INVARIANT-COVERAGE.md` (~4) are re-pinned to the current freeze-record HEAD `fdfda621` (origin/main this round). The AS-BUILT claims + count narratives (199 throwable / 201 catalog) were ground-truth-re-verified at `fdfda621` before re-pinning. The historical SHA mentions BELOW (the `2172cb6d` → `84280d31` → … provenance chain) are intentionally retained as the audit trail. The pin re-floats to the freeze-tag HEAD at the final pre-tag freeze-record sweep if HEAD advances again before the Ben-gated `phase-4-meta-core-close` tag.
+> **STATUS (R6-R4, re-pinned from R6-R3):** the deferred re-pin is **DONE for this round** — the snapshot-SHA cites in `docs/ERROR-CATALOG.md` (~4), `docs/V1-FROZEN-INTERFACE.md` (~4), and `docs/INVARIANT-COVERAGE.md` (~4) are re-pinned to the current freeze-record HEAD `b93b2efc` (origin/main this round; the R6-R3 round had them at `fdfda621`). The AS-BUILT claims + count narratives (199 throwable / 201 catalog) were ground-truth-re-verified at `b93b2efc` before re-pinning (the only commit advancing HEAD past `fdfda621` was #1368, which left `CATALOG_VARIANT_COUNT == 199` unchanged). The historical SHA mentions BELOW (the `2172cb6d` → `84280d31` → `fdfda621` → … provenance chain) are intentionally retained as the audit trail. The pin re-floats to the freeze-tag HEAD at the final pre-tag freeze-record sweep if HEAD advances again before the Ben-gated `phase-4-meta-core-close` tag.
 
 - **Frozen surface (v1-beta):** three freeze-record docs cite the snapshot SHA
   `84280d31` as "HEAD" / "AS-BUILT + ENFORCED at HEAD" — `docs/ERROR-CATALOG.md`
@@ -1587,6 +1587,73 @@ Row D-15's audit-readiness concern.
 - **Observation (NAMED, not fixed this round):** the R6-R3 council surfaced a cluster of **cite / comment / disclosure** observations (finding IDs F-10, F-11, F-16, F-17, F-20, F-27, F-29, F-31, F-32, F-34, F-35, F-37, F-38, F-42, F-45, F-49, F-50, F-51, F-52, F-53, F-54, F-56, F-57, F-59, F-65, F-66). These are minor cite-precision / comment-accuracy / disclosure-completeness observations that a downstream reviewer can address; they are not freeze-blocking and were below the fix-now threshold for this shard (which prioritized the MAJOR + cheap-cite fixes named in its brief).
 - **Destination:** the next phase-close convergence round / the freeze-record reconcile sweep that precedes the Ben-gated tag. Each ID is dispositioned when picked up. Recorded here so the cluster survives between rounds.
 - **Note — F-58 = NO-ACTION:** the `repr(u8)` frozen-cardinality carve-out is correct as-built; no row needed (carried here only to record the explicit NO-ACTION disposition so it is not re-raised).
+
+---
+
+## R6-R4 (post-F-full phase-close, round 4) NAMED-CARRY rows
+
+> The rows below land at the R6-R4 phase-close convergence (doc shard B — cites +
+> named-carry + threat-model rows). Each is a HARD-RULE clause-(b) deferral OR an
+> OBS/disclosure observation whose ENTRY lands NOW with a NAMED destination; the
+> substantive change (or the decision that none is needed) ships in the named
+> downstream wave / is dispositioned by a downstream reviewer. They are NOT
+> freeze-blocking at v1-beta. All cites verified live at HEAD `b93b2efc` at
+> author-time. The bare `C-NN` labels are the R6-R4 council finding IDs.
+
+### Row D-41 — C-04: `ExecuteWorkflow.input_node_cids` bound into no signed/AEAD surface (input-READ-scope binding → v1-GM)
+
+- **Observation (NAMED, not fixed this round):** `crates/benten-engine/src/layer_d/remote_permission.rs::ExecuteWorkflow` carries `input_node_cids: Vec<[u8; 32]>` but `constraint_aad()` binds only the frozen 3-field tuple `(executor_did, max_decrypt_count, result_recipient_pubkey)` — the workflow input READ-scope is NOT cryptographically bound at v1-beta. No live exploit (runtime ExecuteWorkflow enforcement is post-v1-beta per NQ-T3; the variant is reserved / typed-rejected at the dispatch boundary). See `docs/THREAT-MODEL.md` §4 NQ-T3-adjacent note.
+- **Destination:** input-READ-scope AAD/signature binding → **v1-GM**, co-designed with the NQ-T3 runtime no-egress enforcement it travels with. Freezing the binding shape now is premature.
+
+### Row D-42 — C-07: `u16` Layer-C sender-lp asymmetry freeze-note
+
+- **Observation (NAMED, not fixed this round):** the Layer-C sender length-prefix carries a `u16`/`u32` width asymmetry that warrants an explicit freeze-note (which width is wire-locked where) so a future refactor cannot silently widen/narrow the prefix.
+- **Destination:** the freeze-record reconcile sweep that precedes the Ben-gated tag / the sibling CODE shard if a width change is judged needed (no change expected — this is a note-the-asymmetry row).
+
+### Row D-43 — C-08: plaintext-sender golden pin → folds into G-COMP-1 Row D-9
+
+- **Observation (NAMED, not fixed this round):** the plaintext-sender (`LAYER_C_DROP = 0x6500`) golden-bytes pin is part of the deferred hex-pin cohort.
+- **Destination:** **G-COMP-1, Row D-9** (the 6-deferred-hex-pin cohort) — recorded here so the plaintext-sender golden is not dropped from that cohort.
+
+### Row D-44 — C-09: `0x6380` AAD-dispatch base note
+
+- **Observation (NAMED, not fixed this round):** the `0x6380` AAD-dispatch band base wants an explicit base-note in the codepoint/AAD-dispatch narrative (what the band roots, why it is distinct from the neighbouring bands).
+- **Destination:** the codepoint-allocation doc reconcile sweep (`docs/CRYPTO-CODEPOINTS.md`) at the pre-tag freeze-record pass.
+
+### Row D-45 — C-12: Inv-16 `const`-true assertion → round-trip arm
+
+- **Observation (NAMED, not fixed this round):** an Inv-16 (codepoint-dispatch) test arm asserts a `const`-true shape rather than driving a real round-trip; it should be strengthened to a substantive round-trip arm (§3.6f regression-guard-substantive-arm discipline).
+- **Destination:** the sibling CODE shard / next phase-close convergence round (lives under a Rust test target — not edited by this doc shard).
+
+### Row D-46 — C-13: F-MST-3 part-2 → v1-GM
+
+- **Observation (NAMED, not fixed this round):** the F-MST-3 MST-conformance follow-up (part 2) is a v1-GM-scoped item.
+- **Destination:** **v1-GM** MST-conformance lane.
+
+### Row D-47 — C-19: tf3a `wasm32-unknown` → `wasm32-wasip1` header currency
+
+- **Observation (NAMED, not fixed this round):** `crates/benten-crypto-suite/tests/tf3a_pq_hybrid_wasm32_roundtrip.rs` pin-source header prose carries stale `wasm32`-target framing; the test now runs under **wasm32-wasip1** via the `crypto-suite-wasm-roundtrip` CI job (`.github/workflows/wasm-conformance.yml`). Header currency only — the test + CI gating are correct.
+- **Destination:** the comment/cite-accuracy reconcile sweep (a Rust test-file header — adjacent to the CODE shard) at the pre-tag pass.
+
+### Row D-48 — C-20: 32-bit-`usize` drop exercise → v1-GM CI
+
+- **Observation (NAMED, not fixed this round):** a 32-bit-`usize` drop/exercise lane (catching `usize`-width assumptions on 32-bit targets) is not in v1-beta CI.
+- **Destination:** **v1-GM CI** (32-bit target lane).
+
+### Row D-49 — C-22: V1-FROZEN item 2 `.d.ts` count `15` → `14`
+
+- **Observation (NAMED, not fixed this round):** `docs/V1-FROZEN-INTERFACE.md` item 2 (TS public-API parity gate) says the structural diff covers "all 15 `dist/*.d.ts` files"; the baseline `packages/engine/etc/public-api.txt` covers **14** real `.d.ts` modules (atrium, dsl, engine, errors, errors.generated, identity, index, manifest, mermaid, sandbox, stream, subscribe, types, views). Stale count `15` → `14`.
+- **Destination:** the freeze-record cite-precision reconcile sweep that precedes the Ben-gated tag.
+
+### Row D-50 — C-23 / C-24 / C-25: remaining doc-staleness cluster
+
+- **Observation (NAMED, not fixed this round):** the R6-R4 council surfaced a residual cluster of minor doc-staleness items (finding IDs C-23, C-24, C-25) — cite-precision / comment-accuracy observations below the fix-now threshold for this shard (which prioritized the MAJOR + named cite fixes in its brief).
+- **Destination:** the next phase-close convergence round / the freeze-record reconcile sweep that precedes the tag. Each ID is dispositioned when picked up. Recorded here so none is silently dropped between rounds (pim-N-prior-phase-explicit-preflight discipline).
+
+### Row D-51 — C-26: gossip §3.9 `FLAGGED-FOR-BEN` rustdoc residue → pre-tag Ben item (UNRESOLVED, by design)
+
+- **Observation (NAMED, not resolved this round — deliberately):** `crates/benten-membership-set/src/keying.rs::gossip_topic` rustdoc (line ~80) carries a `FLAGGED-FOR-BEN` note about the §3.9-vs-§3.10 gossip-topic derivation: §3.9 owns the gossip topic and its frozen primitive is the **no-label** `blake3::keyed_hash(K_Set, set_id ‖ BE(generation))` form (golden byte-confirmed), while §3.10's prose + the dispatch brief's M-20 line echoed the *labelled* commitment formula. This row NAMES the residue as a **pre-tag Ben item**; it does NOT resolve the §3.9-vs-§3.10 question (that is Ben's freeze-gated call — the golden + no-label form is authoritative at HEAD, but the prose discrepancy is surfaced for Ben's explicit sign-off before the tag).
+- **Destination:** **Ben pre-tag freeze-decision** — the `FLAGGED-FOR-BEN` rustdoc stays until Ben rules on the §3.9/§3.10 prose reconciliation; the doc-prose clarification (the w-doc §3.10 clarification flagged in orchestration) lands with that ruling.
 
 ---
 

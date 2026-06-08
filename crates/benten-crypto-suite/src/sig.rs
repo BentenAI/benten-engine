@@ -733,3 +733,19 @@ impl SignatureSuite {
 pub const fn ed25519_public_len() -> usize {
     ED25519_PUBLIC_LEN
 }
+
+#[cfg(test)]
+mod domain_registry_mirror {
+    /// C-01/C-02 drift defense: the LAMPS composite-signature context label is
+    /// mirrored in the central [`crate::domain_registry`] corpus table over
+    /// which the prefix-free collision check runs. Pin byte-equality so the
+    /// mirror can never silently diverge from this home definition.
+    #[test]
+    fn lamps_label_matches_central_registry() {
+        assert_eq!(
+            super::LAMPS_LABEL_MLDSA65_ED25519_SHA512.as_slice(),
+            crate::domain_registry::LAMPS_LABEL_MLDSA65_ED25519_SHA512,
+            "LAMPS_LABEL_MLDSA65_ED25519_SHA512 drifted from the central domain_registry mirror"
+        );
+    }
+}

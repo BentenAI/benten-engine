@@ -101,7 +101,10 @@ jobs:
             --ignore RUSTSEC-2025-0080 \
             --ignore RUSTSEC-2025-0081 \
             --ignore RUSTSEC-2025-0098 \
-            --ignore RUSTSEC-2025-0100
+            --ignore RUSTSEC-2025-0100 \
+            --ignore RUSTSEC-2026-0173
+            # RUSTSEC-2026-0173 (proc-macro-error2 newly-flagged unmaintained,
+            # informational; transitive via tauri/gtk-rs proc-macros) added 2026-06-07.
             # RUSTSEC-2026-0119 + RUSTSEC-2026-0120 (hickory-dns
             # CPU-exhaustion + NSEC3 unbounded-loop) CLOSED 2026-05-19 at
             # G-CORE-2-FP-1 via iroh 0.98 → 1.0.0-rc.0 bump (transitive

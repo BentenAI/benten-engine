@@ -136,6 +136,7 @@ pub mod cipher_suite;
 pub mod codepoint;
 pub mod conformance;
 pub mod discharge;
+pub mod domain_registry;
 pub mod envelope;
 pub mod error;
 pub mod hash;

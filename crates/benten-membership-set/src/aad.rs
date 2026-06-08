@@ -242,3 +242,19 @@ fn lp(buf: &mut Vec<u8>, bytes: &[u8]) {
 pub fn default_group_codepoint() -> u16 {
     MEMBERSHIP_SET_GROUP_MULTI_STANZA
 }
+
+#[cfg(test)]
+mod domain_registry_mirror {
+    /// C-01/C-02 drift defense: `SETID_COMMITMENT_LABEL` is mirrored in the
+    /// central [`benten_crypto_suite::domain_registry`] corpus table over which
+    /// the prefix-free collision check runs. Pin byte-equality so the mirror
+    /// can never silently diverge from this home definition.
+    #[test]
+    fn setid_commitment_label_matches_central_registry() {
+        assert_eq!(
+            super::SETID_COMMITMENT_LABEL,
+            benten_crypto_suite::domain_registry::SETID_COMMITMENT_LABEL,
+            "SETID_COMMITMENT_LABEL drifted from the central domain_registry mirror"
+        );
+    }
+}
