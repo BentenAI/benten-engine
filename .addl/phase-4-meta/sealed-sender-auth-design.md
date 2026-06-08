@@ -339,6 +339,18 @@ hybrid-coded sig with `VerifyError::CodepointMismatch` (the silent-downgrade def
    ALREADY EXISTS on the base branch — NOT a "newly hybrid-aware `Did::resolve`" to build; the
    prod-safe `parse_validated_hybrid` is the only new benten-id helper) (+ optionally consult
    `RotationLog` — §Q3 / §4.3).
+4b. **[AS-BUILT CORRECTION — F-01 CONTENT-SPLICE, SOUNDNESS-CRITICAL]** RECOMPUTE the canonical
+   `body_cid` from the RECOVERED body (`self_describing_cid(BLAKE3(body))` — the SAME derivation as
+   the seal side) and **fail-closed `SenderOriginAuthFailed`** unless it is byte-equal to the WIRE
+   `body_cid`. `M_auth` binds the body ONLY through `body_cid`, so without this recompute a
+   co-recipient/co-member holding the CEK could keep the victim's real `sender_sig` + the original
+   wire `body_cid` and re-seal a DIFFERENT body under the CEK (the body AEAD verifies — they hold the
+   CEK; M_auth verifies — it reads the unchanged wire `body_cid`). This step is what makes §1's case
+   **(c)** ("a different body changes the CID; verify fails") actually TRUE on the open side — the
+   defense lives in the recipient re-deriving the CID, NOT in the wire value alone. Applies to ALL
+   three open paths (`open_inner` 0x6510, `open_group_stanza` 0x6520, `open_membership_set_group`
+   0x6610). NOTE: an HONEST sender therefore MUST supply `body_cid = BLAKE3(body)` (the design's
+   content-CID contract — `0x6610` derives it internally; `0x6510`/`0x6520` take it from the caller).
 5. Re-build `M_auth` from the recovered `sender_did` + the recipient's **INDEPENDENTLY-held**
    set-state (F-2): the recipient recomputes `body_aad_digest` from the body AAD it just
    AEAD-verified, recomputes `audience_commitment` + `generations` from its OWN roster / audience /
@@ -373,7 +385,12 @@ strongest sealed-sender adversary):
   binding** — this is exactly why binding `audience_commitment` into the signature is the clean
   anti-re-target mechanism (and it is already on the wire/in the AAD, so binding it is free).
 - **(c) Splice Alice's signature onto a DIFFERENT body.** `M_auth` binds `body_cid` (+
-  `body_aad_digest`); a different body changes the CID; verify fails. **Closed.**
+  `body_aad_digest`); a different body changes the CID; verify fails — **PROVIDED the recipient
+  RE-DERIVES `body_cid` from the recovered body and rejects on mismatch** (open-side flow step 4b).
+  `M_auth` consumes the WIRE `body_cid`, so a co-recipient/co-member holding the CEK can keep
+  Alice's real `sender_sig` + the unchanged wire `body_cid` and re-seal a different body unless the
+  open path recomputes `self_describing_cid(BLAKE3(body))` and fail-closes. **Closed by the F-01
+  content-splice recompute** (as-built across all three open paths).
 - **(d) Cross-stanza substitution (U17) / truncation (F-01).** Unchanged and still closed by the
   per-stanza AEAD + the pre-decrypt count check; `M_auth` additionally covers `stanza_count` as
   defense-in-depth. The single shared signature does NOT weaken these because they never relied

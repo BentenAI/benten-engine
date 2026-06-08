@@ -792,6 +792,19 @@ fn open_inner(
     off = sig_end;
     let body = inner[off..].to_vec();
 
+    // B2 CONTENT-SPLICE GUARD (F-01, SOUNDNESS-CRITICAL): M_auth binds the
+    // body ONLY through `body_cid`; a co-recipient holding the CEK can re-seal
+    // a DIFFERENT body under the VICTIM's real `sender_sig` + the ORIGINAL
+    // (unchanged) `body_cid`, and the origin-auth verify below — which consumes
+    // the WIRE `body_cid` — would otherwise pass. Recompute the canonical CID
+    // from the RECOVERED body (SAME derivation as the seal side:
+    // `self_describing_cid(BLAKE3(body))`) and fail-closed unless it is
+    // byte-equal to the wire `body_cid`.
+    let recomputed_cid = self_describing_cid(blake3::hash(&body).as_bytes());
+    if recomputed_cid != body_cid {
+        return Err(LayerCError::SenderOriginAuthFailed);
+    }
+
     // B2 ORIGIN-AUTH VERIFY: re-derive M_auth from the recovered sender-DID +
     // the recipient's OWN audience-DID / key-generation (NOT the wire
     // audience — F-2) and cryptographically verify the hybrid signature.
@@ -1002,6 +1015,89 @@ fn group_roster(recipient_pks: &[RecipientPubKey]) -> Vec<RecipientDid> {
 #[must_use]
 pub fn group_roster_for_test(recipient_pks: &[RecipientPubKey]) -> Vec<RecipientDid> {
     group_roster(recipient_pks)
+}
+
+/// **Test-only content-splice model (F-01, `0x6520`):** a second sealer who can
+/// reconstruct the `0x6520` group CEK (it is derived from PUBLIC inputs —
+/// `body_cid` digest + `sender_did` + `recipient_key_generation`) captures the
+/// VICTIM A's HONEST send, KEEPS A's real `sender_sig` + the ORIGINAL
+/// (unchanged) `body_cid`, but re-seals a DIFFERENT `new_body` under that CEK.
+/// Every stanza (carrying `sender_did = A`) and the wire `body_cid` are left
+/// byte-unchanged; only the shared bulk-body ciphertext is rebuilt. Without the
+/// F-01 content-splice guard, [`open_group_stanza`] would recover `new_body`,
+/// rebuild M_auth from the WIRE `body_cid` (A's original), and verify A's real
+/// sig — accepting the substituted body attributed to A.
+///
+/// `sender_did` MUST be A's DID and `recipient_key_generation` / `body_cid` MUST
+/// match the honest send (the CEK + body AAD are keyed by them).
+///
+/// # Panics
+///
+/// Panics if `env` is not the `0x6520` [`EncryptedEnvelope::HpkeMultiBase`]
+/// variant, or if the honest body region cannot be unwrapped under the
+/// reconstructed CEK (a mis-supplied `sender_did` / generation / `body_cid`).
+#[cfg(any(test, feature = "testing"))]
+#[must_use]
+pub fn splice_group_multi_body_for_test(
+    env: &EncryptedEnvelope,
+    sender_did: &SenderDid,
+    body_cid: &BodyCidDigest,
+    recipient_key_generation: u32,
+    new_body: &[u8],
+) -> EncryptedEnvelope {
+    let EncryptedEnvelope::HpkeMultiBase {
+        format_version,
+        cek_aead_ciphertext,
+        stanzas,
+        ..
+    } = env
+    else {
+        panic!("splice_group_multi_body_for_test requires the 0x6520 HpkeMultiBase variant");
+    };
+
+    // Reconstruct the per-send CEK exactly as `seal_group_impl` does (PUBLIC
+    // inputs only — this is the property that makes the 0x6520 splice possible
+    // for any party, which is precisely what the F-01 guard must defeat).
+    let cid = self_describing_cid(body_cid);
+    let mut cek_h = blake3::Hasher::new();
+    cek_h.update(LAYER_C_GROUP_CEK_CONTEXT);
+    cek_h.update(body_cid);
+    cek_h.update(sender_did);
+    cek_h.update(&recipient_key_generation.to_be_bytes());
+    let cek = *cek_h.finalize().as_bytes();
+    let cek_key =
+        AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &cek);
+
+    // The shared bulk-body AAD (binds the ORIGINAL body_cid + group codepoint).
+    let mut body_aad = Vec::new();
+    body_aad.push(AAD_VERSION);
+    body_aad.extend_from_slice(&LAYER_C_DROP_MULTI_RECIPIENT.to_be_bytes());
+    body_aad.extend_from_slice(&cid);
+
+    // Recover the honest body_v2 = sig_codepoint || lp(sender_sig) || body so we
+    // can KEEP A's real sig-region and substitute ONLY the trailing body.
+    let honest_env = AeadEnvelope::from_wire_bytes(cek_aead_ciphertext)
+        .expect("honest 0x6520 body envelope must parse");
+    let honest_v2 = benten_crypto_suite::aead::unwrap(&honest_env, &cek_key, &body_aad)
+        .expect("reconstructed CEK can unwrap the honest 0x6520 body");
+    let sig_len =
+        u32::from_be_bytes([honest_v2[2], honest_v2[3], honest_v2[4], honest_v2[5]]) as usize;
+    let sig_prefix_end = 6 + sig_len; // 2 (codepoint) + 4 (lp) + sig
+    let mut spliced_v2 = honest_v2[..sig_prefix_end].to_vec();
+    spliced_v2.extend_from_slice(new_body);
+
+    let spliced_env = benten_crypto_suite::aead::wrap(&spliced_v2, &cek_key, &body_aad)
+        .expect("second-sealer re-seal of the substituted 0x6520 body must succeed");
+    let mut cek_aead_nonce = [0u8; 12];
+    cek_aead_nonce.copy_from_slice(&spliced_env.nonce[..12]);
+
+    EncryptedEnvelope::HpkeMultiBase {
+        format_version: *format_version,
+        cek_aead_ciphertext: spliced_env.to_wire_bytes(),
+        cek_aead_nonce,
+        // stanzas (sender_did = A) + their body_cid are byte-UNCHANGED.
+        stanzas: stanzas.clone(),
+    }
 }
 
 fn seal_group_impl(
@@ -1291,6 +1387,19 @@ pub fn open_group_stanza(
     let sender_sig = body_v2[off..sig_end].to_vec();
     off = sig_end;
     let body = body_v2[off..].to_vec();
+
+    // B2 CONTENT-SPLICE GUARD (F-01, SOUNDNESS-CRITICAL): M_auth binds the
+    // body ONLY through `cid`; a co-recipient holding the CEK can re-seal a
+    // DIFFERENT body under the VICTIM's real `sender_sig` + the ORIGINAL
+    // (unchanged) `cid`, and the origin-auth verify below — which consumes the
+    // WIRE `cid` — would otherwise pass. Recompute the canonical CID from the
+    // RECOVERED body (SAME derivation as the seal side:
+    // `self_describing_cid(BLAKE3(body))`) and fail-closed unless it is
+    // byte-equal to the wire `cid`.
+    let recomputed_cid = self_describing_cid(blake3::hash(&body).as_bytes());
+    if recomputed_cid != cid {
+        return Err(LayerCError::SenderOriginAuthFailed);
+    }
 
     // B2 ORIGIN-AUTH VERIFY (F-2 SOUNDNESS-CRITICAL): re-derive M_auth from
     // the recovered sender-DID + the recipient's OWN independently-held roster
@@ -2220,6 +2329,19 @@ pub mod group_posture {
         off = sig_end;
         let body = body_v2[off..].to_vec();
 
+        // B2 CONTENT-SPLICE GUARD (F-01, SOUNDNESS-CRITICAL): M_auth binds the
+        // body ONLY through `env.body_cid`; a co-member holding the K_Set-
+        // derived CEK can re-seal a DIFFERENT body under the VICTIM's real
+        // `sender_sig` + the ORIGINAL (unchanged) `body_cid`, and the origin-
+        // auth verify below — which consumes the WIRE `env.body_cid` — would
+        // otherwise pass. Recompute the canonical CID from the RECOVERED body
+        // (SAME derivation as the seal side: `self_describing_cid(BLAKE3(body))`)
+        // and fail-closed unless it is byte-equal to the wire `env.body_cid`.
+        let recomputed_cid = self_describing_cid(blake3::hash(&body).as_bytes());
+        if recomputed_cid != env.body_cid {
+            return Err(GroupError::SenderOriginAuthFailed);
+        }
+
         // B2 ORIGIN-AUTH VERIFY (F-2 + F-3 SOUNDNESS-CRITICAL): re-derive
         // M_auth from the recovered sender-DID + the recipient's OWN held
         // roster + held generations (NOT the wire) and cryptographically
@@ -2293,6 +2415,67 @@ pub mod group_posture {
         #[must_use]
         pub fn stanza_aad_for_test(&self, idx: usize) -> Vec<u8> {
             self.stanzas[idx].aad.clone()
+        }
+
+        /// **Test-only content-splice model (F-01):** a co-member B who holds
+        /// `k_set` captures the VICTIM A's HONEST send, KEEPS A's real
+        /// `sender_sig` + the ORIGINAL (unchanged) `body_cid`, but re-seals a
+        /// DIFFERENT `new_body` under the K_Set-derived CEK. The wire `body_cid`
+        /// and every stanza (carrying `sender_did = A` + A's sig) are left
+        /// byte-unchanged; only the bulk-body ciphertext is rebuilt. Without the
+        /// F-01 content-splice guard, [`open_membership_set_group`] would recover
+        /// `new_body`, rebuild M_auth from the WIRE `body_cid` (A's original), and
+        /// verify A's real sig — accepting the substituted body attributed to A.
+        /// `sender_did` MUST be A's DID (the CEK is keyed by it).
+        #[cfg(any(test, feature = "testing"))]
+        #[must_use]
+        pub fn with_spliced_body_for_test(
+            &self,
+            k_set: &[u8; 32],
+            sender_did: &[u8],
+            new_body: &[u8],
+        ) -> Self {
+            // Rederive the per-send CEK exactly as the seal side does.
+            let cek = {
+                let mut h = blake3::Hasher::new();
+                h.update(MEMBERSHIP_GROUP_CEK_CONTEXT);
+                h.update(k_set);
+                h.update(sender_did);
+                *h.finalize().as_bytes()
+            };
+            let cek_key =
+                AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &cek);
+
+            // Recover the honest body_v2 = sig_codepoint || lp(sender_sig) ||
+            // body so we can KEEP A's real sig + sig_codepoint and swap ONLY the
+            // body. The body AAD is unchanged (it binds the original body_cid).
+            let mut body_aad = Vec::new();
+            body_aad.push(AAD_VERSION);
+            body_aad.extend_from_slice(&MEMBERSHIP_SET_GROUP_MULTI_STANZA.to_be_bytes());
+            body_aad.extend_from_slice(&self.body_cid);
+            let honest_env = AeadEnvelope::from_wire_bytes(&self.body_wire)
+                .expect("honest body envelope must parse");
+            let honest_v2 = benten_crypto_suite::aead::unwrap(&honest_env, &cek_key, &body_aad)
+                .expect("co-member holding K_Set can unwrap the honest body");
+            // Parse off sig_codepoint(u16) || lp_u32(sender_sig); the trailing
+            // bytes are the original body (discarded — we substitute new_body).
+            let sig_len =
+                u32::from_be_bytes([honest_v2[2], honest_v2[3], honest_v2[4], honest_v2[5]])
+                    as usize;
+            let sig_prefix_end = 6 + sig_len; // 2 (codepoint) + 4 (lp) + sig
+            let captured_sig_region = honest_v2[..sig_prefix_end].to_vec();
+
+            // Rebuild body_v2 with A's captured sig-region + the SUBSTITUTED body,
+            // re-sealed under the same CEK with the SAME (original body_cid) AAD.
+            let mut spliced_v2 = captured_sig_region;
+            spliced_v2.extend_from_slice(new_body);
+            let spliced_env = benten_crypto_suite::aead::wrap(&spliced_v2, &cek_key, &body_aad)
+                .expect("co-member re-seal of the substituted body must succeed");
+
+            let mut spliced = self.clone();
+            spliced.body_wire = spliced_env.to_wire_bytes();
+            // body_cid + stanzas + stanza_count + wire-header all UNCHANGED.
+            spliced
         }
     }
 
