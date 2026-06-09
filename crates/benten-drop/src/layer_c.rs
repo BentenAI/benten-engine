@@ -2057,6 +2057,30 @@ pub mod group_posture {
         }
     }
 
+    /// Derive the `0x6610` group bulk-CEK (CONF-1, SECURITY-CRITICAL).
+    ///
+    /// The single source of truth for the MembershipSet group CEK. It mixes:
+    /// the [`MEMBERSHIP_GROUP_CEK_CONTEXT`] domain prefix, the K_Set secret
+    /// (READ; never on the wire), the `sender_did`, AND — CONF-1 — the
+    /// per-message `cid` (the self-describing CIDv1 over `BLAKE3(plaintext)`,
+    /// which IS on the wire as `env.body_cid`). Mixing `cid` makes the CEK
+    /// PER-MESSAGE-unique: two distinct sends from the SAME sender under the
+    /// SAME K_Set generation seal under DISTINCT CEKs, so the random 96-bit
+    /// AEAD nonce never reuses a key (no birthday-wall keystream reuse /
+    /// Poly1305 forgery). This binds the body identity into the CEK exactly as
+    /// the `0x6520` [`seal_group_impl`] CEK binds `body_cid` per send. Any
+    /// holder of the envelope can reconstruct the CEK from `k_set` + the WIRE
+    /// `cid` (the recipient itself HPKE-unwraps the per-stanza `wrapped_cek`
+    /// rather than re-deriving).
+    fn derive_group_cek(k_set: &[u8; 32], sender_did: &[u8], cid: &[u8]) -> [u8; 32] {
+        let mut h = blake3::Hasher::new();
+        h.update(MEMBERSHIP_GROUP_CEK_CONTEXT);
+        h.update(k_set);
+        h.update(sender_did);
+        h.update(cid);
+        *h.finalize().as_bytes()
+    }
+
     /// Seal a MembershipSet K_Set group (`0x6610`) honoring Sealed-Sender:
     /// each stanza binds the inner-sender-DID in its sealed payload (NOT
     /// plaintext on the wire).
@@ -2083,15 +2107,22 @@ pub mod group_posture {
         let stanza_count = u32::try_from(recipient_pks.len()).expect("count fits u32");
         let body_digest = *blake3::hash(plaintext).as_bytes();
         let cid = self_describing_cid(&body_digest);
-        // The group CEK is the K_Set-derived per-send key (READ K_Set; the
-        // set key itself never goes on the wire).
-        let cek = {
-            let mut h = blake3::Hasher::new();
-            h.update(MEMBERSHIP_GROUP_CEK_CONTEXT);
-            h.update(k_set);
-            h.update(sender_did);
-            *h.finalize().as_bytes()
-        };
+        // The group CEK is the K_Set-derived PER-MESSAGE key (READ K_Set; the
+        // set key itself never goes on the wire). CONF-1 (SECURITY-CRITICAL):
+        // the derivation MUST mix a per-message value so two distinct sends
+        // from the SAME sender under the SAME K_Set generation seal under
+        // DISTINCT CEKs — otherwise every message reuses ONE byte-identical
+        // CEK and the random 96-bit AEAD nonce hits the birthday wall (~2^48
+        // seals) where a single collision is catastrophic (keystream reuse +
+        // Poly1305 forgery). We mix the per-message `cid` (the self-describing
+        // CIDv1 over `BLAKE3(plaintext)`, already on the wire as
+        // `env.body_cid`) — IDENTICAL in spirit to the `0x6520`
+        // `seal_group_impl` CEK, which binds `body_cid` per send. The recipient
+        // never re-derives this CEK (it HPKE-unwraps the per-stanza
+        // `wrapped_cek`), and any party holding the envelope can reconstruct it
+        // from `k_set` + the WIRE `cid` (the property `with_spliced_body_for_test`
+        // exercises).
+        let cek = derive_group_cek(k_set, sender_did, &cid);
         let cek_key =
             AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &cek);
 
@@ -2406,6 +2437,22 @@ pub mod group_posture {
             self.stanza_count
         }
 
+        /// **Test-only accessor (CONF-1):** re-derive the per-message group
+        /// bulk-CEK from `k_set` + the inner `sender_did` + the WIRE `cid`
+        /// (`self.body_cid`), using the SAME [`derive_group_cek`] the live seal
+        /// calls. Exposes the property that drives the CONF-1 nonce-reuse fix:
+        /// two distinct sends from the SAME sender under the SAME K_Set
+        /// generation MUST yield DISTINCT CEKs (because their `cid` differs).
+        /// Reverting the `cid`-mix makes the two re-derived CEKs byte-identical
+        /// — the would-FAIL-on-revert demonstration the CONF-1 test asserts.
+        /// Also demonstrates recipient-recomputability: the CEK is recoverable
+        /// from inputs a member already holds (K_Set) plus the wire `cid`.
+        #[cfg(any(test, feature = "testing"))]
+        #[must_use]
+        pub fn derive_cek_for_test(&self, k_set: &[u8; 32], sender_did: &[u8]) -> [u8; 32] {
+            derive_group_cek(k_set, sender_did, &self.body_cid)
+        }
+
         /// **Test-only accessor (F-02 / M-20):** the actual canonical per-stanza
         /// AAD bytes the live seal bound for stanza `idx` (the BLINDED 11-field
         /// set). Used to assert byte-equality against the local
@@ -2435,14 +2482,11 @@ pub mod group_posture {
             sender_did: &[u8],
             new_body: &[u8],
         ) -> Self {
-            // Rederive the per-send CEK exactly as the seal side does.
-            let cek = {
-                let mut h = blake3::Hasher::new();
-                h.update(MEMBERSHIP_GROUP_CEK_CONTEXT);
-                h.update(k_set);
-                h.update(sender_did);
-                *h.finalize().as_bytes()
-            };
+            // Rederive the per-send CEK exactly as the seal side does — now
+            // INCLUDING the wire `cid` (CONF-1). The CEK binds `self.body_cid`,
+            // which the splice keeps byte-unchanged, so a co-member holding
+            // K_Set re-derives the IDENTICAL CEK and can unwrap the honest body.
+            let cek = derive_group_cek(k_set, sender_did, &self.body_cid);
             let cek_key =
                 AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &cek);
 
