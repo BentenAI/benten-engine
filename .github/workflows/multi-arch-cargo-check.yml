@@ -111,7 +111,7 @@ jobs:
           key: aarch64-sandbox-runtime
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2
+        uses: taiki-e/install-action@7a79fe8c3a13344501c80d99cae481c1c9085912 # v2
         with:
           tool: cargo-nextest
 
