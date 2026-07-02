@@ -108,6 +108,24 @@ ignore = [
     { id = "RUSTSEC-2025-0098", reason = "transitive via tauri-utils -> urlpattern -> unic-ucd-* family; informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream urlpattern/unic-ucd successor migration)" },
     { id = "RUSTSEC-2025-0100", reason = "transitive via tauri-utils -> urlpattern -> unic-ucd-* family; informational unmaintained; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream urlpattern/unic-ucd successor migration)" },
     { id = "RUSTSEC-2026-0173", reason = "proc-macro-error2 newly-flagged unmaintained (successor to proc-macro-error RUSTSEC-2024-0370, also ignored); transitive via tauri 2.x / gtk-rs proc-macro deps AND via hax-lib-macros (the hax formal-verification macro crate's proc-macro-error2 dep); informational unmaintained, no exploit; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri upstream proc-macro-error2 successor migration)" },
+
+    # RUSTSEC-2026-0194 + RUSTSEC-2026-0195: quick-xml DoS advisories (HIGH
+    # 7.5) — DISTINCT CATEGORY from the informational-unmaintained entries
+    # above (these are real DoS advisories, suppressed on REACHABILITY, not
+    # informational). RUSTSEC-2026-0194 = quadratic-runtime duplicate-attribute;
+    # RUSTSEC-2026-0195 = unbounded namespace-declaration allocation. Transitive
+    # via tauri 2.11 -> plist 1.9 -> quick-xml 0.39 AND iroh 1.0.0-rc.0 ->
+    # netwatch -> netdev -> plist -> quick-xml. quick-xml is reached ONLY for
+    # parsing LOCAL OS-generated property lists (macOS Info.plist /
+    # network-interface enumeration) — never remote or untrusted-user XML — so
+    # the malicious-XML input both advisories require is not reachable on any
+    # Benten attack surface. NOT bumpable in isolation: plist pins
+    # quick-xml ^0.39.2, so quick-xml >=0.41.0 needs upstream plist/tauri/iroh
+    # releases. Closure on the tauri/iroh upstream bump cycle tracked at
+    # docs/future/phase-4-backlog.md §3.6. Added 2026-07-02 (Phase-4-Meta-Core
+    # R6 round-7); mirror in supply-chain.yml cargo-audit --ignore (§3.5g item 4).
+    { id = "RUSTSEC-2026-0194", reason = "quick-xml quadratic-runtime duplicate-attribute DoS (HIGH 7.5); transitive via tauri 2.11 -> plist AND iroh 1.0.0-rc.0 -> netdev -> plist -> quick-xml; reachable ONLY for local OS-plist parsing (macOS Info.plist / netdev interface enumeration), never remote/untrusted XML; plist pins quick-xml ^0.39.2 so not bumpable without upstream plist/tauri/iroh release; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri/iroh upstream plist -> quick-xml >=0.41 bump)" },
+    { id = "RUSTSEC-2026-0195", reason = "quick-xml unbounded namespace-declaration allocation DoS (HIGH 7.5); transitive via tauri 2.11 -> plist AND iroh 1.0.0-rc.0 -> netdev -> plist -> quick-xml; reachable ONLY for local OS-plist parsing (macOS Info.plist / netdev interface enumeration), never remote/untrusted XML; plist pins quick-xml ^0.39.2 so not bumpable without upstream plist/tauri/iroh release; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri/iroh upstream plist -> quick-xml >=0.41 bump)" },
 ]
 
 # ---------------------------------------------------------------------------

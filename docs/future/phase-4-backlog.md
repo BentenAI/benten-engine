@@ -106,6 +106,15 @@ All are **informational-only unmaintained advisories** (no exploit class). The c
 
 **Tracked deny.toml ignores at `/Users/benwork/Documents/benten-engine/deny.toml` lines 75-113** (R6-FP-E commit).
 
+**quick-xml DoS carry (added 2026-07-02, Phase-4-Meta-Core R6 round-7) — DISTINCT CATEGORY: real advisories, suppressed on reachability, NOT informational-unmaintained.** Two 2026 RUSTSEC advisories fire against `quick-xml 0.39.4`. Unlike every entry above, these are genuine HIGH-severity DoS advisories, not informational-unmaintained flags:
+
+| Advisory | Crate | Severity | Reachability on Benten | Upstream closure |
+|---|---|---|---|---|
+| RUSTSEC-2026-0194 | quick-xml (quadratic-runtime duplicate-attribute) | 7.5 HIGH | local OS-plist parsing only | plist → quick-xml ≥0.41 via tauri/iroh bump |
+| RUSTSEC-2026-0195 | quick-xml (unbounded namespace-declaration allocation) | 7.5 HIGH | local OS-plist parsing only | plist → quick-xml ≥0.41 via tauri/iroh bump |
+
+`quick-xml` is transitive via **both** `tauri 2.11 → plist 1.9` **and** `iroh 1.0.0-rc.0 → netwatch → netdev → plist`. `plist` uses it **only** to parse **local OS-generated property lists** (macOS `Info.plist` / network-interface enumeration) — never remote or untrusted-user XML — so the malicious-XML input both advisories require is not reachable on any Benten attack surface. **Not bumpable in isolation:** `plist 1.9.0` pins `quick-xml ^0.39.2`, so `quick-xml ≥0.41.0` requires upstream `plist`/`tauri`/`iroh` releases (verified `cargo update -p quick-xml --precise 0.41.0` fails on the plist requirement 2026-07-02). Ignored in `deny.toml [advisories].ignore` **and** `supply-chain.yml` cargo-audit `--ignore` (§3.5g item 4 dual-config mirror). **v1-assessment-window action: drop BOTH ignores** the moment the tauri/iroh dep-bump cycle pulls `plist` onto `quick-xml ≥0.41.0`. (Cross-ref: iroh-version-bump cycle at `phase-3-backlog.md §9`.)
+
 ### §3.4 Phase 4-Meta inherited carries from Phase 3
 
 - wasmtime Component-Model re-evaluation (Phase-3 D-PHASE-3-6 + D-PHASE-3-16 + r1-wsa-12)

@@ -102,7 +102,17 @@ jobs:
             --ignore RUSTSEC-2025-0081 \
             --ignore RUSTSEC-2025-0098 \
             --ignore RUSTSEC-2025-0100 \
-            --ignore RUSTSEC-2026-0173
+            --ignore RUSTSEC-2026-0173 \
+            --ignore RUSTSEC-2026-0194 \
+            --ignore RUSTSEC-2026-0195
+            # RUSTSEC-2026-0194 + RUSTSEC-2026-0195 (quick-xml DoS, HIGH 7.5):
+            # mirror of deny.toml [advisories].ignore (§3.5g item 4 dual-config
+            # mirror). quick-xml transitive via tauri 2.11 -> plist AND
+            # iroh 1.0.0-rc.0 -> netdev -> plist; reached ONLY for local OS-plist
+            # parsing (macOS Info.plist / interface enumeration), never
+            # remote/untrusted XML. plist pins quick-xml ^0.39.2 so not bumpable
+            # without upstream plist/tauri/iroh releases. Drop both when tauri/iroh
+            # bump pulls plist onto quick-xml >=0.41.0. Closure: phase-4-backlog.md §3.6.
             # RUSTSEC-2026-0173 (proc-macro-error2 newly-flagged unmaintained,
             # informational; transitive via tauri/gtk-rs proc-macros) added 2026-06-07.
             # RUSTSEC-2026-0119 + RUSTSEC-2026-0120 (hickory-dns
