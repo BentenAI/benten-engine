@@ -1344,3 +1344,26 @@ Ben: "Let's just proceed with it all now!" — launched both as background work.
 **R6-R7 SHARD C DONE = `r6-r7-fix-c @ e36b3b0f`** (cite-drift clean, didn't stall): cd-1 (SECURITY-PROOFS §3.3: 0x6610→assemble_group_aad, 0x6520→EncryptedEnvelope::HpkeMultiBase) · cd-2/cd-3/as-built-gossip-§4.1/sc-1 · CLUSTER-ROW EXPANSION (D-39:12 / D-40:26 / D-50:3 / D-53:33 / D-54:22 IDs, per-ID sub-lists, no disposition changed — DISCHARGES pre-tag opacity) · named-carry D-55..D-63 + fixed D-30 :147→:185. C-NOTE: cite-drift misses LINE-drift (only missing symbols/globs) → line-anchor currency not gate-enforced (codify). IN-FLIGHT: A a55e03f0 (BLOCKER CONF-1) + B a69724990601f04d2 (code MAJORs/delete).
 
 **R6-R7 SHARD A (BLOCKER CONF-1) DONE = `r6-r7-fix-a @ cf280fc0`** (gates green 414+938, didn't stall): 0x6610 CEK now BLAKE3(CONTEXT‖K_Set‖sender_did‖cid) where cid=self_describing_cid(BLAKE3(plaintext)) — message-UNIQUE; SEAL-side only via shared derive_group_cek helper (:2075); OPEN unchanged (recipient HPKE-UNWRAPS per-stanza wrapped_cek, does NOT re-derive — seal change flows through); MEMBERSHIP_GROUP_CEK_CONTEXT prefix + domain_registry mirror UNCHANGED (only hashed inputs); round-6 F-01 body_cid recompute intact; f_conf_1_membership_group_cek_is_per_message_unique would-FAIL-on-revert VERIFIED; NO golden recomputed (AAD golden CEK-independent, body random-nonce). **A ORCH MINI-REVIEW: PASS (verify seal-binds-cid + open-unwraps-not-rederives at integration).** IN-FLIGHT: B a69724990601f04d2 (drop-placeholder DELETE + psf-1/psf-2/PIC-2, still building).
+
+---
+## ===== SESSION HANDOFF (2026-07-02) — ALL R6-R7 SHARDS ON ORIGIN, READY TO INTEGRATE =====
+**Everything pushed. A fresh session (recommended: fresh LOCAL, to keep warm sccache) can resume from here.** The prior session had an intermittent malformed-tool-call issue (session-specific, not the environment).
+
+**ORIGIN STATE:** main `81924331` · orchestration `94fad7b5` · **all 3 R6-R7 fix shards pushed:**
+- `phase-4-meta-core/r6-r7-fix-a @ cf280fc0` — BLOCKER CONF-1 (0x6610 CEK binds per-message cid; nonce-reuse closed; gates green 414+938; would-FAIL-on-revert test)
+- `phase-4-meta-core/r6-r7-fix-b @ fa98b82b` — drop-placeholder DELETE (Ben-ratified) + psf-1 (exit_criterion_7 live canonical-12 PrimitiveKind backstop, 938→939) + psf-2 (TS glob dist/**/*.d.ts, baseline 14→15) + PIC-2; **gates ALL GREEN** (fmt/clippy-workspace/nextest 812+939/doc/missing_docs 3/cite-drift clean via run bq9mu7yh6; 2 dual-CID prose refs reworded post-gate — prose-only)
+- `phase-4-meta-core/r6-r7-fix-c @ e36b3b0f` — cd-1 + doc cluster + cluster-row expansion (D-39/40/50/53/54) + named-carry D-55..D-63
+
+**NEXT ACTIONS (resume here):**
+1. INTEGRATE A+B+C (file-disjoint): worktree off main 81924331, merge origin/…/r6-r7-fix-{a,b,c}, re-gate (fmt/clippy --workspace --features testing/nextest -p benten-drop -p benten-membership-set -p benten-crypto-suite -p benten-core -p benten-sync --features testing/benten-engine CI-feature-set/cite-drift).
+2. MINI-REVIEW: CONF-1 (0x6610 CEK binds cid at seal, open HPKE-unwraps) + drop-placeholder DELETE (no dangling refs, §15.d/§15.j reconciled to layer_c, benten-drop public-api regen) + psf-1 live.
+3. Open reconcile PR → Ben --squash (NEVER --admin/force). Clean worktrees on merge.
+4. On merge → new main SHA → R6 ROUND 8: edit f-full-r6-council.js (replace_all 81924331→newSHA; ROUND-8 framing APOSTROPHE-FREE single-quoted string, node --check wrapped copy; ADD 2 missed-lenses to mustInclude: crypto-error-oracle/failure-mode-uniformity + at-rest-format-migration/forever-decode-prior-schema; keep sender-origin-authentication-spoofing lens) → Workflow({scriptPath}) → iterate to 0 BLK/MAJ.
+
+**PENDING-BEN PRE-TAG BUNDLE (after convergence):** 5→18 cargo-vet · §16 §1.A.FROZEN FLAG discharge + HEAD re-pin (b93b2efc→freeze SHA) · gossip §3.9/3.10 · multicodec supersession · DropContentMode §11-table · CLUSTER-ROW per-ID walk. **TAG phase-4-meta-core-close = Ben explicit go ONLY.**
+
+**CONVERGENCE ARC:** R1→R2(10MAJ)→R3(7MAJ)→R4(C-01)→R5(2MAJ)→R6(BLOCKER content-splice)→R7(BLOCKER nonce-reuse). Deeper crypto lenses keep finding real BLOCKERs; DO NOT short-circuit round 8.
+
+**CI FEATURE SET (benten-engine):** `--features benten-engine/test-helpers,benten-crypto-suite/testing,benten-eval/testing,benten-graph/testing` (bare `-p benten-engine --features testing` compile-fails on test-helper integration files).
+
+**UNCAPTURED LESSONS TO CODIFY:** (1) agent briefs must gate SYNCHRONOUSLY + commit/push LAST; (2) rate-limited agents = recoverable worktree work (resume-from-worktree); (3) Workflow framing = single-quoted JS, apostrophes break it, node --check first; (4) Workflow large args.cfg doesn't bind — INLINE config; (5) cite-drift misses LINE-number drift; (6) verify git branch (detached-HEAD recurred).
