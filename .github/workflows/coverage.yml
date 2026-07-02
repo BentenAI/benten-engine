@@ -73,7 +73,7 @@ jobs:
           shared-key: coverage
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2
+        uses: taiki-e/install-action@16b05812d776ae1dfaabc8277e421fb6d2506419 # v2
         with:
           tool: cargo-llvm-cov
 
@@ -115,7 +115,7 @@ jobs:
         # comments + historical trend charts from codecov for free. Wire-
         # up decision recorded in .addl/phase-2a/ci-decisions-2026-04-22.md
         # §4 open-question #2.
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5
         with:
           files: coverage.lcov
           fail_ci_if_error: false
