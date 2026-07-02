@@ -38,7 +38,7 @@ U4 (sender-DID-in-AAD) applies to IT.
 
 ## §3.3 — `0x6610` MembershipSet group per-stanza AAD (BLINDED)
 
-The group `EnvelopePayload::HpkeMultiBase` for a MembershipSet. **11 fields**, BLINDED:
+The `0x6610` group per-stanza AAD for a MembershipSet — assembled by `benten_membership_set::aad::assemble_group_aad`, which binds the `benten_membership_set::codepoints::MEMBERSHIP_SET_GROUP_MULTI_STANZA` (`0x6610`) codepoint. **11 fields**, BLINDED:
 
 | Field | Width | Notes |
 |---|---|---|
@@ -64,7 +64,7 @@ own §3.9 / Compromise #61 blinding posture; blinding makes the group AAD obey t
 
 ## §3.3 — `0x6520` `LAYER_C_DROP_MULTI_RECIPIENT` group per-stanza AAD (BLINDED)
 
-`0x6520` is the Layer-C **multi-recipient** group send (`EnvelopePayload::HpkeMultiBase`) — **DISTINCT from the
+`0x6520` is the Layer-C **multi-recipient** group send (`benten_drop::layer_c::EncryptedEnvelope::HpkeMultiBase`) — **DISTINCT from the
 `0x6610` MembershipSet group; it is NOT a MembershipSet**. It carries the same recipient-roster social-graph leak
 (#61-class), so it is BLINDED the same way. **8 fields:**
 
@@ -151,8 +151,8 @@ derived/authenticated under one surface's tag can never be parsed or re-keyed as
 under adversarial concatenation/length-extension framing. The registered surfaces span the Layer-C single/group
 CEK derivations, the chunked-AEAD info strings (`benten-aead:{whole,chunk,recipe}:`), the sender-auth /
 envelope-signature binding domains (`SENDER_AUTH_DOMAIN` / `ENVELOPE_SIG_DOMAIN` — see §4.1 `M_auth`), the
-remote-grant / remote-request / exec-workflow AAD domains, the MembershipSet set-id (`benten:setid:v1`) and §3.9
-gossip-topic derivations, the `K(V)` / `K(N)` keying-glue contexts, the Layer-A vault AAD label
+remote-grant / remote-request / exec-workflow AAD domains, the MembershipSet set-id (`benten:setid:v1`),
+the `K(V)` / `K(N)` keying-glue contexts, the Layer-A vault AAD label
 (`benten-vault:`) and DAK HKDF info-tag (`benten-dak-v1`), and the deterministic recipient-seed expansion label
 (`benten-crypto-suite:recipient-seed`). **Permanence:** the prefix-free property is the
 PERMANENT v1-beta commitment; the registry contents are additive (a new surface registers a new tag, which MUST
@@ -163,7 +163,10 @@ silently opening a cross-surface confusion path. (Cross-ref: `docs/THREAT-MODEL.
 for the threat statement. The centralizing registry CODE + its prefix-free regression test have SHIPPED at
 `crates/benten-crypto-suite/src/domain_registry.rs` — a 19-tag corpus enumerated by `registered_domain_tags()`
 with the `all_domain_tags_are_prefix_free` regression; this property records the structural shape that code
-realizes.)
+realizes. **The §3.9 gossip-topic derivation is deliberately NOT a registered tag** — it is
+`blake3::keyed_hash(K_Set, membership_set_id ‖ BE(generation))` with NO domain-separation label (R0.7 §3.9
+authoritative, golden byte-confirmed): its keyed preimage shape, not a label string, is the separator, so there
+is no tag to register.)
 
 ---
 
