@@ -514,52 +514,6 @@ pub type benten_drop::layer_c::RecipientPubKey = [u8; 32]
 pub type benten_drop::layer_c::RecipientSecKey = [u8; 32]
 pub type benten_drop::layer_c::SelfDescribingCid = alloc::vec::Vec<u8>
 pub type benten_drop::layer_c::SenderDid = alloc::vec::Vec<u8>
-pub mod benten_drop::payload
-pub struct benten_drop::payload::DropBundlePayload
-pub benten_drop::payload::DropBundlePayload::codepoint: u16
-pub benten_drop::payload::DropBundlePayload::content: alloc::vec::Vec<benten_drop::payload::EncryptedNode>
-pub benten_drop::payload::DropBundlePayload::format_version: u8
-pub benten_drop::payload::DropBundlePayload::recipient_wrapped_cek: benten_drop::payload::WrappedCek
-pub benten_drop::payload::DropBundlePayload::spec_cid: benten_drop::payload::Cid
-impl benten_drop::payload::DropBundlePayload
-pub fn benten_drop::payload::DropBundlePayload::serialize(&self) -> alloc::vec::Vec<u8>
-impl core::clone::Clone for benten_drop::payload::DropBundlePayload
-pub fn benten_drop::payload::DropBundlePayload::clone(&self) -> benten_drop::payload::DropBundlePayload
-impl core::cmp::Eq for benten_drop::payload::DropBundlePayload
-impl core::cmp::PartialEq for benten_drop::payload::DropBundlePayload
-pub fn benten_drop::payload::DropBundlePayload::eq(&self, &benten_drop::payload::DropBundlePayload) -> bool
-impl core::fmt::Debug for benten_drop::payload::DropBundlePayload
-pub fn benten_drop::payload::DropBundlePayload::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::StructuralPartialEq for benten_drop::payload::DropBundlePayload
-impl core::marker::Freeze for benten_drop::payload::DropBundlePayload
-impl core::marker::Send for benten_drop::payload::DropBundlePayload
-impl core::marker::Sync for benten_drop::payload::DropBundlePayload
-impl core::marker::Unpin for benten_drop::payload::DropBundlePayload
-impl core::marker::UnsafeUnpin for benten_drop::payload::DropBundlePayload
-impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::payload::DropBundlePayload
-impl core::panic::unwind_safe::UnwindSafe for benten_drop::payload::DropBundlePayload
-pub struct benten_drop::payload::EncryptedNode
-pub benten_drop::payload::EncryptedNode::ciphertext: alloc::vec::Vec<u8>
-pub benten_drop::payload::EncryptedNode::node_cid: benten_drop::payload::Cid
-impl core::clone::Clone for benten_drop::payload::EncryptedNode
-pub fn benten_drop::payload::EncryptedNode::clone(&self) -> benten_drop::payload::EncryptedNode
-impl core::cmp::Eq for benten_drop::payload::EncryptedNode
-impl core::cmp::PartialEq for benten_drop::payload::EncryptedNode
-pub fn benten_drop::payload::EncryptedNode::eq(&self, &benten_drop::payload::EncryptedNode) -> bool
-impl core::fmt::Debug for benten_drop::payload::EncryptedNode
-pub fn benten_drop::payload::EncryptedNode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::StructuralPartialEq for benten_drop::payload::EncryptedNode
-impl core::marker::Freeze for benten_drop::payload::EncryptedNode
-impl core::marker::Send for benten_drop::payload::EncryptedNode
-impl core::marker::Sync for benten_drop::payload::EncryptedNode
-impl core::marker::Unpin for benten_drop::payload::EncryptedNode
-impl core::marker::UnsafeUnpin for benten_drop::payload::EncryptedNode
-impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::payload::EncryptedNode
-impl core::panic::unwind_safe::UnwindSafe for benten_drop::payload::EncryptedNode
-pub fn benten_drop::payload::seal_drop_over_subtree(&[benten_drop::payload::EncryptedNode], &benten_drop::payload::Cid, &[u8; 32], &benten_drop::payload::KSet) -> benten_drop::payload::DropBundlePayload
-pub type benten_drop::payload::Cid = [u8; 32]
-pub type benten_drop::payload::KSet = [u8; 32]
-pub type benten_drop::payload::WrappedCek = alloc::vec::Vec<u8>
 #[non_exhaustive] pub enum benten_drop::DropBundleError
 pub benten_drop::DropBundleError::AuthorizationGrantFailed(benten_caps::authorization_grant::AuthorizationGrantError)
 pub benten_drop::DropBundleError::CodecError(alloc::string::String)
@@ -671,29 +625,6 @@ impl core::marker::Unpin for benten_drop::bundle::DropBundle
 impl core::marker::UnsafeUnpin for benten_drop::bundle::DropBundle
 impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::bundle::DropBundle
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::bundle::DropBundle
-pub struct benten_drop::DropBundlePayload
-pub benten_drop::DropBundlePayload::codepoint: u16
-pub benten_drop::DropBundlePayload::content: alloc::vec::Vec<benten_drop::payload::EncryptedNode>
-pub benten_drop::DropBundlePayload::format_version: u8
-pub benten_drop::DropBundlePayload::recipient_wrapped_cek: benten_drop::payload::WrappedCek
-pub benten_drop::DropBundlePayload::spec_cid: benten_drop::payload::Cid
-impl benten_drop::payload::DropBundlePayload
-pub fn benten_drop::payload::DropBundlePayload::serialize(&self) -> alloc::vec::Vec<u8>
-impl core::clone::Clone for benten_drop::payload::DropBundlePayload
-pub fn benten_drop::payload::DropBundlePayload::clone(&self) -> benten_drop::payload::DropBundlePayload
-impl core::cmp::Eq for benten_drop::payload::DropBundlePayload
-impl core::cmp::PartialEq for benten_drop::payload::DropBundlePayload
-pub fn benten_drop::payload::DropBundlePayload::eq(&self, &benten_drop::payload::DropBundlePayload) -> bool
-impl core::fmt::Debug for benten_drop::payload::DropBundlePayload
-pub fn benten_drop::payload::DropBundlePayload::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::StructuralPartialEq for benten_drop::payload::DropBundlePayload
-impl core::marker::Freeze for benten_drop::payload::DropBundlePayload
-impl core::marker::Send for benten_drop::payload::DropBundlePayload
-impl core::marker::Sync for benten_drop::payload::DropBundlePayload
-impl core::marker::Unpin for benten_drop::payload::DropBundlePayload
-impl core::marker::UnsafeUnpin for benten_drop::payload::DropBundlePayload
-impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::payload::DropBundlePayload
-impl core::panic::unwind_safe::UnwindSafe for benten_drop::payload::DropBundlePayload
 pub struct benten_drop::EncryptedContent
 pub benten_drop::EncryptedContent::bytes: alloc::vec::Vec<u8>
 impl benten_drop::bundle::EncryptedContent
@@ -715,5 +646,3 @@ impl core::marker::UnsafeUnpin for benten_drop::bundle::EncryptedContent
 impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::bundle::EncryptedContent
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::bundle::EncryptedContent
 pub const benten_drop::DROP_BUNDLE_MAX_SIZE_BYTES: usize
-pub fn benten_drop::seal_drop_over_subtree(&[benten_drop::payload::EncryptedNode], &benten_drop::payload::Cid, &[u8; 32], &benten_drop::payload::KSet) -> benten_drop::payload::DropBundlePayload
-pub type benten_drop::KSet = [u8; 32]

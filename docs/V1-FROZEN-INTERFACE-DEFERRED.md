@@ -1368,7 +1368,7 @@ Row D-15's audit-readiness concern.
 
 - **Frozen surface (v1-beta):** the typed error variant
   `DeviceLinkError::SessionIdReplayed` exists at
-  `crates/benten-engine/src/layer_d/device_link.rs:147` (the Signal-Provisioning
+  `crates/benten-engine/src/layer_d/device_link.rs:185` (the Signal-Provisioning
   device-link replay-defense arm) + is exercised by the layer_d test suite.
 - **Deferred consumption (G-COMP-1 destination):** wire the PRODUCTION
   session-id replay store — the durable consumed-session-id set that the
@@ -1581,11 +1581,51 @@ Row D-15's audit-readiness concern.
 
 - **Observation (NAMED, not fixed this round):** the R6-R3 council surfaced a cluster of **code-behavior** observations (finding IDs F-26, F-39, F-40, F-41, F-43, F-44, F-46, F-60, F-61, F-62, F-63, F-64). These describe runtime / construction-site behaviors (NOT doc-reconciliation), so they are out of scope for the doc-only shard that authored this row and are carried for a code-owning reviewer.
 - **Destination:** the R6-R3 code-fix shard (the sibling shard that owns Rust src) / the next phase-close convergence round. Each ID is dispositioned by the code reviewer as fix-now / OUT-OF-SCOPE / NAMED-downstream per HARD RULE 12 when picked up. Recorded here so none is silently dropped between rounds (pim-N-prior-phase-explicit-preflight discipline).
+- **Per-ID breakdown (12 constituent IDs; uniform disposition = OUT-OF-SCOPE for this doc shard — each is a code-behavior item owned by the sibling CODE shard / Rust src, byte-correct at HEAD, not freeze-gating):**
+  - `F-26` — out-of-scope (code-behavior; CODE shard)
+  - `F-39` — out-of-scope (code-behavior; CODE shard)
+  - `F-40` — out-of-scope (code-behavior; CODE shard)
+  - `F-41` — out-of-scope (code-behavior; CODE shard)
+  - `F-43` — out-of-scope (code-behavior; CODE shard)
+  - `F-44` — out-of-scope (code-behavior; CODE shard)
+  - `F-46` — out-of-scope (code-behavior; CODE shard)
+  - `F-60` — out-of-scope (code-behavior; CODE shard)
+  - `F-61` — out-of-scope (code-behavior; CODE shard)
+  - `F-62` — out-of-scope (code-behavior; CODE shard)
+  - `F-63` — out-of-scope (code-behavior; CODE shard)
+  - `F-64` — out-of-scope (code-behavior; CODE shard)
 
 ### Row D-40 — R6-R3 cite/comment/disclosure OBS cluster (F-10 / F-11 / F-16 / F-17 / F-20 / F-27 / F-29 / F-31 / F-32 / F-34 / F-35 / F-37 / F-38 / F-42 / F-45 / F-49 / F-50 / F-51 / F-52 / F-53 / F-54 / F-56 / F-57 / F-59 / F-65 / F-66)
 
 - **Observation (NAMED, not fixed this round):** the R6-R3 council surfaced a cluster of **cite / comment / disclosure** observations (finding IDs F-10, F-11, F-16, F-17, F-20, F-27, F-29, F-31, F-32, F-34, F-35, F-37, F-38, F-42, F-45, F-49, F-50, F-51, F-52, F-53, F-54, F-56, F-57, F-59, F-65, F-66). These are minor cite-precision / comment-accuracy / disclosure-completeness observations that a downstream reviewer can address; they are not freeze-blocking and were below the fix-now threshold for this shard (which prioritized the MAJOR + cheap-cite fixes named in its brief).
 - **Destination:** the next phase-close convergence round / the freeze-record reconcile sweep that precedes the Ben-gated tag. Each ID is dispositioned when picked up. Recorded here so the cluster survives between rounds.
+- **Per-ID breakdown (26 constituent IDs; uniform disposition = named-carry — each is a cite-precision / comment-accuracy / disclosure-completeness item, byte-correct at HEAD, not freeze-gating):**
+  - `F-10` — named-carry (cite/comment/disclosure)
+  - `F-11` — named-carry (cite/comment/disclosure)
+  - `F-16` — named-carry (cite/comment/disclosure)
+  - `F-17` — named-carry (cite/comment/disclosure)
+  - `F-20` — named-carry (cite/comment/disclosure)
+  - `F-27` — named-carry (cite/comment/disclosure)
+  - `F-29` — named-carry (cite/comment/disclosure)
+  - `F-31` — named-carry (cite/comment/disclosure)
+  - `F-32` — named-carry (cite/comment/disclosure)
+  - `F-34` — named-carry (cite/comment/disclosure)
+  - `F-35` — named-carry (cite/comment/disclosure)
+  - `F-37` — named-carry (cite/comment/disclosure)
+  - `F-38` — named-carry (cite/comment/disclosure)
+  - `F-42` — named-carry (cite/comment/disclosure)
+  - `F-45` — named-carry (cite/comment/disclosure)
+  - `F-49` — named-carry (cite/comment/disclosure)
+  - `F-50` — named-carry (cite/comment/disclosure)
+  - `F-51` — named-carry (cite/comment/disclosure)
+  - `F-52` — named-carry (cite/comment/disclosure)
+  - `F-53` — named-carry (cite/comment/disclosure)
+  - `F-54` — named-carry (cite/comment/disclosure)
+  - `F-56` — named-carry (cite/comment/disclosure)
+  - `F-57` — named-carry (cite/comment/disclosure)
+  - `F-59` — named-carry (cite/comment/disclosure)
+  - `F-65` — named-carry (cite/comment/disclosure)
+  - `F-66` — named-carry (cite/comment/disclosure)
 - **Note — F-58 = NO-ACTION:** the `repr(u8)` frozen-cardinality carve-out is correct as-built; no row needed (carried here only to record the explicit NO-ACTION disposition so it is not re-raised).
 
 ---
@@ -1649,6 +1689,10 @@ Row D-15's audit-readiness concern.
 
 - **Observation (NAMED, not fixed this round):** the R6-R4 council surfaced a residual cluster of minor doc-staleness items (finding IDs C-23, C-24, C-25) — cite-precision / comment-accuracy observations below the fix-now threshold for this shard (which prioritized the MAJOR + named cite fixes in its brief).
 - **Destination:** the next phase-close convergence round / the freeze-record reconcile sweep that precedes the tag. Each ID is dispositioned when picked up. Recorded here so none is silently dropped between rounds (pim-N-prior-phase-explicit-preflight discipline).
+- **Per-ID breakdown (3 constituent IDs; uniform disposition = named-carry — minor doc-staleness / cite-precision / comment-accuracy, below the fix-now threshold, not freeze-gating):**
+  - `C-23` — named-carry (doc-staleness / cite-precision)
+  - `C-24` — named-carry (doc-staleness / cite-precision)
+  - `C-25` — named-carry (doc-staleness / cite-precision)
 
 ### Row D-51 — C-26: gossip §3.9 `FLAGGED-FOR-BEN` rustdoc residue → pre-tag Ben item (UNRESOLVED, by design)
 
@@ -1719,6 +1763,45 @@ Row D-15's audit-readiness concern.
   specific F-NN proves to be a code-adjacent item (e.g. a Rust test-file header
   or a missing test pin), it migrates to the sibling CODE shard / a Rust test
   target at pickup rather than being closed in this doc shard.
+- **Per-ID breakdown (the `F-07..F-39` carry range = 33 constituent IDs; the
+  MAJOR/named findings F-01/F-03/F-04/F-05 were RESOLVED in the R6-R5 shard and
+  are NOT part of this carry. Uniform disposition = named-carry — doc-tense /
+  cite-currency / missing-pin / cosmetic, byte-correct at HEAD `6d340944`, not
+  freeze-gating; a code-adjacent F-NN migrates to the CODE shard / a Rust test
+  target at pickup):**
+  - `F-07` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-08` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-09` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-10` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-11` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-12` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-13` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-14` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-15` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-16` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-17` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-18` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-19` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-20` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-21` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-22` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-23` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-24` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-25` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-26` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-27` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-28` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-29` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-30` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-31` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-32` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-33` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-34` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-35` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-36` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-37` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-38` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
+  - `F-39` — named-carry (doc-tense / cite-currency / missing-pin / cosmetic)
 
 ### Row D-54 — R6-R6 doc/cite/OBS NAMED cluster (F-14 / F-15 / F-18 + F-19..F-37) — per-row disposition
 
@@ -1751,6 +1834,169 @@ Row D-15's audit-readiness concern.
   cluster-row precedent.
 - **Anchor:** R6-R6 phase-close council; HARD-RULE clause-b; Row D-53 (R6-R5
   cluster) precedent.
+- **Per-ID breakdown (constituent IDs = F-14, F-15, F-18, and F-19 through F-37.
+  The SHARD-B-resolved findings F-04/F-05/F-06/F-10/F-11/F-12/F-13/F-16/F-17 are
+  NOT part of this carry. Disposition class per the row prose = named-carry by
+  default — doc-tense / cite-currency / cosmetic, byte-correct at HEAD; an item
+  that proves code-adjacent re-classes to out-of-scope and migrates to the CODE
+  shard at pickup, and a finding the reviewer rebuts re-classes to
+  disagree-with-explanation. The class is fixed at pickup; it is NOT changed
+  here):**
+  - `F-14` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-15` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-18` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-19` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-20` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-21` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-22` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-23` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-24` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-25` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-26` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-27` — **CARVE-OUT (NOT dispositioned here):** the `5 → 18` exemption-budget
+    Ben pre-tag ratification surface — Ben-gated freeze-decision held open by
+    design; stays on the pre-tag Ben item list (see the F-27/F-28 carve-out note
+    above + Row D-51).
+  - `F-28` — **CARVE-OUT (NOT dispositioned here):** the `5 → 18` exemption-budget
+    Ben pre-tag ratification surface — Ben-gated freeze-decision held open by
+    design; stays on the pre-tag Ben item list (see the F-27/F-28 carve-out note
+    above + Row D-51).
+  - `F-29` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-30` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-31` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-32` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-33` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-34` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-35` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-36` — named-carry (or out-of-scope/disagree at pickup)
+  - `F-37` — named-carry (or out-of-scope/disagree at pickup)
+
+---
+
+## R6-R7 (post-F-full phase-close, round 7) NAMED-CARRY rows
+
+> The rows below land at the R6-R7 phase-close convergence (doc SHARD C — doc
+> fixes + named-carry + cluster-row expansion). Each is a HARD-RULE clause-(b)
+> deferral OR an OBS/disclosure observation whose ENTRY lands NOW with a NAMED
+> destination; the substantive change (or the decision that none is needed)
+> ships in the named downstream wave / is dispositioned by a downstream
+> reviewer. None is freeze-blocking at v1-beta — all freeze (wire/golden/
+> codepoint) bytes are correct at HEAD `81924331`; these are doc/comment/cite
+> hygiene, test-completeness, or v1-GM-scoped items. All cites verified live at
+> HEAD `81924331` at author-time.
+
+### Row D-55 — LD-AUTH-1: `HeadlessDeviceAuth::seal_and_build` sentinel `user_did_signing_key` undisclosed (doc FLAG)
+
+- **Observation (NAMED, not fixed this round):**
+  `crates/benten-engine/src/layer_d/device_auth.rs:135` `seal_and_build` seals
+  the vault with a HARDCODED sentinel `user_did_signing_key: vec![0x22u8; 64]`
+  (device_auth.rs:145) — a placeholder, NOT a real DID signing key — but the
+  docstring discloses only `k_principal` + `password` and does not flag that the
+  signing-key slot is a sentinel. A caller could mistake the headless backend's
+  unlocked key material for a usable signing key. Disposition = **named-carry →
+  doc FLAG**. No live defect (the headless backend is a test/headless harness;
+  the sentinel is byte-correct as-built).
+- **Destination:** the freeze-record reconcile sweep that precedes the Ben-gated
+  tag (docstring FLAG on `seal_and_build` disclosing the sentinel) / the sibling
+  CODE shard since the docstring lives on a Rust src item — migrated at pickup.
+
+### Row D-56 — D30-LINE-DRIFT: Row D-30 `device_link.rs` cite `:147` → `:185` (FIXED this round)
+
+- **Observation (NAMED, FIXED this round):** Row D-30 cited
+  `crates/benten-engine/src/layer_d/device_link.rs:147` for the
+  `DeviceLinkError::SessionIdReplayed` variant; the variant has drifted to
+  `device_link.rs:185`. Disposition = **named-carry (cite-currency)** — the cite
+  in Row D-30 has been corrected to `:185` in this same shard. Recorded here so
+  the drift + its fix are forensically visible. (cite-drift did not flag it: the
+  file is 308 lines so `:147` still resolves to a line — content-drift, not a
+  missing-line, which the detector does not catch.)
+- **Destination:** CLOSED-in-this-shard (Row D-30 cite corrected). No downstream
+  action required.
+
+### Row D-57 — psf-3 / psf-4: SECURITY-PROOFS doc attribution + count precision
+
+- **Observation (NAMED, not fixed this round):** two sub-threshold
+  doc-precision findings on `docs/SECURITY-PROOFS.md` — psf-3 (an attribution /
+  authorship-prose precision item) and psf-4 (a field/surface count precision
+  item). Both are byte-correct cosmetic doc hygiene, not freeze-gating.
+  Disposition = **named-carry (cite/attribution precision)**.
+- **Destination:** the freeze-record cite-precision reconcile sweep that
+  precedes the Ben-gated tag. Each dispositioned when picked up.
+
+### Row D-58 — WFB-OBS-1: workflow-binding band-width annotation
+
+- **Observation (NAMED, not fixed this round):** the workflow-binding (WFB)
+  surface wants an explicit band-width annotation in the codepoint/AAD-dispatch
+  narrative (which width the band roots, so a future refactor cannot silently
+  widen/narrow it). Annotation-only — the as-built bytes are correct.
+  Disposition = **named-carry (freeze-note annotation)**.
+- **Destination:** the codepoint-allocation doc reconcile sweep
+  (`docs/CRYPTO-CODEPOINTS.md`) at the pre-tag freeze-record pass.
+
+### Row D-59 — xtw-1: 32-bit overflow-guard test → v1-GM
+
+- **Observation (NAMED, not fixed this round):** a 32-bit-target overflow-guard
+  test arm (catching `usize`/width-overflow assumptions on 32-bit targets) is
+  not in v1-beta CI. Disposition = **named-carry → v1-GM** (sibling of Row D-48
+  C-20 32-bit drop-exercise lane). No live defect on 64-bit targets.
+- **Destination:** **v1-GM CI** (32-bit target lane) — co-routes with Row D-48.
+
+### Row D-60 — RGC-TRANS1: drop-side #53 regression-guard transition upgrade
+
+- **Observation (NAMED, not fixed this round):** the drop-side Compromise-#53
+  regression guard wants an upgrade from its current arm to a substantive
+  production-entry-point arm (§3.6f regression-guard-substantive-arm
+  discipline). Disposition = **named-carry → out-of-scope for this doc shard**
+  (lives under a Rust test target — migrated to the sibling CODE shard at
+  pickup). Byte-correct at HEAD; not freeze-gating.
+- **Destination:** the sibling CODE shard / next phase-close convergence round
+  (Rust test target, not edited by this doc shard).
+
+### Row D-61 — CONF-2 / gap-osp-1 / gap-osp-2: SECURITY-PROOFS §4.2 caller-trust + test-symmetry
+
+- **Observation (NAMED, not fixed this round):** three findings on
+  `docs/SECURITY-PROOFS.md` §4.2 (deterministic-CEK confirmation-oracle honest
+  disclosure) — CONF-2 (sharpen the caller-trust boundary prose: who exactly
+  holds the confirmation advantage vs who does not), gap-osp-1 + gap-osp-2 (a
+  symmetric test arm demonstrating the oracle is bounded to a CEK-input-holder
+  and grants the relay nothing). The §4.2 disclosure is already substantively
+  correct; these tighten the prose + add a symmetry test. Disposition =
+  **named-carry** (the CONF-2 prose sharpening is doc-shard; the gap-osp test
+  arms are code-adjacent and migrate to the sibling CODE shard at pickup).
+- **Destination:** the freeze-record reconcile sweep (CONF-2 §4.2 prose) +
+  the sibling CODE shard / a Rust test target (gap-osp-1/2 test-symmetry arms).
+
+### Row D-62 — F-LC3 hygiene: label-collision / loose-assert / mldsa-varint prose cluster
+
+- **Observation (NAMED, not fixed this round):** an F-LC3 hygiene cluster —
+  (a) test-label collisions (duplicate `#[test]`/section labels), (b) a
+  loose-assertion arm (assert that should be sharpened to a substantive check),
+  and (c) ML-DSA varint-encoding prose precision. All byte-correct at HEAD; doc/
+  comment/test hygiene only, not freeze-gating. Disposition = **named-carry**
+  (the mldsa-varint prose is doc-shard; the label-collision + loose-assert items
+  are code-adjacent and migrate to the sibling CODE shard at pickup).
+- **Destination:** the comment/cite-accuracy reconcile sweep (mldsa-varint
+  prose) + the sibling CODE shard / Rust test targets (label collisions +
+  loose-assert) at the pre-tag pass.
+
+### Row D-63 — §16-FLAG discharge + HEAD-repin note
+
+- **Observation (NAMED, not fixed this round):** the `docs/V1-FROZEN-INTERFACE.md`
+  FLAG-FOR-BEN / FLAG-FOR-ORCHESTRATOR-REVIEW section (the §16-class flag) wants
+  an explicit discharge note + a HEAD-repin (the snapshot SHA the flag's prose
+  pins should advance to the current freeze HEAD `81924331`). Disposition =
+  **named-carry → out-of-scope for THIS doc shard** — `V1-FROZEN-INTERFACE.md` is
+  owned by SHARD B; this row only RECORDS the §16-FLAG discharge + HEAD-repin
+  obligation so it is not silently dropped between rounds. No freeze-byte change.
+- **Destination:** SHARD B (`docs/V1-FROZEN-INTERFACE.md` §16 FLAG section) / the
+  freeze-record reconcile sweep that precedes the Ben-gated tag — discharge the
+  flag + repin the snapshot SHA to the current freeze HEAD.
+
+> **Anchor (R6-R7 cluster):** R6-R7 phase-close council; HARD-RULE clause-b;
+> Row D-39 / D-40 / D-53 / D-54 cluster-row + named-carry precedent. The bare
+> `LD-AUTH-1` / `D30-LINE-DRIFT` / `psf-N` / `WFB-OBS-1` / `xtw-1` / `RGC-TRANS1`
+> / `CONF-2` / `gap-osp-N` / `F-LC3` / `§16-FLAG` labels are the R6-R7 council
+> finding IDs.
 
 ---
 

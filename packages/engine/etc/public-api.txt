@@ -313,6 +313,11 @@ export { toMermaid } from "./mermaid.js";
 export { wrapEmitSubscriptionHandle, wrapSubscriptionHandle, serializeCursor, validateOnChangeArgs, validateOnEmitArgs, type NativeEmitSubscriptionJs, type NativeSubscriptionJs, type OnChangeCallback, type OnEmitCallback, } from "./subscribe.js";
 export { wrapStreamHandle, validateStreamCallArgs, type NativeStreamHandle, } from "./stream.js";
 
+## internal/trace.d.ts
+export declare const mapTraceStepForTest: typeof mapTraceStep;
+export declare function mapTraceStep(s: Record<string, unknown>): TraceStep;
+export declare function resetUnknownDiscriminantWarningsForTest(): void;
+
 ## manifest.d.ts
 export declare function manifestSummary(manifest: ModuleManifest): ManifestSummary;
 export declare function renderManifestSummary(summary: ManifestSummary): string;

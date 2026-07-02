@@ -1484,6 +1484,102 @@ fn f_lc_3_second_member_spoof_rejected_membership_group() {
     }
 }
 
+/// CONF-1 (SECURITY-CRITICAL — `0x6610` per-message CEK / nonce-reuse) — the
+/// MembershipSet group bulk-CEK MUST be PER-MESSAGE-unique. Before the fix the
+/// `0x6610` CEK was `BLAKE3(ctx ‖ K_Set ‖ sender_did)` — mixing NOTHING per
+/// message — so EVERY send from a fixed sender under a fixed K_Set generation
+/// sealed under one byte-IDENTICAL CEK. Combined with the random 96-bit
+/// ChaCha20-Poly1305 nonce that path hits the birthday wall (~2^48 seals) where
+/// a single nonce collision under the reused key is catastrophic (keystream
+/// reuse + Poly1305 forgery). The fix mixes the per-message `cid` (= the wire
+/// `body_cid`, the self-describing CIDv1 over `BLAKE3(body)`) into the CEK —
+/// IDENTICAL in spirit to the `0x6520` `seal_group_impl` CEK, which binds
+/// `body_cid` per send.
+///
+/// This drives the PRODUCTION `seal_membership_set_group` entry point twice
+/// (SAME sender, SAME K_Set, SAME generations — ONLY the body differs), derives
+/// each envelope's CEK via the SAME live derivation the seal calls, and asserts
+/// the two CEKs DIFFER.
+///
+/// would-FAIL-on-revert: drop the `cid`-mix from `derive_group_cek` and the two
+/// CEKs become byte-IDENTICAL (the only varied input — the body → its cid — no
+/// longer reaches the CEK) → `assert_ne!` fires.
+#[test]
+fn f_conf_1_membership_group_cek_is_per_message_unique() {
+    use benten_drop::layer_c::group_posture::{
+        GroupSealParams, GroupVerifyContext, open_membership_set_group, seal_membership_set_group,
+    };
+
+    let pks = [fixed_pk(0xA0), fixed_pk(0xA1), fixed_pk(0xA2)];
+    let sks = [fixed_sk(0xA0), fixed_sk(0xA1), fixed_sk(0xA2)];
+    let k_set = [0x5Au8; 32];
+    let params = GroupSealParams {
+        membership_set_id: b"set-conf1".to_vec(),
+        member_key_generation: 3,
+        membership_set_generation: 9,
+        role_assignments_generation: 1,
+    };
+    let member_dids: Vec<String> = group_roster_for_test(&pks)
+        .iter()
+        .map(|d| String::from_utf8_lossy(d).into_owned())
+        .collect();
+    let ctx = GroupVerifyContext {
+        member_dids,
+        member_key_generation: 3,
+        membership_set_generation: 9,
+        role_assignments_generation: 1,
+    };
+
+    // ONE sender, ONE K_Set generation; the ONLY thing that differs across the
+    // two production seals is the body (→ its content cid).
+    let (a_kp, a_did) = hybrid_sender();
+    let body_1 = b"membership group message ONE";
+    let body_2 = b"membership group message TWO (a different body)";
+    let env_1 = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, body_1);
+    let env_2 = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, body_2);
+
+    // Re-derive each per-message CEK via the SAME live `derive_group_cek` the
+    // seal used (the seam binds `self.body_cid` — i.e. the WIRE cid — proving
+    // recipient-recomputability from inputs a member already holds: K_Set + the
+    // wire cid). The inner sender-DID is A's did:key bytes.
+    let cek_1 = env_1.derive_cek_for_test(&k_set, &a_did);
+    let cek_2 = env_2.derive_cek_for_test(&k_set, &a_did);
+
+    // CONF-1 CORE: distinct bodies → distinct CEKs. Reverting the cid-mix makes
+    // these byte-identical (one reused CEK across every send → nonce-reuse).
+    assert_ne!(
+        cek_1, cek_2,
+        "CONF-1: two distinct 0x6610 sends from the SAME sender under the SAME \
+         K_Set generation MUST seal under DISTINCT per-message CEKs (the CEK \
+         binds the per-message cid). would-FAIL-on-revert: without the cid-mix \
+         both derive to the byte-IDENTICAL CEK = catastrophic AEAD nonce reuse."
+    );
+
+    // CONTROL: re-sealing the SAME body (→ same cid) re-derives the SAME CEK —
+    // confirming the CEK is a deterministic function of (K_Set, sender, cid)
+    // and that it is the BODY (via cid) driving the difference above, nothing else.
+    let env_1b = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, body_1);
+    assert_eq!(
+        cek_1,
+        env_1b.derive_cek_for_test(&k_set, &a_did),
+        "CONF-1 control: identical (sender, K_Set, body) MUST re-derive the same CEK."
+    );
+
+    // LEGIT ROUND-TRIP STILL HOLDS: every honest member opens BOTH sends and
+    // recovers the correct body + sender (the cid-mix did not break seal→open;
+    // the recipient HPKE-unwraps the wrapped CEK, it does not re-derive).
+    for (i, sk) in sks.iter().enumerate() {
+        let (pt_1, rec_1) = open_membership_set_group(sk, i, &ctx, &env_1)
+            .unwrap_or_else(|e| panic!("member {i} MUST open send-1: {e:?}"));
+        assert_eq!(pt_1, body_1, "send-1 body recovered for member {i}");
+        assert_eq!(rec_1, a_did, "send-1 sender recovered for member {i}");
+        let (pt_2, rec_2) = open_membership_set_group(sk, i, &ctx, &env_2)
+            .unwrap_or_else(|e| panic!("member {i} MUST open send-2: {e:?}"));
+        assert_eq!(pt_2, body_2, "send-2 body recovered for member {i}");
+        assert_eq!(rec_2, a_did, "send-2 sender recovered for member {i}");
+    }
+}
+
 /// F-LC-3 PIN 5c (B2 SUBSTANTIVE — `0x6520` SECOND-SEALER SPOOF) — same shape
 /// as 5b for the Layer-C group, where the CEK is derivable from public inputs
 /// → ANY party can spoof today. B claims `sender_did = A` but signs with B's
