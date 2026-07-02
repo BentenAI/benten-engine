@@ -74,9 +74,11 @@
 pub const PROVISIONING_DOMAIN: &[u8] = b"benten/layer-d/device-link-provisioning/v1";
 
 // ---------------------------------------------------------------------------
-// Mirrors of the five pre-existing FROZEN domain tags (home-crate is
-// source-of-truth; this is the corpus collision table). Each home crate
-// drift-asserts equality against these in its own tests.
+// Mirrors of the four pre-existing FROZEN same-key signature-family domain
+// tags (home-crate is source-of-truth; this is the corpus collision table).
+// PROVISIONING_DOMAIN above is the FIFTH same-key tag but is NEW-at-C-01 (its
+// canonical home is THIS module, not a mirror). Each home crate drift-asserts
+// equality against these in its own tests.
 // ---------------------------------------------------------------------------
 
 /// Mirror of `benten_drop::envelope_sig::ENVELOPE_SIG_DOMAIN` (offline

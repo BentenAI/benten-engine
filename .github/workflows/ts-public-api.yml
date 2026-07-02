@@ -109,9 +109,16 @@ jobs:
             echo "# backstop that catches add/remove of exports + obvious signature"
             echo "# changes. api-extractor migration is a v1-Composing window enhancement."
             echo ""
-            for f in $(ls packages/engine/dist/*.d.ts | sort); do
-              basename=$(basename "$f")
-              echo "## $basename"
+            # psf-2 (R6 round-7): glob is RECURSIVE (`dist/**/*.d.ts`) so the
+            # publicly-exported `dist/internal/trace.d.ts` subpath (exported
+            # via package.json `./internal/trace`) is COVERED — a top-level-
+            # only `dist/*.d.ts` glob missed it, so a signature change there
+            # would not trip this required-failing parity gate. The `## `
+            # header is the path RELATIVE TO dist/ (so nested files are
+            # unambiguous; top-level headers are byte-identical to before).
+            for f in $(find packages/engine/dist -name '*.d.ts' | sort); do
+              rel="${f#packages/engine/dist/}"
+              echo "## $rel"
               grep -E "^(export |declare )" "$f" | sort -u
               echo ""
             done

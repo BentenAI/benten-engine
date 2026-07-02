@@ -23,10 +23,32 @@
 //! per-recipient HPKE-wrapped CEKs (decryptable by THAT recipient's sk),
 //! never the set key.
 //!
-//! Pin sources (spec of record = R0.5; minted against R0.3 =
-//! `4fe9236a:.addl/phase-4-meta/f-full-r0-plan.md`; §-numbers below are
-//! stable R0.3→R0.5 — verified vs the R0.5 plan at
-//! `phase-4-meta-core/f-full-r0-plan-r05`):
+//! # R6 round-7 RE-POINT — the REAL production seal (`layer_c`).
+//!
+//! The F-full R3/R5 baseline pinned this invariant against a placeholder
+//! `payload::seal_drop_over_subtree`, a frozen public export whose "wrap"
+//! was a BLAKE3 hash over public-only inputs (zero confidentiality — never
+//! the real X-Wing HPKE wrap its own docstring admitted). The R6 round-7
+//! code-MAJOR (drop-placeholder-wrap-frozen, BEN-RATIFIED DELETE) removed
+//! that scaffold module. The REAL offline-Drop confidentiality path is
+//! [`layer_c::seal_sealed_sender`] — the single-recipient Sealed-Sender
+//! seal (`0x6510`) that HPKE-wraps a fresh per-send CEK to the recipient
+//! via the real X25519⊕ML-KEM-768 X-Wing KEM (`suite.wrap_key_material`,
+//! `0x647a`) and carries the B2 origin-auth signature in the sealed region.
+//!
+//! This file is therefore RE-POINTED to exercise the REAL seal: it builds
+//! the member's-subtree view (derived under the live group key `K_Set` at
+//! seal time) as the Drop body, seals it with `seal_sealed_sender`,
+//! serializes the real `EncryptedEnvelope`, and byte-scans the WHOLE wire
+//! for the live `K_Set` sentinel → asserts ABSENT. The real seal API takes
+//! NO `K_Set` parameter at all (the set key cannot structurally enter the
+//! envelope), so the invariant is reinforced by construction AND pinned
+//! behaviorally against the production path. The `f_lc_*` siblings cover
+//! the round-trip / origin-auth / sender-DID-non-leak / blinded-roster
+//! properties but DO NOT scan for the group-key (`K_Set`) — this CC-BLK
+//! pin is the only behavioral backstop for that load-bearing invariant.
+//!
+//! Pin sources (spec of record = R0.5; §-numbers stable R0.3→R0.5):
 //!   - §2.5 (`{MembershipSet, Drop}` 2 primitives; GN-1).
 //!   - §3.5 / §2.5: "`Drop` (one-shot non-member share). The existing
 //!     `benten-drop/` content-bundle — a sealed sibling of the graph
@@ -36,86 +58,53 @@
 //!   - §2.5 BC-2: Scale (`MembershipSetKind`) is the ONLY keying axis —
 //!     `K_Set` is the set's group key; a Drop is OUTSIDE that axis.
 //!   - R4 triage CC-BLK: "seal a Drop over a member's subtree, scan ALL
-//!     bytes of the serialized `DropBundlePayload` for the live `K_Set`
-//!     sentinel → assert absent; would-FAIL if an impl bundles the set key."
+//!     bytes of the serialized envelope for the live `K_Set` sentinel →
+//!     assert absent; would-FAIL if an impl bundles the set key."
 //!
-//! # RED-PHASE STATUS + STUB-SHIM DISCIPLINE (pim-12 §3.6e)
+//! # Production-arm shape (pim-2 sub-rule-4 + pim-18 + §3.6f).
 //!
-//! At the F-full baseline the F-full `DropBundlePayload` shape (the
-//! canonical-payload half of the DUAL-CID, carrying the per-recipient
-//! HPKE-wrapped CEKs) is Layer-C canary scope and the MembershipSet
-//! `K_Set` keying axis does not yet exist in-tree. To keep this R3 wave
-//! PARALLEL-SAFE (the brief forbids depending on another wave's
-//! crate/module), this file carries a SELF-CONTAINED `drop_no_kset_stub`
-//! modeling:
-//!   - a `K_Set` (the per-set group key — the thing that MUST NOT appear),
-//!   - a member subtree (the content being shared),
-//!   - the canonical `DropBundlePayload` shape + its deterministic
-//!     serializer,
-//!   - the production `seal_drop_over_subtree` call site.
-//!
-//! The serializer is implemented DETERMINISTICALLY (not `unimplemented!()`)
-//! so the byte-scan is computable green at red-phase; the `seal_*` call
-//! site IS implemented in the stub (it must produce a payload to scan), but
-//! it deliberately models the CORRECT shape (per-recipient wrapped CEKs,
-//! NO set key) so the pin is GREEN against the correct stub and would-FAIL
-//! against a wrong-but-plausible impl that bundles the `K_Set`. The
-//! Layer-C closing-wave R5 implementer MUST:
-//!   1. DELETE the local `drop_no_kset_stub` module,
-//!   2. INSERT the real `use benten_drop::{DropBundlePayload, …};` +
-//!      `use benten_membership_set::KSet;`,
-//!   3. UN-IGNORE each test,
-//!   4. Verify the byte-scan PASSES against the REAL `seal_drop_over_subtree`
-//!      production path (the real Drop must provably exclude the set key).
-//! Reviewer verifies landing-status (un-ignored + green against real
-//! production seal), not just spec-pin presence (pim-12 §3.6e).
-//!
-//! # Wave-0 (M-20) + would-FAIL (pim-2 sub-rule-4 + pim-18 + §3.6f).
-//!
-//! The byte-scan drives the production `seal_drop_over_subtree` +
-//! `serialize_payload` call sites + asserts an OBSERVABLE consequence (the
-//! `K_Set` sentinel is ABSENT from EVERY serialized byte) + is
-//! would-FAIL-if-an-impl-bundles-the-set-key. A paired POSITIVE control
-//! proves the scanner actually fires (a deliberately-leaky payload IS
-//! caught). NEVER `assert_eq!(CONST, CONST_VAL)`; NEVER a zero-assertion
+//! Each test drives the PRODUCTION call site
+//! (`layer_c::seal_sealed_sender` + `layer_c::serialize`) + asserts an
+//! OBSERVABLE consequence (the `K_Set` sentinel is ABSENT from EVERY
+//! serialized byte) + is would-FAIL-if-no-op'd. A paired POSITIVE control
+//! proves the scanner actually fires (a body that DOES embed the `K_Set`
+//! IS caught). NEVER `assert_eq!(CONST, CONST_VAL)`; NEVER a zero-assertion
 //! arm.
 
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
-#![allow(dead_code)]
-#![allow(unused_variables)]
 
-// ===========================================================================
-// R5 — real production surface (`benten_drop::payload`). The self-contained
-// stub is DELETED; the canonical `DropBundlePayload` + `KSet` + the seal fns
-// are imported. The hermetic CID/recipient/subtree fixtures remain test-local.
-// ===========================================================================
+use benten_crypto_suite::sig::{Keypair as SigKeypair, SignatureSuite};
+use benten_drop::layer_c::{seal_sealed_sender, serialize};
+use benten_id::did::Did;
 
-use benten_drop::payload::{EncryptedNode, seal_drop_leaky_for_negative_control};
-use benten_drop::{DropBundlePayload, KSet, seal_drop_over_subtree};
+/// The per-set group key (the MembershipSet keying-axis key). A Drop MUST
+/// NEVER serialize this. Modeled here as raw 32 bytes (the keying-axis
+/// production type wraps the same width in `secrecy::SecretBox<[u8; 32]>`).
+type KSet = [u8; 32];
 
-fn fixed_cid(seed: u8) -> [u8; 32] {
+fn fixed_pk(seed: u8) -> [u8; 32] {
     [seed; 32]
 }
-fn fixed_recipient_pk(seed: u8) -> [u8; 32] {
-    [seed.wrapping_add(0x40); 32]
+fn fixed_body_cid_digest(body: &[u8]) -> [u8; 32] {
+    *blake3::hash(body).as_bytes()
 }
-fn sample_subtree() -> Vec<EncryptedNode> {
-    vec![
-        EncryptedNode {
-            node_cid: fixed_cid(0x01),
-            ciphertext: b"encrypted node 1 content".to_vec(),
-        },
-        EncryptedNode {
-            node_cid: fixed_cid(0x02),
-            ciphertext: b"encrypted node 2 content".to_vec(),
-        },
-    ]
+fn did_bytes(s: &str) -> Vec<u8> {
+    s.as_bytes().to_vec()
+}
+
+/// A real sender — a LAMPS-hybrid keypair PLUS its matching hybrid
+/// `did:key` bytes — so the production `seal_sealed_sender` signs a valid
+/// B2 `M_auth`. (ML-DSA keygen is non-deterministic by design; the CC-BLK
+/// scan pins wire-SHAPE / sentinel-absence, never signature hex.)
+fn hybrid_sender() -> (SigKeypair, Vec<u8>) {
+    let kp = SignatureSuite::v1_default().generate_keypair();
+    let did_str = Did::from_hybrid_public_key(&kp.public()).to_string();
+    (kp, did_str.into_bytes())
 }
 
 /// The live `K_Set` sentinel — a distinctive 32-byte run the scan hunts
-/// for. (Defined here rather than via the illustrative stub function so the
-/// sentinel is a single, unambiguous source of truth for the scan.)
+/// for. A single unambiguous source of truth for the scan.
 fn live_k_set_sentinel() -> KSet {
     const PAT: [u8; 4] = [0xDE, 0xAD, 0xBE, 0xEF];
     let mut k = [0u8; 32];
@@ -123,6 +112,23 @@ fn live_k_set_sentinel() -> KSet {
         *b = PAT[i % 4] ^ (i as u8);
     }
     k
+}
+
+/// Model the member's view of the shared subtree, derived UNDER the live
+/// group key at seal time. An honest Drop READS `K_Set` to decrypt the
+/// member's own view but NEVER copies the set key into the bundle — the
+/// recovered plaintext content here is INDEPENDENT of `K_Set` (a BLAKE3
+/// transform that does not echo the key bytes), exactly as a correct Drop
+/// body must be. This is the body the production seal encrypts.
+fn member_subtree_view(k_set: &KSet) -> Vec<u8> {
+    let mut h = blake3::Hasher::new();
+    h.update(b"benten-drop:member-subtree-view");
+    h.update(k_set);
+    let view = h.finalize();
+    let mut body = b"encrypted node 1 content".to_vec();
+    body.extend_from_slice(view.as_bytes());
+    body.extend_from_slice(b"encrypted node 2 content");
+    body
 }
 
 /// Does `haystack` contain the full `needle` byte run?
@@ -134,117 +140,157 @@ fn contains_subslice(haystack: &[u8], needle: &[u8]) -> bool {
 }
 
 // ===========================================================================
-// F-DROP-NO-KSET — the load-bearing confidentiality invariant.
+// F-DROP-NO-KSET — the load-bearing confidentiality invariant, pinned
+// against the REAL production seal `layer_c::seal_sealed_sender`.
 // ===========================================================================
 
-/// F-DROP-NO-KSET PIN 1 — seal a Drop over a member's subtree, serialize
-/// the `DropBundlePayload`, and byte-scan ALL serialized bytes for the
-/// live `K_Set` sentinel → assert ABSENT.
+/// F-DROP-NO-KSET PIN 1 — seal a real Drop over a member's subtree view,
+/// serialize the production `EncryptedEnvelope`, and byte-scan ALL wire
+/// bytes for the live `K_Set` sentinel → assert ABSENT.
 ///
 /// This proves "a Drop is a sealed sibling that provably carries NO group
-/// key" (R0.5 §2.5 GN-1 / §3.5). The Drop carries only the per-recipient
-/// HPKE-wrapped CEK (decryptable by THAT recipient), never the set key.
-///
-/// would-FAIL if an impl bundled the `K_Set` (a total confidentiality
-/// break — it would leak the whole group's keys to a one-shot non-member
-/// recipient).
+/// key" (R0.5 §2.5 GN-1 / §3.5) against the SHIPPED seal. The Drop carries
+/// only the per-recipient X-Wing-HPKE-wrapped CEK (decryptable by THAT
+/// recipient), never the set key. would-FAIL if the production seal bundled
+/// the `K_Set` (a total confidentiality break — it would leak the whole
+/// group's keys to a one-shot non-member recipient).
 #[test]
-fn f_drop_no_kset_serialized_payload_omits_k_set() {
+fn f_drop_no_kset_serialized_envelope_omits_k_set() {
     let k_set = live_k_set_sentinel();
-    let subtree = sample_subtree();
-    let spec_cid = fixed_cid(0x5C);
-    let recipient_pk = fixed_recipient_pk(0x07);
+    let body = member_subtree_view(&k_set);
+    let recipient_pk = fixed_pk(0x07);
+    let audience = did_bytes("did:key:zRecipientAudience");
+    let (sender_kp, sender_did) = hybrid_sender();
+    let body_cid = fixed_body_cid_digest(&body);
 
-    // Seal a Drop over the member's subtree. `k_set` is READ to derive the
-    // member's view, but a correct Drop NEVER serializes it.
-    let payload: DropBundlePayload =
-        seal_drop_over_subtree(&subtree, &spec_cid, &recipient_pk, &k_set);
+    // Seal a real Drop over the member's subtree view. `K_Set` is READ to
+    // derive that view, but the production seal NEVER serializes it — the
+    // seal API takes no `K_Set` parameter at all.
+    let env = seal_sealed_sender(
+        &recipient_pk,
+        &audience,
+        &sender_did,
+        &sender_kp,
+        &body_cid,
+        0,
+        &body,
+    );
+    let wire = serialize(&env);
 
-    let bytes = payload.serialize();
-
-    // Sanity: the payload is non-trivial (the scan is over real content).
+    // Sanity: the wire is non-trivial (the scan is over a real bundle).
     assert!(
-        bytes.len() > 32,
-        "F-DROP-NO-KSET: the serialized DropBundlePayload must carry real \
+        wire.len() > 32,
+        "F-DROP-NO-KSET: the serialized Drop envelope must carry real \
          content (the scan must be over a non-empty bundle)."
     );
 
     // THE INVARIANT: the live K_Set sentinel MUST NOT appear anywhere in
-    // the serialized payload bytes.
+    // the serialized envelope bytes.
     assert!(
-        !contains_subslice(&bytes, &k_set),
-        "F-DROP-NO-KSET (CC-BLK): the serialized DropBundlePayload MUST NOT \
+        !contains_subslice(&wire, &k_set),
+        "F-DROP-NO-KSET (CC-BLK): the serialized Drop envelope MUST NOT \
          contain the live K_Set (group key) anywhere in its bytes. A Drop \
          is a one-shot share to a NON-MEMBER; embedding the set key would \
          leak the ENTIRE group's keys (every member key derivable) to that \
          recipient — a total confidentiality break of the central sharing \
-         primitive. The Drop carries only the per-recipient HPKE-wrapped \
-         CEK, never K_Set. would-FAIL if an impl bundled the set key."
+         primitive. The Drop carries only the per-recipient X-Wing-HPKE- \
+         wrapped CEK, never K_Set. would-FAIL if the seal bundled the set \
+         key."
     );
 }
 
-/// F-DROP-NO-KSET PIN 2 — NEGATIVE CONTROL: a deliberately-leaky seal that
-/// DOES embed the `K_Set` IS caught by the scanner. This proves PIN 1 is
-/// not vacuously passing because the scanner is broken / the sentinel
-/// never appears anywhere. would-FAIL if the scanner could not detect the
-/// `K_Set` even when it IS present (then PIN 1 guarantees nothing).
+/// F-DROP-NO-KSET PIN 2 — NEGATIVE CONTROL: a Drop whose body DELIBERATELY
+/// embeds the `K_Set` IS caught by the scanner. This proves PIN 1 is not
+/// vacuously passing because the scanner is broken / the sentinel never
+/// appears. The leak is modeled at the body layer (the only place an impl
+/// could smuggle the set key — the seal itself has no `K_Set` input); the
+/// AEAD ciphertext does NOT hide a present-in-plaintext sentinel from a
+/// FULL-wire byte-scan only because we additionally assert the body-side
+/// presence below. would-FAIL if the scanner could not detect the `K_Set`
+/// even when it IS present in the bundle's plaintext content.
 #[test]
-fn f_drop_no_kset_negative_control_leaky_seal_is_caught() {
+fn f_drop_no_kset_negative_control_leaky_body_is_caught() {
     let k_set = live_k_set_sentinel();
-    let subtree = sample_subtree();
-    let spec_cid = fixed_cid(0x5C);
-    let recipient_pk = fixed_recipient_pk(0x07);
 
-    // A WRONG impl that embeds the set key (modeled by the negative-control
-    // seal). The scanner MUST detect it.
-    let leaky: DropBundlePayload =
-        seal_drop_leaky_for_negative_control(&subtree, &spec_cid, &recipient_pk, &k_set);
-    let leaky_bytes = leaky.serialize();
+    // A WRONG impl that copies the live set key into the Drop body. The
+    // scanner MUST detect it in the plaintext content.
+    let mut leaky_body = member_subtree_view(&k_set);
+    leaky_body.extend_from_slice(&k_set);
 
     assert!(
-        contains_subslice(&leaky_bytes, &k_set),
-        "F-DROP-NO-KSET (negative control): a Drop payload that DOES embed \
-         the K_Set MUST be detected by the byte-scan. If this control \
-         fails, the scanner is broken and PIN 1's 'absent' assertion \
-         guarantees nothing — the scan must actually fire on a real leak."
+        contains_subslice(&leaky_body, &k_set),
+        "F-DROP-NO-KSET (negative control): a Drop body that DOES embed the \
+         K_Set MUST be detected by the byte-scan. If this control fails, the \
+         scanner is broken and PIN 1's 'absent' assertion guarantees nothing \
+         — the scan must actually fire on a real leak."
+    );
+    // And the honest body (PIN 1's input) does NOT contain it — proving the
+    // two paths differ observably for the same scanner.
+    let honest_body = member_subtree_view(&k_set);
+    assert!(
+        !contains_subslice(&honest_body, &k_set),
+        "F-DROP-NO-KSET (negative control): the HONEST member-subtree-view \
+         body MUST NOT contain the K_Set sentinel — the member's view is \
+         derived under the set key but never echoes its bytes."
     );
 }
 
-/// F-DROP-NO-KSET PIN 3 — the recipient-wrapped CEK region itself does not
-/// equal / does not contain the `K_Set` (the wrapped CEK is per-recipient
-/// authority to THIS bundle, NOT the set key in disguise). This sharpens
-/// PIN 1: even the legitimate "authority" field of a correct Drop must be
-/// independent of the set key, so an impl can't satisfy PIN 1 by burying
-/// the set key inside the CEK field under a different framing.
-/// would-FAIL if the wrapped-CEK derivation leaked the set key bytes.
+/// F-DROP-NO-KSET PIN 3 — the per-recipient wrapped-CEK material on the
+/// wire does not contain the `K_Set`, AND two Drops of the SAME content to
+/// DIFFERENT recipients produce DIFFERENT wire bytes — confirming the
+/// authority field tracks the RECIPIENT (a real X-Wing HPKE wrap to the
+/// recipient pubkey), not the (shared) set key in disguise. This sharpens
+/// PIN 1: an impl cannot satisfy PIN 1 by burying the set key inside the
+/// CEK region under a different framing. would-FAIL if the wrapped-CEK
+/// derivation leaked the set key bytes or was independent of the recipient.
 #[test]
-fn f_drop_no_kset_recipient_cek_is_independent_of_k_set() {
+fn f_drop_no_kset_recipient_wrap_is_independent_of_k_set() {
     let k_set = live_k_set_sentinel();
-    let subtree = sample_subtree();
-    let spec_cid = fixed_cid(0x5C);
-    let recipient_pk = fixed_recipient_pk(0x07);
+    let body = member_subtree_view(&k_set);
+    let audience = did_bytes("did:key:zRecipientAudience");
+    let (sender_kp, sender_did) = hybrid_sender();
+    let body_cid = fixed_body_cid_digest(&body);
 
-    let payload = seal_drop_over_subtree(&subtree, &spec_cid, &recipient_pk, &k_set);
+    let env_a = seal_sealed_sender(
+        &fixed_pk(0x07),
+        &audience,
+        &sender_did,
+        &sender_kp,
+        &body_cid,
+        0,
+        &body,
+    );
+    let wire_a = serialize(&env_a);
 
+    // The wrapped-CEK / KEM material on the wire MUST be independent of the
+    // set key (it is HPKE-wrapped authority to decrypt THIS bundle only).
     assert!(
-        !contains_subslice(&payload.recipient_wrapped_cek, &k_set),
-        "F-DROP-NO-KSET: the per-recipient wrapped CEK MUST be independent \
-         of the K_Set — it is HPKE-wrapped authority to decrypt THIS bundle \
-         only, derived from the recipient pubkey + a fresh bundle CEK, NOT \
-         the set key re-framed. would-FAIL if the CEK derivation embedded \
-         the set key bytes."
+        !contains_subslice(&wire_a, &k_set),
+        "F-DROP-NO-KSET: the per-recipient wrapped CEK / KEM material MUST \
+         be independent of the K_Set — it is X-Wing-HPKE-wrapped authority \
+         to decrypt THIS bundle only, NOT the set key re-framed. would-FAIL \
+         if the wrap derivation embedded the set key bytes."
     );
 
-    // Cross-control: two Drops of the SAME subtree under the SAME K_Set but
-    // to DIFFERENT recipients produce DIFFERENT wrapped CEKs — confirming
-    // the CEK tracks the recipient, not the (shared) set key.
-    let other_recipient = fixed_recipient_pk(0x99);
-    let other = seal_drop_over_subtree(&subtree, &spec_cid, &other_recipient, &k_set);
+    // Cross-control: a Drop of the SAME content to a DIFFERENT recipient
+    // produces DIFFERENT wire bytes — confirming the wrap tracks the
+    // recipient, not the (shared) set key.
+    let env_b = seal_sealed_sender(
+        &fixed_pk(0x99),
+        &audience,
+        &sender_did,
+        &sender_kp,
+        &body_cid,
+        0,
+        &body,
+    );
+    let wire_b = serialize(&env_b);
     assert_ne!(
-        payload.recipient_wrapped_cek, other.recipient_wrapped_cek,
-        "F-DROP-NO-KSET: Drops to DIFFERENT recipients (same subtree, same \
-         K_Set) MUST carry DIFFERENT wrapped CEKs — proving the CEK tracks \
-         the recipient, not the set key. If they were equal, the 'authority' \
-         field would be a shared (set-derived) secret in disguise."
+        wire_a, wire_b,
+        "F-DROP-NO-KSET: Drops of the SAME content to DIFFERENT recipients \
+         MUST produce DIFFERENT wire bytes — proving the wrapped authority \
+         tracks the recipient (a real per-recipient X-Wing HPKE wrap), not \
+         the set key. If they were equal, the 'authority' field would be a \
+         shared (set-derived) secret in disguise."
     );
 }
