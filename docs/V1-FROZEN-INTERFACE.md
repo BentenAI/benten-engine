@@ -76,8 +76,10 @@ fail CI on a frozen-surface mutation:
 2. **TS-side public-API parity gate (#1204)** for `@benten/engine`.
    **LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 2 (commit `13322df4`).**
    Workflow at `.github/workflows/ts-public-api.yml`; baseline at
-   `packages/engine/etc/public-api.txt` (410 LOC; extract-from-.d.ts
-   structural diff covering all 15 `dist/*.d.ts` files). Migration to
+   `packages/engine/etc/public-api.txt` (415 LOC; extract-from-.d.ts
+   structural diff covering all 15 `dist/**/*.d.ts` files — the recursive
+   glob includes the publicly-exported `dist/internal/trace.d.ts` subpath,
+   psf-2 R6-round-7). Migration to
    `@microsoft/api-extractor` is named for v1-Composing (the workflow
    + baseline-file location ARE the migration seam — swap-in is
    contained).
@@ -915,8 +917,10 @@ SURFACE.
 **#1204 JS-side public-API parity gate LANDED at G-CORE-9
 V1-FROZEN-INTERFACE row 2 (commit `13322df4`).** Workflow at
 `.github/workflows/ts-public-api.yml`; baseline at
-`packages/engine/etc/public-api.txt` (410 LOC; extract-from-.d.ts
-structural diff covering all 15 `dist/*.d.ts` files). Migration to
+`packages/engine/etc/public-api.txt` (415 LOC; extract-from-.d.ts
+structural diff covering all 15 `dist/**/*.d.ts` files — the recursive
+glob includes the publicly-exported `dist/internal/trace.d.ts` subpath,
+psf-2 R6-round-7). Migration to
 `@microsoft/api-extractor` is named for v1-Composing (the workflow
 + baseline-file location ARE the migration seam; swap-in is
 contained).

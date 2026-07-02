@@ -19,7 +19,14 @@
 #![allow(clippy::unwrap_used)]
 
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — Atriums compose via existing primitives, no new PrimitiveKind variants. G20-B wave-8b shipped (PR #143); structural invariant verifiable at HEAD (benten-core PrimitiveKind enum + benten-eval PrimitiveOp variants unchanged). Test body pins structural invariant; un-ignore at Phase-4-Foundation pre-tag sweep per docs/future/phase-4-backlog.md §4.29 (HARD RULE 12 clause-(b))."]
+#[ignore = "phase-3-backlog §7.3.D Atriums-compose pin. The 12-primitive \
+    COUNT property this stub described is now backstopped LIVE by the \
+    engine-level umbrella `exit_criterion_7_no_new_primitive_kind_variants_\
+    added_in_phase_4_foundation` (UN-IGNORED at R6 round-7 psf-1, wired to \
+    the real benten_core::subgraph::PrimitiveKind: compile-time rename guard \
+    + source-walk add guard). This stub remains a forward-pin for the \
+    benten-eval PrimitiveOp-variant angle only; un-ignore when that surface \
+    is wired (pim-12 §3.6e). NOT a vacuous duplicate of the live umbrella."]
 fn atriums_compose_via_existing_primitives_no_new_primitive_kind_variants() {
     // CLAUDE.md baked-in #1 architectural pin. G20-B implementer wires this:
     //

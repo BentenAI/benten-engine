@@ -196,7 +196,7 @@ impl DualCidStore {
 }
 
 /// The canonical `plaintext_cid` for a payload: `BLAKE3(canonical
-/// DropBundlePayload)`. Deterministic; reseal does NOT change it (it is the
+/// payload)`. Deterministic; reseal does NOT change it (it is the
 /// graph-referenced identity).
 #[must_use]
 pub fn plaintext_cid(payload: &[u8]) -> DualCid {

@@ -21,7 +21,7 @@
 //! topic use (see `blind_set_cid` doc below):
 //!   - §3.3 DUAL-CID (Q3, U18): `envelope_blob_cid = BLAKE3(serialized
 //!     EncryptedEnvelope)` (changes on reseal) vs `plaintext_cid =
-//!     BLAKE3(canonical DropBundlePayload)` (stable, graph-referenced);
+//!     BLAKE3(canonical payload)` (stable, graph-referenced);
 //!     "MembershipSet adds `plaintext_cid_local` (LOCAL-ONLY,
 //!     NEVER-serialized — O-7) + `plaintext_cid_set` (HMAC-blinded)";
 //!     "This EXTENDS `benten-sync/src/two_cid_store.rs` (O-3) — not
