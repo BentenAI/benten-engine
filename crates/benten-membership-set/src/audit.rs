@@ -30,7 +30,11 @@
 // ---------------------------------------------------------------------------
 
 /// The administrative operation an audit Version Node records.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future admin-op variant lands
+/// additively, never a downstream `match` break.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AdminOp {
     /// A member was admitted to the set.
     AdmitMember,
@@ -285,7 +289,11 @@ fn link_cid(
 /// The audit read-access gradation. The first two variants are LIVE at v1-beta;
 /// the latter four are RESERVED as UCAN-caveat / IVM compositions — NEVER wire
 /// codepoints, NEVER a 3rd top-level `Scope` arm.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future gradation variant lands
+/// additively, never a downstream `match` break.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AuditAccessGradation {
     /// Only Admins hold the audit read cap.
     AdminOnly,
@@ -303,7 +311,11 @@ pub enum AuditAccessGradation {
 }
 
 /// The decision an audit-read gradation reaches for a requester.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future decision variant lands
+/// additively, never a downstream `match` break.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AuditReadDecision {
     /// The read is admitted.
     Admit,
@@ -312,7 +324,11 @@ pub enum AuditReadDecision {
 }
 
 /// The role of a principal requesting an audit read.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future requester-role variant
+/// lands additively, never a downstream `match` break.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RequesterRole {
     /// An Admin of the set.
     Admin,
@@ -345,6 +361,11 @@ impl AuditAccessGradation {
             | AuditAccessGradation::Threshold
             | AuditAccessGradation::TimeLocked
             | AuditAccessGradation::Anonymized => requester == RequesterRole::Admin,
+            // NOTE: no `_` arm here. `AuditAccessGradation` is `#[non_exhaustive]`
+            // (SemVer-readiness for downstream crates), but WITHIN the defining
+            // crate this match stays exhaustive — a future variant is a
+            // HALT-AND-SURFACE compile error here, forcing an explicit
+            // fail-closed decision rather than a silent Admin-only default.
         };
         if admit {
             AuditReadDecision::Admit

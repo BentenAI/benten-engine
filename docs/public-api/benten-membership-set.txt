@@ -33,7 +33,7 @@ pub fn benten_membership_set::aad::canonical_members_table_bytes(&alloc::collect
 pub fn benten_membership_set::aad::default_group_codepoint() -> u16
 pub fn benten_membership_set::aad::membership_set_id_commitment(&[u8; 32], &[u8]) -> [u8; 32]
 pub mod benten_membership_set::audit
-pub enum benten_membership_set::audit::AdminOp
+#[non_exhaustive] pub enum benten_membership_set::audit::AdminOp
 pub benten_membership_set::audit::AdminOp::AdmitMember
 pub benten_membership_set::audit::AdminOp::GovernanceChange
 pub benten_membership_set::audit::AdminOp::KickMember
@@ -55,7 +55,7 @@ impl core::marker::Unpin for benten_membership_set::audit::AdminOp
 impl core::marker::UnsafeUnpin for benten_membership_set::audit::AdminOp
 impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AdminOp
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AdminOp
-pub enum benten_membership_set::audit::AuditAccessGradation
+#[non_exhaustive] pub enum benten_membership_set::audit::AuditAccessGradation
 pub benten_membership_set::audit::AuditAccessGradation::AdminOnly
 pub benten_membership_set::audit::AuditAccessGradation::Anonymized
 pub benten_membership_set::audit::AuditAccessGradation::MemberOnly
@@ -105,7 +105,7 @@ impl core::marker::Unpin for benten_membership_set::audit::AuditChainError
 impl core::marker::UnsafeUnpin for benten_membership_set::audit::AuditChainError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AuditChainError
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AuditChainError
-pub enum benten_membership_set::audit::AuditReadDecision
+#[non_exhaustive] pub enum benten_membership_set::audit::AuditReadDecision
 pub benten_membership_set::audit::AuditReadDecision::Admit
 pub benten_membership_set::audit::AuditReadDecision::Deny
 impl core::clone::Clone for benten_membership_set::audit::AuditReadDecision
@@ -124,7 +124,7 @@ impl core::marker::Unpin for benten_membership_set::audit::AuditReadDecision
 impl core::marker::UnsafeUnpin for benten_membership_set::audit::AuditReadDecision
 impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AuditReadDecision
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AuditReadDecision
-pub enum benten_membership_set::audit::RequesterRole
+#[non_exhaustive] pub enum benten_membership_set::audit::RequesterRole
 pub benten_membership_set::audit::RequesterRole::Admin
 pub benten_membership_set::audit::RequesterRole::Member
 pub benten_membership_set::audit::RequesterRole::NonMember
@@ -287,7 +287,7 @@ impl core::marker::Unpin for benten_membership_set::federation::FederationError
 impl core::marker::UnsafeUnpin for benten_membership_set::federation::FederationError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::federation::FederationError
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::federation::FederationError
-pub enum benten_membership_set::federation::FederationModel
+#[non_exhaustive] pub enum benten_membership_set::federation::FederationModel
 pub benten_membership_set::federation::FederationModel::ModelA
 pub benten_membership_set::federation::FederationModel::ModelB
 impl core::clone::Clone for benten_membership_set::federation::FederationModel
@@ -335,7 +335,7 @@ pub fn benten_membership_set::federation::dispatch_codepoint_at_v1_beta(u16) -> 
 pub fn benten_membership_set::federation::select_model_at_v1_beta(benten_membership_set::federation::FederationModel) -> core::result::Result<benten_membership_set::federation::FederationModel, benten_membership_set::federation::FederationError>
 pub type benten_membership_set::federation::FederationSetId = alloc::vec::Vec<u8>
 pub mod benten_membership_set::governance
-pub enum benten_membership_set::governance::GovernanceTier
+#[non_exhaustive] pub enum benten_membership_set::governance::GovernanceTier
 pub benten_membership_set::governance::GovernanceTier::Flat
 pub benten_membership_set::governance::GovernanceTier::Moderated
 pub benten_membership_set::governance::GovernanceTier::Polycentric
