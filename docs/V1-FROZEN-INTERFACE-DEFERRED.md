@@ -1646,6 +1646,7 @@ Row D-15's audit-readiness concern.
 ### Row D-37 — GAP-E: `classical_half_for_test` / `pq_half_for_test` ungated in the frozen crypto-suite baseline (PRE-EXISTING-on-main)
 
 - **Observation (NAMED, not fixed this round):** the frozen `cargo-public-api` baseline `docs/public-api/benten-crypto-suite.txt` carries `benten_crypto_suite::sig::HybridSignature::classical_half_for_test` + `::pq_half_for_test` (plus `SyntheticVector::ml_dsa65_for_test` + `StructuralKdfKey::from_bytes_for_test`) as ungated `pub` `_for_test` accessors — i.e. they are in the v1-beta frozen public surface, not behind `#[cfg(test)]` / a `testing` feature gate. **PRE-EXISTING-on-main** (not introduced by R6-R3).
+  - **R13 F-02 extension:** the same `_for_test`-visibility cluster ALSO includes the sibling `benten_crypto_suite::sizes::SizeTouchingSurfaces::load_signature_fixture(&str) -> SyntheticVector` accessor + the ENTIRE `benten_crypto_suite::sizes::SyntheticVector` type and its methods (`as_hybrid_signature` / `ml_dsa65_for_test` / `pq_pubkey` / `pq_pubkey_len` / `pq_sig_len` / …), all ungated `pub` on the frozen baseline (`docs/public-api/benten-crypto-suite.txt` L826/L836-842). These are a size-fixture test-scaffold surface (the `_for_test`-shaped construction of synthetic size-touching vectors) and belong to the SAME accepted visibility-cluster — enumerated here so the v1-Composing tightening pass sees the full member list, not just the `HybridSignature` accessors. Same disposition (locked AS-IS at v1-beta; gate/rename is a baseline change requiring Ben sign-off). NOTE: R13 F-01 already handled the ONE genuinely-forgeable footgun (`generate_recipient_keypair_deterministic` → renamed `_for_test` + cfg-gated + dropped off the baseline); the `SyntheticVector` cluster is benign test-scaffold (no forgeable-secret footgun), so it stays a Composing-tightening candidate, not a freeze-gating fix.
 - **Destination:** the `_for_test` visibility-cluster v1-Composing tightening pass (same class as the §15.f `derive_step_without_info_tag_for_test` → `_internal` BELONGS-NAMED-NOW item already recorded in `docs/V1-FROZEN-INTERFACE.md` §15.f). A downstream reviewer decides gate-vs-rename-vs-accept; locked AS-IS at v1-beta per the freeze (a gate/rename is itself a public-surface change requiring a baseline-update + Ben sign-off).
 
 ### Row D-38 — GAP-F: `--omit blanket-impls` regen-determinism doc vs committed crypto-suite baseline
@@ -2300,6 +2301,48 @@ Row D-15's audit-readiness concern.
   blocker (both paths produce the frozen, byte-mirror-pinned wire form).
 - **Anchor:** R12-council F-09; `crates/benten-engine/src/layer_d/device_link.rs`
   ("HPKE reuse" FLAG); `benten_drop::layer_c`.
+
+### Row D-72 — F-12: vault/envelope format-version policy is uniform-reject, not `got>V2`/`got<V2`-differentiated → v1-Composing (with baseline pin landed now)
+
+- **Observation (NAMED; pin landed this round):** `crates/benten-crypto-suite/src/vault.rs::parse_vault_frame`
+  (~:357) rejects ANY `bytes[1] != ENVELOPE_FORMAT_VERSION_V2` UNIFORMLY with
+  `VaultError::MalformedCbor`. It does NOT distinguish `got > V2` ("the vault
+  is NEWER than this reader understands — the reader is stale, please upgrade")
+  from `got < V2` ("the vault is STALE — reject"). A differentiated policy is a
+  DX/forward-compat nicety, not a correctness gap: there is **no extant V3**, so
+  every non-V2 value is genuinely malformed at v1-beta, and a fail-closed
+  `MalformedCbor` is the safe posture. The same uniform-equality posture applies
+  to the sibling `EncryptedEnvelope` format-version discrimination.
+- **Pin landed now (HARD-RULE-12 clause-b — this ESCALATES to MAJOR if not
+  named+pinned):** `crates/benten-crypto-suite/tests/f_va_1_vault_ondisk_format_freeze.rs::f_va_12_non_v2_version_byte_uniformly_rejects_baseline`
+  locks the CURRENT uniform-reject baseline (byte[1] ∈ {0x00, 0x01, 0x03, 0xFF}
+  → all `MalformedCbor`), so the future differentiated policy is a DELIBERATE
+  change against a documented pin.
+- **Deferred (destination):** v1-Composing — when a V3 vault/envelope format is
+  first minted, introduce the `got > current ⇒ VersionTooNew{ upgrade-hint }`
+  vs `got < current ⇒ VersionTooStale` distinction (typed variants, not a
+  uniform `MalformedCbor`); update the D-72 pin at that wave. No v1-beta wire
+  change (V2 is the only extant version).
+- **Anchor:** R13-council F-12; `crates/benten-crypto-suite/src/vault.rs`
+  `parse_vault_frame`; `benten_crypto_suite::envelope::ENVELOPE_FORMAT_VERSION_V2`.
+
+### Row D-73 — F-14: Layer-D `as u32` casts → `u32::try_from().expect()` hygiene sweep → v1-Composing (emitted bytes identical < 4 GiB)
+
+- **Observation (NAMED, not fixed this round):** the Layer-D wire-assembly paths
+  (`crates/benten-engine/src/layer_d/*`) carry `len as u32` / `count as u32`
+  casts where a `usize` length is narrowed to a `u32` length-prefix. Below 4 GiB
+  (every realistic v1-beta payload) the emitted bytes are IDENTICAL either way;
+  above `u32::MAX` a bare `as u32` would silently TRUNCATE the length-prefix
+  (a latent wrap the sibling Layer-C paths already avoid via
+  `u32::try_from(..).expect(..)`). This is a hygiene/consistency sweep, not a
+  v1-beta correctness gap (no v1-beta path assembles a >4 GiB Layer-D frame).
+- **Deferred (destination):** v1-Composing — replace the Layer-D `as u32`
+  length/count narrowings with `u32::try_from(..).expect("… fits u32")` (or a
+  typed error) to match the Layer-C discipline. No wire change (byte-identical
+  for all < 4 GiB payloads).
+- **Anchor:** R13-council F-14; `crates/benten-engine/src/layer_d/`
+  (device_link / remote_permission assembly); the Layer-C
+  `u32::try_from(..).expect(..)` precedent in `benten_drop::layer_c`.
 
 ---
 

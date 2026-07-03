@@ -609,6 +609,22 @@ pub fn encode_encrypted_node(encrypted: &EncryptedNode) -> Result<Vec<u8>, AeadE
     Ok(out)
 }
 
+/// Compute `off + len` and verify the end lies within `total`, using
+/// `checked_add` so a wire-read `len` (attacker-controlled `u32 as usize`)
+/// cannot OVERFLOW-WRAP `off + len` below `total` and spuriously pass a
+/// naive `off + len > total` bounds check on a 32-bit `usize` target
+/// (wasm32 thin-client). Returns `None` — fail-closed → typed reject — on
+/// EITHER integer overflow OR out-of-bounds. Mirrors `benten-drop`'s
+/// `layer_c::lp_range_end` discipline (F-04). No behavioral change on
+/// 64-bit where these lengths cannot overflow.
+#[inline]
+fn checked_range_end(off: usize, len: usize, total: usize) -> Option<usize> {
+    match off.checked_add(len) {
+        Some(end) if end <= total => Some(end),
+        _ => None,
+    }
+}
+
 /// Inverse of [`encode_encrypted_node`].
 pub fn decode_encrypted_node(bytes: &[u8]) -> Result<EncryptedNode, AeadError> {
     const STORAGE_MAGIC: u8 = 0x3d;
@@ -664,22 +680,35 @@ pub fn decode_encrypted_node(bytes: &[u8]) -> Result<EncryptedNode, AeadError> {
             let mut cursor = 42usize;
             let mut chunks = Vec::with_capacity(count);
             for _ in 0..count {
-                if cursor + 4 > bytes.len() {
-                    return Err(AeadError::CiphertextTooShort { got: bytes.len() });
-                }
+                // F-04 (R13 per-chunk integer-overflow bounded-decode DoS):
+                // `cursor + N` where N derives from wire bytes (the 4-byte
+                // length prefix, then the attacker-controlled `len` itself)
+                // OVERFLOW-WRAPS on 32-bit `usize` (wasm32 thin-client, shape
+                // b/c). A chunk `len = 0xFFFFFFFF` wraps `cursor + len` BELOW
+                // `bytes.len()`, bypassing a raw `> bytes.len()` guard, so the
+                // subsequent `&bytes[cursor..cursor + len]` slice panics
+                // (pre-auth DoS via `RedbBackend::get_encrypted_node`, decoded
+                // before any AEAD/integrity check). Route EVERY wire-derived
+                // add through `checked_range_end` (mirrors `benten-drop`'s
+                // `lp_range_end` discipline): `None` on overflow OR
+                // out-of-bounds → the SAME typed `CiphertextTooShort` reject.
+                // No behavioral change on 64-bit (the lengths cannot overflow
+                // there); the `checked_add` is what makes the guard
+                // target-agnostic.
+                let len_end = checked_range_end(cursor, 4, bytes.len())
+                    .ok_or(AeadError::CiphertextTooShort { got: bytes.len() })?;
                 let len = u32::from_be_bytes([
                     bytes[cursor],
                     bytes[cursor + 1],
                     bytes[cursor + 2],
                     bytes[cursor + 3],
                 ]) as usize;
-                cursor += 4;
-                if cursor + len > bytes.len() {
-                    return Err(AeadError::CiphertextTooShort { got: bytes.len() });
-                }
-                let envelope = AeadEnvelope::from_wire_bytes(&bytes[cursor..cursor + len])
+                cursor = len_end;
+                let chunk_end = checked_range_end(cursor, len, bytes.len())
+                    .ok_or(AeadError::CiphertextTooShort { got: bytes.len() })?;
+                let envelope = AeadEnvelope::from_wire_bytes(&bytes[cursor..chunk_end])
                     .map_err(AeadError::from)?;
-                cursor += len;
+                cursor = chunk_end;
                 chunks.push(envelope);
             }
             Ok(EncryptedNode::Chunked {
@@ -1066,5 +1095,67 @@ mod tests {
             ),
             "count == max_chunks + 1 MUST typed-reject via the ceiling guard"
         );
+    }
+
+    /// F-04 (R13 per-chunk integer-overflow bounded-decode DoS): a chunked
+    /// blob with `count = 1` and a single chunk whose 4-byte length prefix
+    /// declares `len = 0xFFFFFFFF` MUST typed-reject (`CiphertextTooShort`),
+    /// NOT panic. On a 32-bit `usize` target (wasm32 thin-client, shape
+    /// b/c) `cursor + len` would OVERFLOW-WRAP below `bytes.len()`,
+    /// bypassing a raw `> bytes.len()` guard and reaching a panicking
+    /// `&bytes[cursor..cursor + len]` slice (pre-auth DoS via
+    /// `RedbBackend::get_encrypted_node`).
+    ///
+    /// HONEST NOTE: on the 64-bit `usize` this test runs under, `cursor +
+    /// 0xFFFFFFFF` does NOT overflow, so the pre-existing `end <=
+    /// bytes.len()` check already rejects — this pin asserts the typed-
+    /// reject BEHAVIOR is preserved. The 32-bit overflow safety is provided
+    /// by `checked_range_end`'s `checked_add` (target-agnostic), pinned
+    /// directly by `checked_range_end_returns_none_on_overflow` below.
+    /// Would-FAIL-on-revert: reverting to `cursor + len > bytes.len()` keeps
+    /// this 64-bit assertion GREEN but re-introduces the 32-bit wrap; the
+    /// checked-helper unit test is the target-agnostic regression guard.
+    #[test]
+    fn per_chunk_len_overflow_is_typed_reject_not_panic() {
+        let cid = fixed_cid(0x07);
+        // STORAGE_MAGIC ‖ 0x01 ‖ <36-byte CID> ‖ count=1 ‖ chunk_len=0xFFFFFFFF
+        let mut blob = Vec::with_capacity(46);
+        blob.push(0x3d); // STORAGE_MAGIC
+        blob.push(0x01); // variant: Chunked
+        blob.extend_from_slice(cid.as_bytes()); // 36 bytes
+        blob.extend_from_slice(&1u32.to_be_bytes()); // count = 1 (passes ceiling: (46-42)/9 == 0? -> ceiling first)
+        blob.extend_from_slice(&u32::MAX.to_be_bytes()); // chunk len = 0xFFFFFFFF
+        // NOTE: with these 46 bytes, max_chunks = (46-42)/9 = 0, so the
+        // COUNT ceiling actually fires first for count=1. Pad the blob so
+        // the ceiling admits 1 chunk, forcing the loop to read the poisoned
+        // per-chunk length and exercise the per-chunk overflow guard.
+        blob.extend_from_slice(&[0u8; 9]); // +9 bytes -> len 55 -> max_chunks=(55-42)/9=1
+        assert!(
+            blob.len() >= 46,
+            "blob carries the count + poisoned per-chunk length prefix"
+        );
+        let result = decode_encrypted_node(&blob);
+        assert!(
+            matches!(result, Err(AeadError::CiphertextTooShort { .. })),
+            "per-chunk len=0xFFFFFFFF MUST typed-reject (not panic), got {result:?}"
+        );
+    }
+
+    /// F-04 target-agnostic guard: `checked_range_end` returns `None` on
+    /// integer overflow (the 32-bit wrap the per-chunk pin cannot exercise
+    /// on a 64-bit host) AND on out-of-bounds, and `Some(end)` only for a
+    /// valid in-bounds range. This is the load-bearing regression guard —
+    /// it fails on any host if the `checked_add` is reverted to a raw `+`.
+    #[test]
+    fn checked_range_end_returns_none_on_overflow() {
+        // Overflow: off + len wraps past usize::MAX.
+        assert_eq!(checked_range_end(usize::MAX - 2, 5, usize::MAX), None);
+        assert_eq!(checked_range_end(10, usize::MAX, 100), None);
+        // Out-of-bounds (no overflow): end > total.
+        assert_eq!(checked_range_end(90, 20, 100), None);
+        // Valid in-bounds range.
+        assert_eq!(checked_range_end(10, 20, 100), Some(30));
+        // Exact end == total is in-bounds.
+        assert_eq!(checked_range_end(80, 20, 100), Some(100));
     }
 }

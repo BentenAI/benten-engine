@@ -87,7 +87,7 @@ const FIXTURE_SEEDS: [u8; 3] = [0x10, 0x11, 0x12];
 fn fixture_kp(seed: u8) -> benten_crypto_suite::cipher_suite::RecipientKeypair {
     CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
         .expect("0x647a wire-locked")
-        .generate_recipient_keypair_deterministic(&[seed; 32])
+        .generate_recipient_keypair_deterministic_for_test(&[seed; 32])
 }
 /// The fixture recipient PUBLIC keys (the seal's `recipient_pubs` input).
 fn fixture_pks() -> Vec<RecipientPublic> {

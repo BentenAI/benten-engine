@@ -9,6 +9,16 @@
 > the phase-close council has iterated to convergence). Registered here so
 > the pre-tag sweep picks it up; NOT retensed now (banner-retense couples to
 > the SHA + date the tag lands, a pre-tag-sweep concern).
+> >
+> > **⚑ R13 F-16 pre-tag-sweep line — refresh the §11 `#[non_exhaustive]`
+> > tally.** §11 (~L1055) states "**158 total `pub enum` across `crates/`;
+> > 148 of those carry `#[non_exhaustive]`**" as a HEAD-verified count. Enum
+> > types are added/removed across phase-close council rounds, so this tally
+> > can drift. At the (Ben-gated) pre-tag sweep, re-run the count (the
+> > `g_core_9_non_exhaustive_audit` test set enumerates the surface) and
+> > refresh the `158 / 148` numbers to the tag-time reality — so the freeze
+> > contract's stated tally matches the as-frozen surface. Registered here;
+> > NOT refreshed now (couples to the tag-time SHA, same as the banner).
 >
 > **Status: POST-BUILD-OUT-WAVE.** Round 0.5 triage-synthesis refreshed
 > at the V1-FROZEN-INTERFACE build-out wave (2026-05-23). The 8 cross-

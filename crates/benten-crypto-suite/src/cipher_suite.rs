@@ -101,6 +101,17 @@ pub const X25519_PUBLIC_LEN: usize = 32;
 /// pins it against an actual key's serialized width.
 pub const X25519_SECRET_LEN: usize = 32;
 
+/// FIPS-203 ML-KEM-768 serialized sizes — public SSOT re-exports of the
+/// production `crate::mlkem` size consts (R13 F-11), placed alongside the
+/// `X25519_*_LEN` consts so a caller pinning the hybrid halves' wire widths
+/// has one public home. Exposing FIPS-203 facts is benign + mirrors the
+/// existing `X25519_PUBLIC_LEN`/`X25519_SECRET_LEN` public precedent; the
+/// `f_kat_1` libcrux KAT drives real ML-KEM output against these so a
+/// silent production-const drift away from FIPS-203 fails there.
+pub use crate::mlkem::{
+    ML_KEM_768_CT_LEN, ML_KEM_768_DK_LEN, ML_KEM_768_EK_LEN, ML_KEM_768_SS_LEN,
+};
+
 /// The real draft-connolly X-Wing `XWingLabel` — the 6 bytes
 /// `0x5c2e2f2f5e5c` (ASCII `\.//^\`). **APPENDED** as the trailing suffix
 /// of the combiner pre-image per `draft-connolly-cfrg-xwing-kem-10` §6
@@ -204,22 +215,37 @@ impl CipherSuite {
         }
     }
 
-    /// Deterministically derive a recipient keypair from a 32-byte `seed`.
+    /// TEST-ONLY: deterministically derive a recipient keypair from a
+    /// 32-byte `seed`.
     ///
     /// Both halves are derived from the seed via BLAKE3 domain-separated
     /// expansion (the X25519 `StaticSecret` from one 32-byte block; the
     /// ML-KEM-768 `(d, z)` from two more) so the same seed always yields
-    /// the same keypair. Used by the Layer-C drop path to map a stable
-    /// recipient pubkey *fingerprint* to a real hybrid keypair without a
-    /// keystore round-trip (the `0x647a` hybrid + the `0x6400` classical
-    /// downgrade are both supported; other codepoints would have been
-    /// rejected by [`Self::resolve`]).
+    /// the same keypair. Test fixtures use this to map a stable recipient
+    /// pubkey *fingerprint* to a real hybrid keypair without a keystore
+    /// round-trip (the `0x647a` hybrid + the `0x6400` classical downgrade
+    /// are both supported; other codepoints would have been rejected by
+    /// [`Self::resolve`]).
+    ///
+    /// **⚠️ NOT a production surface (R13 F-01 freeze-hygiene).** A
+    /// keypair whose seed can be a *public* value is the GAP-1 footgun: if
+    /// the seed is derivable by an attacker, the "secret" is forgeable
+    /// (the `real_entropy_differs_from_public_seed_deterministic` unit test
+    /// feeds it a `public_seed` and names its output `forgeable`). It has
+    /// ZERO production callers — production keying goes through
+    /// [`Self::generate_recipient_keypair`] (REAL OS entropy). So this is
+    /// cfg-gated `#[cfg(any(test, feature = "testing"))]` + `_for_test`-named
+    /// to keep it OFF the frozen default-feature public API entirely.
     ///
     /// Per CLAUDE.md baked-in #5 this stays the ONLY crypto-primitive call
     /// site — the seed expansion goes through the vetted `blake3` MAC and
     /// the keys through `x25519-dalek` / `ml-kem`; no primitive is forked.
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
-    pub fn generate_recipient_keypair_deterministic(&self, seed: &[u8; 32]) -> RecipientKeypair {
+    pub fn generate_recipient_keypair_deterministic_for_test(
+        &self,
+        seed: &[u8; 32],
+    ) -> RecipientKeypair {
         // Domain-separated expansion of the seed into the three 32-byte
         // blocks the two key halves need.
         let block = |tag: u8| -> [u8; 32] {
@@ -284,8 +310,8 @@ impl CipherSuite {
     /// the SAME source the seal path uses for ephemerals + the SAME source
     /// `crate::mlkem::generate` fills its `d‖z` seed from). This is
     /// **NON-deterministic**: two calls yield distinct public AND secret
-    /// bytes. Contrast [`Self::generate_recipient_keypair_deterministic`]
-    /// (seeded from a public fingerprint → forgeable) and
+    /// bytes. Contrast [`Self::generate_recipient_keypair_deterministic_for_test`]
+    /// (seeded from a public fingerprint → forgeable; test-only) and
     /// `generate_recipient_keypair_for_test` (test-fixture entropy).
     ///
     /// Per CLAUDE.md baked-in #5 this stays crypto-primitive glue — x25519
@@ -1218,7 +1244,7 @@ mod tests {
         let real = suite.generate_recipient_keypair();
         // The placeholder derived the "secret" from a PUBLIC fingerprint seed.
         let public_seed = *real.public().x25519.as_ref().unwrap().as_bytes();
-        let forgeable = suite.generate_recipient_keypair_deterministic(&public_seed);
+        let forgeable = suite.generate_recipient_keypair_deterministic_for_test(&public_seed);
         assert_ne!(
             real.secret().to_bytes().as_slice(),
             forgeable.secret().to_bytes().as_slice(),

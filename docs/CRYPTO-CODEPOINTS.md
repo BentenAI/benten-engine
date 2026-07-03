@@ -67,6 +67,16 @@ This is the NQ-A1 conservative-fallback policy:
 | `0x6700..0x67FF` | Lifecycle / revocation band (`LIFECYCLE_BAND_BASE`) | RESERVED |
 | (no Core integer) | `RecoveryArtifact` — reserved-at-Core conceptually; the `RecoveryHook` trait lands in Phase-4-Meta-Composing alongside the allocated codepoint (NQ-W5/m-14) | RESERVED (Composing) |
 
+> **R13 F-13 note on `0x0003` "hybrid".** The `0x0003 HYBRID_MLDSA65_SLHDSA`
+> reserve is a **composite-of-two-PQ** signature (ML-DSA-65 ⊕ SLH-DSA) — the
+> **pure-PQ, no-classical-floor** end-state arm (NF-1). Its "hybrid" means
+> two-PQ-algorithms-combined, NOT the classical⊕PQ shape of the v1-beta default
+> `0x0001 HYBRID_ED25519_MLDSA65` (Ed25519 ⊕ ML-DSA-65, where the classical
+> Ed25519 half is the audited security floor per Compromise #30). Because
+> `0x0003` has NO classical floor, it is **audit-gated** (buildable now as a
+> non-default swap-matrix arm; promoted only after the independent PQ audit
+> lands — same gate as the `0x647c` pure-PQ KEM arm).
+
 The reserved set is enumerated in
 `crates/benten-crypto-suite/src/codepoint.rs::ReservedCodepoint` — each slot's
 `resolve()` ALWAYS typed-rejects at v1-beta (never a silent accept). The
@@ -231,12 +241,15 @@ The in-code wire-lock for the group-band constants is regression-guarded in
 > (`f_disc_2_codepoint_ssot_cross_crate_const_equality`) asserts the producing
 > crates' values equal `benten_crypto_suite::registry::*` for the MembershipSet
 > band (`MEMBERSHIP_SET_ENCRYPTION` / `MEMBERSHIP_SET_GROUP_MULTI_STANZA` /
-> `MEMBERSHIP_SET_RESERVED_0X6620`) and the Layer-C drop band
-> (`LAYER_C_DROP` + `LAYER_C_DROP_MULTI_RECIPIENT`); a one-sided edit to any of
-> those fails the build. (The `DROP_TO_RECIPIENT_SEALED_SENDER == 0x6510` value is
-> wire-locked by the Layer-C drop-band byte-pins in
-> `crates/benten-drop/tests/f_lc_hpke_encrypt_to_recipient_sealed_sender.rs`, not
-> by this cross-crate const-equality arm.)
+> `MEMBERSHIP_SET_RESERVED_0X6620`), the Layer-C drop band
+> (`LAYER_C_DROP` + `DROP_TO_RECIPIENT_SEALED_SENDER == 0x6510` +
+> `LAYER_C_DROP_MULTI_RECIPIENT`), and the wave-live default cipher-suite
+> codepoint (`CipherSuiteCodepoint::HYBRID_X25519_MLKEM768.raw() == 0x647a`
+> ↔ `registry::CIPHER_HYBRID_X25519_MLKEM768`); a one-sided edit to any of
+> those fails the build. (R13 F-03 added the `0x6510` + `0x647a` arms; the
+> `DROP_TO_RECIPIENT_SEALED_SENDER == 0x6510` value is ADDITIONALLY wire-locked
+> by the Layer-C drop-band byte-pins in
+> `crates/benten-drop/tests/f_lc_hpke_encrypt_to_recipient_sealed_sender.rs`.)
 
 The Layer-D DeviceLink band `0x6310..0x631F` is the R0.7 §4.1 Signal-Provisioning
 device-link wire band (`crates/benten-engine/src/layer_d/device_link.rs`

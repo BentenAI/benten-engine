@@ -90,7 +90,7 @@ type KSet = [u8; 32];
 fn fixed_pk(seed: u8) -> RecipientPublic {
     let kp = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
         .expect("0x647a wire-locked")
-        .generate_recipient_keypair_deterministic(&[seed; 32]);
+        .generate_recipient_keypair_deterministic_for_test(&[seed; 32]);
     RecipientPublic::from_bytes(
         CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
         &kp.public().to_bytes(),

@@ -308,7 +308,8 @@ use benten_crypto_suite::sig::{Keypair as SigKeypair, SignatureSuite};
 use benten_drop::layer_c::{
     AAD_VERSION, BindingContext, BodyCidDigest, DROP_TO_RECIPIENT_SEALED_SENDER,
     ENVELOPE_FORMAT_VERSION, EncryptedEnvelope, HYBRID_X25519_MLKEM768, HpkeRecipientStanza,
-    LAYER_C_DROP, LAYER_C_DROP_MULTI_RECIPIENT, LayerCError, audience_set_commitment,
+    LAYER_C_DROP, LAYER_C_DROP_MULTI_RECIPIENT, LayerCError, SENDER_AUTH_DOMAIN,
+    SENDER_AUTH_SIG_CODEPOINT, SenderAuthBinding, audience_set_commitment, build_m_auth,
     group_plaintext_aad_region, group_roster_for_test, open_group_stanza, open_single,
     seal_group_multi, seal_group_multi_plaintext_sender, seal_plaintext_sender, seal_sealed_sender,
     self_describing_cid, serialize,
@@ -325,7 +326,7 @@ use benten_id::did::Did;
 fn fixed_kp(seed: u8) -> RecipientKeypair {
     CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
         .expect("0x647a wire-locked")
-        .generate_recipient_keypair_deterministic(&[seed; 32])
+        .generate_recipient_keypair_deterministic_for_test(&[seed; 32])
 }
 fn fixed_pk(seed: u8) -> RecipientPublic {
     // Re-derive the public half from the recipient's secret seed.
@@ -812,6 +813,149 @@ fn f_lc_2_nondefault_plaintext_sender_group_carries_sender_did_in_aad() {
          If this control fails, PIN 5's wire-scan cannot distinguish hiding \
          from a broken scan — the default and non-default paths must differ \
          observably."
+    );
+}
+
+/// R13 F-09 — the deterministic `0x6500` single-recipient PLAINTEXT-sender
+/// AAD fixture, built directly via `BindingContext::DropPlaintextSender` so
+/// the canonical `plaintext_aad_bytes()` serializer is driven without a
+/// keygen. audience = `"did:key:zRecipientAudience6500"` (30 B), body_cid =
+/// self-describing CIDv1 over `[0xC5; 32]`, recipient_key_generation = 0,
+/// sender = `"did:key:zSender6500"` (19 B).
+fn f_lc_09_plaintext_sender_binding_fixture() -> BindingContext {
+    let digest: BodyCidDigest = [0xC5; 32];
+    BindingContext::DropPlaintextSender {
+        aad_version: AAD_VERSION, // 0x01
+        codepoint: LAYER_C_DROP,  // 0x6500
+        audience_did: did("did:key:zRecipientAudience6500"),
+        body_cid: self_describing_cid(&digest),
+        recipient_key_generation: 0,
+        sender_did: did("did:key:zSender6500"),
+    }
+}
+
+/// R13 F-09 — FROZEN big-endian golden for the `0x6500` PLAINTEXT-sender
+/// single-recipient AAD. Layout (BE; M-19): `aad_version u8 | codepoint u16
+/// (0x6500) | aud_len u32 | audience_did | body_cid (36 B) |
+/// recipient_key_gen u32 | sender_len u16 | sender_did`. The load-bearing
+/// R13 F-09 point: the trailing `sender_len` is **u16-BE** (`00 13` for the
+/// 19-byte sender), NOT the audience's u32-BE length-prefix — the two
+/// length-prefix widths are DELIBERATELY different (audience u32, sender
+/// u16) per the band's wire contract (layer_c.rs §4.1). Computed once via
+/// the M-20 throwaway script (`/tmp/.../compute_0x6500_golden.py`).
+const F_LC_PLAINTEXT_SENDER_AAD_HEX: &str = "0165000000001e6469643a6b65793a7a526563697069656e7441756469656e63653635303001711e20c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c50000000000136469643a6b65793a7a53656e64657236353030";
+
+/// R13 F-09 — the `0x6500` plaintext-sender AAD serializes to the FROZEN
+/// big-endian golden AND its trailing `sender_len` prefix is **u16-BE**, NOT
+/// the u32-BE form the audience uses. would-FAIL if `sender_len` regressed to
+/// u32 (the settled-territory conflation the audience-lp guards elsewhere
+/// catch), or if the byte layout drifted.
+#[test]
+fn f_lc_09_plaintext_sender_len_is_u16_be_not_u32_frozen_golden() {
+    let binding = f_lc_09_plaintext_sender_binding_fixture();
+    let bytes = binding.plaintext_aad_bytes();
+
+    // (a) FROZEN golden — the full BE layout (M-20).
+    assert_eq!(
+        to_hex(&bytes),
+        F_LC_PLAINTEXT_SENDER_AAD_HEX,
+        "F-09: the 0x6500 plaintext-sender AAD MUST serialize to the FROZEN \
+         big-endian golden (aad_version | codepoint(0x6500) | \
+         aud_len(u32) | audience | body_cid(36) | rkg(u32) | \
+         sender_len(u16) | sender_did). R5 confirms-or-deliberately-updates \
+         this literal (M-20)."
+    );
+
+    // (b) The trailing `sender_len` is u16-BE. Offset = aad_version(1) +
+    //     codepoint(2) + aud_len(4) + audience(30) + body_cid(36) + rkg(4).
+    let sender = did("did:key:zSender6500");
+    let sender_len_off = 1 + 2 + 4 + "did:key:zRecipientAudience6500".len() + 36 + 4;
+    let observed_u16 = u16::from_be_bytes([bytes[sender_len_off], bytes[sender_len_off + 1]]);
+    assert_eq!(
+        observed_u16 as usize,
+        sender.len(),
+        "F-09: the 2-byte sender_len prefix MUST be the u16-BE sender-DID \
+         length (0x{:04x} for the {}-byte sender).",
+        sender.len(),
+        sender.len()
+    );
+    // The u16 form is EXACTLY 2 bytes; the sender-DID must follow immediately.
+    assert_eq!(
+        &bytes[sender_len_off + 2..sender_len_off + 2 + sender.len()],
+        sender.as_slice(),
+        "F-09: the sender-DID MUST follow the 2-byte u16-BE sender_len \
+         immediately — a u32 prefix would insert 2 spurious high-order zero \
+         bytes and shift the DID."
+    );
+
+    // (c) assert_ne! the u32-BE form: reading the sender_len region as a
+    //     u32-BE would consume 2 EXTRA bytes and NOT equal the true length.
+    let as_u32 = u32::from_be_bytes([
+        bytes[sender_len_off],
+        bytes[sender_len_off + 1],
+        bytes[sender_len_off + 2],
+        bytes[sender_len_off + 3],
+    ]);
+    assert_ne!(
+        as_u32 as usize,
+        sender.len(),
+        "F-09: a u32-BE read of the sender_len region MUST NOT equal the \
+         sender length — the prefix is u16-BE (2 bytes), NOT u32-BE (4 bytes). \
+         If these were equal the wire would be ambiguous with the audience's \
+         u32-BE prefix (the conflation this pin forbids)."
+    );
+}
+
+/// R13 F-10 — FROZEN big-endian golden over `build_m_auth` (the sender-
+/// origin-auth binding). Layout: `SENDER_AUTH_DOMAIN | sig_codepoint u16 |
+/// envelope_codepoint u16 | lp_u32(sender_did) | body_cid(36) |
+/// lp_u32(audience_commitment) | generation_count u32 | generations(u32 each)
+/// | stanza_count u32 | body_aad_digest(32)`. Fixture: sig=0x0001,
+/// envelope=0x6510, sender=`"did:key:zSenderF10"` (18 B), body_cid over
+/// `[0xF1;32]`, audience=`"did:key:zAudF10"` (15 B), generations=[7],
+/// stanza_count=1, body_aad_digest=`[0xAA;32]`. Computed once via the M-20
+/// throwaway script (`/tmp/.../compute_m_auth_golden.py`).
+const F_M_AUTH_GOLDEN_HEX: &str = "62656e74656e2f6c617965722d632f7365616c65642d73656e6465722d6f726967696e2d617574682f763100016510000000126469643a6b65793a7a53656e64657246313001711e20f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f10000000f6469643a6b65793a7a417564463130000000010000000700000001aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+/// R13 F-10 — `build_m_auth` produces the FROZEN deterministic binding
+/// bytes: the `SENDER_AUTH_DOMAIN` prefix, the two u16-BE codepoints, the
+/// `lp_u32` framing of every variable field, the 36-byte self-describing
+/// body_cid, the generation-count prefix + generation words, stanza_count,
+/// and the 32-byte body_aad_digest — all big-endian, injective (M-19/M-20).
+/// would-FAIL if the layout drifted (a dropped lp prefix, an LE codepoint, a
+/// missing domain prefix, or a reordered field) — a wire-break that would
+/// silently break seal/verify agreement across engines.
+#[test]
+fn f_lc_10_build_m_auth_frozen_golden() {
+    let digest: BodyCidDigest = [0xF1; 32];
+    let body_cid = self_describing_cid(&digest);
+    let sender = did("did:key:zSenderF10");
+    let audience_commitment = did("did:key:zAudF10");
+    let m = build_m_auth(&SenderAuthBinding {
+        sig_codepoint: SENDER_AUTH_SIG_CODEPOINT, // 0x0001
+        envelope_codepoint: DROP_TO_RECIPIENT_SEALED_SENDER, // 0x6510
+        sender_did: &sender,
+        body_cid: &body_cid,
+        audience_commitment: &audience_commitment,
+        generations: &[7],
+        stanza_count: 1,
+        body_aad_digest: [0xAA; 32],
+    });
+    assert_eq!(
+        to_hex(&m),
+        F_M_AUTH_GOLDEN_HEX,
+        "F-10: build_m_auth MUST serialize to the FROZEN big-endian binding \
+         (SENDER_AUTH_DOMAIN prefix | sig/envelope codepoints u16-BE | \
+         lp_u32 widths | 36-byte body_cid | generation-count prefix + words | \
+         stanza_count | 32-byte body_aad_digest). R5 confirms-or-deliberately-\
+         updates this literal (M-20)."
+    );
+    // The golden MUST start with the exact SENDER_AUTH_DOMAIN prefix — the
+    // domain separation that makes M_auth unforgeable-cross-context (F-1).
+    assert!(
+        m.starts_with(SENDER_AUTH_DOMAIN),
+        "F-10: build_m_auth output MUST begin with the SENDER_AUTH_DOMAIN \
+         prefix (the F-1 domain separation)."
     );
 }
 

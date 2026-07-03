@@ -388,7 +388,7 @@ fn hybrid_sender() -> (SigKeypair, Vec<u8>) {
 fn fixed_kp(seed: u8) -> benten_crypto_suite::cipher_suite::RecipientKeypair {
     CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
         .expect("0x647a wire-locked")
-        .generate_recipient_keypair_deterministic(&[seed; 32])
+        .generate_recipient_keypair_deterministic_for_test(&[seed; 32])
 }
 fn fixed_pk(seed: u8) -> RecipientPublic {
     RecipientPublic::from_bytes(
@@ -701,6 +701,27 @@ fn f_disc_2_codepoint_ssot_cross_crate_const_equality() {
         registry::LAYER_C_DROP_MULTI_RECIPIENT,
         "0x6520 LAYER_C_DROP_MULTI_RECIPIENT drifted between \
          benten_drop::layer_c and benten_crypto_suite::registry"
+    );
+    // R13 F-03: the DEFAULT Sealed-Sender codepoint (0x6510) is
+    // independently defined in benten_drop::layer_c and mirrored to the
+    // registry — pin their agreement so a one-sided edit fails the build.
+    assert_eq!(
+        benten_drop::layer_c::DROP_TO_RECIPIENT_SEALED_SENDER,
+        registry::DROP_TO_RECIPIENT_SEALED_SENDER,
+        "0x6510 DROP_TO_RECIPIENT_SEALED_SENDER drifted between \
+         benten_drop::layer_c and benten_crypto_suite::registry"
+    );
+    // R13 F-03: the wave-live default cipher-suite codepoint (0x647a) is
+    // defined as the `CipherSuiteCodepoint::HYBRID_X25519_MLKEM768` newtype
+    // in benten_crypto_suite::codepoint and mirrored as a bare u16 in the
+    // registry allocation map — pin their raw() agreement (cross-definition,
+    // NOT an `assert_eq!(CONST, literal)` self-walker).
+    assert_eq!(
+        benten_crypto_suite::codepoint::CipherSuiteCodepoint::HYBRID_X25519_MLKEM768.raw(),
+        registry::CIPHER_HYBRID_X25519_MLKEM768,
+        "0x647a HYBRID_X25519_MLKEM768 drifted between \
+         benten_crypto_suite::codepoint (the newtype) and \
+         benten_crypto_suite::registry (the allocation map)"
     );
 }
 

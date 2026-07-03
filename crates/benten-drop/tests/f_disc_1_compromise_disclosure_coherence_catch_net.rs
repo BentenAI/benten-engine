@@ -103,11 +103,15 @@ use std::collections::BTreeSet;
 ///   MIT = Mitigated-Open
 const DISPOSITION_CLASSES: &[&str] = &["ATO", "SGD", "CHD", "OOS", "MIT"];
 
-/// The highest Compromise number in the **closed F-full range** per spec
-/// R0.5 §5.2 + §10.5 (NQ-T4 mint). #63 = Sealed-Sender abuse-control
-/// (BR-1); **#64 = best-effort-eventual cross-device nonce-rejection
-/// window (NQ-T4; SGD)** — the slot a Ben ruling specifically mandated.
-const F_FULL_TOP_COMPROMISE: u32 = 64;
+/// The highest Compromise number the closed presence-sweep covers per spec
+/// R0.5 §5.2 + §10.5 (NQ-T4 mint) + the R13 F-07 mint. #63 = Sealed-Sender
+/// abuse-control (BR-1); **#64 = best-effort-eventual cross-device
+/// nonce-rejection window (NQ-T4; SGD)** — the slot a Ben ruling specifically
+/// mandated; **#65 = wave-3e per-Node AEAD publicly-derivable-`K_principal`
+/// confidentiality limit at v1-beta (R13 F-07; SGD)** — minted to track the
+/// THREAT-MODEL untrusted-host honesty retense so the limit is auto-swept
+/// here (the coupled F-06/F-07 fix).
+const F_FULL_TOP_COMPROMISE: u32 = 65;
 
 /// A parsed Compromise row: its number + the line text we found it on.
 #[derive(Debug, Clone)]
@@ -339,21 +343,24 @@ fn f_disc_1_disposition_class_match_is_word_boundary_not_substring_baseline() {
     }
 }
 
-/// PIN 0d (baseline) — R4.3-FIX (C-MAJOR-1-64): the closed F-full range
-/// top is #64, NOT #63. Guards against the range silently regressing back
-/// to #63 (which would drop the NQ-T4-mandated disclosure from the
+/// PIN 0d (baseline) — R4.3-FIX (C-MAJOR-1-64) + R13-F-07: the closed
+/// presence-sweep top is #65, NOT #64/#63. Guards against the range
+/// silently regressing (which would drop the NQ-T4-mandated #64 disclosure
+/// OR the R13 F-07 #65 confidentiality-limit disclosure from the
 /// auto-include sweep). Would-FAIL if `F_FULL_TOP_COMPROMISE` is lowered.
 #[test]
-fn f_disc_1_closed_range_top_is_64_not_63_baseline() {
+fn f_disc_1_closed_range_top_is_65_not_64_baseline() {
     assert_eq!(
-        F_FULL_TOP_COMPROMISE, 64,
-        "the closed F-full Compromise range MUST run #30..=#64. NQ-T4 \
-         (spec R0.5 §10.5; Ben 2026-06-02) mandated minting Compromise #64 \
-         — the best-effort-eventual cross-device nonce-rejection window. \
-         #63 = Sealed-Sender abuse-control (BR-1) is NOT the top. Lowering \
-         this back to 63 silently forecloses the one row a Ben ruling \
-         specifically mandated — exactly the catch-net regression \
-         C-MAJOR-1-64 closes."
+        F_FULL_TOP_COMPROMISE, 65,
+        "the closed Compromise presence-sweep range MUST run #30..=#65. \
+         NQ-T4 (spec R0.5 §10.5; Ben 2026-06-02) mandated minting Compromise \
+         #64 — the best-effort-eventual cross-device nonce-rejection window; \
+         R13 F-07 minted Compromise #65 — the wave-3e per-Node AEAD \
+         publicly-derivable-`K_principal` confidentiality limit at v1-beta \
+         (the THREAT-MODEL untrusted-host honesty retense). #63 = \
+         Sealed-Sender abuse-control (BR-1) is NOT the top. Lowering this \
+         silently forecloses a mandated disclosure — exactly the catch-net \
+         regression C-MAJOR-1-64 closes."
     );
 }
 
@@ -362,12 +369,13 @@ fn f_disc_1_closed_range_top_is_64_not_63_baseline() {
 // end-state disclosure coherence over Compromise #30..#64.
 // ===========================================================================
 
-/// PIN 1 — every Compromise #30..#64 row EXISTS in the doc.
-/// Parametrized over the closed F-full range (the R5 end-state mints all
-/// of #32..#64); the sweep is driven by `distinct_compromise_numbers`
-/// so any NEW row beyond #64 is auto-swept by PIN 2.
+/// PIN 1 — every Compromise #30..#65 row EXISTS in the doc.
+/// Parametrized over the closed range (the R5 end-state mints all of
+/// #32..#64; R13 F-07 mints #65); the sweep is driven by
+/// `distinct_compromise_numbers` so any NEW row beyond #65 is auto-swept
+/// by PIN 2.
 #[test]
-fn f_disc_1_all_compromise_30_through_64_rows_present() {
+fn f_disc_1_all_compromise_30_through_65_rows_present() {
     let doc = security_posture_md();
     let numbers = distinct_compromise_numbers(&doc);
 

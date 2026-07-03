@@ -32,7 +32,7 @@
 | Compromise #55 | `SGD` | Compromise #56 | `SGD` | Compromise #57 | `SGD` |
 | Compromise #58 | `CHD` | Compromise #59 | `SGD` | Compromise #60 | `SGD` |
 | Compromise #61 | `CHD` | Compromise #62 | `SGD` (revocation-reach; Drops forever-valid) | Compromise #63 | `ATO` |
-| Compromise #64 | `SGD` (cross-device best-effort nonce / jti replay window) | | | | |
+| Compromise #64 | `SGD` (cross-device best-effort nonce / jti replay window) | Compromise #65 | `SGD` (wave-3e per-Node AEAD publicly-derivable-`K_principal` confidentiality limit at v1-beta) | | |
 
 This document records the security claims Benten makes through Phase
 4-Foundation close and the known compromises those claims rest on. This
@@ -155,6 +155,7 @@ table narrative.
 | 61 | MembershipSet-fingerprint-leak via iroh-gossip topic (CLOSED by HMAC-blinded topic) | 4-Meta-Core | **COMPOSITION-HAZARD HONEST DISCLOSURE; CLOSED.** The iroh-gossip topic would have leaked a membership-set fingerprint; CLOSED by P2 D6 HMAC-blinded (`blake3::keyed_hash`) gossip topic — set-identifying material is never published in the clear. MembershipSet panel (M-C3). |
 | 62 | Revocation reach in encryption-at-rest (already-derived keys remain decryptable; Drop bundles forever-valid once distributed) | 4-Meta-Core | **RE-POINTED from the in-tree #31 occupant (BR-2). OPEN ARCHITECTURAL TRADE-OFF; MITIGATED by tight UCAN `nbf`/`exp` + key rotation.** Per RATIFIED-S&C §R6 + V1-FROZEN-INTERFACE.md item 15(i): UCAN revocation cuts FUTURE serves (the per-request `CapabilityPolicy::check_read` consultation fails for subsequent requests against the granted CID), but already-derived keys remain decryptable forever. Once Bob has derived `K(N)` for some Node, Bob can decrypt any ciphertext he obtains for that Node, regardless of subsequent UCAN revocation. Re-keying the Node requires Alice to re-encrypt + re-issue (a heavy operation; per-Node + per-recipient cost scales). Drop bundles are forever-valid once distributed — the producer has no callback to revoke an already-distributed Drop. **Mitigation:** tight UCAN `nbf`/`exp` windows + key rotation discipline + the typed `E_UCAN_BLOBS_REQUEST_REJECTED` server-side gate. **Stays OPEN at v1-beta + v1-GM** — this is an inherent property of encryption-at-rest where the reader holds plaintext key material; closing it would require structural changes (e.g. forward-secret re-keying on every revocation; MLS-style per-message keys) that are out of scope for v1. Authored at G-CORE-9 V1-FROZEN-INTERFACE row 8e per Ben morning queue item; tracking via the V1-FROZEN-INTERFACE.md item 15(i) FREEZE-WAVE FIX-NOW. Cross-linked #57. |
 | 63 | Sealed-Sender abuse-control trade-off (no plaintext sender ⇒ abuse-control rides recipient-issued delivery tokens) | 4-Meta-Core | **NEW (BR-1; §3.11).** The DEFAULT Sealed-Sender path (`0x6510`) carries no plaintext sender identity, so abuse/spam control cannot use per-sender filtering; it rides recipient-issued short-lived rate-limited UCAN-backed delivery tokens (refused at the receive boundary BEFORE decrypt). Residual: a recipient who over-issues tokens re-admits spam (mitigated by default-conservative token rate-limits + per-token `nbf`/`exp` + revocation). See body section. |
+| 65 | Wave-3e per-Node AEAD publicly-derivable-`K_principal` confidentiality limit at v1-beta (untrusted host CAN read partition plaintext) | 4-Meta-Core | **NEW (R13 F-07; `SGD` substrate-guarantee disclosure; minted to match the THREAT-MODEL untrusted-host honesty retense, R13 F-06).** At v1-beta the per-Node AEAD wrap does NOT provide confidentiality against a malicious *storage host*: the wave-3e `K_principal = blake3::keyed_hash(K_PRINCIPAL_DOMAIN_KEY, namespace_did)` is derived from a **publicly-known** 32-byte domain-tag constant (`domain_registry.rs`) + the **publicly-known** `namespace_did`, so `K_principal` — and thus `K(N)` + the per-Node AEAD key — is **publicly derivable**: any party holding `(namespace_did, ciphertext_blob)` can derive the key and decrypt. Per CLAUDE.md baked-in #18 the **confidentiality half** of the Principal primitive (per-principal encryption of the storage partition; the #1301 / D-64 substrate) is **DEFERRED — NOT built at v1-beta**; the LIVE protection is the **AUTHORITY half** (capability / namespace isolation) which binds only a **cooperating** engine. So per-Node AEAD is a publicly-derivable-`K_principal` **STAND-IN** keeping the substrate shape stable for the production `K_principal`-store swap-in, NOT real untrusted-host confidentiality. Mitigated in the interim by namespace-isolation at the storage backend (the AUTHORITY half) + the local device's Layer-A vault (Argon2id-DAK-sealed, protecting the *local* vault at rest). **Stays OPEN at v1-beta; CLOSES when the #1301 / D-64 per-DID secret-material `K_principal` backend lands** (the swap-in replaces only the `K_principal` synthesis step — the function signature + AEAD-wrap layer + per-chunk size are all stable). Full narration: the "⚠️ Confidentiality limit at this wave" disclosure in the **Per-Node AEAD wrap layer** section below (`derive_test_seam_key_from_cid_with_namespace`). Cross-linked from `docs/THREAT-MODEL.md` §1 (the untrusted-host row + honesty note). Named carry: `docs/future/phase-4-backlog.md §3.10`. |
 | 64 | Cross-device best-effort-eventual nonce-rejection window (NQ-T4) | 4-Meta-Core | **NEW (NQ-T4; Ben-ratified 2026-06-02; minted this cascade). `SGD` substrate-guarantee disclosure.** The `jti`-keyed nonce-cache is per-device-durable-GUARANTEED **via the durable-CAS-marker + `from_durable` hydration seam** (`JtiNonceCache`; the engine honors a caller-contract to persist `durable_snapshot()` + re-hydrate on restart — the full disk-persistence wiring is deferred with the remote-permission wiring, Row D-64-adjacent) but user-global only best-effort-eventual-via-sync (NOT synchronous): a nonce consumed on device B is rejected on device C only after the consumed-`jti` set propagates via sync. The pre-sync cross-device window admits a one-time replay of a remote-permission / DeviceLink token across the user's own devices. Mitigated by: durable per-device rejection via the seam (no same-device replay once persisted+hydrated), tight `valid_until` (full-second granularity, strict, no skew window — NQ-T2), and short delivery-token `exp`. **Stays OPEN at v1-beta + v1-GM** — synchronous user-global rejection would require a consensus/online-coordinator the P2P model deliberately avoids. See body section. |
 
 **Refinement-audit-2026-05 delta:** Compromise #29 (engine-extension trust model, narrative-only at HEAD; now registry-tracked) + reserved rows #27 / #28 added post-tag to anchor META #669 + META #629 closure mints. The v1-platform-shippable BLOCKER cluster framing lives in the local-only campaign-summary `refinement-audit-2026-05.md §15` (gitignored under `docs/future/*` — internal methodology artifact, not publicly shipped; see `docs/future/phase-4-backlog.md §15.5`).
@@ -2661,6 +2662,40 @@ model; the bounded window is the accepted residual. **Cross-ref:** Compromise #2
 substrate it re-uses); NQ-T2 (`valid_until` strict-enforcement); Compromise #60 (tight-`exp`); R0.7 §10.5
 (NQ-T4 ratification) + §3.10 (nonce-cache spec).
 
+### Compromise #65 — Wave-3e per-Node AEAD publicly-derivable-`K_principal` confidentiality limit at v1-beta
+
+**Status.** OPEN; SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** NEW — minted at R13 (F-07), coupled to the
+THREAT-MODEL untrusted-host honesty retense (R13 F-06). **Class.** `SGD` — the substrate GUARANTEES the AUTHORITY
+half (capability / namespace isolation) and DISCLOSES that the CONFIDENTIALITY half is deferred, so per-Node AEAD
+is a publicly-derivable-`K_principal` stand-in at v1-beta (same honest-disclosure class as #62 revocation-reach +
+#64 nonce-window).
+
+At v1-beta the per-Node AEAD wrap does **NOT** provide confidentiality against a malicious **storage host**. The
+wave-3e `K_principal = blake3::keyed_hash(K_PRINCIPAL_DOMAIN_KEY, namespace_did)` is derived from a
+**publicly-known** 32-byte domain-tag constant (`domain_registry.rs`) + the **publicly-known** `namespace_did`, so
+`K_principal` — and thus `K(N)` + the per-Node AEAD key — is **publicly derivable**: any party holding
+`(namespace_did, ciphertext_blob)` can derive the key and decrypt (see the "⚠️ Confidentiality limit at this wave"
+disclosure in the **Per-Node AEAD wrap layer** section of this document — `derive_test_seam_key_from_cid_with_namespace`).
+
+Per CLAUDE.md baked-in #18 the Principal primitive has two isolation halves, and only ONE is live at v1-beta: the
+**AUTHORITY half** (capability / namespace isolation, cooperating-engine-only) is the live protection; the
+**CONFIDENTIALITY half** (per-principal encryption of the storage partition — the #1301 / D-64 substrate) is
+**DEFERRED, NOT built at v1-beta**. So per-Node AEAD is a publicly-derivable-`K_principal` **STAND-IN** keeping the
+substrate shape stable for the production `K_principal`-store swap-in, NOT real untrusted-host confidentiality.
+
+**Why this is accepted at v1-beta.** The wave-3e use-case is holding the substrate shape stable for the production
+`K_principal`-store swap-in (the swap-in replaces only the `K_principal` synthesis step; the function signature +
+AEAD-wrap layer + per-chunk size are all stable). In the interim: the AUTHORITY half (namespace isolation at the
+storage backend) is the live protection on a cooperating engine, and the local device's **Layer-A vault**
+(Argon2id-DAK-sealed) protects the *local* vault at rest.
+
+**Stays OPEN at v1-beta; CLOSES** when the #1301 / D-64 per-DID secret-material `K_principal` backend lands.
+**Cross-ref:** `docs/THREAT-MODEL.md` §1 (untrusted-host tier row + honesty note); CLAUDE.md baked-in #18; the
+per-Node AEAD "⚠️ Confidentiality limit at this wave" section (this document); Row D-64 / #1301 (the deferred
+confidentiality substrate); `docs/future/phase-4-backlog.md §3.10` (K_principal-per-DID secret-material backend).
+Contrast the Tier-1 network-observer "sees plaintext = NO" (Layer-C encrypt-to-recipient — a DIFFERENT, live
+mechanism, NOT this stand-in).
+
 > **Compromise #62 detail (revocation reach)** lives at the renumbered in-tree section
 > "Revocation reach (§R6) — Compromise #62 detail (RE-POINTED from in-tree #31 per BR-2)" below +
 > the "Revocation reach — online-pull vs offline-Drop asymmetry (G-CORE-3f)" section — verbatim-preserved
@@ -3183,6 +3218,18 @@ carry destination: `docs/future/phase-4-backlog.md §3.10`
 replaces only the `K_principal` synthesis step; the function
 signature + the AEAD-wrap layer + the per-chunk size are all
 stable.
+
+**This limit is now a NUMBERED Compromise (#65; R13 F-07)** so it is
+registry-tracked + auto-swept by the `f_disc_1` compromise-disclosure
+catch-net. The companion `docs/THREAT-MODEL.md` §1 untrusted-host tier
+row + honesty note match this disclosure: per CLAUDE.md baked-in #18
+the confidentiality half of the Principal primitive is DEFERRED
+(#1301 / D-64), so per-Node AEAD is a publicly-derivable-`K_principal`
+STAND-IN at v1-beta and an untrusted *storage host* CAN read the
+partition plaintext — the LIVE protection is the AUTHORITY half
+(capability / namespace isolation, cooperating-engine-only). The
+relay-facing "sees plaintext = NO" (Tier-1) is a DIFFERENT, live
+mechanism (Layer-C encrypt-to-recipient), not this stand-in.
 
 ### Per-chunk-AEAD chunk size = `IROH_BLOCK_SIZE` (16 KiB)
 

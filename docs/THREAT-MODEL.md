@@ -16,15 +16,41 @@ The trust tiers, from least- to most-trusted relative to a principal's plaintext
 | Tier | Who | Sees plaintext? | Sees metadata? |
 |---|---|---|---|
 | **Network observer / untrusted relay** | an iroh relay, a passive network adversary, a storage host holding ciphertext | **NO** (but see the `body_cid` note below — low-entropy bodies are confirmable/linkable) | gossip topic (blinded), Drop envelope sizes + timing, blinded group tags (`audience_set_commitment`, `membership_set_id_commitment`) — **opaque 32-byte tags, NOT the roster** — plus the plaintext **`body_cid`** (unsalted `BLAKE3(body)` CID; a confirmation-oracle + equality-linker for **low-entropy** bodies only) |
-| **Untrusted host** (peers-hold-ciphertext) | a peer storing a principal's encrypted partition (Phase-7 Garden-Grove) | **NO** (per-Node AEAD + Layer-A vault seal the bytes) | blob CIDs + access patterns |
+| **Untrusted host** (peers-hold-ciphertext) | a peer storing a principal's encrypted partition (Phase-7 Garden-Grove) | **NOT YET at v1-beta** — see the honesty note below (the confidentiality half of the Principal primitive is DEFERRED; per-Node AEAD is a publicly-derivable-`K_principal` STAND-IN, so a malicious host CAN read the partition plaintext); the LIVE protection is the AUTHORITY half (capability/namespace isolation) which binds only a COOPERATING engine | blob CIDs + access patterns |
 | **Co-recipient member** | a member of a MembershipSet holding `K_Set` | **YES** for content they are entitled to | the member roster (recomputes the blinded commitments from the member list they hold) |
 | **Admin** | a MembershipSet admin holding the audit log + `members_table` | **YES** for set content + **CAN correlate members** | full audit-log visibility (Compromise #58) |
 | **Coerced device** | a device whose holder is compelled to unlock / approve | **YES** (whatever that device is entitled to) | n/a — OUT-OF-SCOPE (Compromise #33) |
 
 **The load-bearing scope boundary.** Per-recipient unlinkability (the `0x6610` / `0x6520` group-AAD blinding) is
-**network-observer-only** (see §3). Capability-gating binds only a *cooperating* engine; on an *untrusted host*,
-**encryption** (per-Node AEAD + Layer-A vault) is the load-bearing confidentiality substrate (CLAUDE.md baked-in
-#18 — the confidentiality half of the Principal primitive).
+**network-observer-only** (see §3).
+
+**⚠️ Untrusted-host confidentiality is NOT delivered at v1-beta (HARD honesty note — must match `docs/SECURITY-POSTURE.md`).**
+Per CLAUDE.md baked-in #18 the Principal primitive has TWO isolation halves, and only ONE is live at v1-beta:
+
+- **AUTHORITY isolation** (who is *allowed* to see/act) — capability/namespace-gating (UCAN / `CapabilityPolicy` +
+  private-namespace delegation-refusal). This is **LIVE + real**, and it is the protection an untrusted host defeats:
+  capabilities bind only a *cooperating* engine, so they give **zero** protection the moment a partition rests on
+  hardware another principal controls.
+- **CONFIDENTIALITY isolation** (who *can read the bytes*) — per-principal encryption of the storage partition. This is
+  the **DEFERRED** #1301 / D-64 encryption substrate (the confidentiality half of the Principal primitive) and is
+  **NOT built at v1-beta.**
+
+Consequently, per-Node AEAD is a **publicly-derivable-`K_principal` STAND-IN** at v1-beta, **not** real untrusted-host
+confidentiality: `K_principal = BLAKE3-keyed-hash(domain_tag, namespace_did)` where BOTH the `domain_tag` (a public
+registered constant in `domain_registry.rs`) AND the `namespace_did` are **PUBLIC**, so `K_principal` — and thus `K(N)`
+and the per-Node AEAD key — is **publicly derivable**: any party holding `(namespace_did, ciphertext_blob)` can derive
+the key and decrypt. An **untrusted host CAN therefore currently read the partition plaintext.** This is disclosed
+honestly + tracked as a **numbered Compromise** in `docs/SECURITY-POSTURE.md` (Compromise #65 — "wave-3e per-Node AEAD
+publicly-derivable-`K_principal` confidentiality limit at v1-beta"), cross-linked to the existing "⚠️ Confidentiality
+limit at this wave" disclosure in that document's per-Node-AEAD section. The **Layer-A vault** (Argon2id-derived DAK
+sealing the on-disk `K_principal`/user-DID-key vault) is real at-rest protection **for the local device's own vault**,
+but it is distinct from — and does NOT stand in for — the per-DID partition-confidentiality half a hostile *remote*
+host would defeat.
+
+(Contrast Tier-1: the **network-observer / relay** "sees plaintext = NO" is real + live — that is **Layer-C
+encrypt-to-recipient** (`0x6610` / HPKE-wrapped CEK), which genuinely seals the wire against a passive relay. The
+relay-vs-untrusted-host distinction is the whole point: sealing bytes *in transit to a chosen recipient* is live;
+sealing a per-principal partition *at rest on a hostile host* is the deferred confidentiality half.)
 
 **Deterministic-CEK confirmation-oracle (additive disclosure; GAP-2).** The Layer-C content-encryption key is
 deterministically derived from the plaintext, so a party that **already holds the CEK** (the sealer, or a

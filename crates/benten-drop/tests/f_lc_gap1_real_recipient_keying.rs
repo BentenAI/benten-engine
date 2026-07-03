@@ -7,7 +7,7 @@
 //! placeholder fingerprints and derived the recipient "secret" from the PUBLIC
 //! fingerprint (`sk[i] = pk[i].wrapping_sub(0x80)` per byte), then expanded
 //! that public fingerprint into a "keypair" via
-//! `generate_recipient_keypair_deterministic`. Net: the secret carried ZERO
+//! `generate_recipient_keypair_deterministic_for_test`. Net: the secret carried ZERO
 //! entropy independent of the public key — ANY party holding the recipient's
 //! PUBLIC key could reconstruct the "secret" and decrypt. That is a total break
 //! of encrypt-to-recipient confidentiality on the frozen v1-beta surface.

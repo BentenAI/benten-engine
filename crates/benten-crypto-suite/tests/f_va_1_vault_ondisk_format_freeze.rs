@@ -176,6 +176,44 @@ fn xnonce_codepoint_with_12_byte_nonce_is_rejected() {
     );
 }
 
+/// R13 F-12 — vault format-version policy pin (NAMED-carry Row D-72). The
+/// production `parse_vault_frame` currently rejects ANY `bytes[1] !=
+/// ENVELOPE_FORMAT_VERSION_V2` UNIFORMLY with `MalformedCbor` — it does NOT
+/// yet distinguish `got > V2` ("newer vault; the reader is stale, please
+/// upgrade") from `got < V2` ("stale vault; reject"). There is no extant V3,
+/// so a differentiated policy is deferred to v1-Composing (Row D-72). This
+/// pin LOCKS the current uniform-reject baseline so the future differentiated
+/// policy is a DELIBERATE change against a documented pin, not a silent drift.
+/// would-FAIL if a future edit changed the not-V2 rejection shape without
+/// updating this pin + Row D-72.
+#[test]
+fn f_va_12_non_v2_version_byte_uniformly_rejects_baseline() {
+    let payload = fixture_payload();
+    let dak = fixture_dak();
+    let bytes = serialize_vault_for_test(&payload, &dak);
+    // Sanity: the honest frame decodes.
+    assert!(
+        decode_vault_for_test(&bytes, &dak).is_ok(),
+        "F-12: the honest V2 vault frame MUST decode (positive control)."
+    );
+    // byte[1] is the envelope format-version byte (parse_vault_frame :357).
+    // Flip it to a STALE (< V2) value and a NEWER (> V2) value; BOTH must
+    // currently reject with the SAME MalformedCbor (uniform policy).
+    for injected in [0x00u8, 0x01u8, 0x03u8, 0xFFu8] {
+        let mut tampered = bytes.clone();
+        tampered[1] = injected;
+        let outcome = decode_vault_for_test(&tampered, &dak);
+        assert!(
+            matches!(outcome, Err(VaultError::MalformedCbor)),
+            "F-12 (Row D-72): a vault whose format-version byte is 0x{injected:02x} \
+             (NOT V2) MUST currently reject UNIFORMLY with MalformedCbor — the \
+             got>V2 (\"newer, upgrade\") vs got<V2 (\"stale, reject\") \
+             differentiated policy is DEFERRED (no extant V3). If this baseline \
+             changes, update Row D-72. got {outcome:?}"
+        );
+    }
+}
+
 /// The FROZEN canonical DAG-CBOR golden hex for `fixture_payload()`
 /// (F4-038). Computed ONCE from the canonical encoder (definite-length map
 /// of 3 pairs; field order k_principal ‖ user_did_signing_key ‖

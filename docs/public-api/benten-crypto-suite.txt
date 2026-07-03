@@ -108,7 +108,6 @@ pub struct benten_crypto_suite::cipher_suite::CipherSuite
 impl benten_crypto_suite::cipher_suite::CipherSuite
 pub const fn benten_crypto_suite::cipher_suite::CipherSuite::codepoint(&self) -> benten_crypto_suite::codepoint::CipherSuiteCodepoint
 pub fn benten_crypto_suite::cipher_suite::CipherSuite::generate_recipient_keypair(&self) -> benten_crypto_suite::cipher_suite::RecipientKeypair
-pub fn benten_crypto_suite::cipher_suite::CipherSuite::generate_recipient_keypair_deterministic(&self, &[u8; 32]) -> benten_crypto_suite::cipher_suite::RecipientKeypair
 pub fn benten_crypto_suite::cipher_suite::CipherSuite::is_hybrid_default(&self) -> bool
 pub fn benten_crypto_suite::cipher_suite::CipherSuite::open_aead(&self, &[u8], &benten_crypto_suite::aead::AeadEnvelope, &[u8]) -> core::result::Result<benten_crypto_suite::cipher_suite::DecryptedPlaintext, benten_crypto_suite::aead::AeadError>
 pub fn benten_crypto_suite::cipher_suite::CipherSuite::resolve(benten_crypto_suite::codepoint::CipherSuiteCodepoint) -> core::result::Result<Self, benten_crypto_suite::error::UnsupportedAlgorithm>
@@ -228,6 +227,10 @@ impl core::marker::Unpin for benten_crypto_suite::cipher_suite::WrappedKey
 impl core::marker::UnsafeUnpin for benten_crypto_suite::cipher_suite::WrappedKey
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::cipher_suite::WrappedKey
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::cipher_suite::WrappedKey
+pub const benten_crypto_suite::cipher_suite::ML_KEM_768_CT_LEN: usize
+pub const benten_crypto_suite::cipher_suite::ML_KEM_768_DK_LEN: usize
+pub const benten_crypto_suite::cipher_suite::ML_KEM_768_EK_LEN: usize
+pub const benten_crypto_suite::cipher_suite::ML_KEM_768_SS_LEN: usize
 pub const benten_crypto_suite::cipher_suite::RECIPIENT_SEED_LABEL: &[u8]
 pub const benten_crypto_suite::cipher_suite::X25519_PUBLIC_LEN: usize
 pub const benten_crypto_suite::cipher_suite::X25519_SECRET_LEN: usize

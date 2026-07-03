@@ -99,15 +99,25 @@ pub fn registered_envelope_codepoints() -> Vec<u16> {
 
 /// The IANA HPKE kem/kdf/aead 16-bit registry ranges a Benten envelope
 /// codepoint MUST avoid. These are the real IANA HPKE registry allocations
-/// (RFC 9180 §7 + the HPKE-PQ WG-stream additions): KEM IDs `0x0010..0x0021`
-/// (DHKEM + ML-KEM + X-Wing/X25519MLKEM768), KDF IDs `0x0001..0x0003`, AEAD
-/// IDs `0x0001..0x0003` + `0xFFFF` export-only. The Benten band `0x6100..` is
-/// disjoint from all of these by construction.
+/// (RFC 9180 §7 + the HPKE-PQ WG-stream additions). The correct current
+/// allocations (R13 F-08 correction — the prior comment mislabeled the
+/// `0x0010..0x0021` DHKEM block as also covering ML-KEM + X25519MLKEM768):
+///   - KDF IDs `0x0001..0x0003` (HKDF-SHA256/384/512); AEAD IDs
+///     `0x0001..0x0003` + `0xFFFF` export-only (overlap the low band).
+///   - KEM IDs: DHKEM `0x0010..0x0020` (RFC 9180 §7.1);
+///     **ML-KEM-512/768/1024 = `0x0040..0x0042`** (NOT the DHKEM block);
+///     **X25519MLKEM768 = `0x11EC`** (the concrete hybrid KEM ID; NOT in the
+///     DHKEM block either).
+/// The Benten band `0x6100..` is disjoint from ALL of these by construction
+/// (the `0x6100+` band floor sits above every IANA allocation above), so
+/// disjointness holds regardless — but the ranges are now accurate.
 #[must_use]
 pub fn iana_hpke_reserved_ranges() -> Vec<RangeInclusive<u16>> {
     vec![
         0x0001..=0x0003, // KDF IDs (HKDF-SHA256/384/512) + AEAD IDs (overlap low band)
-        0x0010..=0x0021, // KEM IDs (DHKEM + ML-KEM-512/768/1024 + X25519MLKEM768)
+        0x0010..=0x0020, // KEM IDs — DHKEM (RFC 9180 §7.1)
+        0x0040..=0x0042, // KEM IDs — ML-KEM-512/768/1024 (real IANA allocation)
+        0x11EC..=0x11EC, // KEM ID — X25519MLKEM768 (the concrete hybrid KEM)
     ]
 }
 

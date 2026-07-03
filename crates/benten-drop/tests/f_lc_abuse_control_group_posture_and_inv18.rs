@@ -210,7 +210,7 @@ fn hybrid_sender() -> (SigKeypair, Vec<u8>) {
 fn fixed_kp(seed: u8) -> benten_crypto_suite::cipher_suite::RecipientKeypair {
     CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
         .expect("0x647a wire-locked")
-        .generate_recipient_keypair_deterministic(&[seed; 32])
+        .generate_recipient_keypair_deterministic_for_test(&[seed; 32])
 }
 fn fixed_pk(seed: u8) -> RecipientPublic {
     RecipientPublic::from_bytes(
@@ -918,7 +918,7 @@ fn f_lc_7_hpke_non_fs_old_envelope_still_opens_with_recovered_sk() {
         benten_crypto_suite::cipher_suite::CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
     )
     .expect("0x647a wire-locked")
-    .generate_recipient_keypair_deterministic(&[0x99u8; 32]);
+    .generate_recipient_keypair_deterministic_for_test(&[0x99u8; 32]);
     let opened = open_with_recovered_sk(&old_env, &recovered_kp);
     assert!(
         opened.is_ok(),

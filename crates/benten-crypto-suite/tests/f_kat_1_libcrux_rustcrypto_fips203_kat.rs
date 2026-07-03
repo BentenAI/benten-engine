@@ -109,11 +109,14 @@ mod libcrux_impl {
     }
 }
 
-/// FIPS-203 ML-KEM-768 serialized sizes (exact).
-const ML_KEM_768_EK_LEN: usize = 1184;
-const ML_KEM_768_CT_LEN: usize = 1088;
-const ML_KEM_768_DK_LEN: usize = 2400;
-const ML_KEM_768_SS_LEN: usize = 32;
+// R13 F-11: pin the PRODUCTION FIPS-203 ML-KEM-768 size consts (not
+// file-local literals). Importing `benten_crypto_suite::mlkem::*` makes the
+// libcrux-driven KAT assertions below verify the ACTUAL production consts
+// against real libcrux output — so a silent drift of a production const away
+// from FIPS-203 fails HERE, instead of tautologizing against a private copy.
+use benten_crypto_suite::cipher_suite::{
+    ML_KEM_768_CT_LEN, ML_KEM_768_DK_LEN, ML_KEM_768_EK_LEN, ML_KEM_768_SS_LEN,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct MlKem768Kat {
