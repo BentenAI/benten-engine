@@ -23,7 +23,11 @@ use benten_crypto_suite::{HybridSignature, SignatureSuite, SuiteConfig};
 /// ([`GovernanceConfig::content_label`]) — NOT sub-codepoints, NOT sealed-policy
 /// fields. The three tiers correspond to Flat / Moderated / Polycentric
 /// governance shapes.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future governance-tier variant
+/// lands additively, never a downstream `match` break.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum GovernanceTier {
     /// Flat governance — every admin is co-equal.
     Flat,
@@ -43,6 +47,12 @@ impl GovernanceTier {
             GovernanceTier::Flat => 0,
             GovernanceTier::Moderated => 1,
             GovernanceTier::Polycentric => 2,
+            // NOTE: no `_` arm. `GovernanceTier` is `#[non_exhaustive]` for
+            // downstream SemVer-readiness, but this tag byte enters the SIGNED
+            // canonical Node bytes, so within the defining crate the match stays
+            // exhaustive: a future tier is a HALT-AND-SURFACE compile error here,
+            // forcing it to mint its own distinct signed tag rather than
+            // silently colliding an existing tier's signed content (§15.c).
         }
     }
 }

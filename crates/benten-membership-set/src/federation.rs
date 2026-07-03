@@ -156,7 +156,11 @@ impl FederationError {
 }
 
 /// The federation model toggle (Inv-20 clause-l).
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future federation-model variant
+/// lands additively, never a downstream `match` break.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[non_exhaustive]
 pub enum FederationModel {
     /// DEFAULT — independent `K_Set` per set.
     ModelB,
@@ -196,5 +200,9 @@ pub fn select_model_at_v1_beta(m: FederationModel) -> Result<FederationModel, Fe
     match m {
         FederationModel::ModelB => Ok(FederationModel::ModelB),
         FederationModel::ModelA => Err(FederationError::ModelAUnavailable),
+        // NOTE: no `_` arm. `FederationModel` is `#[non_exhaustive]` for
+        // downstream SemVer-readiness, but within the defining crate this match
+        // stays exhaustive — a future model variant HALT-AND-SURFACEs here,
+        // forcing an explicit selectable/typed-reject decision.
     }
 }
