@@ -87,6 +87,19 @@ decrypt (not advisory).
 > `crates/benten-drop/tests/f_nqa1_1_frozen_surface_additive_extensibility.rs`
 > (PIN 4).
 
+> **Federation-reserve-gate inversion follow-up (R10-council F-16).**
+> `benten_membership_set::federation::federation_reserve_gate_at_v1_beta(cp)`
+> (renamed from `dispatch_codepoint_at_v1_beta` at R10 F-16) is a targeted
+> BLOCKLIST: it typed-rejects the reserved federation `0x6620` (`SubsetRef`) and
+> returns `Ok(())` for EVERY other codepoint — a **fail-OPEN** shape (an unknown /
+> future codepoint passes). At v1-beta its only callers are test-only and only
+> feed it the frozen MembershipSet band, so the fail-open shape is contained.
+> **Follow-up:** invert to an **ALLOWLIST** (return `Ok(())` ONLY for the
+> explicitly-enumerated frozen codepoints; typed-reject everything else) so the
+> gate is fail-CLOSED, consistent with the `ReservedCodepoint::resolve()`
+> typed-reject-on-unknown discipline above. Additive follow-up (no wire change) —
+> Phase-4-Meta-Composing federation-wiring wave.
+
 ## did:key hybrid-pubkey multicodec (NQ-C4 / U15) — RESOLVED
 
 The PQ-**hybrid** public keys carried in `did:key` must reference REGISTERED
@@ -103,6 +116,17 @@ registered COMPOSITE multicodec** for the hybrid pubkey shapes, but registered
 |-----------|-----------------------|-----------------|
 | ML-DSA-65 pubkey | `mldsa-65-pub = 0x1211` | `[0x91, 0x24]` (`MLDSA65_PUB_MULTICODEC`) |
 | Ed25519 pubkey | `ed25519-pub = 0xed` | `[0xed, 0x01]` (`ED25519_MULTICODEC`) |
+| ML-KEM-768 pubkey | `mlkem-768-pub = 0x120c` | `[0x8c, 0x24]` |
+| X25519 pubkey | `x25519-pub = 0xec` | `[0xec, 0x01]` |
+
+**KEM-component note (R10-council F-21).** The hybrid **KEM** `did:key`
+(X25519⊕ML-KEM-768) uses the registered component code **`mlkem-768-pub = 0x120c`**
+(varint `[0x8c, 0x24]`) + `x25519-pub = 0xec`. The `HYBRID_KEM_MULTICODEC =
+[0xf0, 0x01]` const in `crates/benten-id/src/did.rs` is the fallback-only
+reserved-private interim (single-byte-squat, #5-RISKY); new content uses the
+two-registered-component-multikey form with the exact `0x120c` code recorded
+above (the earlier `ml-kem-768-pub` spelling was non-verbatim — the registered
+multiformats name is `mlkem-768-pub`).
 
 So the **v1 hybrid `did:key` encodes the hybrid key as TWO registered
 component multikeys** (the multi-multikey form), **ML-DSA FIRST** (consistent
@@ -288,16 +312,19 @@ Benten has two extension categories (CLAUDE.md baked-in #18 + #19), recognized
 ## HPKE KEM-extensibility (NQ-C1) — the Benten-supplies-the-KEM resolution
 
 At v1-beta the Layer-C `0x647a` X-Wing KEM is implemented as **Benten's own
-KEM-DEM** over vetted upstream primitives (`ml-kem` + `x25519-dalek` + `sha3`
-for the X-Wing SHA3-256 combiner, which directly derives the wrap key — there is
-no separate HKDF key-schedule on this path; `chacha20poly1305` for the DEM) —
-the **"Benten-supplies-the-KEM"** branch. The
-`rozbb/rust-hpke` crate's KEM roster is effectively closed to the
+KEM-DEM** over vetted upstream primitives (`libcrux-ml-kem` (via
+`benten_crypto_suite::mlkem`; RustCrypto `ml-kem` is the dev-only KAT witness) +
+`x25519-dalek` + `sha3` for the X-Wing SHA3-256 combiner, which directly derives
+the wrap key — there is **no separate HKDF key-schedule and no `hpke` crate** on
+this path; `chacha20poly1305` for the DEM) — the **"Benten-supplies-the-KEM"**
+branch. The `rozbb/rust-hpke` crate's KEM roster is effectively closed to the
 RFC-9180-registered KEMs (a custom X-Wing KEM is not a first-class extension
 point there), so X25519MLKEM768 does **not** plug into that crate's KEM trait
 as a first-class registered KEM. The dependency-pinning **posture** (McMillion
-`hpke` over Cryspen `hpke-rs`) is recorded in `docs/SECURITY-POSTURE.md`
-Compromise #39 as the standing choice for the HPKE key-schedule/AEAD surface.
+`hpke` over Cryspen `hpke-rs`) is a **RESERVED** posture recorded in
+`docs/SECURITY-POSTURE.md` Compromise #39 — the standing choice IF/WHEN the
+additive RFC-9180-faithful HPKE key-schedule/AEAD branch is adopted (NQ-C1),
+NOT a currently-linked dependency (there is no `hpke` crate on the live path).
 
 ## Gossip topic (§3.9, unlabelled) vs AAD set-id commitment (§3.10, labelled) — do not conflate
 

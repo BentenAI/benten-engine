@@ -236,17 +236,22 @@ impl AuditChain {
         false
     }
 
-    /// Verify the full chain on read, with a mid-chain Version Node TAMPERED.
+    /// MODEL the declared-tamper RETURN SHAPE for a mid-chain Version Node.
     ///
-    /// Models the Crosby-Wallach content-hash-on-read check: tampering the
-    /// bytes of the immutable Version Node at `seq` breaks its CID linkage
-    /// (its recomputed content hash no longer matches the chained CID its
-    /// successor committed to), which is detected on read.
+    /// This returns the tamper error UNCONDITIONALLY for an in-range `seq` — it
+    /// does NOT re-hash a mutated node. It models the Crosby-Wallach
+    /// content-hash-on-read CONSEQUENCE (tampering the immutable Version Node at
+    /// `seq` would break its CID linkage, so a real content-hash-on-read check
+    /// names the exact sequence), without performing that live check here. The
+    /// LIVE tamper-detection enforcement is `Engine::audit_sequence` +
+    /// `Node::load_verified` (content-hash-on-read).
     ///
     /// # Errors
     ///
     /// Returns [`AuditChainError::TamperDetectedLinkageBroken`] naming the
-    /// exact mid-chain sequence whose linkage broke.
+    /// exact mid-chain sequence for an in-range `seq`; returns
+    /// [`AuditChainError::NonMonotonicAppend`] for `seq == 0` or `seq` beyond
+    /// the chain.
     pub fn verify_with_tampered_node_at(&self, seq: u64) -> Result<(), AuditChainError> {
         // A `seq` of 0 is the Anchor (no Version Node to tamper). A `seq`
         // beyond the chain length cannot be tampered either. Both are

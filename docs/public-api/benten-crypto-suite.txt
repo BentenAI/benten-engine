@@ -410,7 +410,7 @@ pub const fn benten_crypto_suite::conformance::endianness::ascii_label_excluded(
 pub const fn benten_crypto_suite::conformance::endianness::info_tag_ascii_flagged() -> bool
 pub fn benten_crypto_suite::conformance::endianness::wire_path_le_survivor_count() -> usize
 pub mod benten_crypto_suite::discharge
-pub enum benten_crypto_suite::discharge::DischargeDisposition
+#[non_exhaustive] pub enum benten_crypto_suite::discharge::DischargeDisposition
 pub benten_crypto_suite::discharge::DischargeDisposition::CratePrivate
 pub benten_crypto_suite::discharge::DischargeDisposition::Deleted
 impl benten_crypto_suite::discharge::DischargeDisposition
@@ -869,7 +869,7 @@ impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::structural_kd
 pub fn benten_crypto_suite::structural_kdf::derive_root(&benten_crypto_suite::structural_kdf::StructuralKdfKey, &[u8], u16) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub fn benten_crypto_suite::structural_kdf::derive_step(&benten_crypto_suite::structural_kdf::StructuralKdfKey, &[u8], &[u8]) -> benten_crypto_suite::structural_kdf::StructuralKdfKey
 pub mod benten_crypto_suite::swap_matrix
-pub enum benten_crypto_suite::swap_matrix::SwapKeypair
+#[non_exhaustive] pub enum benten_crypto_suite::swap_matrix::SwapKeypair
 pub benten_crypto_suite::swap_matrix::SwapKeypair::Hybrid(alloc::boxed::Box<benten_crypto_suite::sig::Keypair>)
 pub benten_crypto_suite::swap_matrix::SwapKeypair::PurePq(alloc::boxed::Box<benten_crypto_suite::swap_matrix::PurePqKeypairInner>)
 impl benten_crypto_suite::swap_matrix::SwapKeypair
@@ -905,7 +905,7 @@ impl core::marker::Unpin for benten_crypto_suite::swap_matrix::SwapMatrixError
 impl core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::SwapMatrixError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::SwapMatrixError
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::SwapMatrixError
-pub enum benten_crypto_suite::swap_matrix::SwapPublicKey
+#[non_exhaustive] pub enum benten_crypto_suite::swap_matrix::SwapPublicKey
 pub benten_crypto_suite::swap_matrix::SwapPublicKey::Hybrid(alloc::boxed::Box<benten_crypto_suite::sig::PublicKey>)
 pub benten_crypto_suite::swap_matrix::SwapPublicKey::PurePq(alloc::boxed::Box<benten_crypto_suite::swap_matrix::PurePqPublicKey>)
 impl core::marker::Freeze for benten_crypto_suite::swap_matrix::SwapPublicKey
@@ -915,7 +915,7 @@ impl core::marker::Unpin for benten_crypto_suite::swap_matrix::SwapPublicKey
 impl core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::SwapPublicKey
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::SwapPublicKey
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::SwapPublicKey
-pub enum benten_crypto_suite::swap_matrix::SwapRecipientKeypair
+#[non_exhaustive] pub enum benten_crypto_suite::swap_matrix::SwapRecipientKeypair
 pub benten_crypto_suite::swap_matrix::SwapRecipientKeypair::Cipher(benten_crypto_suite::cipher_suite::RecipientKeypair)
 pub benten_crypto_suite::swap_matrix::SwapRecipientKeypair::None
 pub benten_crypto_suite::swap_matrix::SwapRecipientKeypair::PurePqMlKem(alloc::boxed::Box<benten_crypto_suite::swap_matrix::PurePqMlKemKeypair>)
@@ -929,7 +929,7 @@ impl core::marker::Unpin for benten_crypto_suite::swap_matrix::SwapRecipientKeyp
 impl core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::SwapRecipientKeypair
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::SwapRecipientKeypair
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::SwapRecipientKeypair
-pub enum benten_crypto_suite::swap_matrix::SwapRecipientPublic<'a>
+#[non_exhaustive] pub enum benten_crypto_suite::swap_matrix::SwapRecipientPublic<'a>
 pub benten_crypto_suite::swap_matrix::SwapRecipientPublic::Cipher(benten_crypto_suite::swap_matrix::CipherRecipientPublicRef<'a>)
 pub benten_crypto_suite::swap_matrix::SwapRecipientPublic::None
 pub benten_crypto_suite::swap_matrix::SwapRecipientPublic::PurePqMlKem(alloc::boxed::Box<benten_crypto_suite::swap_matrix::PurePqMlKemKeypair>)
@@ -940,7 +940,7 @@ impl<'a> core::marker::Unpin for benten_crypto_suite::swap_matrix::SwapRecipient
 impl<'a> core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::SwapRecipientPublic<'a>
 impl<'a> core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::SwapRecipientPublic<'a>
 impl<'a> core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::SwapRecipientPublic<'a>
-pub enum benten_crypto_suite::swap_matrix::SwapRecipientSecret<'a>
+#[non_exhaustive] pub enum benten_crypto_suite::swap_matrix::SwapRecipientSecret<'a>
 pub benten_crypto_suite::swap_matrix::SwapRecipientSecret::Cipher(benten_crypto_suite::swap_matrix::CipherRecipientSecretRef<'a>)
 pub benten_crypto_suite::swap_matrix::SwapRecipientSecret::None
 pub benten_crypto_suite::swap_matrix::SwapRecipientSecret::PurePqMlKem(alloc::boxed::Box<benten_crypto_suite::swap_matrix::PurePqMlKemKeypair>)
@@ -1462,7 +1462,7 @@ impl core::marker::Unpin for benten_crypto_suite::envelope::EnvelopeError
 impl core::marker::UnsafeUnpin for benten_crypto_suite::envelope::EnvelopeError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::envelope::EnvelopeError
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::envelope::EnvelopeError
-pub enum benten_crypto_suite::SwapKeypair
+#[non_exhaustive] pub enum benten_crypto_suite::SwapKeypair
 pub benten_crypto_suite::SwapKeypair::Hybrid(alloc::boxed::Box<benten_crypto_suite::sig::Keypair>)
 pub benten_crypto_suite::SwapKeypair::PurePq(alloc::boxed::Box<benten_crypto_suite::swap_matrix::PurePqKeypairInner>)
 impl benten_crypto_suite::swap_matrix::SwapKeypair
@@ -1498,7 +1498,7 @@ impl core::marker::Unpin for benten_crypto_suite::swap_matrix::SwapMatrixError
 impl core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::SwapMatrixError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::SwapMatrixError
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::SwapMatrixError
-pub enum benten_crypto_suite::SwapPublicKey
+#[non_exhaustive] pub enum benten_crypto_suite::SwapPublicKey
 pub benten_crypto_suite::SwapPublicKey::Hybrid(alloc::boxed::Box<benten_crypto_suite::sig::PublicKey>)
 pub benten_crypto_suite::SwapPublicKey::PurePq(alloc::boxed::Box<benten_crypto_suite::swap_matrix::PurePqPublicKey>)
 impl core::marker::Freeze for benten_crypto_suite::swap_matrix::SwapPublicKey
@@ -1508,7 +1508,7 @@ impl core::marker::Unpin for benten_crypto_suite::swap_matrix::SwapPublicKey
 impl core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::SwapPublicKey
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::SwapPublicKey
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::SwapPublicKey
-pub enum benten_crypto_suite::SwapRecipientKeypair
+#[non_exhaustive] pub enum benten_crypto_suite::SwapRecipientKeypair
 pub benten_crypto_suite::SwapRecipientKeypair::Cipher(benten_crypto_suite::cipher_suite::RecipientKeypair)
 pub benten_crypto_suite::SwapRecipientKeypair::None
 pub benten_crypto_suite::SwapRecipientKeypair::PurePqMlKem(alloc::boxed::Box<benten_crypto_suite::swap_matrix::PurePqMlKemKeypair>)
@@ -1522,7 +1522,7 @@ impl core::marker::Unpin for benten_crypto_suite::swap_matrix::SwapRecipientKeyp
 impl core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::SwapRecipientKeypair
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::SwapRecipientKeypair
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::SwapRecipientKeypair
-pub enum benten_crypto_suite::SwapRecipientPublic<'a>
+#[non_exhaustive] pub enum benten_crypto_suite::SwapRecipientPublic<'a>
 pub benten_crypto_suite::SwapRecipientPublic::Cipher(benten_crypto_suite::swap_matrix::CipherRecipientPublicRef<'a>)
 pub benten_crypto_suite::SwapRecipientPublic::None
 pub benten_crypto_suite::SwapRecipientPublic::PurePqMlKem(alloc::boxed::Box<benten_crypto_suite::swap_matrix::PurePqMlKemKeypair>)
@@ -1533,7 +1533,7 @@ impl<'a> core::marker::Unpin for benten_crypto_suite::swap_matrix::SwapRecipient
 impl<'a> core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::SwapRecipientPublic<'a>
 impl<'a> core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::SwapRecipientPublic<'a>
 impl<'a> core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::SwapRecipientPublic<'a>
-pub enum benten_crypto_suite::SwapRecipientSecret<'a>
+#[non_exhaustive] pub enum benten_crypto_suite::SwapRecipientSecret<'a>
 pub benten_crypto_suite::SwapRecipientSecret::Cipher(benten_crypto_suite::swap_matrix::CipherRecipientSecretRef<'a>)
 pub benten_crypto_suite::SwapRecipientSecret::None
 pub benten_crypto_suite::SwapRecipientSecret::PurePqMlKem(alloc::boxed::Box<benten_crypto_suite::swap_matrix::PurePqMlKemKeypair>)

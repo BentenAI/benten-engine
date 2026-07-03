@@ -848,6 +848,12 @@ impl SwapMatrixError {
 // =====================================================================
 
 /// Sender keypair (hybrid arm OR pure-PQ arm).
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future signature arm (an
+/// additional PQ⊕PQ combiner, a new NF-1 shape) lands as an ADDITIVE variant
+/// without a breaking SemVer bump on the frozen v1 API; cross-crate consumers
+/// MUST fail-CLOSED on an unrecognized arm (reject, never silently dispatch).
+#[non_exhaustive]
 pub enum SwapKeypair {
     /// Hybrid-or-classical arm — wraps the live [`SigKeypair`]
     /// produced by [`SignatureSuite::generate_keypair`].
@@ -879,6 +885,11 @@ impl SwapKeypair {
 }
 
 /// Public-key handle for either arm.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future signature arm lands as an
+/// ADDITIVE variant without a breaking SemVer bump on the frozen v1 API;
+/// cross-crate consumers MUST fail-CLOSED on an unrecognized arm.
+#[non_exhaustive]
 pub enum SwapPublicKey {
     /// Hybrid-or-classical arm.
     Hybrid(Box<SigPublicKey>),
@@ -893,6 +904,12 @@ pub struct PurePqPublicKey {
 }
 
 /// Recipient keypair (encryption-side; varies per encryption arm).
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future encryption arm (a new
+/// KEM combiner, a PQ⊕PQ KEM) lands as an ADDITIVE variant without a breaking
+/// SemVer bump on the frozen v1 API; cross-crate consumers MUST fail-CLOSED on
+/// an unrecognized arm.
+#[non_exhaustive]
 pub enum SwapRecipientKeypair {
     /// Hybrid-or-classical encryption — wraps the live [`RecipientKeypair`].
     Cipher(RecipientKeypair),
@@ -943,6 +960,11 @@ impl SwapRecipientKeypair {
 }
 
 /// Recipient's public material (suite-tagged).
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future encryption arm lands as
+/// an ADDITIVE variant without a breaking SemVer bump on the frozen v1 API;
+/// cross-crate consumers MUST fail-CLOSED on an unrecognized arm.
+#[non_exhaustive]
 pub enum SwapRecipientPublic<'a> {
     /// Hybrid-or-classical cipher-suite recipient (borrowed).
     Cipher(CipherRecipientPublicRef<'a>),
@@ -969,6 +991,11 @@ impl<'a> SwapRecipientPublic<'a> {
 }
 
 /// Recipient's secret material (suite-tagged).
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future encryption arm lands as
+/// an ADDITIVE variant without a breaking SemVer bump on the frozen v1 API;
+/// cross-crate consumers MUST fail-CLOSED on an unrecognized arm.
+#[non_exhaustive]
 pub enum SwapRecipientSecret<'a> {
     /// Hybrid-or-classical cipher-suite recipient secret (borrowed).
     Cipher(CipherRecipientSecretRef<'a>),

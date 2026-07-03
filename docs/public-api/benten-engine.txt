@@ -666,7 +666,6 @@ impl benten_engine::engine_stream::StreamHandle
 pub fn benten_engine::engine_stream::StreamHandle::close(&mut self)
 pub fn benten_engine::engine_stream::StreamHandle::empty_closed() -> Self
 pub fn benten_engine::engine_stream::StreamHandle::from_producer_bridge(benten_eval::chunk_sink::ChunkSource, std::thread::join_handle::JoinHandle<()>, bool) -> Self
-pub fn benten_engine::engine_stream::StreamHandle::from_test_chunks(alloc::vec::Vec<benten_eval::chunk_sink::Chunk>) -> Self
 pub fn benten_engine::engine_stream::StreamHandle::is_drained(&self) -> bool
 pub fn benten_engine::engine_stream::StreamHandle::next_chunk(&mut self) -> core::result::Result<core::option::Option<benten_eval::chunk_sink::Chunk>, benten_engine::error::EngineError>
 pub fn benten_engine::engine_stream::StreamHandle::next_chunk_with_timeout(&mut self, core::time::Duration) -> core::result::Result<benten_engine::engine_stream::NextChunkPoll, benten_engine::error::EngineError>
@@ -2334,7 +2333,6 @@ pub fn benten_engine::subgraph_spec::WriteSpec::new() -> Self
 pub fn benten_engine::subgraph_spec::WriteSpec::properties_ref(&self) -> &alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>
 pub fn benten_engine::subgraph_spec::WriteSpec::property(self, &str, benten_core::value::Value) -> Self
 pub fn benten_engine::subgraph_spec::WriteSpec::requires(self, &str) -> Self
-pub fn benten_engine::subgraph_spec::WriteSpec::test_inject_failure(self, bool) -> Self
 impl core::clone::Clone for benten_engine::subgraph_spec::WriteSpec
 pub fn benten_engine::subgraph_spec::WriteSpec::clone(&self) -> benten_engine::subgraph_spec::WriteSpec
 impl core::default::Default for benten_engine::subgraph_spec::WriteSpec
@@ -3723,7 +3721,6 @@ impl benten_engine::engine_stream::StreamHandle
 pub fn benten_engine::engine_stream::StreamHandle::close(&mut self)
 pub fn benten_engine::engine_stream::StreamHandle::empty_closed() -> Self
 pub fn benten_engine::engine_stream::StreamHandle::from_producer_bridge(benten_eval::chunk_sink::ChunkSource, std::thread::join_handle::JoinHandle<()>, bool) -> Self
-pub fn benten_engine::engine_stream::StreamHandle::from_test_chunks(alloc::vec::Vec<benten_eval::chunk_sink::Chunk>) -> Self
 pub fn benten_engine::engine_stream::StreamHandle::is_drained(&self) -> bool
 pub fn benten_engine::engine_stream::StreamHandle::next_chunk(&mut self) -> core::result::Result<core::option::Option<benten_eval::chunk_sink::Chunk>, benten_engine::error::EngineError>
 pub fn benten_engine::engine_stream::StreamHandle::next_chunk_with_timeout(&mut self, core::time::Duration) -> core::result::Result<benten_engine::engine_stream::NextChunkPoll, benten_engine::error::EngineError>
@@ -3914,7 +3911,6 @@ pub fn benten_engine::subgraph_spec::WriteSpec::new() -> Self
 pub fn benten_engine::subgraph_spec::WriteSpec::properties_ref(&self) -> &alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>
 pub fn benten_engine::subgraph_spec::WriteSpec::property(self, &str, benten_core::value::Value) -> Self
 pub fn benten_engine::subgraph_spec::WriteSpec::requires(self, &str) -> Self
-pub fn benten_engine::subgraph_spec::WriteSpec::test_inject_failure(self, bool) -> Self
 impl core::clone::Clone for benten_engine::subgraph_spec::WriteSpec
 pub fn benten_engine::subgraph_spec::WriteSpec::clone(&self) -> benten_engine::subgraph_spec::WriteSpec
 impl core::default::Default for benten_engine::subgraph_spec::WriteSpec

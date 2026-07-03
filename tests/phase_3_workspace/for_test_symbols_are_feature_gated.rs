@@ -139,6 +139,45 @@ const EXEMPT_PUB_ITEMS: &[(&str, &str)] = &[
         "crates/benten-engine/src/thin_client.rs",
         "active_session_count_for_test",
     ),
+    // ---- R10-council F-03: the widened `_test_`/`inject_`/`test_`-prefix
+    // pattern newly flags these PRODUCTION-SHAPED symbols (consumed by
+    // non-test code paths, cannot be cfg-gated without breaking production
+    // builds). v1-GM rename target: drop the misleading test-suffix/substring. ----
+    //
+    // benten-eval — the READ path of the test-callee registry is
+    // DELIBERATELY unconditional (G4-A mini-review M1): production
+    // `invariants::budget::{non_isolated_callee_factor, isolated_callee_bound}`
+    // consult it on every build (the registry is simply empty in non-test
+    // builds and the Inv-8 validator rejects unknown callees). Gating it
+    // would break the production `benten-eval` build.
+    ("crates/benten-eval/src/lib.rs", "lookup_test_callee"),
+    // benten-core — the canonical determinism fixture is consumed by
+    // production code: `bindings/napi/src/wasm_target.rs` recomputes the
+    // canonical CID locally from `canonical_test_node` for the wasm bridge.
+    ("crates/benten-core/src/lib.rs", "canonical_test_node"),
+    // benten-graph — the structural-seam key derivation is consumed by
+    // PRODUCTION `redb_backend` per-Node AEAD paths (§3.10 G-CORE-3e), not
+    // just the tf3d test. `_test_` in the name is the misleading-suffix smell.
+    (
+        "crates/benten-graph/src/redb_backend.rs",
+        "derive_test_seam_key_from_cid_with_namespace",
+    ),
+    // benten-engine — production builder knob (mirrors the intentional
+    // `test_inject_failure` design: a public builder setter for a test-grade
+    // budget). It has a production alias `ivm_max_work_per_update` and is a
+    // documented fluent-builder method on `EngineBuilder`.
+    (
+        "crates/benten-engine/src/builder.rs",
+        "with_test_ivm_budget",
+    ),
+    // benten-platform-foundation — `#[doc(hidden)]` off-frozen-surface
+    // hand-authored-spec constructor consumed by the schema_compiler
+    // integration tests (materializer-entry-arm isolation). Not on the
+    // stable public API (doc-hidden); the `for_test_` substring is the smell.
+    (
+        "crates/benten-platform-foundation/src/schema_compiler/spec.rs",
+        "for_test_from_handcoded_subgraph",
+    ),
 ];
 
 /// Discover every `crates/*/src/**/*.rs` + `tools/*/src/**/*.rs` source
@@ -272,11 +311,29 @@ fn in_pub_trait_block(lines: &[&str], idx: usize) -> bool {
     false
 }
 
-/// Does the identifier `name` end in `_for_test` / `_for_testing` /
-/// `_for_test_<suffix>` (allowing trailing words like `_distinct`,
-/// `_signal`, etc.)?
+/// Does the identifier `name` name a test-only-shaped `pub` surface?
+///
+/// R10-council F-03 WIDENING: the original guard only matched the
+/// `_for_test` / `_for_testing` suffix forms, which let the
+/// `test_inject_failure`-class leak (a `test_`-prefixed + `inject_`-bearing
+/// production-builder method) slip past. The pattern now ALSO flags:
+///   - a `test_` PREFIX (e.g. `test_inject_failure`, `test_subscribe_*`),
+///   - an `_test_` interior substring (e.g. `canonical_test_node`,
+///     `with_test_ivm_budget`, `lookup_test_callee`),
+///   - a `mock_` substring (test-double naming),
+///   - an `inject_` substring (failure-/event-injection test seams).
+/// Production-shaped symbols that legitimately carry one of these
+/// substrings (consumed by non-test code paths) live in
+/// [`EXEMPT_PUB_ITEMS`]; genuinely test-only symbols must carry a
+/// `#[cfg(any(test, feature = "testing"|"test-helpers"))]` gate (per-fn or
+/// on an enclosing gated module/impl).
 fn is_for_test_pattern(name: &str) -> bool {
-    name.contains("_for_test") || name.contains("_for_testing")
+    name.contains("_for_test")
+        || name.contains("_for_testing")
+        || name.starts_with("test_")
+        || name.contains("_test_")
+        || name.contains("mock_")
+        || name.contains("inject_")
 }
 
 /// Inspect up to 5 preceding lines of `lines[idx]` for a cfg attribute

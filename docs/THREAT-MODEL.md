@@ -15,7 +15,7 @@ The trust tiers, from least- to most-trusted relative to a principal's plaintext
 
 | Tier | Who | Sees plaintext? | Sees metadata? |
 |---|---|---|---|
-| **Network observer / untrusted relay** | an iroh relay, a passive network adversary, a storage host holding ciphertext | **NO** | gossip topic (blinded), Drop envelope sizes + timing, blinded group tags (`audience_set_commitment`, `membership_set_id_commitment`) — **opaque 32-byte tags, NOT the roster** |
+| **Network observer / untrusted relay** | an iroh relay, a passive network adversary, a storage host holding ciphertext | **NO** (but see the `body_cid` note below — low-entropy bodies are confirmable/linkable) | gossip topic (blinded), Drop envelope sizes + timing, blinded group tags (`audience_set_commitment`, `membership_set_id_commitment`) — **opaque 32-byte tags, NOT the roster** — plus the plaintext **`body_cid`** (unsalted `BLAKE3(body)` CID; a confirmation-oracle + equality-linker for **low-entropy** bodies only) |
 | **Untrusted host** (peers-hold-ciphertext) | a peer storing a principal's encrypted partition (Phase-7 Garden-Grove) | **NO** (per-Node AEAD + Layer-A vault seal the bytes) | blob CIDs + access patterns |
 | **Co-recipient member** | a member of a MembershipSet holding `K_Set` | **YES** for content they are entitled to | the member roster (recomputes the blinded commitments from the member list they hold) |
 | **Admin** | a MembershipSet admin holding the audit log + `members_table` | **YES** for set content + **CAN correlate members** | full audit-log visibility (Compromise #58) |
@@ -29,10 +29,16 @@ The trust tiers, from least- to most-trusted relative to a principal's plaintext
 **Deterministic-CEK confirmation-oracle (additive disclosure; GAP-2).** The Layer-C content-encryption key is
 deterministically derived from the plaintext, so a party that **already holds the CEK** (the sealer, or a
 co-recipient that recovers it) can **confirm a guessed plaintext** — a confirmation oracle for low-entropy bodies.
-This does **NOT** extend to the **Tier-1 network observer / untrusted relay**: the bulk AEAD uses a **fresh random
-nonce per send** and the CEK is HPKE-wrapped to the recipient, so the relay sees neither the CEK nor a
-plaintext-equality test (the Tier-1 "sees plaintext = NO" row is unchanged). Full cryptographic narration:
-`docs/SECURITY-PROOFS.md` §4.2.
+The **ciphertext** does not extend this to the **Tier-1 network observer / untrusted relay**: the bulk AEAD uses a
+**fresh random nonce per send** and the CEK is HPKE-wrapped to the recipient, so the relay sees neither the CEK nor
+a plaintext-equality test **in the ciphertext bytes**. **However**, the wire `body_cid` — an **unsalted**
+`self_describing_cid(BLAKE3(plaintext))` emitted **plaintext** in every Layer-C AAD — DOES give the Tier-1 observer,
+**for low-entropy / guessable bodies only**, (a) a confirmation oracle (guess → `BLAKE3` → compare against the wire
+`body_cid`, no key material needed) and (b) a plaintext-equality linker (identical bodies carry identical
+`body_cid`). The Tier-1 "sees plaintext = NO" row is unchanged (the relay still recovers no plaintext for
+high-entropy bodies and never the ciphertext), but low-entropy senders must **pad/randomize at the application
+layer**; a per-send `body_cid` salt is additively reservable. Full cryptographic narration:
+`docs/SECURITY-PROOFS.md` §4.2; residual tracked at Compromise #43.
 
 **Inter-member sender-origin non-forgeability (positive as-built property; B2 ORIGIN-AUTHENTICATION — ENFORCED in
 code).** A **co-recipient member** (and, on the multi-recipient group path, a co-sealer) — even one holding `K_Set`
@@ -101,8 +107,10 @@ not absolute:
 Honest scope of the blinding: it achieves **identity-HIDING**, NOT full unlinkability — the same commitment
 recurs for a static recipient set, so a network observer can still link sends to "the same unknown group". Full
 per-send unlinkability (salt/nonce-rotated commitments) is **U25, CODEPOINT-RESERVE for v1-GM**, additive over
-the field with no wire-break. Cross-link Compromise #43 (envelope-metadata leakage); Compromise #61
-(gossip-topic blinding).
+the field with no wire-break. Separately, the plaintext `body_cid` links sends that share the **same body** (a
+low-entropy confirmation/equality vector — see §1 Tier-1 note + `docs/SECURITY-PROOFS.md` §4.2; a distinct axis
+from recipient-linkage). Cross-link Compromise #43 (envelope-metadata leakage + `body_cid` residual); Compromise
+#61 (gossip-topic blinding).
 
 ---
 

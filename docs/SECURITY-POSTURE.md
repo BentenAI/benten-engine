@@ -130,11 +130,11 @@ table narrative.
 | 36 | RAM-residency / coredump / swap forensic-extraction OUT-OF-SCOPE (`zeroize`+`secrecy` best-effort) | 4-Meta-Core | **OUT-OF-SCOPE (disclosed).** Plaintext-in-RAM extraction via coredump/swap is outside scope; `zeroize` + `secrecy` are best-effort hardening, not a guarantee. 9-eyes. |
 | 37 | No TEE / sealed-enclave attestation at v1-beta + v1-GM | 4-Meta-Core | **SUBSTRATE-GUARANTEE DISCLOSURE.** Benten makes no TEE/enclave attestation claim; key material rests in process memory protected only by OS boundaries. 9-eyes. |
 | 38 | Physical-presence side-channels OUT-OF-SCOPE | 4-Meta-Core | **OUT-OF-SCOPE (disclosed).** EM/power/acoustic/timing physical side-channels are outside the threat model. 9-eyes. |
-| 39 | Supply-chain dependency-pinning posture (PARTIAL; `cargo deny` + RustSec + McMillion-not-Cryspen `hpke`; new `secrecy` Layer-A dep) | 4-Meta-Core | **SUBSTRATE-GUARANTEE DISCLOSURE.** Dependency pinning is PARTIAL: `cargo deny` + RustSec advisory gate + the McMillion `hpke` crate (NOT Cryspen `hpke-rs` w/ 13 CVEs). O-1: `secrecy` is a new Layer-A dependency disclosed here. 9-eyes; O-1. |
+| 39 | Supply-chain dependency-pinning posture (PARTIAL; `cargo deny` + RustSec; new `secrecy` Layer-A dep) | 4-Meta-Core | **SUBSTRATE-GUARANTEE DISCLOSURE.** Dependency pinning is PARTIAL: `cargo deny` + RustSec advisory gate. **The live path uses NO `hpke` crate** (R10-council GAP-A correction) — the Benten-supplied X-Wing KEM-DEM is the wire (NQ-C1); the McMillion `hpke` (NOT Cryspen `hpke-rs` w/ 13 CVEs) pin is RESERVED for the additive RFC-9180-faithful key-schedule branch ONLY, if/when NQ-C1 ratifies it. O-1: `secrecy` is a new Layer-A dependency disclosed here. 9-eyes; O-1. |
 | 40 | Build-time / reproducible-builds + SLSA-3+ posture (post-v1-GM) | 4-Meta-Core | **SUBSTRATE-GUARANTEE DISCLOSURE.** Reproducible-builds + SLSA-3+ provenance are post-v1-GM commitments, not v1-beta guarantees. 9-eyes. |
 | 41 | Cross-device-sync UX-vs-cryptographic boundary — incl. revocation-propagation-lag (O-4) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** The cross-device sync UX surface and the cryptographic boundary differ; O-4 sub-clause: a revoked device can exercise a stale grant during a partition (bounded by tight `exp`). 9-eyes; O-4. |
 | 42 | Layer-C forward-secrecy gap (HPKE-mode-base recipient long-term sk decrypts forever) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** HPKE-mode-base is structurally non-FS at the long-term-sk axis: a 2030 sk-compromise recovers 2026 envelopes. Partial FS via app-layer key rotation; full per-message FS is the SEPARATE #56 journalist class. 9-eyes (U13). |
-| 43 | Envelope metadata leakage to untrusted relays — IMPROVED by Sealed-Sender DEFAULT (BR-1) | 4-Meta-Core | **ACCEPTED TRADE-OFF; IMPROVED.** Sealed-Sender DEFAULT (`0x6510`) removes plaintext sender-DID on the default path; NO coarse-epoch on the Drop wire (1-hr bucket is Layer-D-only — RULING-1 / M-14); group-AAD set-identifying material is BLINDED (audience_set_commitment + membership_set_id_commitment per #61). Residual on the default Drop wire = recipient DID + linkable-but-blinded group tags (roadmap U22–U28; full per-send unlinkability = U25 v1-GM-reserve). 9-eyes (L6); BR-1; #61. |
+| 43 | Envelope metadata leakage to untrusted relays — IMPROVED by Sealed-Sender DEFAULT (BR-1) | 4-Meta-Core | **ACCEPTED TRADE-OFF; IMPROVED.** Sealed-Sender DEFAULT (`0x6510`) removes plaintext sender-DID on the default path; NO coarse-epoch on the Drop wire (1-hr bucket is Layer-D-only — RULING-1 / M-14); group-AAD set-identifying material is BLINDED (audience_set_commitment + membership_set_id_commitment per #61). Residual on the default Drop wire = recipient DID + linkable-but-blinded group tags + the plaintext **`body_cid`** (unsalted `BLAKE3(body)` — a confirmation-oracle + equality-linker for LOW-ENTROPY bodies; app-layer padding / additive per-send salt mitigate) (roadmap U22–U28; full per-send unlinkability = U25 v1-GM-reserve). 9-eyes (L6); BR-1; #61. |
 | 44 | Long-term-confidentiality posture (BSI TR-02102-1; X-Wing/MLKEM768-X25519 acceptable-migration-window) | 4-Meta-Core | **OUT-OF-SCOPE (disclosed).** The very-long-term (decades) confidentiality horizon is outside the v1-beta posture; the hybrid KEM acceptable-migration-window is disclosed per BSI TR-02102-1. 9-eyes. |
 | 45 | ML-KEM-768 MAL-BIND-K-CT / K-PK binding-properties (connects to IND-CCA2-adversarial-recipient-seed) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** ML-KEM-768 binding properties (MAL-BIND-K-CT / K-PK) connect to the M-6 IND-CCA2-adversarial-recipient-seed audit line; this is an external-cryptographer-audit disclosure surface (NOT a unit-test "proof"). MembershipSet panel; M-6. |
 | 46 | `HpkeMultiBase` O(N) wire-cost above 32 recipients (Atrium 32 / DeviceMesh 5 / SingleDevice 1) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** Multi-stanza HPKE wire-cost grows linearly with recipient count; per-Kind cardinality caps bound it (Atrium 32 / DeviceMesh 5 / SingleDevice 1). MembershipSet panel. |
@@ -2740,9 +2740,13 @@ a physically-present attacker with measurement apparatus. Disclosed, not closed.
 
 **Status.** SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** 9-eyes; O-1 (R0.7 §5.2).
 
-Dependency pinning is **PARTIAL** at v1-beta: `cargo deny` + the RustSec advisory gate run in CI, and the HPKE /
-KEM crate choices are conservative — **Brendan McMillion `hpke`** (NOT Cryspen `hpke-rs`, which carried 13 CVEs
-Feb 2026) and **libcrux-ml-kem** (verified secret-independence). **O-1 disclosure:** `secrecy` is a NEW Layer-A
+Dependency pinning is **PARTIAL** at v1-beta: `cargo deny` + the RustSec advisory gate run in CI. **The live path
+uses NO `hpke` crate** (R10-council GAP-A correction): there is no `hpke` crate dependency in any `Cargo.toml` and
+no HPKE key-schedule on the live path — Layer-C is the Benten-supplied X-Wing **KEM-DEM** (NQ-C1). The **McMillion
+`hpke`** (NOT Cryspen `hpke-rs`, which carried 13 CVEs Feb 2026) is a **RESERVED** pin for the additive
+RFC-9180-faithful key-schedule branch ONLY — the standing posture recorded so the choice does not drift IF/WHEN
+NQ-C1 ratifies that branch, not a currently-linked dependency. The KEM half is **libcrux-ml-kem** (verified
+secret-independence; the production impl). **O-1 disclosure:** `secrecy` is a NEW Layer-A
 dependency introduced this arc (wrapping secret bytes), disclosed here as a supply-chain surface. **F-full
 disclosure (2026-06-05):** the production ML-KEM-768 swap to **libcrux-ml-kem** (Compromise #32 mitigation) pulls
 13 net-new transitive crates (the `libcrux-*` / `hax-lib*` / `pastey` / `proc-macro-error2*` / `core-models`
@@ -2759,12 +2763,13 @@ This row discloses the partial-pinning substrate honestly; it is not a closed gu
 Compromise #32 (ML-KEM production impl); Compromise #40 (reproducible-builds); R0.7 §2.2 (tactical picks);
 §5.2 (O-1).
 
-> **Dependency-posture note (Layer-C HPKE):** the McMillion-`hpke`-not-Cryspen choice above is a
-> **dependency-pinning posture** recorded for the audit window. At v1-beta the Layer-C `0x647a` X-Wing KEM-DEM is
-> implemented over Benten's own vetted-primitive call site (`ml-kem` + `x25519-dalek` + `sha3` +
-> `chacha20poly1305`; see `docs/CRYPTO-CODEPOINTS.md` §"HPKE KEM-extensibility (NQ-C1)") — so the on-tree
-> dependency set reflects that. The McMillion-vs-Cryspen pin is the standing posture for the HPKE
-> key-schedule/AEAD surface, recorded so the choice does not drift.
+> **Dependency-posture note (Layer-C — no `hpke` crate; R10-council GAP-A).** At v1-beta the Layer-C `0x647a`
+> X-Wing **KEM-DEM** is implemented over Benten's own vetted-primitive call site (`libcrux-ml-kem` (via
+> `benten_crypto_suite::mlkem`; RustCrypto `ml-kem` is the dev-only KAT witness) + `x25519-dalek` + `sha3` +
+> `chacha20poly1305`; see `docs/CRYPTO-CODEPOINTS.md` §"HPKE KEM-extensibility (NQ-C1)"). There is **NO `hpke`
+> crate and no HPKE key-schedule** on this live path. The McMillion-`hpke`-not-Cryspen choice is a **RESERVED**
+> dependency-pinning posture for the additive RFC-9180-faithful HPKE key-schedule/AEAD branch ONLY (a Ben-gated
+> NQ-C1 wire decision), recorded so the choice does not drift if that branch is later adopted.
 
 ### Compromise #40 — Build-time / reproducible-builds + SLSA-3+ posture (post-v1-GM)
 
@@ -2808,7 +2813,20 @@ and group-AAD set-identifying material is **BLINDED** (`audience_set_commitment`
 Compromise #61's BLAKE3-keyed-blinding construction). The **residual** observable on the default Drop wire is the recipient
 DID plus linkable-but-blinded group tags. Full per-send unlinkability is roadmap (U22–U28; **U25 is the v1-GM-reserve**
 for full per-send unlinkability). Disclosed as an honest, scoped residual — not an over-claim of network-observer
-invisibility. **Cross-ref:** Compromise #58 (insider-correlation boundary — unlinkability is network-observer-only);
+invisibility.
+
+**`body_cid` low-entropy confirmation/equality-linkability residual (R10 F-01, honest disclosure).** The Layer-C
+AAD carries the wire `body_cid` as an **unsalted** `self_describing_cid(BLAKE3(plaintext))`
+(`benten_drop::layer_c::self_describing_cid` over `blake3::hash(&body)`), emitted **in plaintext**. For **low-entropy /
+guessable** bodies this is (a) a **confirmation oracle** for a Tier-1 network observer (guess a candidate body → recompute
+`BLAKE3` → compare against the wire `body_cid`, no key material required) and (b) a **plaintext-equality linker**
+(two sends of the identical body carry the identical `body_cid`, independent of the random-nonce ciphertext
+distinctness). This is bounded to low-entropy payloads — high-entropy bodies keep the guess space intractable — and
+the `body_cid`-in-AAD is load-bearing (origin-auth binding + U3 length-injectivity; `open_group_stanza` recomputes
+and fail-closes on mismatch, so it is NOT droppable). **Mitigations:** application-layer padding / randomization for
+low-entropy payloads; a **per-send `body_cid` salt** is additively reservable (codepoint-reserve, no wire-break per
+CLAUDE.md baked-in #5) if judged load-bearing. DOC-ONLY disclosure — no wire byte changes. **Cross-ref:**
+`docs/SECURITY-PROOFS.md` §4.2; `docs/THREAT-MODEL.md` §1 (Tier-1 row `body_cid` note). **Cross-ref:** Compromise #58 (insider-correlation boundary — unlinkability is network-observer-only);
 Compromise #61 (gossip-topic blinding); Compromise #63 (Sealed-Sender abuse-control trade-off); `THREAT-MODEL.md`
 (network-observer-only unlinkability scoping); R0.7 §3.8.
 

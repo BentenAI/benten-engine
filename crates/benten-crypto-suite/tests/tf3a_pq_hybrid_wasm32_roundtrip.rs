@@ -17,6 +17,15 @@
 //!   - CLAUDE.md baked-in #5 (PQ-hybrid as v1-beta default; codepoint
 //!     dispatch must work end-to-end across compilation targets).
 //!
+//! **CI-target scope (R10-council F-04):** the CI gate for this test
+//! (`crypto-suite-wasm-roundtrip` in `.github/workflows/wasm-conformance.yml`)
+//! runs on **wasm32-wasip1** (via wasmtime), which proves the crypto layer is
+//! wasm-CLEAN. BrowserBackend (the thin-compute deployment shape) actually
+//! ships on **wasm32-unknown-unknown**; wasm32-wasip1 cleanliness is a strong
+//! necessary condition but NOT the same target. A dedicated
+//! wasm32-unknown-unknown crypto round-trip drift-gate is a NAMED CI follow-up
+//! (see the CI follow-up row in `docs/V1-WIRE-FORMAT-INVENTORY.md`).
+//!
 //! # RED-PHASE STATUS (pim-12 §3.6e) + STUB-SHIM DISCIPLINE
 //!
 //! At HEAD `c9c11c56` `AeadKeyMaterial` + `AeadEnvelope` + the
@@ -43,23 +52,28 @@
 //! The Gate-2 ASSERTION (the round-trip MUST work on wasm32) is the
 //! load-bearing safety property here. The TEST body itself compiles on
 //! BOTH targets at baseline (the stub-shim mints both arms) but the
-//! `#[cfg(target_arch = "wasm32")]` arm asserts the BYTE-IDENTITY
-//! property against the native-target output — the cross-target
-//! conformance guard. Without this pin, a regression that breaks
-//! wasm32 (e.g. an unintended `getrandom`-with-`std` dep, an
-//! `Instant::now()` call, a thread-local that wasm32 can't satisfy)
-//! could pass cargo-test at native + ship to BrowserBackend silently
-//! broken.
+//! `#[cfg(target_arch = "wasm32")]` arm asserts a SAME-TARGET
+//! self-round-trip proving wasm32-PORTABILITY — a payload sealed on
+//! wasm32 opens back to byte-identical plaintext on wasm32. (It does NOT
+//! assert cross-target byte-identity of the wrap OUTPUT: each seal mints a
+//! FRESH random ephemeral + nonce, so native and wasm32 wire bytes differ
+//! by construction — only the recovered PLAINTEXT round-trips identically.)
+//! Without this pin, a regression that breaks wasm32 (e.g. an unintended
+//! `getrandom`-with-`std` dep, an `Instant::now()` call, a thread-local
+//! that wasm32 can't satisfy) could pass cargo-test at native + ship to
+//! BrowserBackend silently broken.
 //!
 //! # Production-arm shape (pim-2 sub-rule-4 + pim-18 SHAPE-not-SUBSTANCE)
 //!
 //! The pin exercises the FULL `wrap_key_material` → `seal_aead` →
 //! `open_aead` → `unwrap_key_material` round-trip on a payload + asserts
-//! the recovered plaintext matches byte-identically. The SHIPPED-SURFACE
+//! the recovered PLAINTEXT matches byte-identically. The SHIPPED-SURFACE
 //! exercise is the `CipherSuiteCodepoint::HYBRID_X25519_MLKEM768` (the
 //! `0x647a` codepoint, already typed at HEAD `c9c11c56`). The
-//! cross-target arm asserts byte-identity of the wrap-output between
-//! native and wasm32 (when run via wasm-pack-test).
+//! wasm32 arm asserts a SAME-TARGET self-round-trip (seal-then-open on
+//! wasm32 recovers the byte-identical plaintext) — it does NOT assert
+//! byte-identity of the wrap OUTPUT between native and wasm32 (fresh random
+//! ephemeral + nonce per seal makes the wire bytes differ by construction).
 //!
 //! # §3.13 per-test-static decomposition
 //!
@@ -73,7 +87,9 @@
 //! (TS surface does NOT hardcode classical 32/64 sizes). **Scope-honesty
 //! (R9-council F-16):** this test exercises the `benten-crypto-suite`
 //! wrap/seal/open/unwrap round-trip COMPILED for the `wasm32` target and
-//! asserts cross-target byte-identity of the codepoint-dispatched output. It
+//! asserts a SAME-TARGET self-round-trip of the codepoint-dispatched output
+//! (recovered plaintext byte-identity on wasm32; NOT cross-target wire-byte
+//! identity — fresh random ephemeral/nonce per seal). It
 //! does **NOT** instantiate `BrowserBackend` or the thin-compute-surface stack
 //! — it verifies the CRYPTO layer is wasm32-clean (no `std`-only `getrandom` /
 //! `Instant::now` / thread-local deps), which is the property BrowserBackend

@@ -54,6 +54,13 @@
 //!   write boundary.
 //! - [`governance::MembershipSetPolicy`] — the zero-sized sealed-policy fence
 //!   (mechanism-half boundary marker), NOT a runtime enforcer.
+//! - [`verify::verify_stanza`] role-staleness gate (`E_ROLE_STALE_AT_VERIFY`) —
+//!   a data-half model with **zero production callers** at HEAD (R10-council
+//!   F-10); the LIVE role-staleness / generation-freshness enforcement is the
+//!   `benten_drop::layer_c` open-side recompute (`open_group_stanza` /
+//!   `open_membership_set_group` re-derive the key-epoch generation words from
+//!   the recipient's INDEPENDENTLY-held set-state and fail-close the hybrid
+//!   LAMPS verify), NOT this standalone comparator.
 //!
 //! These models are deliberately RETAINED (they pin the intended shapes +
 //! property-hold under proptest); they do **NOT** themselves enforce, and this

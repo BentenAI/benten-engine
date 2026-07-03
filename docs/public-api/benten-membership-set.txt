@@ -331,7 +331,7 @@ impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::federation:
 pub const benten_membership_set::federation::ENVELOPE_FORMAT_VERSION_V2: u8
 pub const benten_membership_set::federation::MEMBERSHIP_RECURSION_MAX_DEPTH: usize
 pub fn benten_membership_set::federation::admit_subset_ref_at_v1_beta() -> core::result::Result<(), benten_membership_set::federation::FederationError>
-pub fn benten_membership_set::federation::dispatch_codepoint_at_v1_beta(u16) -> core::result::Result<(), benten_membership_set::federation::FederationError>
+pub fn benten_membership_set::federation::federation_reserve_gate_at_v1_beta(u16) -> core::result::Result<(), benten_membership_set::federation::FederationError>
 pub fn benten_membership_set::federation::select_model_at_v1_beta(benten_membership_set::federation::FederationModel) -> core::result::Result<benten_membership_set::federation::FederationModel, benten_membership_set::federation::FederationError>
 pub type benten_membership_set::federation::FederationSetId = alloc::vec::Vec<u8>
 pub mod benten_membership_set::governance

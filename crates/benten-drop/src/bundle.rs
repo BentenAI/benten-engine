@@ -156,6 +156,11 @@ pub enum DropBundleError {
     /// A per-Node signature (when present) did not verify against
     /// the carried verifying key. This is the secondary integrity
     /// layer — distinct from the AEAD-tag layer above.
+    ///
+    /// Reserved-but-unconstructed at v1-beta (register-then-enforce, Row
+    /// D-66): the `per_node_attestation` field is a frozen sized placeholder,
+    /// so nothing emits this variant yet. It lands when the deferred typed
+    /// per-Node-signature upgrade lands (Phase-4-Meta-Composing).
     #[error("per-Node signature invalid at content[{index}]: {detail}")]
     PerNodeSignatureInvalid {
         /// Index in the `content` array where the failure surfaced.
@@ -263,16 +268,19 @@ impl EncryptedContent {
 ///   spec this bundle is for; the body is carried for offline
 ///   consume so the recipient does not need a network lookup).
 /// - `per_node_attestation`: optional opaque bytes blob carried
-///   as a SIZE-RESERVED placeholder at G-CORE-3f (130-byte sized
-///   marker; the real per-Node-signature construction is reserved
-///   for G-CORE-9 when the freeze fixes its typed shape). Defense-
-///   in-depth at G-CORE-3f is genuinely 2 layers (envelope-sig +
-///   per-Node-AEAD-tag); the third layer (per-Node-sig validation)
-///   lands at G-CORE-9 against a real `Vec<Signature>` shape — the
-///   `DropBundleError::PerNodeSignatureInvalid` typed-reject defined
-///   here is reserved-but-unconstructed until that surface lands.
-///   The size-reservation pin keeps the ~12% Spike G ceiling visible
-///   so the future field doesn't surface as a wire-format surprise.
+///   as a SIZE-RESERVED placeholder (130-byte sized marker). At the
+///   G-CORE-9 v1-beta freeze this field is FROZEN as an inert,
+///   reserved-size opaque blob — the real per-Node-signature
+///   construction (a typed `Vec<Signature>` parallel to `content`)
+///   was DEFERRED past the freeze (Row D-66); the freeze did NOT
+///   upgrade the shape. Defense-in-depth on the shipped v1-beta path
+///   is genuinely 2 layers (envelope-sig + per-Node-AEAD-tag); the
+///   third layer (per-Node-sig validation) is the deferred addition,
+///   and the `DropBundleError::PerNodeSignatureInvalid` typed-reject
+///   defined here is reserved-but-unconstructed (register-then-enforce)
+///   at v1-beta. The size-reservation pin keeps the ~12% Spike G
+///   ceiling visible so the deferred per-Node-signature upgrade lands
+///   ADDITIVELY (no wire-format surprise) when it arrives.
 /// - `envelope_sig`: `Vec<u8>` — Ed25519 signature over the bundle
 ///   header (everything else above). Verified BEFORE any per-Node
 ///   decrypt is attempted.
@@ -299,9 +307,11 @@ pub struct DropBundle {
     pub restricted_spec: RestrictedScope,
     /// Per-Node attestation blob — non-empty when the bundle is
     /// built with per-Node-sig defense-in-depth ON; empty (or
-    /// shortened) for the envelope-only-for-test variant. The
-    /// production wire-up at G-CORE-9 freeze upgrades this to a
-    /// typed `Vec<Signature>` parallel to `content`.
+    /// shortened) for the envelope-only-for-test variant. FROZEN at the
+    /// G-CORE-9 v1-beta freeze as an inert, reserved-size opaque blob;
+    /// the typed `Vec<Signature>` (parallel to `content`) upgrade was
+    /// DEFERRED past the freeze (Row D-66), so this stays a `Vec<u8>`
+    /// size-reservation at v1-beta. The deferred upgrade lands additively.
     #[serde(with = "serde_bytes")]
     pub per_node_attestation: Vec<u8>,
     /// Ed25519 envelope signature bytes.
@@ -811,9 +821,11 @@ fn build_5_recipe_bundle_impl(
 
     // G-CORE-3f: this is a SIZED PLACEHOLDER, not real per-Node
     // Ed25519 signatures. The placeholder reserves the wire-shape
-    // budget; G-CORE-9 v1-interface freeze upgrades it to typed
-    // `Vec<Signature>` parallel to `content`. See `per_node_attestation`
-    // field docstring + the
+    // budget; the G-CORE-9 v1-beta freeze FROZE it as this inert
+    // reserved-size blob — the typed `Vec<Signature>` (parallel to
+    // `content`) upgrade was DEFERRED past the freeze (Row D-66), so it
+    // remains a sized placeholder at v1-beta and the upgrade lands
+    // additively. See `per_node_attestation` field docstring + the
     // `tf3f_per_node_attestation_size_overhead_under_12_percent` pin.
     // For Spike G's overhead measurement the load-bearing property is
     // the size differential between with-attestation and envelope-only

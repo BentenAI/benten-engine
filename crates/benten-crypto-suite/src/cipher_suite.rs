@@ -4,9 +4,10 @@
 //! # G-CORE-3a deliverables (this wave)
 //!
 //! - LIVE codepoint `0x647a` = X25519⊕ML-KEM-768 hybrid KEM
-//!   (vendored ~30-LOC X-Wing-style combiner over `ml-kem` +
-//!   `x25519-dalek` + `sha3`; per Spike I + CLAUDE.md baked-in #5
-//!   + RATIFIED-S&C §1 refinement #6).
+//!   (vendored ~30-LOC X-Wing-style combiner over `libcrux-ml-kem` (via
+//!   `crate::mlkem`) + `x25519-dalek` + `sha3`; the RustCrypto `ml-kem` crate
+//!   is the dev-only FIPS-203 KAT witness, NOT the production impl; per Spike I
+//!   + CLAUDE.md baked-in #5 + RATIFIED-S&C §1 refinement #6).
 //! - LIVE codepoint `0x6400` = classical-only X25519 KEM (non-default
 //!   downgrade arm of the swap matrix).
 //! - Typed-reject (NEVER silent-fallback) on every other codepoint —

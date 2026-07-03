@@ -188,6 +188,12 @@ pub fn testing_call_engine_dispatch(state: &mut EscDefenseState) {
 /// reject the resulting module at parse time, which is also a
 /// valid outcome (the forged cap-claim is not consulted because
 /// the module was rejected before any cap derivation).
+// R10-council F-03: this whole module (`sandbox::testing_helpers`) is already
+// gated `#[cfg(any(test, feature = "test-helpers", feature = "testing"))]` at
+// its `pub mod testing_helpers;` declaration (`sandbox/mod.rs`). The redundant
+// per-fn gate here (identical cfg — never narrows) makes the widened
+// `inject_` no-regression guard recognize the gate directly.
+#[cfg(any(test, feature = "test-helpers", feature = "testing"))]
 #[must_use]
 pub fn testing_inject_forged_cap_claim_section(
     fixture_bytes: &[u8],

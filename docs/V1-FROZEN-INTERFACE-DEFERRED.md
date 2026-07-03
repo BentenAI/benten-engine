@@ -756,6 +756,35 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
     (§11 ↔ §16 non_exhaustive carry); V1-FROZEN-INTERFACE.md §16 MembershipSet
     freeze section + item 11 enumerated must-apply table.
 
+  **R10-council EXTENSION (F-02 / F-11 closure — crypto-suite + drop §11 gaps
+  CLOSED at v1-beta, NOT deferred):** the R10 non_exhaustive freeze-hygiene sweep
+  found + CLOSED the following gaps in-round (applied at HEAD, not carried):
+  - **APPLIED `#[non_exhaustive]` (§11 SemVer-readiness doc-block on each):**
+    `benten-crypto-suite::swap_matrix::{SwapKeypair, SwapPublicKey,
+    SwapRecipientKeypair, SwapRecipientPublic, SwapRecipientSecret}` (the 5 Swap
+    matrix enums — each grows with a new sig/enc arm) +
+    `benten-crypto-suite::discharge::DischargeDisposition` +
+    `benten-drop::layer_c::EncryptedEnvelope` (the Inv-16 codepoint-dispatched
+    envelope). Integration-test consumers of `EncryptedEnvelope` gained
+    fail-closed `_` arms; the 5 `Swap*` enums have no external match sites.
+  - **DELIBERATE CARVE-OUT registered (DO NOT APPLY):**
+    `benten-drop::layer_c::BindingContext` — the CLOSED 2-variant single-recipient
+    drop set (`DropPlaintextSender` = `0x6500` / `DropSealedSender` = `0x6510`).
+    Wire-keying (one codepoint per variant); exhaustive-by-design mirrors
+    `MembershipSetKind`/`RoleId`. NO `#[non_exhaustive]`, NO `_` arm — the
+    exhaustive 2-arm match HALT-AND-SURFACEs any wire decision. Registered in the
+    V1-FROZEN-INTERFACE.md §11 carve-out set.
+  - **Audit arm-coverage pins:**
+    `crates/benten-crypto-suite/tests/g_core_9_non_exhaustive_audit_crypto_suite.rs`
+    (6 pins) +
+    `crates/benten-drop/tests/g_core_9_non_exhaustive_audit_drop.rs`
+    (`EncryptedEnvelope` non_exhaustive pin + `BindingContext`
+    exhaustive-by-design pin).
+  - **Anchor (R10 extension):** R10-council findings F-02 + F-11;
+    V1-FROZEN-INTERFACE.md item 11 must-apply table + carve-out set.
+  - **NOTE — the D-17 non_exhaustive-in-Composing SemVer question (R10 F-22)** is
+    SURFACED-TO-BEN separately (Ben-gated) and is NOT dispositioned in this row.
+
   **Wire-bytes-load-bearing types CLOSED AT G-CORE-9 R2 (NOT deferred):**
   `TypedOutputProjection` + `KernelOutput` in `benten-ivm/src/subgraph_spec.rs`
   carry the attribute at v1-beta — the 1-byte arm-discriminator at
@@ -1390,8 +1419,39 @@ Row D-15's audit-readiness concern.
   nonce/session-id-cache argument to `open_provisioning_payload` so it can emit
   `SessionIdReplayed`. The replay-defense LOGIC is typed (the variant exists);
   the production storage binding (per-engine persistent consumed-session-id set,
-  pruned by the offer `exp` window) + the verify-path wiring are the G-COMP-1
-  deliverable coupled to the device-link UX flow (Phase-4-Meta-Composing).
+  pruned by a **local policy window referencing `granted_at_bucket`** — the coarse
+  1-hour grant-time bucket on the offer; there is **NO `exp` field** on the
+  `ProvisioningOffer` wire, so any prior "offer `exp` window" phrasing was
+  inaccurate and is corrected here (R10 F-06)) + the verify-path wiring are the
+  G-COMP-1 deliverable coupled to the device-link UX flow (Phase-4-Meta-Composing).
+- **Offer authentication is DEFERRED device-link-UX hardening (R10 F-12).** The
+  `ProvisioningOffer` (the QR B publishes: `version`, `device_b_fingerprint`,
+  `provisioning_session_id`) is NOT itself authenticated at v1-beta — nothing
+  signs the offer, and A's out-of-band fingerprint confirmation is the only
+  binding (and its enforcement is itself deferred; see the R10 F-05 addition
+  below). Offer-authentication (binding the offer to B's confirmed device
+  identity so a swapped offer is rejected) is deferred device-link-UX hardening,
+  co-designed with the G-COMP-1 device-link flow.
+- **Active swap-before-seal MITM-substitution enforcement is DEFERRED to G-COMP-1
+  (R10 F-05).** The out-of-band device fingerprint
+  (`ProvisioningOffer::device_b_fingerprint` + the `fingerprint_recipient` helper,
+  `crates/benten-engine/src/layer_d/device_link.rs`) is the intended defense
+  against an active MITM that swaps B's pubkey in the offer BEFORE A seals. At
+  v1-beta this defense is **HUMAN-FINGERPRINT-dependent and NOT wired into the
+  production seal/open path**: `device_b_fingerprint` / `fingerprint_recipient`
+  have **zero production consumers** (exercised only by the F-LD-4 test corpus),
+  and nothing in `seal_provisioning_payload` binds B's human-confirmed identity to
+  the pubkey A actually seals to. The `HpkeUnwrapFailed` recipient-confidentiality
+  property (a payload sealed to B does not decrypt under any other secret) is a
+  REAL but WEAKER guarantee — it rejects at OPEN time, it does NOT prevent A from
+  sealing to a swapped-before-seal pubkey. `device_b_fingerprint` /
+  `fingerprint_recipient` are a **RESERVED SEAM** (register-then-enforce, like Row
+  D-64 / D-52) — the genuine planned surface for the deferred fingerprint MITM
+  defense; retained intentionally (do NOT delete; folding the fingerprint into the
+  signed bytes would be a wire change, deferred with the wiring). The §10.2-HIGH
+  test (`f_ld_4_recipient_confidentiality_wrong_secret_rejects_k_principal_exfil`)
+  is corrected (R10 F-05) to pin recipient-confidentiality, the property it
+  actually exercises.
 - **v1-beta posture:** the typed reject variant + the in-band session-id-MATCH
   check are present (a substituted payload whose inner session-id disagrees fires
   `SessionIdMismatch`); the residual is BOTH the durable replay-store binding AND
@@ -2076,6 +2136,59 @@ Row D-15's audit-readiness concern.
 - **Anchor:** R9-council F-14; CLAUDE.md 3-tactical-picks (`keyring-core`
   v1.0.0); `crates/benten-engine/src/layer_d/secret_store.rs::SecretStore` +
   the Device-link / Remote-permission Phase-4-Meta-Composing UX waves.
+
+---
+
+## R10 (post-F-full phase-close, round 10) NAMED-CARRY rows
+
+> The rows below land at the R10 phase-close convergence council fix wave (branch
+> `phase-4-meta-core/r10-council-fix`). Each is a HARD-RULE clause-(b) deferral
+> whose ENTRY lands NOW with a NAMED destination; the substantive change ships in
+> the named downstream wave. Cites verified live at HEAD `bbdf4b91` at author-time.
+
+### Row D-66 — Drop `per_node_attestation` typed per-Node-signature upgrade → Phase-4-Meta-Composing (R10 F-07)
+
+- **Frozen surface (v1-beta):** the `benten_drop::bundle::DropBundle`
+  `per_node_attestation` field (`crates/benten-drop/src/bundle.rs`) is a FROZEN
+  `#[serde(with = "serde_bytes")] Vec<u8>` sized-placeholder blob (130-byte
+  reserved marker). The `DropBundleError::PerNodeSignatureInvalid` typed-reject
+  variant is defined here but is **reserved-but-unconstructed** at v1-beta
+  (register-then-enforce, like Row D-64 / D-52) — nothing emits it because the
+  field carries no real signatures. The v1-beta defense-in-depth on the shipped
+  Drop path is genuinely 2 layers (envelope-sig + per-Node-AEAD-tag); the field's
+  size-reservation is pinned by
+  `tf3f_per_node_attestation_size_overhead_under_12_percent`.
+- **Deferred consumption (Phase-4-Meta-Composing destination):** upgrade the
+  `per_node_attestation` field from the inert `Vec<u8>` sized placeholder to a
+  real typed `Vec<Signature>` parallel to `content` (the third integrity layer =
+  per-Node-signature validation), which lights up the `PerNodeSignatureInvalid`
+  typed-reject emitter. This is an ADDITIVE upgrade landing within the reserved
+  size budget (no wire-format surprise per the ~12% Spike G ceiling pin).
+- **v1-beta posture:** an inert reserved field with zero runtime impact — the
+  freeze deliberately FROZE the size-reservation shape (NOT the `Vec<Signature>`
+  shape), so this is a documented reserved seam, **NOT a Compromise**. The R10
+  F-07 retense corrected the field/inline docstrings from future-tense ("the
+  freeze upgrades this to `Vec<Signature>`") to completed-freeze framing ("FROZEN
+  as an inert reserved-size blob; the typed upgrade was DEFERRED").
+- **Anchor:** R10-council F-07; `crates/benten-drop/src/bundle.rs::DropBundle::per_node_attestation`
+  + `DropBundleError::PerNodeSignatureInvalid`; the G-CORE-3f Spike-G size-budget pin.
+
+### Row D-1/D-64-adjacent note — `accept_grant` caller-contract (R10 F-15)
+
+- **Caller-contract disclosure (v1-beta):** `benten_engine::layer_d::grant_acceptance::accept_grant`
+  runs the six-class grant-acceptance pipeline over a `GrantAcceptanceContext`,
+  but does **NOT** verify the `PermissionGrant.signature` and does **NOT** bind
+  the `request_id`. The caller is responsible for (a) verifying the grant's
+  signature at the wire layer (over `signing_bytes`) and (b) binding the
+  request_id BEFORE deriving the acceptance context. This is a **caller
+  contract**, not a gap in the pipeline — the pipeline's job is the six-class
+  order-sensitive check-cascade (replay / revocation / clock / audience /
+  UI-summary / audit-binding), with signature-verify + request_id-binding as
+  wire-layer preconditions. Recorded adjacent to Row D-1 (WriteBoundaryChain
+  consumption) + Row D-64 (engine encrypt-to-recipient wiring), whose
+  Phase-4-Meta-Composing engine-wiring is where the accept-grant path gains its
+  first production caller. **Anchor:** R10-council F-15;
+  `crates/benten-engine/src/layer_d/grant_acceptance.rs::accept_grant`.
 
 ---
 

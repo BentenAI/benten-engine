@@ -1572,6 +1572,14 @@ pub fn make_change_event(
 
 /// Inject a change event into a subscription. Returns the subscription's
 /// inject result.
+///
+/// Test-only seam (R10-council F-03): consumed exclusively by the gated
+/// `benten_eval::testing::testing_subscribe_inject_event` wrapper + this
+/// crate's own subscribe tests. Gated behind
+/// `#[cfg(any(test, feature = "testing"))]` so the injection seam is NOT part
+/// of the production/default public surface (matches the `testing` module gate
+/// its sole non-test caller lives behind).
+#[cfg(any(test, feature = "testing"))]
 pub fn inject_event(sub: &ActiveSubscription, event: ChangeEvent) -> Result<(), SubscribeError> {
     sub.inject(event)
 }

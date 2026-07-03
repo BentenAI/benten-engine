@@ -23,7 +23,13 @@
 //! test-fixture regeneration + the visibility flip).
 
 /// What `from_string_unchecked` looks like AFTER the discharge.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future discharge disposition
+/// (e.g. a `RenamedGated` shape) lands as an ADDITIVE variant without a breaking
+/// SemVer bump on the frozen v1 API; cross-crate consumers MUST fail-CLOSED on
+/// an unrecognized disposition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DischargeDisposition {
     /// The function was deleted entirely from the public API.
     Deleted,

@@ -206,10 +206,26 @@ secret). The recipient secret carries genuine OS-RNG entropy
 recipient public key** — a public-key-only party derives a different X-Wing shared secret and the ChaCha20-Poly1305
 CEK-unwrap fails closed. Consequently:
 
-- A **network observer / untrusted relay** (Tier-1; holds neither the CEK nor its derivation inputs) gains **no
-  confirmation oracle and no equality test**: the random nonce makes two seals of the same plaintext produce
-  distinct ciphertext bytes, and the wrapped CEK is opaque. The relay-facing confidentiality claim of §3.3 /
-  §4.1 is **UNCHANGED**.
+- A **network observer / untrusted relay** (Tier-1; holds neither the CEK nor its derivation inputs) gains no
+  confirmation oracle or equality test **from the CIPHERTEXT**: the random nonce makes two seals of the same
+  plaintext produce distinct ciphertext bytes, and the wrapped CEK is opaque. The relay-facing *ciphertext*
+  confidentiality claim of §3.3 / §4.1 is **UNCHANGED**.
+- **HOWEVER — `body_cid` low-entropy confirmation/equality-linkability (honest disclosure).** The wire `body_cid`
+  is an **unsalted** `self_describing_cid(BLAKE3(plaintext))` (`benten_drop::layer_c::self_describing_cid` over
+  `blake3::hash(&body)`) and is emitted **in plaintext** in every Layer-C AAD
+  (`0x6500`/`0x6510`/`0x6520`/`0x6610`). It therefore DOES give the Tier-1 observer two capabilities that the
+  ciphertext denies it, both bounded to **LOW-ENTROPY / guessable** bodies:
+  (1) a **confirmation oracle** — guess a candidate `body`, compute `self_describing_cid(BLAKE3(guess))`, and
+  compare against the wire `body_cid`; a match confirms the plaintext with no key material at all; and
+  (2) a **plaintext-equality linker** — two sends of the **identical** body carry the **identical** `body_cid`,
+  so the relay can link "same plaintext body" across sends (independent of the random-nonce ciphertext
+  distinctness). For **high-entropy** bodies both capabilities are computationally infeasible (the guess space is
+  intractable). **Mitigations:** senders with low-entropy-plaintext concerns should **pad / randomize the body at
+  the application layer** (this also mitigates the CEK confirmation oracle above); and a **per-send `body_cid`
+  salt** is additive over the field (codepoint-reserve, no wire-break per CLAUDE.md baked-in #5 crypto-agility) if
+  the `body_cid` oracle is later judged load-bearing. The `body_cid`-in-AAD is deliberate — it is the
+  origin-auth-binding + U3 length-injectivity anchor (`open_group_stanza` recomputes and fail-closes on mismatch);
+  this disclosure is DOC-ONLY and changes no wire byte.
 - The confirmation advantage is bounded to a party that can already reconstruct the CEK-derivation inputs
   (`recipient_pk`, `sender_did`, `aad`, and a *candidate* `body`) — i.e. the sealer, or a co-recipient holding the
   recovered CEK. For low-entropy / guessable plaintexts (short enumerable messages, known templates) such a party

@@ -384,6 +384,13 @@ pub fn audience_set_commitment(recipient_dids: &[RecipientDid]) -> [u8; 32] {
 /// `0x6510`) — both wire-frozen at v1-beta. The codepoint-dispatched
 /// extensibility lives on [`EncryptedEnvelope`] (which IS extensible per
 /// Inv-16) + the codepoint registry, not on this binding's variant set.
+///
+/// **§11 SemVer carve-out — INTENTIONALLY EXHAUSTIVE (NOT `#[non_exhaustive]`).**
+/// Each variant is WIRE-KEYING (one codepoint per variant: `0x6500` /
+/// `0x6510`), so the variant set is a closed, frozen wire contract — the same
+/// exhaustive-by-design posture as `MembershipSetKind` / `RoleId`, and the
+/// opposite of the extensible [`EncryptedEnvelope`]. New drop shapes are added on
+/// `EncryptedEnvelope` + the codepoint registry, NOT by growing this enum.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BindingContext {
     /// Plaintext-sender drop (`0x6500`, NON-default): sender-DID on the wire.
@@ -539,7 +546,16 @@ impl HpkeRecipientStanza {
 // ---------------------------------------------------------------------------
 
 /// The codepoint-dispatched `EncryptedEnvelope` (Inv-16).
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): the envelope is Inv-16-extensible
+/// — a future codepoint-dispatched shape (a new HPKE mode, a CGKA group object)
+/// lands as an ADDITIVE variant without a breaking SemVer bump on the frozen v1
+/// API; cross-crate consumers MUST fail-CLOSED on an unrecognized shape (reject,
+/// never silently dispatch). Contrast the sibling [`BindingContext`], whose
+/// two-variant set IS wire-keying (`0x6500`/`0x6510`) and is deliberately
+/// exhaustive-by-design.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum EncryptedEnvelope {
     /// Single-recipient HPKE `mode_base` (`0x647A` KEM) carrying a
     /// `0x6500`/`0x6510` drop binding.

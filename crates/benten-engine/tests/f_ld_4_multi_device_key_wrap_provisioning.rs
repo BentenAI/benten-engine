@@ -35,8 +35,11 @@
 // X25519+ML-KEM-768 recipient keypair (Inv-16 — the same KEM-DEM the Layer-C
 // drops use); the seal/open route through `benten_crypto_suite::hpke`
 // (`wrap_key_to_recipient`/`unwrap_key_from_recipient`), NOT a symmetric XOR
-// stand-in. A substituted recipient pubkey (MITM post-fingerprint) yields a
-// wrong recipient secret on B's side and the HPKE unwrap fails closed.
+// stand-in. The §10.2-HIGH arm exercises RECIPIENT-CONFIDENTIALITY: a payload
+// sealed to B's real pubkey does not decrypt under any OTHER recipient secret
+// (the HPKE unwrap fails closed). It does NOT exercise the active
+// swap-before-seal MITM defense — that is fingerprint-dependent + DEFERRED
+// (Row D-30, R10 F-05); nothing binds `device_b_fingerprint` to the sealed pubkey.
 use benten_crypto_suite::cipher_suite::{CipherSuite, RecipientKeypair};
 use benten_crypto_suite::codepoint::CipherSuiteCodepoint;
 use benten_crypto_suite::domain_registry::PROVISIONING_DOMAIN;
@@ -122,12 +125,19 @@ fn f_ld_4_device_link_key_wrap_round_trips_to_device_b() {
     assert_eq!(recovered.k_principal, inner.k_principal);
 }
 
-/// F-LD-4 §10.2-HIGH: substitute B's keypair post-fingerprint → K_principal does
-/// NOT decrypt to the wrong device. A MITM that swaps the recipient keypair after
-/// A confirmed the fingerprint cannot exfiltrate K_principal (the HPKE unwrap
-/// fails closed under the attacker's recipient secret).
+/// F-LD-4 §10.2-HIGH — RECIPIENT-CONFIDENTIALITY (the property this ACTUALLY
+/// exercises). `K_principal` sealed to B's real pubkey does NOT decrypt under any
+/// OTHER recipient secret: a party holding a different (attacker's) secret fails
+/// the HPKE unwrap closed, so `K_principal` is not exfiltrated to the wrong device.
+///
+/// This is NOT the active swap-before-seal MITM-substitution defense: nothing
+/// binds the human-confirmed `device_b_fingerprint` to the pubkey A seals to, so
+/// this test does not (and cannot, at v1-beta) prevent A from sealing to a
+/// pubkey swapped BEFORE the seal. That fingerprint-binding enforcement is
+/// DEFERRED to G-COMP-1 (Row D-30, R10 F-05). What is proven here is that a
+/// mismatched recipient secret fails closed at OPEN time.
 #[test]
-fn f_ld_4_pubkey_substitution_post_fingerprint_rejects_k_principal_exfil() {
+fn f_ld_4_recipient_confidentiality_wrong_secret_rejects_k_principal_exfil() {
     let user_did = Keypair::generate();
     let device_b = fresh_device_keypair();
     let attacker = fresh_device_keypair();

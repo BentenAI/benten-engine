@@ -468,6 +468,9 @@ fn f_lc_1_envelope_is_v2_and_carries_hybrid_codepoint() {
         EncryptedEnvelope::HpkeMultiBase { .. } => {
             panic!("F-LC-1 single-recipient seal MUST produce HpkeBase")
         }
+        // `EncryptedEnvelope` is `#[non_exhaustive]` (Inv-16); fail-closed on a
+        // future additive shape (a single-recipient seal must not be one).
+        _ => panic!("F-LC-1 single-recipient seal MUST produce HpkeBase"),
     };
 
     assert_eq!(
@@ -673,6 +676,8 @@ fn f_lc_2_group_envelope_codepoint_and_stanza_count() {
             }
         }
         EncryptedEnvelope::HpkeBase { .. } => panic!("group seal MUST produce HpkeMultiBase"),
+        // `EncryptedEnvelope` is `#[non_exhaustive]` (Inv-16); fail-closed.
+        _ => panic!("group seal MUST produce HpkeMultiBase"),
     }
     assert_eq!(
         LAYER_C_DROP_MULTI_RECIPIENT, 0x6520,
@@ -717,6 +722,8 @@ fn f_lc_2_default_group_send_honors_sealed_sender_no_plaintext_sender_did() {
             }
         }
         EncryptedEnvelope::HpkeBase { .. } => panic!("group seal MUST produce HpkeMultiBase"),
+        // `EncryptedEnvelope` is `#[non_exhaustive]` (Inv-16); fail-closed.
+        _ => panic!("group seal MUST produce HpkeMultiBase"),
     }
 
     // (b) WIRE-SCAN: the sender-DID byte sequence MUST NOT appear in the
@@ -784,6 +791,8 @@ fn f_lc_2_nondefault_plaintext_sender_group_carries_sender_did_in_aad() {
         EncryptedEnvelope::HpkeBase { .. } => {
             panic!("plaintext-sender group seal MUST produce HpkeMultiBase")
         }
+        // `EncryptedEnvelope` is `#[non_exhaustive]` (Inv-16); fail-closed.
+        _ => panic!("plaintext-sender group seal MUST produce HpkeMultiBase"),
     }
 
     let plaintext_aad = group_plaintext_aad_region(&env);

@@ -91,9 +91,9 @@ pub const HYBRID_SIG_MULTICODEC: [u8; 2] = [0xef, 0x01];
 /// [`HYBRID_SIG_MULTICODEC`]: the single-byte private value (`0xf0`, varint
 /// `[0xf0, 0x01]`) was the G-CORE-9 reserved-private interim. The KEM hybrid
 /// `did:key` (when wired) uses the two-registered-component-multikey form
-/// (the registered `ml-kem-768-pub` component code + `x25519-pub`), so this
-/// const is RETAINED as documented fallback-only and is #5-RISKY (single-byte
-/// squat). See `docs/CRYPTO-CODEPOINTS.md`.
+/// (the registered multiformats `mlkem-768-pub` = `0x120c` component code +
+/// `x25519-pub`), so this const is RETAINED as documented fallback-only and is
+/// #5-RISKY (single-byte squat). See `docs/CRYPTO-CODEPOINTS.md` NQ-C4.
 pub const HYBRID_KEM_MULTICODEC: [u8; 2] = [0xf0, 0x01];
 
 /// `did:key` URI prefix (literal string the W3C spec mandates).

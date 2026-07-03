@@ -1189,7 +1189,6 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::primitives::subscr
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::primitives::subscribe::TestPrincipal
 pub fn benten_eval::primitives::subscribe::active_subscription_count() -> usize
 pub fn benten_eval::primitives::subscribe::execute(&benten_core::subgraph::OperationNode, &dyn benten_eval::host::PrimitiveHost) -> core::result::Result<benten_eval::StepResult, benten_eval::EvalError>
-pub fn benten_eval::primitives::subscribe::inject_event(&benten_eval::primitives::subscribe::ActiveSubscription, benten_core::change_stream::ChangeEvent) -> core::result::Result<(), benten_eval::primitives::subscribe::SubscribeError>
 pub fn benten_eval::primitives::subscribe::make_change_event(benten_core::Cid, benten_core::change_stream::ChangeKind, serde_json::value::Value) -> benten_core::change_stream::ChangeEvent
 pub fn benten_eval::primitives::subscribe::next_engine_seq() -> u64
 pub fn benten_eval::primitives::subscribe::on_change_registration_count() -> usize

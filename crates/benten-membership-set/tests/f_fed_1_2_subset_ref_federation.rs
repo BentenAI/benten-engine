@@ -29,7 +29,7 @@
 //! The self-contained stub-shim is DELETED. The production surface is
 //! `benten_membership_set::federation::{KSetAcquisitionPath,
 //! MEMBERSHIP_RECURSION_MAX_DEPTH, AcquisitionError, FederationError,
-//! FederationModel, admit_subset_ref_at_v1_beta, dispatch_codepoint_at_v1_beta,
+//! FederationModel, admit_subset_ref_at_v1_beta, federation_reserve_gate_at_v1_beta,
 //! select_model_at_v1_beta}` + the `0x6620` codepoint
 //! `benten_membership_set::codepoints::MEMBERSHIP_SET_RESERVED_0X6620`. The
 //! production `KSetAcquisitionPath` carries `Vec<u8>` ids (content-addressed
@@ -42,8 +42,8 @@
 use benten_membership_set::codepoints::MEMBERSHIP_SET_RESERVED_0X6620;
 use benten_membership_set::federation::{
     AcquisitionError, FederationError, FederationModel, KSetAcquisitionPath,
-    MEMBERSHIP_RECURSION_MAX_DEPTH, admit_subset_ref_at_v1_beta, dispatch_codepoint_at_v1_beta,
-    select_model_at_v1_beta,
+    MEMBERSHIP_RECURSION_MAX_DEPTH, admit_subset_ref_at_v1_beta,
+    federation_reserve_gate_at_v1_beta, select_model_at_v1_beta,
 };
 
 /// The federation codepoint (`0x6620`) — reserve-and-refused at v1-beta.
@@ -199,16 +199,17 @@ fn fed2_subset_ref_refused_at_v1_beta() {
         Err(FederationError::FederationReserved),
         "MemberRef::SubsetRef is reserved-and-REFUSED at v1-beta"
     );
-    // The 0x6620 codepoint typed-rejects at dispatch.
+    // The 0x6620 codepoint typed-rejects at the federation-reserve gate.
     assert_eq!(
-        dispatch_codepoint_at_v1_beta(MEMBERSHIP_SET_SUBSET_REF),
+        federation_reserve_gate_at_v1_beta(MEMBERSHIP_SET_SUBSET_REF),
         Err(FederationError::FederationReserved),
         "codepoint 0x6620 typed-rejects at v1-beta"
     );
     assert_eq!(MEMBERSHIP_SET_SUBSET_REF, 0x6620);
     // Paired positive control: a non-federation codepoint does NOT reject — so
-    // the 0x6620 rejection is targeted, not a blanket fail.
-    assert!(dispatch_codepoint_at_v1_beta(0x6600).is_ok());
+    // the 0x6620 rejection is targeted, not a blanket fail (fail-OPEN shape;
+    // R10 F-16: allowlist inversion is the fail-CLOSED end-state).
+    assert!(federation_reserve_gate_at_v1_beta(0x6600).is_ok());
 }
 
 #[test]

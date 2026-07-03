@@ -28,21 +28,21 @@
 //!
 //! # M-20 / Wave-0 DAG edge — authored against BE from the first commit
 //!
-//! The in-tree `aad_per_chunk`/`aad_per_recipe` emit LE (`aead.rs:244,277`).
-//! This family pins the **BE** layout the W0 migration installs. The red-phase
-//! failure for an un-migrated tree is exactly "still LE". This file does NOT
-//! depend on W0's module (wave-independence); it pins the BE bytes via a LOCAL
-//! BE-emitting stub so R5 can swap in the migrated `aead::aad_per_chunk`.
+//! **M-19 BE migration LANDED.** The in-tree `aad_per_chunk`/`aad_per_recipe`
+//! now emit **BIG-ENDIAN** (`aead.rs:266,267` for `aad_per_chunk`; the recipe
+//! sibling mirrors it), NOT LE — the pre-migration "still LE" red-phase state is
+//! historical. This family pins the **BE** layout, and a live `#[test]` +
+//! `assert_ne!` anti-LE guard fail-closes if the emitted bytes ever regress to
+//! the little-endian order.
 //!
-//! # RED-PHASE STATUS (pim-12 §3.6e) + SELF-CONTAINED STUB-SHIM
+//! # STATUS — LIVE (RED-PHASE HISTORY, pim-12 §3.6e)
 //!
-//! The stub `f_lb_2_stub::aad_per_chunk_be` emits the CORRECT BE layout (so the
-//! BE-reference pin is a real, meaningful assertion) but the
-//! `aead_open_with_aad` stub deliberately IGNORES the AAD (the truncation/
-//! substitution bug) so the negative pins FAIL until R5 wires the real
-//! AAD-bound AEAD open. R5 DELETEs the stub + wires the LIVE migrated
-//! `benten_crypto_suite::aead::{aad_per_chunk, aad_per_recipe, open}`,
-//! un-ignores, verifies green.
+//! R5 wired this family to the LIVE migrated
+//! `benten_crypto_suite::aead::{aad_per_chunk, aad_per_recipe, open}` (BE per
+//! M-19) + the real AAD-bound ChaCha20-Poly1305 seal/open; the earlier
+//! self-contained BE-emitting stub (whose `aead_open_with_aad` deliberately
+//! ignored the AAD to drive the red-phase negative pins) was DELETED. The tests
+//! are un-ignored and green against the production BE surface.
 
 #![allow(dead_code)]
 

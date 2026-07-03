@@ -395,7 +395,7 @@ impl core::marker::Unpin for benten_drop::layer_c::BindingContext
 impl core::marker::UnsafeUnpin for benten_drop::layer_c::BindingContext
 impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::BindingContext
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::BindingContext
-pub enum benten_drop::layer_c::EncryptedEnvelope
+#[non_exhaustive] pub enum benten_drop::layer_c::EncryptedEnvelope
 pub benten_drop::layer_c::EncryptedEnvelope::HpkeBase
 pub benten_drop::layer_c::EncryptedEnvelope::HpkeBase::binding: benten_drop::layer_c::BindingContext
 pub benten_drop::layer_c::EncryptedEnvelope::HpkeBase::ciphertext: alloc::vec::Vec<u8>

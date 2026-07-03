@@ -104,11 +104,17 @@ fn dedup_replay_does_not_advance_sequence_or_emit_phantom_event() {
     );
 }
 
-/// F-AUDIT-2 (c): tampering a mid-chain immutable Version Node breaks its
-/// CID linkage, detected on read (Crosby-Wallach tamper-evident log).
+/// F-AUDIT-2 (c): pins the MODEL's declared-tamper RETURN SHAPE — that
+/// `verify_with_tampered_node_at(mid_seq)` reports
+/// `TamperDetectedLinkageBroken { at_seq: mid_seq }` naming the exact sequence.
 ///
-/// would-FAIL if W6 stores audit events in a mutable structure where a
-/// mid-chain edit goes undetected.
+/// This exercises the model's declared-tamper return shape, NOT a live
+/// tamper-detection property: `verify_with_tampered_node_at` returns the tamper
+/// error unconditionally (it models the Crosby-Wallach content-hash-on-read
+/// consequence, it does not re-hash a mutated node). The LIVE tamper-detection
+/// enforcement is `Engine::audit_sequence` + `Node::load_verified`
+/// (content-hash-on-read). would-FAIL if the model stopped naming the exact
+/// mid-chain sequence in its declared return shape.
 #[test]
 fn mid_chain_tamper_breaks_cid_linkage_on_read() {
     let mut chain = AuditChain::new(&fixed_cid(0x51));

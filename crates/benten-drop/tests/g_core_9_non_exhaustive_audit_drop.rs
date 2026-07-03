@@ -106,6 +106,61 @@ fn group_error_audit_arm_coverage_non_exhaustive() {
     );
 }
 
+// R10-council F-02/F-11: `EncryptedEnvelope` is the Inv-16 codepoint-dispatched
+// envelope — SemVer-frozen `#[non_exhaustive]` so a future dispatched shape lands
+// additively. The `_` arm stays reachable ONLY while the attribute is present;
+// removing it turns the catch-all into `unreachable_patterns` → `-D warnings`
+// build break (§11 HALT-AND-SURFACE).
+#[test]
+fn encrypted_envelope_audit_arm_coverage_non_exhaustive() {
+    use benten_drop::layer_c::{BindingContext, EncryptedEnvelope};
+    fn audit(e: &EncryptedEnvelope) -> &'static str {
+        match e {
+            EncryptedEnvelope::HpkeBase { .. } => "HpkeBase",
+            EncryptedEnvelope::HpkeMultiBase { .. } => "HpkeMultiBase",
+            _ => "Unknown",
+        }
+    }
+    let env = EncryptedEnvelope::HpkeBase {
+        format_version: 2,
+        binding: BindingContext::DropSealedSender {
+            aad_version: 0x01,
+            codepoint: 0x6510,
+            audience_did: b"did:key:zAudience".to_vec(),
+            body_cid: benten_drop::layer_c::self_describing_cid(&[0u8; 32]),
+            recipient_key_generation: 0,
+        },
+        enc: vec![0u8; 4],
+        ciphertext: vec![0u8; 4],
+    };
+    assert_eq!(audit(&env), "HpkeBase");
+}
+
+// R10-council F-02/F-11 CARVE-OUT: the drop-side `BindingContext` is
+// INTENTIONALLY exhaustive-by-design (wire-keying — one codepoint per variant:
+// `0x6500`/`0x6510`), the same posture as `MembershipSetKind`/`RoleId`. It has
+// NO `#[non_exhaustive]` and NO `_` arm; this exhaustive match (both variants,
+// no catch-all) HALT-AND-SURFACEs if a variant is ever added without a wire
+// decision — the correct posture for a closed frozen wire contract.
+#[test]
+fn binding_context_audit_exhaustive_by_design_no_catch_all() {
+    use benten_drop::layer_c::BindingContext;
+    fn audit(b: &BindingContext) -> &'static str {
+        match b {
+            BindingContext::DropPlaintextSender { .. } => "DropPlaintextSender",
+            BindingContext::DropSealedSender { .. } => "DropSealedSender",
+        }
+    }
+    let b = BindingContext::DropSealedSender {
+        aad_version: 0x01,
+        codepoint: 0x6510,
+        audience_did: b"did:key:zAudience".to_vec(),
+        body_cid: benten_drop::layer_c::self_describing_cid(&[0u8; 32]),
+        recipient_key_generation: 0,
+    };
+    assert_eq!(audit(&b), "DropSealedSender");
+}
+
 #[test]
 fn drop_bundle_error_audit_arm_coverage_non_exhaustive() {
     use benten_drop::bundle::DropBundleError;

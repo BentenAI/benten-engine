@@ -79,7 +79,7 @@
 
 **Byte-pin test coverage:**
 - `crates/benten-crypto-suite/tests/tf3a_*.rs` + `crates/benten-crypto-suite/tests/tf4_*.rs` — AEAD round-trip + codepoint dispatch pins.
-- `crates/benten-crypto-suite/tests/tf3a_pq_hybrid_wasm32_roundtrip.rs` — wasm32 cross-target PQ-hybrid round-trip, **CI-gated under wasm32-wasip1** by the `crypto-suite-wasm-roundtrip` job in `.github/workflows/wasm-conformance.yml` (F-full R6 R1 finding F-06; the encryption layer is now exercised on the wasm target through wasmtime, not just compile-checked / native-run).
+- `crates/benten-crypto-suite/tests/tf3a_pq_hybrid_wasm32_roundtrip.rs` — same-target PQ-hybrid self-round-trip (recovered-plaintext byte-identity; NOT cross-target wire-byte identity — fresh random ephemeral/nonce per seal), **CI-gated under wasm32-wasip1** by the `crypto-suite-wasm-roundtrip` job in `.github/workflows/wasm-conformance.yml` (F-full R6 R1 finding F-06; the encryption layer is now exercised on the wasm target through wasmtime, not just compile-checked / native-run). **Scope (R10-council F-04):** this gate guards **wasm32-wasip1**, NOT **wasm32-unknown-unknown** — the target the BrowserBackend thin-compute shape (CLAUDE.md baked-in #17) actually ships on. wasm32-wasip1 cleanliness is a strong necessary condition for BrowserBackend but is a distinct target; the wasm32-unknown-unknown crypto round-trip drift-gate is a NAMED CI follow-up (row below).
 - `crates/benten-graph/src/aead_wrap.rs` — production wrap path; consumed by every encryption-bearing test.
 
 **M-19 endianness conformance scanner (`benten_crypto_suite::conformance::endianness`).** The flagship M-19 gate
@@ -492,7 +492,7 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 
 **Byte-pin test coverage:**
 - `crates/benten-engine/tests/f_ld_2_remote_permission_wire_freeze.rs` (F-LD-2: `f_ld_2_operation_wire_encoding_is_big_endian_golden_pin` + `f_ld_2_full_struct_signing_bytes_golden_pin` + signature round-trip + `f_ld_2_out_of_band_codepoint_typed_rejects`).
-- `crates/benten-engine/tests/f_ld_4_multi_device_key_wrap_provisioning.rs` (F-LD-4: `f_ld_4_device_link_key_wrap_round_trips_to_device_b` + `f_ld_4_pubkey_substitution_post_fingerprint_rejects_k_principal_exfil` + `f_ld_4_model_only_session_id_replay_pin` (model-only; NOT a production-path pin per Row D-30) + `f_ld_4_forged_offer_signature_rejects` + `f_ld_4_device_link_band_base_pinned` (`0x6310`) + `f_ld_4_k_principal_has_no_forward_secrecy_documented`).
+- `crates/benten-engine/tests/f_ld_4_multi_device_key_wrap_provisioning.rs` (F-LD-4: `f_ld_4_device_link_key_wrap_round_trips_to_device_b` + `f_ld_4_recipient_confidentiality_wrong_secret_rejects_k_principal_exfil` + `f_ld_4_model_only_session_id_replay_pin` (model-only; NOT a production-path pin per Row D-30) + `f_ld_4_forged_offer_signature_rejects` + `f_ld_4_device_link_band_base_pinned` (`0x6310`) + `f_ld_4_k_principal_has_no_forward_secrecy_documented`).
 - `crates/benten-engine/tests/f_ld_8_layer_d_timestamp_exclusion.rs` (F-LD-8: `f_ld_8_drop_to_recipient_carries_no_timestamp_field` + the differential `f_ld_8_drop_serialization_has_no_timestamp_bytes` (would-FAIL-on-no-op) + `f_ld_8_device_link_carries_the_one_hour_bucket` (inverse pin) + `f_ld_8_bucket_is_round_down_no_jitter_nq_c5_gated`).
 - The Layer-D drops REUSE the Layer-C `0x6610` / `0x6520` BLINDED group-AAD; that AAD shape is golden-pinned by `crates/benten-drop/tests/f_02_group_aad_11field_and_f_01_truncation.rs` (`f_02_live_0x6610_seal_binds_canonical_11_field_aad_golden` + `f_02_local_assembler_matches_canonical_membership_set_byte_for_byte` + `f_02_seal_open_round_trip_under_11_field_aad`; F-01 truncation arms `f_01_0x6610_dropped_stanza_fails_closed` + `f_01_0x6520_dropped_stanza_fails_closed`).
 
@@ -571,6 +571,23 @@ This inventory is the wave-time enumeration; Ben signs the freeze decision separ
 A "yes, complete" answer locks the inventory; a "no, add X" answer adds the missing surface inline + extends the byte-pin coverage at the same wave.
 
 **R6 R1 expansion provenance (2026-05-24):** items 11-24 were added at R6 R1 phase-close council per L11 lens finding `L11-R6-R1-MAJOR-1` (phase-wide canonical-bytes sweep). The 9-of-10 prior framing was scoped to the G-CORE-9 R4 FREEZE subset; R6 R1 widened to phase-wide which surfaced 14 additional wire-format-bearing surfaces. Per L11 lens recommendation path-(1): expand inventory items 11-24 for the 12 publicly-observable surfaces + retain item 24 (crate-private suspension_store) for completeness.
+
+---
+
+## CI follow-up rows (named-carry)
+
+- **CI-FU-1 (R10-council F-04) — wasm32-unknown-unknown crypto round-trip drift-gate.**
+  The `crypto-suite-wasm-roundtrip` job (`.github/workflows/wasm-conformance.yml`)
+  gates the tf3a PQ-hybrid round-trip on **wasm32-wasip1** (via wasmtime), which
+  proves the crypto layer is wasm-CLEAN. It does NOT run on
+  **wasm32-unknown-unknown** — the target the BrowserBackend thin-compute
+  deployment shape (CLAUDE.md baked-in #17) actually ships on. **Follow-up:** add
+  a dedicated wasm32-unknown-unknown crypto round-trip (or at minimum a compile +
+  wasm-pack-node round-trip) drift-gate so a regression that breaks the
+  BrowserBackend target — but not wasm32-wasip1 — fires at PR time. **Destination:**
+  a new `wasm-browser.yml` (or `wasm-checks.yml`) job; Phase-4-Meta-Composing
+  browser-runtime CI hardening. Not a wire-format change — a CI coverage
+  enhancement. Anchor: R10-council F-04.
 
 ---
 

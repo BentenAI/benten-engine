@@ -13,11 +13,35 @@
 //!
 //! # Properties (e2r §7)
 //!
-//! - HPKE IND-CCA2 confidentiality (the real X-Wing KEM-DEM; a substituted
-//!   recipient pubkey fails to decrypt — §10.2 HIGH);
+//! - HPKE IND-CCA2 **recipient-confidentiality** (the real X-Wing KEM-DEM):
+//!   `K_principal` sealed to device B's real pubkey does NOT decrypt under any
+//!   OTHER recipient secret — a party holding a different secret (an attacker's,
+//!   or a wrong device's) fails the unwrap closed (§10.2 HIGH). This is what the
+//!   §10.2-HIGH test actually exercises;
 //! - user-DID-signature authentication (a forged/unsigned offer rejects);
 //! - **NO forward-secrecy for `K_principal`** (identity-equivalent by design);
 //! - session-layer FS + replay defense via `provisioning_session_id` binding.
+//!
+//! # MITM-substitution defense — HUMAN-FINGERPRINT-dependent, ENFORCEMENT DEFERRED (Row D-30, R10 F-05)
+//!
+//! The out-of-band device fingerprint ([`ProvisioningOffer::device_b_fingerprint`]
+//! + [`fingerprint_recipient`]) is the intended defense against an ACTIVE
+//! MITM that swaps B's pubkey in the offer **before A seals** (so A would seal
+//! `K_principal` to the attacker's pubkey). At v1-beta this defense is
+//! **HUMAN-FINGERPRINT-dependent and its enforcement is NOT wired into the
+//! production seal/open path**: `device_b_fingerprint` / `fingerprint_recipient`
+//! have **zero production consumers** (they are exercised only by the F-LD-4 test
+//! corpus), and nothing in [`seal_provisioning_payload`] binds device-B's
+//! human-confirmed identity to the pubkey A actually seals to. The
+//! recipient-confidentiality property above is a REAL but WEAKER guarantee — it
+//! rejects a substituted pubkey at OPEN time (wrong secret → fail-closed) but
+//! does NOT prevent A from sealing to a swapped-BEFORE-seal pubkey. The
+//! fingerprint-binding MITM-substitution enforcement is **DEFERRED to G-COMP-1
+//! (Phase-4-Meta-Composing device-link UX)** — see Row D-30 in
+//! `docs/V1-FROZEN-INTERFACE-DEFERRED.md`. `device_b_fingerprint` /
+//! `fingerprint_recipient` are a **RESERVED SEAM** (register-then-enforce, like
+//! Row D-64 / D-52) — the genuine planned surface for that deferred defense;
+//! they are intentionally retained (do NOT delete) but are inert at v1-beta.
 //!
 //! # HPKE reuse (Inv-16 / C-2 — and the layer_c-reuse FLAG)
 //!
@@ -55,6 +79,12 @@ pub struct ProvisioningOffer {
     /// Device-fingerprint A confirms out-of-band (QR scan) — BLAKE3 over the
     /// recipient public material. The recipient public material itself
     /// travels in the [`ProvisioningPayload`] / is reconstructed by A.
+    ///
+    /// **RESERVED SEAM (register-then-enforce; Row D-30, R10 F-05).** Zero
+    /// production consumers at v1-beta — nothing binds this human-confirmed value
+    /// to the pubkey A actually seals to. The active swap-before-seal MITM-
+    /// substitution enforcement is DEFERRED to G-COMP-1; this field is the seam
+    /// for that wave (inert at v1-beta; do NOT delete).
     pub device_b_fingerprint: [u8; 32],
     /// The provisioning session id (replay + session-FS binding).
     pub provisioning_session_id: [u8; 32],
@@ -175,8 +205,11 @@ pub enum DeviceLinkError {
     /// The user-DID signature on the provisioning offer did not verify
     /// (forged / unsigned offer — `E_DEVICE_ATTESTATION_FORGED`-class).
     OfferSignatureForged,
-    /// The HPKE unwrap failed (wrong recipient secret — a substituted pubkey
-    /// can't recover `K_principal`; §10.2 HIGH).
+    /// The HPKE unwrap failed (wrong recipient secret — `K_principal` sealed to
+    /// B's pubkey does not decrypt under any other secret; recipient-
+    /// confidentiality, §10.2 HIGH). NOTE: this fires at OPEN time; it is NOT the
+    /// active swap-before-seal MITM defense (that is fingerprint-dependent +
+    /// DEFERRED — see the module MITM-substitution doc-block + Row D-30).
     HpkeUnwrapFailed,
     /// The recovered inner payload's session id did not match the offer's
     /// session id.
@@ -187,6 +220,12 @@ pub enum DeviceLinkError {
 
 /// Build a fingerprint over a recipient's public material (BLAKE3). A confirms
 /// this out-of-band (QR scan) before sealing.
+///
+/// **RESERVED SEAM (register-then-enforce; Row D-30, R10 F-05).** This is the
+/// planned surface for the active swap-before-seal MITM-substitution defense, but
+/// it has **zero production consumers** at v1-beta — no seal/open path binds this
+/// fingerprint to the sealed pubkey. Retained as the seam for the G-COMP-1
+/// fingerprint-enforcement wave; inert (do NOT delete) at v1-beta.
 #[must_use]
 pub fn fingerprint_recipient(recipient_pub_bytes: &[u8]) -> [u8; 32] {
     *blake3::hash(recipient_pub_bytes).as_bytes()
@@ -218,10 +257,17 @@ pub fn seal_provisioning_payload(
 }
 
 /// Device B: verify A's user-DID signature, HPKE-unwrap the inner payload with
-/// B's recipient secret, and confirm the bound session id. A substituted
-/// recipient pubkey (MITM post-fingerprint) yields a wrong recipient secret on
-/// B's side and the unwrap fails closed (§10.2 HIGH); a forged offer signature
-/// rejects before any unwrap.
+/// B's recipient secret, and confirm the bound session id. A payload sealed to a
+/// DIFFERENT recipient pubkey yields a wrong recipient secret on B's side and the
+/// unwrap fails closed (recipient-confidentiality; §10.2 HIGH); a forged offer
+/// signature rejects before any unwrap.
+///
+/// This does NOT enforce the active swap-before-seal MITM-substitution defense:
+/// nothing here binds the human-confirmed `device_b_fingerprint` to the pubkey A
+/// sealed to, so a MITM that swapped B's pubkey BEFORE A sealed would be opened
+/// successfully by the attacker (who holds the matching secret). That
+/// fingerprint-binding enforcement is DEFERRED to G-COMP-1 (Row D-30); see the
+/// module MITM-substitution doc-block.
 ///
 /// # Errors
 ///
@@ -245,8 +291,10 @@ pub fn open_provisioning_payload(
         .verify(&signing_bytes, &sig)
         .map_err(|_| DeviceLinkError::OfferSignatureForged)?;
 
-    // HPKE-unwrap with B's recipient secret. A substituted pubkey → wrong
-    // recipient secret → fail closed.
+    // HPKE-unwrap with B's recipient secret. A payload sealed to a DIFFERENT
+    // pubkey → wrong recipient secret → fail closed (recipient-confidentiality;
+    // NOT the swap-before-seal MITM defense — that is fingerprint-dependent +
+    // deferred, Row D-30).
     let recovered = unwrap_key_from_recipient(recipient_sec, &payload.wrapped)
         .map_err(|_| DeviceLinkError::HpkeUnwrapFailed)?;
 

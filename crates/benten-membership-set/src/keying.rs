@@ -73,11 +73,15 @@ pub fn derive_member_key(node_cid: &[u8]) -> Vec<u8> {
 /// distinct keyed-MAC preimages over the SAME primitive (the topic appends
 /// `BE(generation)`; the AAD commitment prepends the label) — they never
 /// collide. The R4-frozen golden vector (`f_gossip_2_topic_absolute_golden_vector_be`)
-/// is computed against THIS no-label §3.9 construction. (The dispatch brief's
-/// M-20 line and §3.10's "the SAME construction §3.9 uses" prose both echoed the
-/// *labelled* commitment formula; that is an imprecise cross-reference — §3.9
-/// owns the gossip topic and its frozen primitive is the no-label form, which
-/// the existing golden confirms byte-for-byte. FLAGGED-FOR-BEN.)
+/// is computed against THIS no-label §3.9 construction. (An earlier imprecise
+/// cross-reference — the dispatch brief's M-20 line and §3.10's "the SAME
+/// construction §3.9 uses" prose — echoed the *labelled* commitment formula;
+/// §3.9 owns the gossip topic and its frozen primitive is the no-label form,
+/// which the existing golden confirms byte-for-byte. The unlabelled §3.9 form is
+/// the FROZEN authoritative derivation — see `docs/CRYPTO-CODEPOINTS.md` §"Gossip
+/// topic (§3.9, unlabelled) vs AAD set-id commitment (§3.10, labelled)",
+/// `docs/SECURITY-POSTURE.md` Compromise #61, and `docs/THREAT-MODEL.md`; the
+/// code matches those frozen docs.)
 ///
 /// Byte-order is freeze-gating: the generation counter is encoded
 /// **big-endian** (F4-024 M-20). An observer without `K_Set` cannot link or

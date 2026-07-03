@@ -31,11 +31,12 @@
 //!
 //! ## pim-2 §3.6b + §3.6f-ext end-to-end discipline
 //!
-//! Drives the PRODUCTION merge (`merge_membership_ops`) + tie-break
-//! (`fork_winner`) stand-ins; asserts OBSERVABLE snapshot-equality across
-//! permutations + idempotence under duplicate delivery + the actual fork
-//! tie-break winner; would-FAIL-if-no-op'd (an order-sensitive or
-//! non-idempotent merge fails the permutation / duplicate arms; a larger-HLC
+//! Drives a **Loro-faithful LOCAL fold** (`merge_membership_ops`) + tie-break
+//! (`fork_winner`) that pin the LWW / tie-break COMPARATORS — NOT the real Loro
+//! merge (real-Loro convergence is owned by `benten-sync`). Asserts OBSERVABLE
+//! snapshot-equality across permutations + idempotence under duplicate delivery +
+//! the actual fork tie-break winner; would-FAIL-if-no-op'd (an order-sensitive or
+//! non-idempotent fold fails the permutation / duplicate arms; a larger-HLC
 //! fork tie-break fails the F-CRDT-3 fork arm).
 //!
 //! ## Wiring (history: pim-12 §3.6e)
@@ -109,10 +110,13 @@ struct ResolvedCell {
     role: Option<String>, // None = kicked
 }
 
-/// PRODUCTION-stand-in: the CRDT merge. Applies a multiset of ops and
-/// resolves each DID's cell by larger-HLC-wins. Returns the canonical
-/// `members_table`-equivalent snapshot (BTreeMap ⇒ deterministic order).
-/// R5 routes through the real Loro/CRDT merge.
+/// Pins the LWW / tie-break comparators via a **Loro-faithful LOCAL fold** —
+/// NOT a real Loro/CRDT merge. Applies a multiset of ops and resolves each DID's
+/// cell by larger-HLC-wins (ties broken by the total `(physical_ms, logical,
+/// node_id)` lex order, matching the production comparator). Returns the
+/// canonical `members_table`-equivalent snapshot (BTreeMap ⇒ deterministic
+/// order). **Real-Loro convergence is owned by `benten-sync`** — this fold pins
+/// the comparator semantics locally, it does not exercise the Loro document.
 fn merge_membership_ops(ops: &[MembershipOp]) -> BTreeMap<String, ResolvedCell> {
     let mut table: BTreeMap<String, ResolvedCell> = BTreeMap::new();
     for op in ops {

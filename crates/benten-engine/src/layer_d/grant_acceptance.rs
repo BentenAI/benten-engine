@@ -11,9 +11,13 @@
 //!   3. **clock-skew** — the `valid_until` enforcement clock is decoupled from
 //!      the coarse 1-hour bucket (NQ-T2) and enforced STRICTLY (`present >
 //!      valid_until → reject`; NO grace/skew window);
-//!   4. **confused-deputy** — the audience/operation is bound and checked
-//!      BEFORE the time-window (the `validate_chain_for_audience_at`-before-
-//!      `validate_chain_at` ordering precedent);
+//!   4. **confused-deputy** — the audience (and, at the wire layer, the
+//!      operation via `signing_bytes`) is bound and checked BEFORE the
+//!      time-window (the `validate_chain_for_audience_at`-before-
+//!      `validate_chain_at` ordering precedent). The acceptance-path class-4
+//!      check itself compares `requested_audience` vs `grant_audience` — there
+//!      is NO operation/scope field on this path; operation-binding rides the
+//!      signed `signing_bytes` at the wire layer;
 //!   5. **UI-deception** — the signed grant binds the displayed
 //!      operation-summary hash; a displayed-vs-bound mismatch is rejected;
 //!   6. **audit-Node-binding** — the grant is REJECTED if `audit_node_cid` is
@@ -46,7 +50,8 @@ pub enum GrantRejection {
     DeviceKeyRevoked,
     /// Class 3 — `valid_until` enforcement-clock expired (strict; NQ-T2).
     Expired,
-    /// Class 4 — audience/operation mismatch (checked BEFORE the time-window).
+    /// Class 4 — audience mismatch (checked BEFORE the time-window; operation
+    /// binds at the wire layer via `signing_bytes`, not on this path).
     ConfusedDeputy,
     /// Class 5 — displayed operation-summary hash ≠ bound summary
     /// (UI-deception).
@@ -96,8 +101,9 @@ const _ROSTER_INDEX_CONSISTENT: () = {
 };
 
 /// The grant + the acceptance context. The acceptance pipeline runs the six
-/// checks in the §6.7-mandated order: confused-deputy (audience/operation) is
-/// checked BEFORE the time-window (class 4 before class 3).
+/// checks in the §6.7-mandated order: confused-deputy (audience — operation
+/// binds at the wire layer via `signing_bytes`, not on this path) is checked
+/// BEFORE the time-window (class 4 before class 3).
 pub struct GrantAcceptanceContext<'a> {
     /// The grant's `jti` (replay key).
     pub jti: [u8; 32],
@@ -136,6 +142,12 @@ pub struct GrantAcceptanceContext<'a> {
 /// Run the six-class grant-acceptance pipeline. Returns `Ok(())` and records
 /// the `jti` on admit; otherwise the typed [`GrantRejection`] of the FIRST
 /// failing class in the §6.7-mandated order.
+///
+/// **Caller contract (R10-council F-15):** this pipeline does NOT verify the
+/// `PermissionGrant.signature` and does NOT bind the `request_id` — the caller
+/// is responsible for verifying the grant's signature (at the wire layer, over
+/// `signing_bytes`) and for binding the request_id BEFORE handing the derived
+/// context here. See `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-1 / D-64.
 ///
 /// # Errors
 ///

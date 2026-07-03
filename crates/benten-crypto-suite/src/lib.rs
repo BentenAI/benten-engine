@@ -83,7 +83,8 @@
 //! a real typed surface ([`cipher_suite::CipherSuiteCodepoint`]) without
 //! adding a new workspace dep. **G-CORE-3a CANARY shipped `0x647a`
 //! X25519⊕ML-KEM-768 hybrid KEM LIVE** (the vendored ~30-LOC X-Wing-style
-//! combiner over `ml-kem` + `x25519-dalek` + `sha3` — stable-but-non-WG
+//! combiner over `libcrux-ml-kem` (via `crate::mlkem`; RustCrypto `ml-kem` is
+//! the dev-only KAT witness) + `x25519-dalek` + `sha3` — stable-but-non-WG
 //! IETF Independent Submission draft, Benten-owned) + **`0x6400`
 //! classical-only X25519 downgrade arm LIVE.** **G-CORE-3c TERMINAL shipped
 //! the full swap matrix** retaining `0x647c` (pure-PQ ML-KEM-768-only swap-matrix

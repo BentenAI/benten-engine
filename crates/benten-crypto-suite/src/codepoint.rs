@@ -226,7 +226,8 @@ impl HashCodepoint {
 ///
 /// `HYBRID_X25519_MLKEM768` at `0x647a` is the IETF HPKE-PQ WG-stream
 /// `MLKEM768-X25519` hybrid-KEM codepoint (IANA-requested; X-Wing-style
-/// vendored combiner over `ml-kem` + `x25519-dalek` + `sha3`).
+/// vendored combiner over `libcrux-ml-kem` (via `crate::mlkem`; RustCrypto
+/// `ml-kem` is the dev-only KAT witness) + `x25519-dalek` + `sha3`).
 /// **G-CORE-3a CANARY flips `0x647a` + `0x6400` (classical-X25519
 /// downgrade arm) to LIVE.** `0x647b` (NF-1 ML-KEM-768⊕HQC end-state)
 /// + `0x647c` (pure-PQ ML-KEM-768-only swap-matrix arm; reserved-named
@@ -244,9 +245,10 @@ pub struct CipherSuiteCodepoint(pub(crate) u16);
 impl CipherSuiteCodepoint {
     /// v1-beta DEFAULT for #1301: X25519⊕ML-KEM-768 hybrid KEM at
     /// codepoint `0x647a` + ChaCha20-Poly1305 bulk. **LIVE at G-CORE-3a
-    /// CANARY** (X-Wing-style combiner over `ml-kem` + `x25519-dalek`
-    /// + `sha3`; conformance test at G-CORE-3 #1301 — see plan §3
-    /// G-CORE-3 + RATIFIED §1 + §6).
+    /// CANARY** (X-Wing-style combiner over `libcrux-ml-kem` (via
+    /// `crate::mlkem`; RustCrypto `ml-kem` is the dev-only KAT witness) +
+    /// `x25519-dalek` + `sha3`; conformance test at G-CORE-3 #1301 — see
+    /// plan §3 G-CORE-3 + RATIFIED §1 + §6).
     pub const HYBRID_X25519_MLKEM768: Self = Self(0x647a);
 
     /// Non-PQ downgrade: X25519-only KEM + ChaCha20-Poly1305 bulk.

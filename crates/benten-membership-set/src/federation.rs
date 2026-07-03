@@ -177,14 +177,23 @@ pub fn admit_subset_ref_at_v1_beta() -> Result<(), FederationError> {
     Err(FederationError::FederationReserved)
 }
 
-/// Dispatch a MembershipSet codepoint at v1-beta. The federation `0x6620`
-/// codepoint typed-rejects; every other codepoint passes (targeted rejection).
+/// Federation-reserve gate at v1-beta: typed-reject the reserved federation
+/// `0x6620` (`SubsetRef`) codepoint; every OTHER codepoint passes.
+///
+/// **Fail-OPEN shape (R10-council F-16):** this is a targeted BLOCKLIST of one
+/// reserved codepoint, NOT a general codepoint dispatcher — an unknown/future
+/// codepoint returns `Ok(())` (passes). At v1-beta the sole test-only callers
+/// only ever feed it the frozen MembershipSet band, so the fail-open shape is
+/// contained, but the inverted → **ALLOWLIST** follow-up (return `Ok(())` ONLY
+/// for the explicitly-enumerated frozen codepoints, typed-reject everything
+/// else) is the correct fail-CLOSED end-state — tracked in
+/// `docs/CRYPTO-CODEPOINTS.md` (federation-reserve-gate inversion note).
 ///
 /// # Errors
 ///
 /// Returns [`FederationError::FederationReserved`] iff `cp ==
 /// MEMBERSHIP_SET_RESERVED_0X6620` (`0x6620`).
-pub fn dispatch_codepoint_at_v1_beta(cp: u16) -> Result<(), FederationError> {
+pub fn federation_reserve_gate_at_v1_beta(cp: u16) -> Result<(), FederationError> {
     if cp == MEMBERSHIP_SET_RESERVED_0X6620 {
         return Err(FederationError::FederationReserved);
     }

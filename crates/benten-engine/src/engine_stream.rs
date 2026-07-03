@@ -334,6 +334,11 @@ impl StreamHandle {
     /// handle is closed (no further chunks will arrive) once the
     /// vector drains. Test-factory entry point used by the napi
     /// `testing_open_stream_for_test` symbol per ts-r4-2 R4 finding.
+    ///
+    /// Test-only factory (R10-council F-03): gated behind
+    /// `#[cfg(any(test, feature = "test-helpers"))]` — its sole non-test caller
+    /// (`testing_open_stream_for_test`) is behind the same gate.
+    #[cfg(any(test, feature = "test-helpers"))]
     #[must_use]
     pub fn from_test_chunks(chunks: Vec<Chunk>) -> Self {
         Self {
