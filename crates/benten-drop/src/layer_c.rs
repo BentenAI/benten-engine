@@ -319,6 +319,15 @@ pub const DROP_TO_RECIPIENT_SEALED_SENDER: u16 = 0x6510;
 /// `LAYER_C_DROP_MULTI_RECIPIENT` — `HpkeMultiBase` group multi-stanza.
 pub const LAYER_C_DROP_MULTI_RECIPIENT: u16 = 0x6520;
 
+/// The wire-frozen maximum recipient-roster cardinality for a `0x6520`
+/// Layer-C group send: the per-stanza AAD encodes `recipient_count` as a
+/// `u16` BE field (§4.0 by-band width; the MembershipSet `0x6610` band uses
+/// `u32` — unifying the widths is a rejected freeze record). A caller MUST
+/// keep a single-send roster at or below this; a larger group must split
+/// into multiple sends. Enforced with a typed error at the seal entry
+/// (never a panic) — R12 F-11.
+pub const MAX_LAYER_C_GROUP_RECIPIENTS: usize = u16::MAX as usize; // 65_535
+
 // ---------------------------------------------------------------------------
 // Recipient key types (the REAL X25519⊕ML-KEM-768 hybrid key material).
 // ---------------------------------------------------------------------------
@@ -538,7 +547,10 @@ impl HpkeRecipientStanza {
         out.push(AAD_VERSION);
         out.extend_from_slice(&self.codepoint.to_be_bytes());
         out.extend_from_slice(&self.body_cid);
-        let count = u16::try_from(self.recipient_dids.len()).expect("recipient count fits u16");
+        let count = u16::try_from(self.recipient_dids.len()).expect(
+            "recipient count within MAX_LAYER_C_GROUP_RECIPIENTS — guaranteed by \
+             validate_group_roster_len at the seal entry",
+        );
         out.extend_from_slice(&count.to_be_bytes());
         out.extend_from_slice(&audience_set_commitment(&self.recipient_dids));
         out.extend_from_slice(&self.stanza_index.to_be_bytes());
@@ -625,6 +637,15 @@ pub enum LayerCError {
     SenderOriginAuthFailed, // drift-detect: internal-only — layer_c-internal; no napi/wire ErrorCode boundary (§3.5g precedent: StanzaCountMismatch / DidError).
     /// Codepoint dispatch hit an unknown/reserved arm.
     UnsupportedCodepoint(u16),
+    /// The `0x6520` group recipient roster exceeds the band's wire-frozen
+    /// `u16` cardinality limit ([`MAX_LAYER_C_GROUP_RECIPIENTS`]). Split the
+    /// send into multiple groups.
+    RecipientCountExceedsBandWidth {
+        /// The recipient count the caller requested for this single send.
+        count: usize,
+        /// The wire-frozen ceiling ([`MAX_LAYER_C_GROUP_RECIPIENTS`]).
+        max: usize,
+    },
     /// The number of stanzas actually DELIVERED does not equal the
     /// `stanza_count` bound into every stanza's AAD — a relay dropped /
     /// censored / truncated stanzas (SECURITY-PROOFS §3.3/§4.1
@@ -1197,6 +1218,23 @@ pub fn unwrap_group_cek_for_test(
         .to_vec()
 }
 
+/// Reject a `0x6520` group roster whose cardinality exceeds the band's
+/// wire-frozen `u16` limit ([`MAX_LAYER_C_GROUP_RECIPIENTS`]) BEFORE any
+/// keying work. This is the single choke point that keeps the seal path from
+/// ever reaching the infallible `u16::try_from` in
+/// [`HpkeRecipientStanza::plaintext_aad_bytes`] with an out-of-range count —
+/// a public crypto seal returns a typed error, never a panic, on caller
+/// input (R12 F-11). Cheaply unit-testable (no keygen).
+fn validate_group_roster_len(n: usize) -> Result<(), LayerCError> {
+    if n > MAX_LAYER_C_GROUP_RECIPIENTS {
+        return Err(LayerCError::RecipientCountExceedsBandWidth {
+            count: n,
+            max: MAX_LAYER_C_GROUP_RECIPIENTS,
+        });
+    }
+    Ok(())
+}
+
 fn seal_group_impl(
     recipient_pubs: &[RecipientPublic],
     sender_did: &SenderDid,
@@ -1205,7 +1243,8 @@ fn seal_group_impl(
     recipient_key_generation: u32,
     plaintext: &[u8],
     plaintext_sender: bool,
-) -> EncryptedEnvelope {
+) -> Result<EncryptedEnvelope, LayerCError> {
+    validate_group_roster_len(recipient_pubs.len())?;
     let suite = hybrid_suite();
     let roster = group_roster(recipient_pubs);
     let stanza_count = u32::try_from(recipient_pubs.len()).expect("stanza count fits u32");
@@ -1321,19 +1360,25 @@ fn seal_group_impl(
         });
     }
 
-    EncryptedEnvelope::HpkeMultiBase {
+    Ok(EncryptedEnvelope::HpkeMultiBase {
         format_version: ENVELOPE_FORMAT_VERSION,
         cek_aead_ciphertext,
         cek_aead_nonce,
         stanzas,
-    }
+    })
 }
 
 /// Group multi-stanza seal (`0x6520`), DEFAULT path: HONORS Sealed-Sender
 /// (BR-1 ruling 1). Each stanza's BLINDED AAD binds the
 /// `audience_set_commitment` + counts WITHOUT the sender-DID NOR the raw
 /// roster; the inner-sender-DID is sealed inside the per-stanza payload.
-#[must_use]
+///
+/// # Errors
+///
+/// Returns [`LayerCError::RecipientCountExceedsBandWidth`] when the recipient
+/// roster exceeds the band's wire-frozen `u16` cardinality limit
+/// ([`MAX_LAYER_C_GROUP_RECIPIENTS`] = 65535); split the send into multiple
+/// groups. This is the ONLY failure mode — the seal is otherwise infallible.
 pub fn seal_group_multi(
     recipient_pubs: &[RecipientPublic],
     sender_did: &SenderDid,
@@ -1341,7 +1386,7 @@ pub fn seal_group_multi(
     body_cid: &BodyCidDigest,
     recipient_key_generation: u32,
     plaintext: &[u8],
-) -> EncryptedEnvelope {
+) -> Result<EncryptedEnvelope, LayerCError> {
     seal_group_impl(
         recipient_pubs,
         sender_did,
@@ -1356,7 +1401,13 @@ pub fn seal_group_multi(
 /// Group multi-stanza seal under the NON-DEFAULT plaintext-sender posture
 /// (`0x6520` with the `plaintext_sender_did` AAD field set). EXPLICITLY
 /// non-default — paired control only (BR-1 ruling 1).
-#[must_use]
+///
+/// # Errors
+///
+/// Returns [`LayerCError::RecipientCountExceedsBandWidth`] when the recipient
+/// roster exceeds the band's wire-frozen `u16` cardinality limit
+/// ([`MAX_LAYER_C_GROUP_RECIPIENTS`] = 65535); split the send into multiple
+/// groups. This is the ONLY failure mode — the seal is otherwise infallible.
 pub fn seal_group_multi_plaintext_sender(
     recipient_pubs: &[RecipientPublic],
     sender_did: &SenderDid,
@@ -1364,7 +1415,7 @@ pub fn seal_group_multi_plaintext_sender(
     body_cid: &BodyCidDigest,
     recipient_key_generation: u32,
     plaintext: &[u8],
-) -> EncryptedEnvelope {
+) -> Result<EncryptedEnvelope, LayerCError> {
     seal_group_impl(
         recipient_pubs,
         sender_did,
@@ -2777,6 +2828,40 @@ mod domain_registry_mirror {
             super::group_posture::MEMBERSHIP_GROUP_CEK_CONTEXT,
             reg::MEMBERSHIP_GROUP_CEK_CONTEXT,
             "MEMBERSHIP_GROUP_CEK_CONTEXT drifted from the central domain_registry mirror"
+        );
+    }
+}
+
+#[cfg(test)]
+mod group_roster_cardinality_guard {
+    use super::{LayerCError, MAX_LAYER_C_GROUP_RECIPIENTS, validate_group_roster_len};
+
+    /// R12 F-11: the `0x6520` group-seal roster-cardinality validator accepts
+    /// exactly up to the wire-frozen `u16` ceiling and typed-rejects one over.
+    ///
+    /// would-FAIL-on-revert: before this change there was NO validator — a
+    /// roster of `MAX_LAYER_C_GROUP_RECIPIENTS + 1` flowed straight into
+    /// `plaintext_aad_bytes`'s `u16::try_from(...).expect(...)` and PANICKED
+    /// inside the seal. This test drives the choke-point directly (no keygen)
+    /// and asserts a typed `LayerCError::RecipientCountExceedsBandWidth` at
+    /// the boundary, not a panic.
+    #[test]
+    fn accepts_at_limit_and_rejects_over_limit() {
+        // At the ceiling (65535): OK.
+        assert_eq!(
+            validate_group_roster_len(MAX_LAYER_C_GROUP_RECIPIENTS),
+            Ok(()),
+            "a roster exactly at MAX_LAYER_C_GROUP_RECIPIENTS must be accepted"
+        );
+
+        // One over the ceiling (65536): typed error carrying count + max.
+        assert_eq!(
+            validate_group_roster_len(MAX_LAYER_C_GROUP_RECIPIENTS + 1),
+            Err(LayerCError::RecipientCountExceedsBandWidth {
+                count: 65_536,
+                max: 65_535,
+            }),
+            "a roster over MAX_LAYER_C_GROUP_RECIPIENTS must typed-reject, never panic"
         );
     }
 }

@@ -437,7 +437,8 @@ fn f_disc_2_inv16_codepoint_dispatch_enforced_fail_closed() {
     let pks = [fixed_pk(0x21), fixed_pk(0x22)];
     let body_cid = *blake3::hash(b"inv16 enforced body").as_bytes();
     let (sender_kp, sender) = hybrid_sender();
-    let group_env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 1, b"inv16 body");
+    let group_env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 1, b"inv16 body")
+        .expect("group seal within recipient limit");
 
     // The single-recipient open arm MUST refuse a group envelope by codepoint
     // (the dispatch strict-rejects BEFORE any decrypt/verify).

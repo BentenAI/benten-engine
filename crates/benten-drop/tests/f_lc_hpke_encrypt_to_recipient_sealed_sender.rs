@@ -512,7 +512,8 @@ fn f_lc_2_multi_stanza_each_recipient_opens_same_plaintext() {
     let plaintext = b"group payload".to_vec();
     let body_cid = body_cid_of(&plaintext);
 
-    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, &plaintext);
+    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, &plaintext)
+        .expect("group seal within recipient limit");
 
     for (idx, sk) in sks.iter().enumerate() {
         let (recovered, _recovered_sender) = open_group_stanza(sk, idx, &roster, 0, &env)
@@ -540,7 +541,8 @@ fn f_lc_2_cross_stanza_substitution_rejected() {
     let roster = group_roster_for_test(&pks);
     let body_cid = fixed_body_cid_digest(0xD1);
 
-    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, b"group payload");
+    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, b"group payload")
+        .expect("group seal within recipient limit");
 
     // Adversary swaps stanza 0 and stanza 1.
     let mut tampered = env.clone();
@@ -579,7 +581,8 @@ fn f_lc_2_stanza_retarget_to_different_recipient_rejected() {
     let roster = group_roster_for_test(&pks);
     let body_cid = fixed_body_cid_digest(0xD2);
 
-    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, b"group payload");
+    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, b"group payload")
+        .expect("group seal within recipient limit");
 
     // Adversary rewrites the bound recipient roster of stanza 0 to a
     // different membership. Even though the roster is BLINDED (never on the
@@ -634,7 +637,8 @@ fn f_lc_2_group_envelope_codepoint_and_stanza_count() {
         &fixed_body_cid_digest(0xD3),
         0,
         b"x",
-    );
+    )
+    .expect("group seal within recipient limit");
 
     match &env {
         EncryptedEnvelope::HpkeMultiBase {
@@ -700,7 +704,8 @@ fn f_lc_2_default_group_send_honors_sealed_sender_no_plaintext_sender_did() {
     let (sender_kp, sender) = hybrid_sender();
     let body_cid = fixed_body_cid_digest(0xD6);
 
-    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, b"group payload");
+    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, b"group payload")
+        .expect("group seal within recipient limit");
 
     // (a) Typed-shape guard: NO stanza carries a plaintext_sender_did on
     //     the DEFAULT path (it lives in `sealed_inner` instead).
@@ -774,7 +779,8 @@ fn f_lc_2_nondefault_plaintext_sender_group_carries_sender_did_in_aad() {
         &body_cid,
         0,
         b"group payload",
-    );
+    )
+    .expect("group seal within recipient limit");
 
     match &env {
         EncryptedEnvelope::HpkeMultiBase { stanzas, .. } => {
@@ -1632,7 +1638,8 @@ fn f_lc_3_second_sealer_spoof_rejected_layer_c_group() {
         &body_cid_of(b"group hi"),
         0,
         b"group hi",
-    );
+    )
+    .expect("group seal within recipient limit");
     for (i, sk) in sks.iter().enumerate() {
         let (_pt, rec) = open_group_stanza(sk, i, &roster, 0, &honest)
             .unwrap_or_else(|e| panic!("recipient {i} MUST open A's honest send: {e:?}"));
@@ -1650,7 +1657,8 @@ fn f_lc_3_second_sealer_spoof_rejected_layer_c_group() {
         &body_cid_of(b"forged-as-A"),
         0,
         b"forged-as-A",
-    );
+    )
+    .expect("group seal within recipient limit");
     for (i, sk) in sks.iter().enumerate() {
         let outcome = open_group_stanza(sk, i, &roster, 0, &spoof);
         assert_eq!(
@@ -1764,7 +1772,8 @@ fn f_lc_3_content_splice_rejected_layer_c_group() {
     // Positive control: A's honest send recovers A's EXACT body for every
     // recipient (the F-01 guard does NOT reject the honest send).
     let (a_kp, a_did) = hybrid_sender();
-    let honest = seal_group_multi(&pks, &a_did, &a_kp, &body_cid, 0, b"honest body");
+    let honest = seal_group_multi(&pks, &a_did, &a_kp, &body_cid, 0, b"honest body")
+        .expect("group seal within recipient limit");
     for (i, sk) in sks.iter().enumerate() {
         let (pt, rec) = open_group_stanza(sk, i, &roster, 0, &honest)
             .unwrap_or_else(|e| panic!("recipient {i} MUST open A's honest send: {e:?}"));
@@ -1819,7 +1828,8 @@ fn mc_1_non_recipient_cannot_recover_group_cek() {
     let body_cid = body_cid_of(body);
 
     let (a_kp, a_did) = hybrid_sender();
-    let env = seal_group_multi(&pks, &a_did, &a_kp, &body_cid, generation, body);
+    let env = seal_group_multi(&pks, &a_did, &a_kp, &body_cid, generation, body)
+        .expect("group seal within recipient limit");
 
     // A LEGITIMATE recipient CAN open (the CEK it unwraps is the real one).
     let (pt, rec) = open_group_stanza(&sks[0], 0, &roster, generation, &env)
@@ -1905,7 +1915,8 @@ fn f_lc_3_retarget_to_new_audience_rejected() {
     let body_cid = body_cid_of(b"to S1 only");
 
     let (a_kp, a_did) = hybrid_sender();
-    let env = seal_group_multi(&pks, &a_did, &a_kp, &body_cid, 0, b"to S1 only");
+    let env = seal_group_multi(&pks, &a_did, &a_kp, &body_cid, 0, b"to S1 only")
+        .expect("group seal within recipient limit");
 
     // S1 recipient with the CORRECT held roster: opens + verifies (control).
     let (_pt, rec) = open_group_stanza(&sks[0], 0, &roster_s1, 0, &env)

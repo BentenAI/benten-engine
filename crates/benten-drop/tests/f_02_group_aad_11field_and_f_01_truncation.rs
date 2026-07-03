@@ -551,7 +551,8 @@ fn f_01_0x6520_dropped_stanza_fails_closed() {
         &body_cid,
         /* recipient_key_generation = */ 1,
         FIXTURE_PLAINTEXT,
-    );
+    )
+    .expect("group seal within recipient limit");
 
     // Pre-condition: the index-1 survivor opens fine on the FULL envelope.
     assert!(

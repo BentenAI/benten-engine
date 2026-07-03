@@ -183,7 +183,8 @@ fn f_lc_gap1_group_0x6520_real_recipient_keying() {
     let plaintext = b"gap-1 group confidential payload".to_vec();
     let body_cid = *blake3::hash(&plaintext).as_bytes();
 
-    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, &plaintext);
+    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, &plaintext)
+        .expect("group seal within recipient limit");
 
     // Positive — each member opens their OWN stanza with their real secret.
     let (pt_a, _) = open_group_stanza(&sec_of(&kp_a), 0, &roster, 0, &env)

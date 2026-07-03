@@ -158,6 +158,13 @@ HandshakeError::ReplayWithinBoundedWindow
 HandshakeError::WireFormat
 IpcError::CapabilityNotInManifest
 IpcError::MethodNotInAllowlist
+# R12 F-11 (2026-07-03): the 0x6520 group-seal over-limit-roster typed-reject
+# (LayerCError::RecipientCountExceedsBandWidth). layer_c-internal typed error
+# of exactly the same category as the sibling LayerCError::* variants already
+# grandfathered here (LayerCError has no code() method + does not cross the
+# napi/wire/ErrorCode catalog surface; observable as a fail-closed seal Err).
+# Joins the SAME NAMED-DEFERRED post-FREEZE §3.5g item 6 drain wave.
+LayerCError::RecipientCountExceedsBandWidth
 LayerCError::UnsupportedCodepoint
 LightClientError::BandwidthBudgetExceeded
 LightClientError::Mst
