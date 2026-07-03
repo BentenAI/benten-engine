@@ -2448,7 +2448,7 @@ pub mod group_posture {
 
         /// **Test-only accessor (CONF-1):** re-derive the per-message group
         /// bulk-CEK from `k_set` + the inner `sender_did` + the WIRE `cid`
-        /// (`self.body_cid`), using the SAME [`derive_group_cek`] the live seal
+        /// (`self.body_cid`), using the SAME `derive_group_cek` the live seal
         /// calls. Exposes the property that drives the CONF-1 nonce-reuse fix:
         /// two distinct sends from the SAME sender under the SAME K_Set
         /// generation MUST yield DISTINCT CEKs (because their `cid` differs).

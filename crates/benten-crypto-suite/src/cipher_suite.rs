@@ -281,7 +281,7 @@ impl CipherSuite {
     ///
     /// Both halves are seeded from the crate's OS RNG (`rand_core::OsRng`,
     /// the SAME source the seal path uses for ephemerals + the SAME source
-    /// [`crate::mlkem::generate`] fills its `d‖z` seed from). This is
+    /// `crate::mlkem::generate` fills its `d‖z` seed from). This is
     /// **NON-deterministic**: two calls yield distinct public AND secret
     /// bytes. Contrast [`Self::generate_recipient_keypair_deterministic`]
     /// (seeded from a public fingerprint → forgeable) and
