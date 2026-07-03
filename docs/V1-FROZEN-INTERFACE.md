@@ -379,7 +379,8 @@ freeze wave SURFACES the decision; Ben makes it.
   (item 15(g)) — locked at `crates/benten-crypto-suite/src/aead.rs:52`.
   AAD layout binds `(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32)`
   per `crates/benten-crypto-suite/src/aead.rs::aad_per_chunk` (4-segment
-  layout: domain-tag || plaintext_cid || chunk_index LE || total_chunks LE).
+  layout: domain-tag || plaintext_cid || chunk_index BE || total_chunks BE —
+  big-endian per M-19; the earlier LE encoding was migrated at F-full Wave-0).
   The `total_chunks` segment closes the cross-chunk-truncation attack
   (an attacker who truncates a 10-chunk ciphertext to 5 chunks cannot
   fabricate per-chunk AAD-matching tags because the seal-time AAD
@@ -613,6 +614,35 @@ each codepoint = SWAPPABLE within the framing):**
    / MLS-style) stays G-COMP-3 v1-assessment-window; the ENVELOPE SHAPE
    around the wrap is frozen here so a recovery-protocol choice doesn't
    require re-opening the freeze.
+
+5a. **Layer-C encrypt-to-recipient seal/open signatures — REAL hybrid
+   recipient key types (R9 GAP-1 closure).** The 8 `benten-drop` Layer-C
+   seal/open functions are frozen keying off the REAL hybrid recipient key
+   types (NOT a `[u8; 32]` placeholder fingerprint). `benten-drop`
+   **re-exports** `RecipientPublic` / `RecipientSecret` from
+   `benten_crypto_suite::cipher_suite` (`benten_drop::layer_c::{RecipientPublic,
+   RecipientSecret}` + the `group_posture` mirror). The frozen signatures
+   (machine-locked by the `docs/public-api/benten-drop.txt` `cargo-public-api`
+   baseline):
+
+   - `seal_sealed_sender(&RecipientPublic, &AudienceDid, &SenderDid, &sig::Keypair, &BodyCidDigest, u32, &[u8]) -> EncryptedEnvelope`
+   - `seal_plaintext_sender(&RecipientPublic, &AudienceDid, &SenderDid, &sig::Keypair, &BodyCidDigest, u32, &[u8]) -> EncryptedEnvelope`
+   - `seal_group_multi(&[RecipientPublic], &SenderDid, &sig::Keypair, &BodyCidDigest, u32, &[u8]) -> EncryptedEnvelope`
+   - `seal_group_multi_plaintext_sender(&[RecipientPublic], &SenderDid, &sig::Keypair, &BodyCidDigest, u32, &[u8]) -> EncryptedEnvelope`
+   - `open_single(&RecipientSecret, &AudienceDid, u32, &EncryptedEnvelope) -> Result<(Vec<u8>, SenderDid), LayerCError>`
+   - `open_group_stanza(&RecipientSecret, usize, &[RecipientDid], u32, &EncryptedEnvelope) -> Result<(Vec<u8>, SenderDid), LayerCError>`
+   - `group_posture::seal_membership_set_group(&[RecipientPublic], &SenderDid, &sig::Keypair, &[u8; 32], &GroupSealParams, &[u8]) -> GroupSealedEnvelope`
+   - `group_posture::open_membership_set_group(&RecipientSecret, usize, &GroupVerifyContext, &GroupSealedEnvelope) -> Result<(Vec<u8>, SenderDid), GroupError>`
+
+   The recipient secret carries genuine OS-RNG entropy (ML-KEM-768
+   decapsulation key ‖ X25519 static secret; unrecoverable from the public
+   key) — the seal side wraps the CEK to `&RecipientPublic` and the open side
+   unwraps with `&RecipientSecret`, **fail-closed** on any non-matching
+   secret. The deleted placeholder derived `sk = pk + 0x80` (zero secret
+   entropy). Cross-refs `docs/SECURITY-PROOFS.md` §4.1/§4.2 + `docs/THREAT-MODEL.md`
+   §2 rung 4. Engine-level USE of this surface is `NAMED-DEFERRED` to
+   Phase-4-Meta-Composing (`docs/V1-FROZEN-INTERFACE-DEFERRED.md`) — the
+   PRIMITIVE is frozen + safe + exercisable; no engine flow calls it yet.
 
 6. **Typed-reject discipline** — `UnsupportedAlgorithm::{Signature,
    CipherSuite, Hash}` error variant on every codepoint dispatcher;
@@ -1052,6 +1082,7 @@ verification at HEAD):
 | `benten-crypto-suite` | `UnsupportedAlgorithm` | TBD | APPLY |
 | `benten-crypto-suite` | `SwapMatrixError` | TBD | APPLY |
 | `benten-drop` | `DropBundleVersion`, `DropContentMode`, `DropBundleError`, `EnvelopeSigError` (+ the Layer-C `LayerCError` / `AdmitError` / `GroupError` consumer enums) | YES — `#[non_exhaustive]` applied to `DropBundleVersion`, `DropBundleError`, `EnvelopeSigError`, `LayerCError`, `AdmitError`, `GroupError`; `DropContentMode` is the intentional exhaustive-by-design carve-out (item 15(c) + `tf3f_drop_content_mode_no_inline_tiny_arm`). Audit arm-coverage at `crates/benten-drop/tests/g_core_9_non_exhaustive_audit_drop.rs` (6/6 covered enums PASS) | APPLY each (KEEP) |
+| `benten-membership-set` | `audit::AdminOp`, `audit::AuditAccessGradation`, `audit::AuditReadDecision`, `audit::RequesterRole`, `federation::FederationModel`, `governance::GovernanceTier` | **YES — `#[non_exhaustive]` APPLIED at HEAD** (verified `crates/benten-membership-set/src/{audit,federation,governance}.rs`; each carries a `// §11 SemVer-readiness` doc-block above the attribute so a future variant lands additively) | **APPLIED (KEEP)** — the additive-variant surfaces (governance tiers, federation models, audit-op / access-gradation / read-decision / requester-role) all grow post-v1; `#[non_exhaustive]` on each is the SemVer-readiness pin. **Carve-out registry** (deliberately exhaustive-by-design, NO `#[non_exhaustive]` — the EXACTLY-N-arms-by-the-type-system property IS the structural pin, mirrors `Strategy` / `benten-caps::Scope`): `kind::MembershipSetKind` (EXACTLY-3 `{Atrium, Garden, Grove}` per item 15(c); a 4th Kind HALT-AND-SURFACEs), `kind::RequestedReserveKind` (the typed-reject reserve *selector*, keeps `MembershipSetKind` EXACTLY-3), `role::RoleId` (`#[repr(u8)]` AAD-keying-bound wire ordinal; a new role changes the keying wire), `member::MemberRef` (`#[repr(u8)]` AAD-keying-bound int-discriminant; tag 3 reserved for a future `SubsetRef`), `keying_kv::CidTarget` (the `derive_kv` KDF-input target set — exhaustive by keying construction). |
 | `benten-renderer-tauri` | `IpcMethod` (per-method allowlist) | TBD | APPLY |
 | `benten-dsl-compiler` | `CompileError`, `CompiledSubgraph`, `CompiledPrimitive`, `Diagnostic`, `Span` | YES (5/5 applied per L9-DSL-MAJOR-2 closure at G-CORE-9 R2; audit test at `crates/benten-dsl-compiler/tests/g_core_9_non_exhaustive_audit_dsl.rs` 2/2 PASS) | KEEP |
 | `benten-errors` | `ErrorCode` | YES (per Phase-4-Foundation freeze) | KEEP |

@@ -118,7 +118,7 @@ impl Drop for StructuralKdfKey {
 /// Formula (R6 R2 batch-A Item 7 — Row D-13 closure;
 /// Spike-E + §1.A.FROZEN item 15(f) extended):
 /// `K(root) = HKDF-SHA256(K_principal,
-///   info = "root:codepoint:" || codepoint_le_bytes || root_cid)`
+///   info = "root:codepoint:" || codepoint_be_bytes || root_cid)`
 ///
 /// The `"root"` HKDF info-tag is the cross-role domain separator (it
 /// disambiguates the root-derivation step from step-derivation; eliding

@@ -103,7 +103,13 @@ pub const SENDER_AUTH_DOMAIN: &[u8] = b"benten/layer-c/sealed-sender-origin-auth
 /// `M_auth`) so the classical-only `0x0002` arm stays a really-built
 /// NON-DEFAULT swap and any future suite is an additive upgrade — never a
 /// wire-break (CLAUDE.md baked-in #5).
-pub const SENDER_AUTH_SIG_CODEPOINT: u16 = 0x0001;
+///
+/// **F-12: NOT a 4th silent literal.** Derived from the codepoint-registry
+/// SSOT ([`benten_crypto_suite::codepoint::SigCodepoint::HYBRID_ED25519_MLDSA65`])
+/// via `const fn raw()` — if the SSOT value ever moves, this const moves with
+/// it (no independent `0x0001` byte to drift).
+pub const SENDER_AUTH_SIG_CODEPOINT: u16 =
+    benten_crypto_suite::codepoint::SigCodepoint::HYBRID_ED25519_MLDSA65.raw();
 
 /// Layer-C single-recipient CEK BLAKE3 derivation context (the `0x6500` /
 /// `0x6510` per-send content-encryption-key domain prefix). A registered

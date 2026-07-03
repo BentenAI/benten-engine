@@ -1,12 +1,17 @@
 # benten-drop — Internals
 
-A plain-English, code-grounded tour of the `benten-drop` crate — the **14th workspace crate** added in Phase-4-Meta-Core (G-CORE-3f at PR #1340 minting the Drop bundle format; G-CORE-3f follow-ups landing through G-CORE-9 FREEZE). Read-only audit. Audience: a developer landing in this crate fresh and trying to find the load-bearing seams. Last refreshed: 2026-05-24 against main HEAD `a0b75637` (post `phase-4-meta-core/r4b-r1-fix-pass` base `4bbc4cac`).
+A plain-English, code-grounded tour of the `benten-drop` crate — the **14th workspace crate** added in Phase-4-Meta-Core (G-CORE-3f at PR #1340 minting the Drop bundle format; G-CORE-3f follow-ups + the F-full Layer-C encrypt-to-recipient / Sealed-Sender build landing through G-CORE-9 FREEZE). Read-only audit. Audience: a developer landing in this crate fresh and trying to find the load-bearing seams. Last refreshed: 2026-07-02 against the `phase-4-meta-core/r9-base` freeze base `091fb12f` (R9 GAP-1 real recipient keying + F-04 Layer-C-section + file-inventory refresh).
 
 ---
 
 ## 1. What this crate does
 
-`benten-drop` is the **self-contained offline-bundle format** for Benten's Sharing & Confidentiality (S&C) stack. A `DropBundle` is a single **CBOR-on-disk artifact** that packages everything a recipient needs to consume a shared subgraph *without a live publisher online* — the offline complement to the live G-CORE-3e ALPN serve path.
+`benten-drop` carries **two** Sharing & Confidentiality (S&C) surfaces:
+
+1. The **self-contained offline-bundle format** — a `DropBundle` is a single **CBOR-on-disk artifact** that packages everything a recipient needs to consume a shared subgraph *without a live publisher online* (the offline complement to the live G-CORE-3e ALPN serve path). §1–§2 below cover this half.
+2. The **online Layer-C encrypt-to-recipient / Sealed-Sender** surface (`layer_c.rs`, the LARGEST file in the crate) — the codepoint-dispatched HPKE `mode_base` encrypt-to-recipient + Sealed-Sender drops (`0x6510` / `0x6520` / the `0x6610` MembershipSet group via `group_posture`). §3-LAYER-C covers this half.
+
+The rest of §1's narrative describes the offline `DropBundle` half.
 
 A `DropBundle` carries four things:
 
@@ -50,11 +55,13 @@ Drop bundles are **forever-valid once distributed**: revocation of the embedded 
 
 ---
 
-## 3. Files inventory in `src/` (~1.0k LOC across 3 files)
+## 3. Files inventory in `src/` (~3.8k LOC across 4 files)
 
-- **`lib.rs`** (93 LOC) — crate-level doc (the 3-mode taxonomy + defense-in-depth + revocation reach narrative). Pub re-exports: `DROP_BUNDLE_MAX_SIZE_BYTES`, `DropBundle`, `DropBundleError`, `DropBundleVersion`, `DropContentMode`, `EncryptedContent`. `#![forbid(unsafe_code)]` + `#![deny(rust_2018_idioms)]`.
+**`layer_c.rs` is the largest file in the crate** — the crate is NOT offline-bundle-only. The offline `DropBundle` format (`lib.rs` / `bundle.rs` / `envelope_sig.rs`) is one half; the online **Layer-C encrypt-to-recipient / Sealed-Sender** surface (`layer_c.rs`, §3-LAYER-C below) is the other, larger half.
 
-- **`bundle.rs`** (793 LOC) — the substantive surface. Owns:
+- **`lib.rs`** (94 LOC) — crate-level doc (the 3-mode taxonomy + defense-in-depth + revocation reach narrative). Pub re-exports: `DROP_BUNDLE_MAX_SIZE_BYTES`, `DropBundle`, `DropBundleError`, `DropBundleVersion`, `DropContentMode`, `EncryptedContent` + the `layer_c` module (`RecipientPublic` / `RecipientSecret` re-exports, `EncryptedEnvelope`, seal/open surface). `#![forbid(unsafe_code)]` + `#![deny(rust_2018_idioms)]`.
+
+- **`bundle.rs`** (877 LOC) — the substantive offline-bundle surface. Owns:
   - **`DropBundle`** — the top-level CBOR-on-disk envelope. Fields: `version: DropBundleVersion`, `spec: RestrictedScopeSpec`, `audience: Did`, `mode: DropContentMode`, `auth_grant: AuthorizationGrant`, `content: Vec<EncryptedContent>`, `envelope_sig: EnvelopeSignature`. CBOR-serialized via `serde_ipld_dagcbor`.
   - **`DropBundleVersion`** — version discriminator (`V1` + `Synthetic` test-only arm). `#[non_exhaustive]`. Unknown reader-side versions surface `E_DROP_BUNDLE_VERSION_UNSUPPORTED`.
   - **`DropContentMode`** — `OnlinePull` (mode 1) or `OfflineDrop` (mode 2). `#[non_exhaustive]`. **No `InlineTiny` arm** at v1-beta (mode 3 deferred). Synthetic Mode-3 construction at runtime fires `E_DROP_BUNDLE_MODE3_INLINE_REJECTED`.
@@ -63,7 +70,21 @@ Drop bundles are **forever-valid once distributed**: revocation of the embedded 
   - **`DROP_BUNDLE_MAX_SIZE_BYTES = 4096`** — 4 KiB upper bound on 5-Recipe bundles (Spike G measurement ~2688 bytes).
   - **Construction + parse** — `DropBundle::seal(issuer_keypair, spec, audience, mode, auth_grant, content) -> Result<Self, DropBundleError>` + `DropBundle::open(bytes, recipient_keymaterial) -> Result<UnwrappedBundle, DropBundleError>` (high-level surface; internal helpers handle the envelope-sig verify + per-Node AEAD unwrap loop).
 
-- **`envelope_sig.rs`** (148 LOC) — the envelope-level Ed25519 signature helpers. `EnvelopeSignature` wire-bytes type + sign / verify functions over the bundle header transcript. Routes through `benten-crypto-suite::sig::SignatureSuite` rather than calling `ed25519-dalek` directly (per the only-call-site rule). The signed transcript is the canonical-byte serialization of `(version, spec_cid, audience, mode, auth_grant, content_root_hash, key_material_hash)` — note `content_root_hash` is hashed-over-payload (not each ciphertext byte), so per-Node AEAD-tag verification is the inner defense layer.
+- **`envelope_sig.rs`** (166 LOC) — the envelope-level Ed25519 signature helpers. `EnvelopeSignature` wire-bytes type + sign / verify functions over the bundle header transcript. Routes through `benten-crypto-suite::sig::SignatureSuite` rather than calling `ed25519-dalek` directly (per the only-call-site rule). The signed transcript is the canonical-byte serialization of `(version, spec_cid, audience, mode, auth_grant, content_root_hash, key_material_hash)` — note `content_root_hash` is hashed-over-payload (not each ciphertext byte), so per-Node AEAD-tag verification is the inner defense layer.
+
+- **`layer_c.rs`** (2670 LOC, the LARGEST file in the crate) — the **online Layer-C encrypt-to-recipient / Sealed-Sender** surface (G-CORE-3f / F-full Layer-C). See §3-LAYER-C below.
+
+### 3-LAYER-C. The Layer-C encrypt-to-recipient surface (`layer_c.rs`)
+
+`layer_c.rs` is the codepoint-dispatched encrypt-to-recipient surface — a body is bulk-sealed under a fresh content-encryption-key (CEK), the CEK is HPKE-key-wrapped to the recipient via the unified X25519⊕ML-KEM-768 X-Wing KEM at codepoint `0x647a`, and a codepoint-discriminated plaintext AAD binds the recipient-targeting metadata. Per CLAUDE.md baked-in #5 all crypto routes through `benten_crypto_suite` — this module is concat / framing glue only. **The recipient key types are REAL (R9 GAP-1):** `layer_c` re-exports `RecipientPublic` / `RecipientSecret` from `benten_crypto_suite::cipher_suite`; seal takes `&RecipientPublic`, open takes `&RecipientSecret` (genuine OS-RNG entropy, unrecoverable from the public key; the deleted placeholder derived `sk = pk + 0x80`).
+
+- **`0x6510` Sealed-Sender single-recipient DEFAULT (BR-1)** — `seal_sealed_sender` / `open_single`. The sender-DID lives INSIDE the ciphertext (recovered post-decrypt); the on-wire AAD binds ONLY `{aad_version, codepoint, audience, body_cid, recipient_key_generation}` — never the sender-DID. The paired non-default plaintext-sender path is `seal_plaintext_sender` (`0x6500`, binds the sender-DID into the plaintext AAD, U4).
+- **`0x6520` group multi-stanza** — `seal_group_multi` / `seal_group_multi_plaintext_sender` / `open_group_stanza`. One `HpkeRecipientStanza` per recipient. The DEFAULT group send HONORS Sealed-Sender: each stanza's plaintext AAD is BLINDED — it carries the `audience_set_commitment` over the *sorted* recipient roster (never the raw roster; closes the #61 social-graph leak), `stanza_index`, `stanza_count` (truncation defense), and `recipient_key_generation`.
+- **B2 sender ORIGIN-AUTHENTICATION (always-on, BD-2)** — every Sealed-Sender send carries, inside the once-sealed body region, one per-MESSAGE LAMPS-hybrid `id-MLDSA65-Ed25519-SHA512` (`0x0001`) signature over the domain-separated binding `M_auth` (`build_m_auth` / `SENDER_AUTH_DOMAIN`). The recipient resolves the recovered sender-DID to its hybrid verifying key and verifies BOTH halves post-decrypt, fail-closed (`SenderOriginAuthFailed`). SOUNDNESS-CRITICAL (F-2): the recipient re-derives the audience commitment + key-epoch generations from the set-state it INDEPENDENTLY HOLDS, never the wire value — so a re-target flips the commitment and a stale-generation replay flips a generation word.
+- **`EncryptedEnvelope` (Inv-16)** — the codepoint-dispatched envelope (`HpkeBase` single / `HpkeMultiBase` group); `BindingContext` (the AAD source); `HpkeRecipientStanza`; `LayerCError` (`#[non_exhaustive]`).
+- **Submodules:** `group_posture` (the `0x6610` MembershipSet group seal/open — `seal_membership_set_group` / `open_membership_set_group` + `GroupSealParams` / `GroupVerifyContext` / `GroupSealedEnvelope` / `GroupError`), `abuse_control`, `sealed_aad`, and the `domain_registry_mirror` byte-equality test.
+
+**Endianness:** every wire integer is big-endian (M-19); the AAD leads with the dedicated `AAD_VERSION` (`0x01`) byte, DISTINCT from the envelope `ENVELOPE_FORMAT_VERSION` (`0x02`).
 
 ---
 

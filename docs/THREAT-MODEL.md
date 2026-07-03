@@ -63,7 +63,12 @@ exposure is bounded + disclosed, never silently total:
 3. **A per-Node AEAD key compromise** → exactly **that Node's** plaintext (the per-Node wrap is the granularity).
    Cross-link the per-Node AEAD rebinding-attack-prevention section in `docs/SECURITY-POSTURE.md`.
 4. **A recipient long-term secret key (HPKE-mode-base) compromise** → **every envelope ever sent to that
-   recipient** (HPKE-mode-base is structurally non-FS at the long-term-sk axis). Cross-link Compromise #42 / #48.
+   recipient** (HPKE-mode-base is structurally non-FS at the long-term-sk axis). This rung is reached **only** by
+   compromising the recipient's REAL hybrid SECRET (the ML-KEM-768 decapsulation key ‖ X25519 static secret carried
+   by `benten_crypto_suite::cipher_suite::RecipientSecret`); an attacker holding **only the recipient PUBLIC key**
+   (`RecipientPublic`) **cannot decrypt** — the public key is unrecoverable-to-secret and a non-matching secret
+   fails the CEK-unwrap closed (R9 GAP-1: the prior `[u8; 32]` public-fingerprint placeholder, which let any
+   public-key holder reconstruct the secret via `sk = pk + 0x80`, is DELETED). Cross-link Compromise #42 / #48.
 5. **A MembershipSet `shared_key` (K_Set) compromise** → that **generation's set shape** (a fingerprint of who is
    in the set) + the set content for that generation; recovery is **fork-only** rotation. NOT future generations
    after a fork. Cross-link Compromise #48 (shape-leak); Compromise #52 (no-PCS-against-removed-members).

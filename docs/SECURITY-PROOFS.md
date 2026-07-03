@@ -89,6 +89,18 @@ additive with no wire-break.
 
 ## §4.1 — Sealed-Sender property + the per-stanza-LIVE binding (the proof shape)
 
+**Recipient-key premise (REAL, not a placeholder — R9 GAP-1).** Every claim below stands on the CEK being
+HPKE-key-wrapped to a **REAL hybrid recipient key**: the seal path
+(`benten_drop::layer_c::seal_sealed_sender` / `seal_group_multi`) takes a `&RecipientPublic` (`&[RecipientPublic]`
+for the group) and the open path (`open_single` / `open_group_stanza`) takes a `&RecipientSecret`, both re-exported
+by `benten-drop` from `benten_crypto_suite::cipher_suite`. The secret is an ML-KEM-768 decapsulation key ‖ X25519
+static secret carrying genuine OS-RNG entropy, **unrecoverable from the public key**. (The pre-fix corpus base wrapped
+to a `[u8; 32]` public *fingerprint* and reconstructed the "secret" from that public via `sk = pk + 0x80` — ZERO
+secret entropy, so any public-key holder could recover the CEK. That placeholder derivation is **DELETED**; a
+non-matching secret now yields a different X-Wing shared secret and the CEK-unwrap fails closed.) All the
+confidentiality + non-forgeability properties below assume, and now genuinely have, a recipient secret that only the
+intended recipient holds.
+
 **Sealed-Sender (BR-1 / F-LC-9 — RATIFIED).** EVERY group send is Sealed-Sender by default: the inner-sender-DID is
 bound **INSIDE** the sealed/encrypted part **per stanza** (HPKE inner-payload sender-DID + post-decrypt-verify),
 NOT in the plaintext on-wire AAD. `sender_did` is NOT a plaintext AAD field on the default path.
@@ -185,7 +197,14 @@ recovery to a party who does not.
 
 **Why this does NOT break confidentiality against the relay.** The bulk AEAD seal uses a **fresh random nonce per
 send** (`ChaCha20Poly1305::generate_nonce(&mut OsRng)`, `benten_crypto_suite::aead::wrap`), and the CEK is
-**HPKE-key-wrapped to the recipient** — the relay never sees the CEK. Consequently:
+**HPKE-key-wrapped to the recipient's REAL hybrid public key** — the relay never sees the CEK, and the CEK can be
+recovered **only** by a holder of the matching REAL hybrid recipient SECRET (ML-KEM-768 decapsulation key ‖ X25519
+static secret; `benten_drop::layer_c::open_single` / `open_group_stanza` take a `&RecipientSecret`, unwrap via
+`benten_crypto_suite::cipher_suite::CipherSuite::unwrap_key_material`, and **fail closed** on any non-matching
+secret). The recipient secret carries genuine OS-RNG entropy
+(`benten_crypto_suite::cipher_suite::CipherSuite::generate_recipient_keypair`) and is **NOT recoverable from the
+recipient public key** — a public-key-only party derives a different X-Wing shared secret and the ChaCha20-Poly1305
+CEK-unwrap fails closed. Consequently:
 
 - A **network observer / untrusted relay** (Tier-1; holds neither the CEK nor its derivation inputs) gains **no
   confirmation oracle and no equality test**: the random nonce makes two seals of the same plaintext produce

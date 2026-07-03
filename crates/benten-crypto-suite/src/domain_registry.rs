@@ -1,7 +1,10 @@
 //! The central domain-separation-tag registry — the single source-of-truth
-//! table enumerating EVERY cross-surface domain/context tag (signing, KDF, and
-//! AEAD-AAD) minted across the Benten corpus, plus the **prefix-free /
-//! no-collision** cross-surface invariant (C-01 / C-02).
+//! table enumerating every **signing / KDF / AEAD-AAD** cross-surface tag
+//! minted across the Benten corpus, plus the **prefix-free / no-collision**
+//! cross-surface invariant (C-01 / C-02). (Scope carve-out: **public
+//! content-hash namespaces** — BLAKE3 CIDv1 content addressing, the §3.9
+//! gossip-topic derivation — are NOT registered tags; see the carve-out note
+//! below.)
 //!
 //! # Why a central table
 //!
@@ -22,8 +25,9 @@
 //! # The corpus-wide registered scope (the widened set)
 //!
 //! `SECURITY-PROOFS.md` §4.1 + `THREAT-MODEL.md` §5 commit this registry to
-//! span EVERY cross-surface domain/context tag, not just the same-key signature
-//! family. The registered surfaces, by family:
+//! span every **signing / KDF / AEAD-AAD** cross-surface tag, not just the
+//! same-key signature family (the tightened scope — public content-hash
+//! namespaces are carved out, see below). The registered surfaces, by family:
 //!
 //! - **Same-key (user-DID) signature / AAD domains** — [`PROVISIONING_DOMAIN`],
 //!   [`ENVELOPE_SIG_DOMAIN`], [`SENDER_AUTH_DOMAIN`], [`REQUEST_DOMAIN`],
@@ -42,11 +46,23 @@
 //! - **Deterministic recipient-seed expansion** — [`RECIPIENT_SEED_LABEL`]
 //!   (the Layer-C deterministic-keypair BLAKE3 expansion label).
 //!
-//! The §3.9 gossip-topic derivation is deliberately NOT a registered tag: it is
-//! a `blake3::keyed_hash(K_Set, membership_set_id || BE(generation))` with NO
-//! domain-separation label (R0.7 §3.9 authoritative, golden byte-confirmed) —
-//! its preimage shape, not a label string, is the separator, so there is no tag
-//! to register.
+//! # Scope carve-out — public content-hash namespaces are NOT registered tags
+//!
+//! The registry scope is signing / KDF / AEAD-AAD domain separators. **Public
+//! content-hash namespaces are deliberately OUTSIDE the registered set** — they
+//! are not domain-separation tags in the cross-context-confusion sense (they
+//! address public content, they do not key/sign/AAD-bind secret material), so
+//! there is nothing to prefix-free-check against the tag corpus. Two instances:
+//!
+//! - **BLAKE3 CIDv1 content addressing** — the multiformats content-hash
+//!   framing (`0x01 0x71 0x1e 0x20 || BLAKE3`) is an un-labelled hash over
+//!   public canonical bytes; it is not a keyed/signed domain separator.
+//! - **The §3.9 gossip-topic derivation** — a
+//!   `blake3::keyed_hash(K_Set, membership_set_id || BE(generation))` with NO
+//!   domain-separation label (R0.7 §3.9 authoritative, golden byte-confirmed):
+//!   its keyed preimage SHAPE, not a label string, is the separator, so there
+//!   is no tag to register (mirrors the content-hash carve-out — a preimage /
+//!   framing acts as the separator, not a registered label).
 //!
 //! # The single source of truth vs. the home-crate mirrors
 //!

@@ -1998,6 +1998,35 @@ Row D-15's audit-readiness concern.
 > / `CONF-2` / `gap-osp-N` / `F-LC3` / `§16-FLAG` labels are the R6-R7 council
 > finding IDs.
 
+### Row D-64 — Engine encrypt-to-recipient wiring → Phase-4-Meta-Composing (R9 GAP-1)
+
+- **Frozen surface (v1-beta):** the Layer-C encrypt-to-recipient PRIMITIVE is
+  COMPLETE + safe + exercisable. `benten_drop::layer_c` seal/open key off the
+  REAL hybrid recipient key types (`RecipientPublic` / `RecipientSecret`,
+  re-exported from `benten_crypto_suite::cipher_suite`); the placeholder
+  `[u8; 32]` fingerprint + `sk = pk + 0x80` derivation is DELETED (R9 GAP-1).
+  The 8 seal/open signatures + the `EncryptedEnvelope` wire are frozen (see
+  `docs/V1-FROZEN-INTERFACE.md` §6 item 5a; machine-locked by
+  `docs/public-api/benten-drop.txt`). The primitive is unit-exercised by the
+  `f_lc_*` corpus.
+- **Deferred consumption (Phase-4-Meta-Composing destination):** the
+  **engine-level USE** of the frozen primitive. No engine flow CALLS
+  encrypt-to-recipient at v1-beta. Composing must wire: (i) minting the
+  recipient keypair as Principal identity key material (via
+  `CipherSuite::generate_recipient_keypair`), (ii) vault-storing the
+  `RecipientSecret` at rest (Layer-A vault seal), (iii) `benten-id` DID
+  encryption-key resolution (resolve a recipient's advertised
+  `RecipientPublic` from its `did:key`), and (iv) seal-side recipient-pub
+  sourcing (the engine flow that hands a `&RecipientPublic` to `seal_*`).
+- **v1-beta posture:** encrypt-to-recipient is a frozen, safe, standalone
+  primitive with no engine caller. This is **NOT a Compromise** — the frozen
+  surface is safe (real keying, fail-closed open); it is a not-yet-wired
+  capability, deferred because the engine wiring co-designs with the
+  Composing-phase Principal-identity + vault-storage + DID-resolution flows.
+- **Anchor:** R9 GAP-1 closure; CLAUDE.md baked-in #18 (Principal
+  confidentiality half); `docs/SECURITY-PROOFS.md` §4.1/§4.2 +
+  `docs/THREAT-MODEL.md` §2 rung 4 (the real-keying cross-records).
+
 ---
 
 ## Update discipline
