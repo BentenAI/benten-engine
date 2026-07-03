@@ -96,16 +96,14 @@ fn codepoint_table_integer_values_pinned() {
 /// earlier 2-tuple layout). The AAD now binds 4 segments per
 /// `crates/benten-crypto-suite/src/aead.rs::aad_per_chunk`.
 ///
-/// **F4-004 / M-19 BIG-ENDIAN migration (RED-PHASE until R5/Wave-0).**
+/// **F4-004 / M-19 BIG-ENDIAN migration (LANDED).**
 /// The M-19 freeze ratifies that ALL multiformats-framed integer wire/AAD
 /// fields are **BIG-ENDIAN** (R0.5 §4.1 row "BE endianness"; Q2/U7). The
 /// per-chunk AAD's `chunk_index` (u64) + `total_chunks` (u32) are named
-/// M-19 sites. This pin therefore freezes the **BIG-ENDIAN** layout; at
-/// HEAD the production `aad_per_chunk` (`aead.rs:244,245`) still emits
-/// LITTLE-ENDIAN, so this test is gated `#[ignore]` and the W0/M-19 step
-/// that flips the production encoder to BE un-ignores it. This leaves
-/// exactly ONE canonical big-endian per-chunk-AAD pin across the corpus
-/// (the prior on-main LE assertion is migrated here, not duplicated).
+/// M-19 sites. This pin freezes the **BIG-ENDIAN** layout; the production
+/// `aad_per_chunk` (`aead.rs`) emits BIG-ENDIAN (the M-19 BE migration has
+/// landed — see the `to_be_bytes()` sites). This is the single canonical
+/// big-endian per-chunk-AAD pin across the corpus.
 ///
 /// The exact post-M-19 byte layout is:
 ///   `b"benten-aead:chunk:" || plaintext_cid || chunk_index.to_be_bytes() || total_chunks.to_be_bytes()`
@@ -117,10 +115,10 @@ fn codepoint_table_integer_values_pinned() {
 ///
 /// Any change to the segment order, encoding, or endianness is a wire-format
 /// break; this test fails first to signal the freeze-discipline
-/// coupling. would-FAIL-if-no-op'd: while the production encoder still
-/// emits LE (or if a future refactor reverts to LE), the BE assertions
-/// below fail (the explicit `assert_ne!` BE-not-LE guard makes the
-/// endianness distinction load-bearing).
+/// coupling. would-FAIL-if-no-op'd: if a future refactor reverts the
+/// production encoder to LE, the BE assertions below fail (the explicit
+/// `assert_ne!` BE-not-LE guard makes the endianness distinction
+/// load-bearing).
 #[test]
 fn aad_per_chunk_canonical_layout_pinned() {
     // Synthetic plaintext_cid + chunk_index + total_chunks. The chosen

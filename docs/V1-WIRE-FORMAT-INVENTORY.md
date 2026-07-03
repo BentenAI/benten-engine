@@ -465,6 +465,7 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 - The Layer-C drop band is `0x6500..=0x65FF`. Three values assigned at v1-beta: `0x6500` (plaintext-sender, NON-default), `0x6510` (Sealed-Sender, the v1-beta DEFAULT, BR-1), `0x6520` (`HpkeMultiBase` group multi-stanza).
 - **Plaintext AAD field-set (relay-visible) — UNCHANGED by B2.** `0x6500`/`0x6510` single-recipient AAD = `{aad_version(u8), codepoint(u16 BE), audience(u32-BE-lp), body_cid(self-describing CIDv1 36B), recipient_key_generation(u32 BE)}` (`0x6500` additionally appends `lp(sender_did)`, U4). `0x6520` per-stanza AAD = the BLINDED `{aad_version, codepoint, body_cid, recipient_count(u16 BE), audience_set_commitment(32B), stanza_index(u32 BE), stanza_count(u32 BE), recipient_key_generation(u32 BE)}` (+ optional `lp(sender_did)` on the non-default plaintext-sender variant). The KEM is HPKE `mode_base[MLKEM768-X25519]` (`0x647A`); bulk AEAD is ChaCha20-Poly1305.
 - **B2 sender ORIGIN-AUTH (always-on; BD-2) — inside the once-sealed body region, NOT on the plaintext wire.** `0x6510` (single): `inner_v2 = lp_u32(sender_did) ‖ sig_codepoint(u16 BE) ‖ sender_sig_len(u32 BE) ‖ sender_sig ‖ body`, sealed under the CEK. `0x6520` (group): `body_v2 = sig_codepoint(u16 BE) ‖ sender_sig_len(u32 BE) ‖ sender_sig ‖ body`, PREPENDED into the once-bulk-sealed body (the per-stanza `sealed_inner = lp_u32(sender_did)` is unchanged). `sender_sig` is one per-MESSAGE LAMPS-hybrid `id-MLDSA65-Ed25519-SHA512` (`0x0001`) signature over `M_auth` (`SENDER_AUTH_DOMAIN` ‖ codepoints ‖ sender-DID ‖ body_cid ‖ audience commitment ‖ generation words ‖ stanza_count ‖ body-AAD digest). The sender-DID + signature are BOTH inside the ciphertext (sender-confidential); the on-wire plaintext AAD field-set is byte-identical to pre-B2.
+- **F-11 (R12) — BY-BAND recipient-cardinality width (AS-BUILT freeze note, FLAG-FOR-BEN).** The recipient/member-cardinality integer in the group AADs is **BY-BAND asymmetric**: the Layer-C `0x6520` group per-stanza AAD encodes `recipient_count` as **`u16` BE** (this section, line above), while the MembershipSet `0x6610` group per-stanza AAD (§25) encodes `member_count` as **`u32` BE** (the BLINDED 11-field set; verified against `crates/benten-drop/tests/f_02_group_aad_11field_and_f_01_truncation.rs` golden — "4 (member_count)" u32 segment). This is AS-BUILT and both widths are golden-pinned + round-trip-tested; it is **NOT a blocker** (each band's width is internally consistent, and `0x6520`'s `stanza_index`/`stanza_count` are `u32` so the `u16` is only the roster-cardinality field). **⚑ FLAG-FOR-BEN (P-III-adjacent):** the canonical-width choice is a wire-format decision — Ben confirms at pre-tag that the `0x6520` u16 vs `0x6610` u32 by-band asymmetry is **intentional** (a `0x6520` roster >65535 recipients would saturate the u16; if that is out of scope by design the u16 is fine, otherwise widen to u32 pre-freeze). This is a registration + flag, not a change request.
 - Verified post-decrypt against the hybrid verifying key resolved from the recovered sender-DID (`benten_id::did::Did::resolve_hybrid`), recomputing the audience commitment + key-generation from the recipient's INDEPENDENTLY-held audience/roster (F-2). The unauthenticated sealed-sender variant is DELETED (an unauthenticated-but-claimed sender = indistinguishable from forgery).
 
 **Format version:** `ENVELOPE_FORMAT_VERSION = 2` (the envelope serialization byte) + `aad_version: u8 = 0x01` (the AAD prefix axis, DISTINCT from the format byte) + `sig_codepoint` (the auth-suite axis, inside the sealed body region).
@@ -576,18 +577,26 @@ A "yes, complete" answer locks the inventory; a "no, add X" answer adds the miss
 
 ## CI follow-up rows (named-carry)
 
-- **CI-FU-1 (R10-council F-04) — wasm32-unknown-unknown crypto round-trip drift-gate.**
+- **CI-FU-1 (R10-council F-04; reworded F-25 R12) — wasm32-unknown-unknown
+  bundle-composition drift-gate.**
   The `crypto-suite-wasm-roundtrip` job (`.github/workflows/wasm-conformance.yml`)
   gates the tf3a PQ-hybrid round-trip on **wasm32-wasip1** (via wasmtime), which
-  proves the crypto layer is wasm-CLEAN. It does NOT run on
-  **wasm32-unknown-unknown** — the target the BrowserBackend thin-compute
-  deployment shape (CLAUDE.md baked-in #17) actually ships on. **Follow-up:** add
-  a dedicated wasm32-unknown-unknown crypto round-trip (or at minimum a compile +
-  wasm-pack-node round-trip) drift-gate so a regression that breaks the
-  BrowserBackend target — but not wasm32-wasip1 — fires at PR time. **Destination:**
-  a new `wasm-browser.yml` (or `wasm-checks.yml`) job; Phase-4-Meta-Composing
-  browser-runtime CI hardening. Not a wire-format change — a CI coverage
-  enhancement. Anchor: R10-council F-04.
+  proves the crypto layer is wasm-CLEAN under wasip1. **F-25 correction:** the
+  earlier framing ("add a wasm32-unknown-unknown crypto *round-trip*") is wrong —
+  `benten-crypto-suite` is **structurally EXCLUDED from the wasm32-unknown-unknown
+  BrowserBackend thin-compute bundle** (CLAUDE.md baked-in #17: the thin-compute
+  target ships NO crypto / sync / SANDBOX state; crypto lives on the full-peer
+  shape a). So there is nothing to run a *crypto round-trip* against on
+  wasm32-unknown-unknown — the crate isn't in that bundle. The correct follow-up
+  gate is a **bundle-composition drift-gate**: a wasm32-unknown-unknown build of
+  the BrowserBackend thin-compute artifact that ASSERTS `benten-crypto-suite` (and
+  the other full-peer-only crates) is NOT linked in — so a future dependency edit
+  that accidentally pulls crypto-suite into the browser bundle fires at PR time
+  (the structural-exclusion invariant, mirroring the per-crate `wasm32_excluded`
+  compile-fence tests). **Destination:** a new `wasm-browser.yml` (or
+  `wasm-checks.yml`) job; Phase-4-Meta-Composing browser-runtime CI hardening. Not
+  a wire-format change — a CI coverage enhancement. Anchor: R10-council F-04 /
+  R12-council F-25.
 
 ---
 

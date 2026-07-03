@@ -47,13 +47,16 @@
 //!
 //! The wrap routes through the unified Layer-C/Layer-D HPKE primitive
 //! [`benten_crypto_suite::hpke::wrap_key_to_recipient`] (the real
-//! X25519⊕ML-KEM-768 X-Wing KEM-DEM at codepoint `0x647a`). The
-//! `benten_drop::layer_c` module is a SIBLING wave not yet merged into this
-//! base; this module wraps directly against the canary HPKE primitive. **FLAG
-//! (eventual layer_c reuse):** once `benten_drop::layer_c` lands, the
-//! Layer-C drop assembler and this Layer-D wrap should share the same
-//! envelope-assembly helper rather than both calling the crypto-suite
-//! primitive independently — a no-wire-change consolidation.
+//! X25519⊕ML-KEM-768 X-Wing KEM-DEM at codepoint `0x647a`). **F-09 (R12)
+//! retense:** `benten_drop::layer_c` HAS landed (the 14th crate; it is
+//! merged into this base). This Layer-D wrap still calls the crypto-suite
+//! HPKE primitive directly, while Layer-C assembles its envelopes directly
+//! against `aead::wrap` (see V1-FROZEN-INTERFACE.md §6 item 4 F-07 AS-BUILT
+//! note). **FLAG (layer_c reuse — NAMED-DEFERRED):** the Layer-C drop
+//! assembler and this Layer-D wrap should share the same envelope-assembly
+//! helper rather than both routing to the crypto-suite primitive
+//! independently — a no-wire-change consolidation deferred to
+//! Phase-4-Meta-Composing (V1-FROZEN-INTERFACE-DEFERRED.md Row D-71).
 
 use benten_crypto_suite::cipher_suite::{RecipientPublic, RecipientSecret, WrappedKey};
 use benten_crypto_suite::domain_registry::PROVISIONING_DOMAIN;

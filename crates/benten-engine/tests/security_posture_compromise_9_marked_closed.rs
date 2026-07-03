@@ -36,10 +36,16 @@ fn security_posture_compromise_9_marked_closed_at_g12_e() {
          after G12-E lands the durable SuspensionStore. Did you skip the \
          doc update in the closure narrative pass?"
     );
+    // F-15 (R12): the original predicate ORed "cross-process" with itself —
+    // vacuous. The comment intends "either spelling", so match the hyphenated
+    // form OR the space/underscore variants (all three occur in the doc).
     assert!(
-        body.contains("cross-process") || body.contains("cross-process"),
+        body.contains("cross-process")
+            || body.contains("cross process")
+            || body.contains("cross_process"),
         "the closure narrative MUST name the cross-process metadata gap \
-         so a future reader understands what was actually closed"
+         (any spelling: hyphen / space / underscore) so a future reader \
+         understands what was actually closed"
     );
     // Sanity: the brief / orchestrator log spells the compromise as
     // #9; the doc currently numbers it #10. Pin BOTH so a future

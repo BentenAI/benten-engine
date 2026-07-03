@@ -178,10 +178,19 @@ impl MemberEntry {
     /// The answer is **always `false` by construction** — the canonical
     /// 5-field shape `{ role, is_authority, sig_pubkey, admitted_at_hlc,
     /// member_ref }` carries ZERO nature field. Nature is DERIVED
-    /// ([`derive_member_nature`]), never stored (Inv-22). This is a `const`
-    /// truth, not a runtime computation; it exists so the `f_nat_1`
-    /// struct-fence pin can name the property and would-FAIL if a future edit
-    /// reintroduced a stored discriminator (the 5-field shape is FROZEN).
+    /// ([`derive_member_nature`]), never stored (Inv-22).
+    ///
+    /// **F-12 (R12) attribution:** this is a NON-load-bearing NAMING helper —
+    /// a `const` literal `false`. It does NOT itself detect a reintroduced
+    /// nature field (a literal cannot). The **load-bearing Inv-22 enforcement**
+    /// is the EXHAUSTIVE DESTRUCTURE
+    /// `let MemberEntry { role, is_authority, sig_pubkey, admitted_at_hlc,
+    /// member_ref } = &e;` (NO `..` rest) in
+    /// `crates/benten-membership-set/tests/f_ms_3_members_table_fusion.rs` —
+    /// adding a 6th (nature) field breaks that pattern at compile time. This
+    /// const exists only so callers/tests can NAME the "zero stored nature
+    /// field" property; the destructure is what would-FAIL on a reintroduced
+    /// discriminator.
     #[must_use]
     pub const fn has_any_nature_field() -> bool {
         false

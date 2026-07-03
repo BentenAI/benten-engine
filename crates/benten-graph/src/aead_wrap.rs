@@ -637,6 +637,30 @@ pub fn decode_encrypted_node(bytes: &[u8]) -> Result<EncryptedNode, AeadError> {
                 return Err(AeadError::CiphertextTooShort { got: bytes.len() });
             }
             let count = u32::from_be_bytes([bytes[38], bytes[39], bytes[40], bytes[41]]) as usize;
+            // F-01 (R12 bounded-decode / unbounded-allocation DoS fix):
+            // `count` is attacker-controlled (up to u32::MAX) and reachable
+            // PRE-AUTH on the untrusted-host tier via
+            // `RedbBackend::get_encrypted_node`, which feeds raw stored bytes
+            // here before any AEAD decrypt / plaintext_cid integrity check.
+            // A 42-byte crafted blob with `count = 0xFFFFFFFF` would force a
+            // multi-GB `Vec::with_capacity` -> allocation-abort / OOM. Bound
+            // `count` by what the input length can possibly encode BEFORE the
+            // pre-allocation. Each chunk entry consumes AT LEAST a 4-byte
+            // length prefix + a 5-byte minimal `AeadEnvelope` header (the
+            // cipher-suite `from_wire_bytes` rejects `< 5` bytes) = 9 bytes.
+            // So a well-formed input of length `bytes.len()` encodes at most
+            // `(bytes.len() - 42) / 9` chunks; an over-count input is
+            // malformed and rejected honestly (typed reject, not a silent
+            // allocation abort). This restores THREAT-MODEL §6's positively
+            // claimed bounded-decode ceiling on this wire-decode path.
+            const MIN_CHUNK_ENTRY_LEN: usize = 4 + 5; // 4-byte len prefix + minimal AeadEnvelope header
+            let max_chunks = bytes.len().saturating_sub(42) / MIN_CHUNK_ENTRY_LEN;
+            if count > max_chunks {
+                return Err(AeadError::ChunkCountExceedsInput {
+                    count,
+                    max: max_chunks,
+                });
+            }
             let mut cursor = 42usize;
             let mut chunks = Vec::with_capacity(count);
             for _ in 0..count {
@@ -745,6 +769,23 @@ pub enum AeadError {
     CiphertextTooShort {
         /// Observed ciphertext length.
         got: usize,
+    },
+
+    /// A chunked-envelope decode declared a chunk `count` larger than the
+    /// input length can possibly encode (bounded-decode / unbounded-
+    /// allocation DoS tripwire, F-01). The chunk count is read from
+    /// attacker-controlled bytes and reached PRE-AUTH on the untrusted-host
+    /// tier; a well-formed input encodes at most
+    /// `(bytes.len() - 42) / 9` chunks (4-byte length prefix + 5-byte
+    /// minimal `AeadEnvelope` header per chunk). An over-count input is
+    /// malformed and rejected here BEFORE any pre-allocation, per
+    /// THREAT-MODEL §6's bounded-decode ceiling.
+    #[error("chunked-envelope chunk count {count} exceeds max encodable for input ({max})")]
+    ChunkCountExceedsInput {
+        /// Attacker-declared chunk count.
+        count: usize,
+        /// Maximum chunk count the input length can encode.
+        max: usize,
     },
 
     /// Codepoint dispatch surfaced typed-unsupported (NEVER silent
@@ -939,5 +980,91 @@ mod tests {
                 | AeadError::TagMismatch { .. }
                 | AeadError::CiphertextTooShort { .. })
         ));
+    }
+
+    /// F-01 (R12 bounded-decode / unbounded-allocation DoS): a 42-byte
+    /// crafted chunked-envelope blob declaring `count = 0xFFFFFFFF` MUST
+    /// be rejected with the typed [`AeadError::ChunkCountExceedsInput`]
+    /// reject BEFORE the pre-allocation, NOT attempt a
+    /// `Vec::with_capacity(u32::MAX)` (which would abort the process /
+    /// OOM). This blob is reachable PRE-AUTH via
+    /// `RedbBackend::get_encrypted_node`. Without the ceiling guard this
+    /// call would attempt `Vec::with_capacity(0xFFFF_FFFF)`.
+    #[test]
+    fn chunk_count_overflow_is_typed_reject_not_alloc_abort() {
+        let cid = fixed_cid(0x01);
+        // STORAGE_MAGIC ‖ 0x01 (chunked) ‖ <36-byte CID> ‖ count=0xFFFFFFFF
+        let mut blob = Vec::with_capacity(42);
+        blob.push(0x3d); // STORAGE_MAGIC
+        blob.push(0x01); // variant tag: Chunked
+        blob.extend_from_slice(cid.as_bytes()); // 36 bytes
+        blob.extend_from_slice(&u32::MAX.to_be_bytes()); // count = 0xFFFFFFFF
+        assert_eq!(blob.len(), 42, "crafted blob is the minimal 42-byte header");
+        let result = decode_encrypted_node(&blob);
+        assert!(
+            matches!(
+                result,
+                Err(AeadError::ChunkCountExceedsInput {
+                    count: 0xFFFF_FFFF,
+                    max: 0
+                })
+            ),
+            "42-byte blob with count=u32::MAX MUST typed-reject, got {result:?}"
+        );
+    }
+
+    /// F-01 boundary: `count == max_chunks` (well-formed) decodes OK;
+    /// `count == max_chunks + 1` rejects. Uses a real chunked encode to
+    /// get valid chunk bytes, then rewrites only the 4-byte count field.
+    #[test]
+    fn chunk_count_boundary_at_max_encodable() {
+        let cid = fixed_cid(0x03);
+        let key = [0x55u8; 32];
+        // 3 × IROH_BLOCK_SIZE = 48 KiB... below the 64 KiB whole-threshold,
+        // so build the chunked container directly for a multi-chunk case.
+        let plaintext = vec![0x11u8; 3 * IROH_BLOCK_SIZE];
+        let chunked = ChunkedCiphertext::encrypt(&plaintext, &cid, &key).unwrap();
+        let node = EncryptedNode::Chunked {
+            plaintext_cid: cid,
+            chunked,
+        };
+        let encoded = encode_encrypted_node(&node).unwrap();
+        // Positive control: the honest encode round-trips.
+        assert!(matches!(
+            decode_encrypted_node(&encoded),
+            Ok(EncryptedNode::Chunked { .. })
+        ));
+
+        // max_chunks = (len - 42) / 9 for this input.
+        let max_chunks = encoded.len().saturating_sub(42) / (4 + 5);
+        assert!(
+            max_chunks >= 3,
+            "input can encode at least its 3 real chunks"
+        );
+
+        // count == max_chunks: passes the ceiling guard (the per-chunk
+        // bounds loop then rejects mid-stream once the real bytes run out,
+        // but the point here is the ceiling guard does NOT fire).
+        let mut at_max = encoded.clone();
+        at_max[38..42].copy_from_slice(&(max_chunks as u32).to_be_bytes());
+        assert!(
+            !matches!(
+                decode_encrypted_node(&at_max),
+                Err(AeadError::ChunkCountExceedsInput { .. })
+            ),
+            "count == max_chunks MUST pass the ceiling guard"
+        );
+
+        // count == max_chunks + 1: the ceiling guard fires.
+        let mut over = encoded;
+        let over_count = (max_chunks + 1) as u32;
+        over[38..42].copy_from_slice(&over_count.to_be_bytes());
+        assert!(
+            matches!(
+                decode_encrypted_node(&over),
+                Err(AeadError::ChunkCountExceedsInput { .. })
+            ),
+            "count == max_chunks + 1 MUST typed-reject via the ceiling guard"
+        );
     }
 }

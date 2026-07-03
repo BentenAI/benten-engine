@@ -4,6 +4,9 @@ pub use benten_graph::WriteAuthority
 pub mod benten_graph::aead_wrap
 #[non_exhaustive] pub enum benten_graph::aead_wrap::AeadError
 pub benten_graph::aead_wrap::AeadError::Authentication(alloc::string::String)
+pub benten_graph::aead_wrap::AeadError::ChunkCountExceedsInput
+pub benten_graph::aead_wrap::AeadError::ChunkCountExceedsInput::count: usize
+pub benten_graph::aead_wrap::AeadError::ChunkCountExceedsInput::max: usize
 pub benten_graph::aead_wrap::AeadError::CiphertextTooShort
 pub benten_graph::aead_wrap::AeadError::CiphertextTooShort::got: usize
 pub benten_graph::aead_wrap::AeadError::KeyMismatch

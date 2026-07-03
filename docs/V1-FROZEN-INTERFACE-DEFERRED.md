@@ -2257,6 +2257,52 @@ Row D-15's audit-readiness concern.
 
 ---
 
+## R12 (post-F-full phase-close, round 12) NAMED-CARRY rows
+
+### Row D-70 — F-08: `WrappedKey` has 3 hand-rolled encode sites → canonical `to_wire_bytes`/`from_wire_bytes` consolidation
+
+- **Observation (NAMED):** `benten_crypto_suite::cipher_suite::WrappedKey` (the
+  Layer-C/Layer-D key-wrap wire type) carries **no canonical
+  `to_wire_bytes()`/`from_wire_bytes()` method on the type itself**, so its
+  length-prefixed encode form (`ek_x_len u32 BE ‖ ek_x ‖ ek_mlkem_len u32 BE ‖
+  ek_mlkem ‖ aead_envelope.to_wire_bytes()`, BE per M-19) is **hand-rolled in 3
+  sites**: the production `benten_drop::layer_c::encode_wrapped_key`
+  (`crates/benten-drop/src/layer_c.rs:656`, called at `:778` single-recipient
+  and `:1315` group), plus a duplicated in-test copy
+  `layer_c::group_posture::tests::encode_wrapped` (`:1953`). Each site re-derives
+  the same framing by hand; a future field-order / width / endianness edit must
+  be mirrored across all copies (drift surface — currently guarded only by
+  round-trip tests, not by a single canonical encoder).
+- **Deferred (destination):** lift the encode/decode onto `WrappedKey` as
+  canonical `to_wire_bytes(&self) -> Vec<u8>` / `from_wire_bytes(&[u8]) ->
+  Option<Self>` methods in `benten-crypto-suite` (the type's home crate) and
+  replace the 3 hand-rolled sites with calls to it — a **no-wire-change
+  consolidation**. Deferred to the Phase-4-Meta-Composing crypto-surface
+  cleanup (co-routes with Row D-71's layer_c/layer_d envelope-helper
+  consolidation — same class). Not a v1-beta blocker: the wire form is frozen +
+  round-trip-pinned + byte-mirrored across the seal/open paths.
+- **Anchor:** R12-council F-08; `crates/benten-drop/src/layer_c.rs::encode_wrapped_key`
+  (+ the `:1953` test copy); `benten_crypto_suite::cipher_suite::WrappedKey`.
+
+### Row D-71 — F-09: Layer-C / Layer-D shared envelope-assembly helper (device_link FLAG retense)
+
+- **Observation (NAMED, retensed):** the `device_link.rs` module docstring FLAG
+  previously claimed `benten_drop::layer_c` was "a SIBLING wave not yet merged
+  into this base". That premise is **stale** — `benten-drop` (the 14th crate)
+  HAS landed. The FLAG is retensed in-code (`crates/benten-engine/src/layer_d/device_link.rs`
+  §"HPKE reuse") to record the AS-BUILT state: the Layer-D wrap calls the
+  crypto-suite HPKE primitive directly, while Layer-C assembles its envelopes
+  directly against `aead::wrap` (V1-FROZEN-INTERFACE.md §6 item 4 F-07 AS-BUILT note).
+- **Deferred (destination):** the Layer-C drop assembler and the Layer-D wrap
+  should share ONE envelope-assembly helper rather than each routing to the
+  crypto-suite primitive independently — a **no-wire-change consolidation**
+  deferred to Phase-4-Meta-Composing (co-routes with Row D-70). Not a v1-beta
+  blocker (both paths produce the frozen, byte-mirror-pinned wire form).
+- **Anchor:** R12-council F-09; `crates/benten-engine/src/layer_d/device_link.rs`
+  ("HPKE reuse" FLAG); `benten_drop::layer_c`.
+
+---
+
 ## Update discipline
 
 This document updates via PR:

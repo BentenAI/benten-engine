@@ -1,5 +1,15 @@
 # v1 Frozen Interface Contract — Phase-4-Meta-Core deliverable (TRIAGE SYNTHESIS)
 
+> **⚑ F-19 (R12) PRE-TAG-SWEEP NOTE (Ben-gated):** this status banner is
+> stale relative to the Phase-4-Meta-Core phase-close state — it reads
+> "POST-BUILD-OUT-WAVE" dated 2026-05-23, predating the R6–R12 phase-close
+> council rounds. At the (Ben-gated) pre-tag sweep, retense this banner to
+> the phase-close/freeze-ready state (dropping the "TRIAGE SYNTHESIS" +
+> build-out-wave framing; the doc is now the AS-BUILT freeze contract that
+> the phase-close council has iterated to convergence). Registered here so
+> the pre-tag sweep picks it up; NOT retensed now (banner-retense couples to
+> the SHA + date the tag lands, a pre-tag-sweep concern).
+>
 > **Status: POST-BUILD-OUT-WAVE.** Round 0.5 triage-synthesis refreshed
 > at the V1-FROZEN-INTERFACE build-out wave (2026-05-23). The 8 cross-
 > confirmed FIX-NOW pre-freeze build-out items from the companion
@@ -319,7 +329,7 @@ re-open).
 | §4.62 | `crates/benten-graph/src/backends/blob_backend_trait.rs:120` `BlobBackend` | **DECIDED additive-default** (NOT a split). The trait carries `put_blob`/`get_blob`/`has_blob` with `Send + Sync + 'static`; future additive methods land as defaulted methods. |
 | §4.63 | `crates/benten-graph/src/backend.rs:306` `KVBackend: Send + Sync` | **DECIDED sync** (NOT RPITIT). RPITIT adds 2024-edition feature-gate complexity v1-beta cannot absorb; future-Composing-async migration is an additive `AsyncKVBackend` trait. |
 | §4.64 | `crates/benten-sync/src/transport_trait.rs:85` `Transport` + `TransportEndpoint` + `TransportConnection` family | `Transport` family stays in `benten-sync` per §8-B (b). The trait surface is `pub` + `Send + Sync + 'static`. **`MerkleRangeProofBackend` trait DEFERRED to G-COMP-1 per V1-FROZEN-INTERFACE row 5 outcome (commit `d2616800`)** — Option A per Planner-B; verified not-built at HEAD; freezing a phantom shape is overcommit. Tracked at `docs/future/phase-4-backlog.md §4.64` (the named-NOW destination per HARD RULE 12 clause-(b)). The §4.64 row received an explicit verify-or-defer outcome paragraph at the G-CORE-9 row 5 commit. |
-| §4.43 | `WriteContext` / `ChangeEvent` / `GraphError::TxAborted` `#[non_exhaustive]` | **APPLY `#[non_exhaustive]` to all three.** `benten_graph::WriteContext` (in `crates/benten-graph/src/lib.rs`) is currently MISSING the attribute (verified HEAD). `benten_core::change_stream::ChangeEvent` ALREADY has it — KEEP. `benten_graph::GraphError::TxAborted` per-variant `#[non_exhaustive]` — APPLY defensively. The freeze MUST not ship without these. Couples to item 5 + item 11; closes atomically in the G-CORE-9 wave. |
+| §4.43 | `WriteContext` / `ChangeEvent` / `GraphError::TxAborted` `#[non_exhaustive]` | `benten_graph::WriteContext` (in `crates/benten-graph/src/lib.rs`) **HAS `#[non_exhaustive]` at HEAD** (applied; verified `pub struct WriteContext` carries the attribute). `benten_core::change_stream::ChangeEvent` ALREADY has it — KEEP. `benten_graph::GraphError::TxAborted` per-variant `#[non_exhaustive]` is **deliberately NOT applied** (Fwd-2 #997 / umbrella #1207 explicit no-apply — `TxAborted { reason }` is constructed in cross-crate production code at `crates/benten-engine/src/engine_diagnostics.rs`, so a bare per-variant `#[non_exhaustive]` breaks the workspace build; `GraphError` is ALREADY `#[non_exhaustive]` at the enum level, so only adding a NEW field to `TxAborted` — not a new variant — is a SemVer break). Applying the per-variant attribute (with a `GraphError::tx_aborted(reason)` constructor + production-site migration) OR accepting the field-level lock with a written rationale is a **ratified HARD-RULE clause-(b) NAMED-DEFERRAL to `docs/future/phase-4-backlog.md §4.43`** (the v1-API-stabilization wave; see that row's `#[non_exhaustive]` residual note). The §11 sweep (this doc) preserves the explicit no-apply reason at the cite. Couples to item 5 + item 11. |
 
 **What "frozen" means here:**
 - Trait method signatures + `Send + Sync + 'static` bounds + the
@@ -609,6 +619,23 @@ each codepoint = SWAPPABLE within the framing):**
    structural/size + roundtrip + constant-position + format-version pins,
    not a deterministic hex byte-golden.
 
+   - **F-07 (R12) — Inv-16 seam registration at `CipherSuite::wrap_key_material`.**
+     The `WrappedKey` wire form is produced by
+     `benten_crypto_suite::cipher_suite::CipherSuite::wrap_key_material(&RecipientPublic, k_root)`
+     (`crates/benten-crypto-suite/src/cipher_suite.rs`) and consumed by the
+     mirror `unwrap_key_material`. This is the frozen Inv-16 (one-HPKE-primitive
+     KEM-DEM) key-wrap seam. **AS-BUILT note:** Layer-C
+     (`benten_drop::layer_c`) assembles its per-stanza `EncryptedEnvelope`
+     bytes **directly** (its own AAD assembly + the crypto-suite `aead::wrap`
+     bulk primitive) and does **NOT** route through the `benten_crypto_suite::hpke`
+     facade — the Inv-16 unification is at the ENVELOPE / AAD-binding layer +
+     the shared `wrap_key_material`/`aead` primitives, not a single call-through
+     facade. So the frozen seam is the `wrap_key_material` + `aead::wrap`
+     primitive pair, with Layer-C as a direct-assembly consumer (this is
+     intentional — keeps Layer-C's production tree sync-free; the byte-equality
+     mirror pins guard against drift). The `hpke` module is the facade for the
+     Layer-D wrap path.
+
 5. **Multi-device key-wrap/recovery envelope SHAPE** — frozen as part of
    #1301 per item 6. Recovery PROTOCOL choice (Shamir / social / hardware
    / MLS-style) stays G-COMP-3 v1-assessment-window; the ENVELOPE SHAPE
@@ -657,11 +684,17 @@ each codepoint = SWAPPABLE within the framing):**
    discipline.
 
 8. **Codepoint-typed constructors** — `SigCodepoint` / `CipherSuiteCodepoint`
-   / `HashCodepoint` are wrapper structs around `u16` (`pub struct
-   SigCodepoint(pub(crate) u16)`). The `from_raw(raw: u16) -> Self`
-   constructor at `codepoint.rs::from_raw` (line 82) is `pub` for deserializer use, paired
-   with `resolve()` → `Result<(), UnsupportedAlgorithm>` at every
-   dispatch site — i.e. you can construct any codepoint but you can't
+   are wrapper structs around `u16` (`pub struct SigCodepoint(pub(crate) u16)`;
+   `pub struct CipherSuiteCodepoint(pub(crate) u16)`). **F-13 (R12) AS-BUILT
+   note: `HashCodepoint` wraps a `u64`, NOT a `u16`** (`pub struct
+   HashCodepoint(pub(crate) u64)` at `crates/benten-crypto-suite/src/codepoint.rs`)
+   — the multihash/multicodec code space is a `u64` varint space (a hash code
+   can exceed `u16`), so `HashCodepoint`'s underlying integer width is `u64`
+   while the two crypto-suite selectors that live in the Benten-owned `u16`
+   codepoint table are `u16`. The `from_raw(raw) -> Self` constructor is `pub`
+   for deserializer use (its `raw` param type matches the wrapped width per
+   selector), paired with `resolve()` → `Result<(), UnsupportedAlgorithm>` at
+   every dispatch site — i.e. you can construct any codepoint but you can't
    USE one that doesn't typed-resolve. This is the C11b safety property
    and MUST be enforced end-to-end at every dispatch site (auditable
    workspace-wide).
@@ -1084,7 +1117,8 @@ verification at HEAD):
 | `benten-caps` | **`Scope`** | NO (deliberate) | **DO NOT APPLY** — explicit carve-out per item 15(c); the EXACTLY-two-arms-by-the-type-system property IS the structural pin |
 | `benten-ivm` | **`Strategy`** | NO (deliberate) | **DO NOT APPLY** — explicit carve-out per G-CORE-9 R1 L8-MAJOR-3 ratification; the 3-arm `{A, B, Reserved}` set IS load-bearing per the spec's audit-pin (item 11 documented carve-out); adding a 4th strategy is a Composing-time architectural decision, NOT a SemVer non-breaking field addition |
 | `benten-graph` | `WriteContext` (struct) | NO at HEAD | **APPLY** (item 5 coupling) |
-| `benten-graph` | `ChangeEvent` (re-export) | YES | KEEP |
+| `benten-graph` | `ChangeEvent` (`benten_core::change_stream::ChangeEvent` re-export) | YES | KEEP |
+| `benten-graph` | `store::ChangeEvent` (**benten-graph's OWN struct** at `crates/benten-graph/src/store.rs`, re-exported at `lib.rs::pub use store::{ChangeEvent, ..}` — DISTINCT from the `benten_core` re-export above) | **NO at HEAD** (`pub struct ChangeEvent` with `pub` fields, no `#[non_exhaustive]`) | **F-05 (R12) freeze-accounting: NAMED-DEFERRAL** — same class as `WriteContext` §4.43: `store::ChangeEvent` is struct-literal-constructed in cross-crate test code (`crates/benten-ivm/tests/*`), so a bare struct-level `#[non_exhaustive]` breaks the workspace test build. Applying it (+ migrating the test literals to the `ChangeEvent::new_*` constructors) OR accepting the field-level SemVer-lock with a written rationale is deferred to the v1-API-stabilization wave, tracked at `docs/future/phase-4-backlog.md §4.43` (the `#[non_exhaustive]` residual row already names `ChangeEvent` alongside `WriteContext`). |
 | `benten-graph` | `GraphError` | YES | KEEP |
 | `benten-graph` | `GraphError::TxAborted` (per-variant) | Unclear at HEAD | **APPLY** defensively |
 | `benten-graph` | `WriteAuthority` (re-export from core) | YES | KEEP |

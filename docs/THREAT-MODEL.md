@@ -225,7 +225,13 @@ who-can-degrade-service. Availability against a resource-exhaustion adversary is
 concern handled outside the crypto threat model**, and where a specific amplification vector touches the crypto
 substrate it is disclosed at its own site rather than here — e.g. the `dedup_synchronized_revocations`
 substrate-growth defense (`crates/benten-sync/src/handshake.rs`, adversarial duplicate-packing + rejoin-churn),
-the bounded-decode ceilings on wire-decode paths (e.g. the stanza-count over-run reject), the
+the bounded-decode ceilings on wire-decode paths (e.g. the stanza-count over-run reject, and the
+chunked-storage-envelope chunk-count over-run reject — `decode_encrypted_node`'s `0x01` variant caps the
+attacker-declared `count` at `(bytes.len() - 42) / 9` before pre-allocating, since each chunk entry needs
+≥ a 4-byte length prefix + a 5-byte minimal `AeadEnvelope` header, so a crafted 42-byte blob with
+`count = u32::MAX` typed-rejects via `AeadError::ChunkCountExceedsInput` instead of forcing a multi-GB
+`Vec::with_capacity`; this path is reachable PRE-AUTH via `RedbBackend::get_encrypted_node` on the
+untrusted-host tier), the
 per-Kind `wire_cost_ceiling` (Compromise #46), and the 4-MiB `recv_bytes` sync cap. The MembershipSet member
 count is a strictly stronger case: it is **NEVER wire-decoded** — the `member_count` is always COMPUTED from the
 recipient's own held roster (`member_dids.len()`) and bound INTO the AAD, never read from an untrusted wire field

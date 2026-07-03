@@ -326,20 +326,24 @@ fn semantic_pub_enum_registry_is_complete() {
         "keying_kv::CidTarget",       // K(V) KDF-input — exhaustive fail-closed dispatch
     ];
 
-    // The census total. Any new semantic `pub enum` added to the crate MUST be
-    // classified into exactly one bucket, bumping this expected total. This is
-    // the R9 F-07 forward-guard: a future enum added without a registry entry
-    // makes the live `pub enum` count diverge from the census below.
-    const EXPECTED_TOTAL_SEMANTIC_PUB_ENUMS: usize = 17;
+    // The census total is the count of `pub enum` declarations LIVE in the
+    // crate's `src/` (derived structurally below — NOT a hardcoded literal), so
+    // adding a new `pub enum` WITHOUT a registry entry makes `registry_total`
+    // diverge from `live_count` and BREAKS this test. (F-03 R12: previously the
+    // assertion compared the two registry buckets against a hardcoded `17`, which
+    // is `17 == 17` — vacuous with respect to the crate's live enum count; a new
+    // unregistered `pub enum` would NOT have broken it. The doc-comment above
+    // claimed a live-count comparison the code did not perform; this derives it.)
+    let live_count = live_pub_enum_count();
+    let registry_total = NON_EXHAUSTIVE_REQUIRED.len() + EXHAUSTIVE_BY_DESIGN_CARVE_OUTS.len();
 
     assert_eq!(
-        NON_EXHAUSTIVE_REQUIRED.len() + EXHAUSTIVE_BY_DESIGN_CARVE_OUTS.len(),
-        EXPECTED_TOTAL_SEMANTIC_PUB_ENUMS,
-        "R9 F-07 census drift: the two registry buckets must sum to the total \
-         semantic pub-enum count. If you added a `pub enum` to benten-membership-set, \
-         classify it into NON_EXHAUSTIVE_REQUIRED (add #[non_exhaustive] + an \
-         arm-coverage test) or EXHAUSTIVE_BY_DESIGN_CARVE_OUTS (document the \
-         structural reason), and bump EXPECTED_TOTAL_SEMANTIC_PUB_ENUMS."
+        registry_total, live_count,
+        "R9 F-07 census drift: the two registry buckets ({registry_total}) must sum to \
+         the crate's LIVE `pub enum` count ({live_count}). If you added a `pub enum` to \
+         benten-membership-set, classify it into NON_EXHAUSTIVE_REQUIRED (add \
+         #[non_exhaustive] + an arm-coverage test) or EXHAUSTIVE_BY_DESIGN_CARVE_OUTS \
+         (document the structural reason)."
     );
 
     // No enum appears in both buckets (a classification must be unambiguous).
@@ -350,4 +354,40 @@ fn semantic_pub_enum_registry_is_complete() {
              either #[non_exhaustive] OR an exhaustive-by-design carve-out, never both"
         );
     }
+}
+
+/// Count the `pub enum` declarations LIVE in `benten-membership-set/src/`.
+/// Derived structurally so the F-07 completeness census (above) breaks when a
+/// new `pub enum` is added without a registry entry — matching the census
+/// doc-comment's stated guarantee. Counts leading `pub enum ` at the start of a
+/// (trimmed) line, ignoring `pub(crate)`/`pub(super)` and in-comment matches.
+fn live_pub_enum_count() -> usize {
+    let src_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut count = 0usize;
+    for path in walk_rs(&src_dir) {
+        let text = std::fs::read_to_string(&path).unwrap_or_default();
+        for line in text.lines() {
+            let t = line.trim_start();
+            if t.starts_with("pub enum ") {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
+/// Recursively collect `.rs` files under `dir`.
+fn walk_rs(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                out.extend(walk_rs(&p));
+            } else if p.extension().is_some_and(|x| x == "rs") {
+                out.push(p);
+            }
+        }
+    }
+    out
 }

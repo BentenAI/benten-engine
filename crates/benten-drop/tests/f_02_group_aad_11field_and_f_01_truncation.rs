@@ -396,6 +396,32 @@ fn f_02_local_assembler_matches_canonical_membership_set_byte_for_byte() {
     }
 }
 
+/// F-04 (R12) — the FROZEN leading wire byte `AAD_VERSION` is byte-mirrored
+/// across the two engines. The `f_02_local_assembler_matches_..._byte_for_byte`
+/// arm proves the two ASSEMBLERS agree over the same inputs, but both sides read
+/// their OWN `AAD_VERSION` const — a simultaneous value drift in BOTH crates'
+/// `AAD_VERSION` would keep the assemblers byte-equal to each other while
+/// silently changing the on-the-wire format. This pin closes that gap: the two
+/// crates' `AAD_VERSION` constants MUST be byte-equal to each other AND equal the
+/// frozen `0x01` (R0.7 §4.1; the dedicated AAD-prefix byte, DISTINCT from the
+/// envelope serialization-format byte). Same shape as the `domain_registry_mirror`
+/// cross-crate byte-equality pins.
+#[test]
+fn f_04_aad_version_byte_mirrors_across_engines() {
+    assert_eq!(
+        benten_drop::layer_c::AAD_VERSION,
+        benten_membership_set::aad::AAD_VERSION,
+        "F-04: benten-drop's layer_c::AAD_VERSION drifted from the canonical \
+         benten_membership_set::aad::AAD_VERSION — a simultaneous both-sides drift \
+         would keep the AAD assemblers byte-equal while changing the wire format."
+    );
+    assert_eq!(
+        benten_drop::layer_c::AAD_VERSION,
+        0x01,
+        "F-04: AAD_VERSION is the FROZEN dedicated AAD-prefix byte 0x01 (R0.7 §4.1)."
+    );
+}
+
 /// F-02 arm 3 — a real seal→open round-trip succeeds (the open path reconstructs
 /// the SAME 11-field AAD). A seal-vs-open AAD mismatch would make EVERY group
 /// decrypt fail; this arm proves the 11-field change is consistent across seal+open.

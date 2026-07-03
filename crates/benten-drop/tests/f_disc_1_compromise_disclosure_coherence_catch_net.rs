@@ -168,7 +168,16 @@ fn distinct_compromise_numbers(doc: &str) -> BTreeSet<u32> {
 fn row_window(lines: &[&str], n: u32, lookbehind: usize, lookahead: usize) -> String {
     let needle = format!("Compromise #{n}");
     for (i, l) in lines.iter().enumerate() {
-        if l.contains(&needle) {
+        // F-14 (R12): require a NON-DIGIT boundary after the matched number, so
+        // `Compromise #6` does NOT spuriously match inside `Compromise #60`.
+        // Scan every occurrence in the line (a bare `.contains` on the FIRST
+        // occurrence would still mis-anchor if `#60` preceded `#6`).
+        if l.match_indices(&needle).any(|(idx, _)| {
+            l[idx + needle.len()..]
+                .chars()
+                .next()
+                .is_none_or(|c| !c.is_ascii_digit())
+        }) {
             let lo = i.saturating_sub(lookbehind);
             let hi = (i + lookahead).min(lines.len());
             return lines[lo..hi].join(" ");

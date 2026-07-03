@@ -36,10 +36,13 @@ fn workspace_root() -> PathBuf {
         .expect("workspace root")
 }
 
+// F-16 (R12): the RED-PHASE `#[ignore]` carried a closed-prior-phase trigger
+// ("G26-A wave-10 un-ignores"). Phase-4-Foundation is CLOSED
+// (`phase-4-foundation-close`) and the Compromise #11 materializer reaffirmation
+// landed in SECURITY-POSTURE.md (all four content markers present), so the trigger
+// already fired — the ignore was a phantom "later" (HARD-RULE 12). Un-ignored
+// against current doc state; the assertions pass live.
 #[test]
-#[ignore = "phase-4-foundation R4-FP-3 RED-PHASE — G26-A wave-10 un-ignores. \
-    Pin source: r2-test-landscape.md §2.12 row 4 + sec-3.5-r1-13. Compromise #11 reaffirmation \
-    against new materializer pipeline (G23-B) landed at Phase-4-Foundation close."]
 fn security_posture_compromise_11_reaffirmation_landed() {
     let posture = workspace_root().join("docs/SECURITY-POSTURE.md");
     let body = fs::read_to_string(&posture).expect("read SECURITY-POSTURE.md");

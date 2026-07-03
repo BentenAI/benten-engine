@@ -68,6 +68,7 @@
 
 AeadError::AeadAuthFailed
 AeadError::Authentication
+AeadError::ChunkCountExceedsInput
 AeadError::CiphertextTooShort
 AeadError::KeyMismatch
 AeadError::MalformedEnvelope
