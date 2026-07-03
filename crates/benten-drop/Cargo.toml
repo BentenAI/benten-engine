@@ -101,13 +101,6 @@ blake3 = { workspace = true }
 # `blake3::hash` API needs no default features).
 blake3 = { workspace = true }
 
-# F-full Layer-C DUAL-CID (O-3): the `f_lc_dual_cid` family exercises the
-# `benten-sync::two_cid_store` DUAL-CID extension (DualCidStore + reseal +
-# blind_set_cid + the O-7 wire-surface enumeration + generation staleness).
-# No cycle — benten-sync depends on benten-{id,core,errors}, none of which
-# pull benten-drop (verified vs the workspace dependency edges).
-benten-sync = { path = "../benten-sync" }
-
 # F-02 OPTION-(b) TEST-ONLY cross-check: the `f_02_group_aad_11field_and_f_01_truncation`
 # test asserts benten-drop's LOCAL 11-field AAD assembler
 # (`layer_c::group_posture::assemble_group_aad_local`) reproduces the CANONICAL
