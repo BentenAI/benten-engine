@@ -301,6 +301,9 @@
 // did helper) remain test-local.
 // ===========================================================================
 
+use benten_crypto_suite::cipher_suite::{
+    CipherSuite, CipherSuiteCodepoint, RecipientKeypair, RecipientPublic, RecipientSecret,
+};
 use benten_crypto_suite::sig::{Keypair as SigKeypair, SignatureSuite};
 use benten_drop::layer_c::{
     AAD_VERSION, BindingContext, BodyCidDigest, DROP_TO_RECIPIENT_SEALED_SENDER,
@@ -312,15 +315,34 @@ use benten_drop::layer_c::{
 };
 use benten_id::did::Did;
 
-/// Hermetic per-seed recipient fingerprints / DID helpers (test-local; the
-/// production `seal_*`/`open_*` expand these to a real deterministic hybrid
-/// keypair internally). `fixed_sk(seed) = fixed_pk(seed) + 0x80` per byte so
-/// the seal-pubkey-fingerprint is recoverable from the open-secret.
-fn fixed_pk(seed: u8) -> [u8; 32] {
-    [seed; 32]
+/// Hermetic per-seed recipient keypair helper (R9 GAP-1). Each `seed` maps to a
+/// stable REAL hybrid keypair via the deterministic-from-SECRET-seed KAT tool —
+/// the `seed` is the recipient's PRIVATE seed (both key halves are BLAKE3-
+/// expanded from it), so `.public()` and `.secret()` genuinely correspond and a
+/// DIFFERENT seed yields a NON-matching secret (the wrong-key tests fail closed
+/// for real). This replaces the deleted `fixed_sk(seed) = fixed_pk(seed) + 0x80`
+/// placeholder, which had zero secret entropy.
+fn fixed_kp(seed: u8) -> RecipientKeypair {
+    CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
+        .expect("0x647a wire-locked")
+        .generate_recipient_keypair_deterministic(&[seed; 32])
 }
-fn fixed_sk(seed: u8) -> [u8; 32] {
-    [seed.wrapping_add(0x80); 32]
+fn fixed_pk(seed: u8) -> RecipientPublic {
+    // Re-derive the public half from the recipient's secret seed.
+    let kp = fixed_kp(seed);
+    RecipientPublic::from_bytes(
+        CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+        &kp.public().to_bytes(),
+    )
+    .expect("re-parse of a freshly-serialized recipient public must succeed")
+}
+fn fixed_sk(seed: u8) -> RecipientSecret {
+    let kp = fixed_kp(seed);
+    RecipientSecret::from_bytes(
+        CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+        &kp.secret().to_bytes(),
+    )
+    .expect("re-parse of a freshly-serialized recipient secret must succeed")
 }
 fn fixed_body_cid_digest(seed: u8) -> BodyCidDigest {
     [seed; 32]

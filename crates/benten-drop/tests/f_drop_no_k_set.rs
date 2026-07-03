@@ -74,6 +74,7 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
 
+use benten_crypto_suite::cipher_suite::{CipherSuite, CipherSuiteCodepoint, RecipientPublic};
 use benten_crypto_suite::sig::{Keypair as SigKeypair, SignatureSuite};
 use benten_drop::layer_c::{seal_sealed_sender, serialize};
 use benten_id::did::Did;
@@ -83,8 +84,18 @@ use benten_id::did::Did;
 /// production type wraps the same width in `secrecy::SecretBox<[u8; 32]>`).
 type KSet = [u8; 32];
 
-fn fixed_pk(seed: u8) -> [u8; 32] {
-    [seed; 32]
+/// R9 GAP-1: a stable REAL recipient PUBLIC key per `seed` (the seal wraps to
+/// it). This crate only seals here (no open), so only the public half is
+/// needed. Replaces the deleted `[u8; 32]` placeholder fingerprint.
+fn fixed_pk(seed: u8) -> RecipientPublic {
+    let kp = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
+        .expect("0x647a wire-locked")
+        .generate_recipient_keypair_deterministic(&[seed; 32]);
+    RecipientPublic::from_bytes(
+        CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+        &kp.public().to_bytes(),
+    )
+    .expect("re-parse of recipient public must succeed")
 }
 fn fixed_body_cid_digest(body: &[u8]) -> [u8; 32] {
     *blake3::hash(body).as_bytes()

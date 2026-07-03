@@ -360,14 +360,17 @@ fn f_disc_2_records_r46_group_codepoints_0x6610_0x6520() {
 // observable consequences. would-FAIL-if-no-op'd.
 // ===========================================================================
 
+use benten_crypto_suite::cipher_suite::{
+    CipherSuite, CipherSuiteCodepoint, RecipientPublic, RecipientSecret,
+};
 use benten_crypto_suite::sig::{Keypair as SigKeypair, SignatureSuite};
 use benten_drop::layer_c::group_posture::{
     GroupError, GroupSealParams, GroupVerifyContext, open_membership_set_group,
     seal_membership_set_group,
 };
 use benten_drop::layer_c::{
-    AAD_VERSION, EncryptedEnvelope, LayerCError, RecipientPubKey, group_roster_for_test,
-    open_single, seal_sealed_sender, sealed_aad,
+    AAD_VERSION, EncryptedEnvelope, LayerCError, group_roster_for_test, open_single,
+    seal_sealed_sender, sealed_aad,
 };
 use benten_id::did::Did;
 
@@ -379,9 +382,32 @@ fn hybrid_sender() -> (SigKeypair, Vec<u8>) {
     (kp, did_str.into_bytes())
 }
 
+/// R9 GAP-1 recipient-key helpers: a stable REAL hybrid keypair per `seed`
+/// (secret seed → both halves via BLAKE3 expansion; `.public()`/`.secret()`
+/// genuinely correspond). Replaces the deleted `[u8; 32]` placeholder pubkeys.
+fn fixed_kp(seed: u8) -> benten_crypto_suite::cipher_suite::RecipientKeypair {
+    CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
+        .expect("0x647a wire-locked")
+        .generate_recipient_keypair_deterministic(&[seed; 32])
+}
+fn fixed_pk(seed: u8) -> RecipientPublic {
+    RecipientPublic::from_bytes(
+        CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+        &fixed_kp(seed).public().to_bytes(),
+    )
+    .expect("re-parse of recipient public must succeed")
+}
+fn fixed_sk(seed: u8) -> RecipientSecret {
+    RecipientSecret::from_bytes(
+        CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+        &fixed_kp(seed).secret().to_bytes(),
+    )
+    .expect("re-parse of recipient secret must succeed")
+}
+
 /// The independently-held `GroupVerifyContext` for a `0x6610` membership-set
 /// round-trip with all generations = 1 (the common fixture shape here).
-fn verify_ctx_gen1(pks: &[RecipientPubKey]) -> GroupVerifyContext {
+fn verify_ctx_gen1(pks: &[RecipientPublic]) -> GroupVerifyContext {
     let member_dids = group_roster_for_test(pks)
         .iter()
         .map(|d| String::from_utf8_lossy(d).into_owned())
@@ -408,14 +434,14 @@ fn verify_ctx_gen1(pks: &[RecipientPubKey]) -> GroupVerifyContext {
 #[test]
 fn f_disc_2_inv16_codepoint_dispatch_enforced_fail_closed() {
     use benten_drop::layer_c::seal_group_multi;
-    let pks: [RecipientPubKey; 2] = [[0x21u8; 32], [0x22u8; 32]];
+    let pks = [fixed_pk(0x21), fixed_pk(0x22)];
     let body_cid = *blake3::hash(b"inv16 enforced body").as_bytes();
     let (sender_kp, sender) = hybrid_sender();
     let group_env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 1, b"inv16 body");
 
     // The single-recipient open arm MUST refuse a group envelope by codepoint
     // (the dispatch strict-rejects BEFORE any decrypt/verify).
-    let outcome = open_single(&[0xA1u8; 32], &b"did:key:zAUD".to_vec(), 1, &group_env);
+    let outcome = open_single(&fixed_sk(0xA1), &b"did:key:zAUD".to_vec(), 1, &group_env);
     assert_eq!(
         outcome,
         Err(LayerCError::UnsupportedCodepoint(
@@ -465,7 +491,7 @@ fn f_disc_2_inv18_sealed_sender_default_metadata_disclosure_enforced() {
     // (2) A REAL seal's plaintext AAD region MUST NOT contain the sender-DID.
     let (sender_kp, sender) = hybrid_sender();
     let env = seal_sealed_sender(
-        &[0x31u8; 32],
+        &fixed_pk(0x31),
         &b"did:key:zAUDIENCE".to_vec(),
         &sender,
         &sender_kp,
@@ -500,7 +526,7 @@ fn f_disc_2_inv18_sealed_sender_default_metadata_disclosure_enforced() {
 /// emitting the raw set-id/roster flips the blinding assertion.
 #[test]
 fn f_disc_2_inv20_clause_c_group_aad_field_set_enforced_blinded() {
-    let pks: [RecipientPubKey; 3] = [[0x41u8; 32], [0x42u8; 32], [0x43u8; 32]];
+    let pks = [fixed_pk(0x41), fixed_pk(0x42), fixed_pk(0x43)];
     let k_set = [0x55u8; 32];
     let set_id: Vec<u8> = b"benten:set:inv20-RAW-SETID-MARKER".to_vec();
     let params = GroupSealParams {
@@ -553,8 +579,10 @@ fn f_disc_2_inv20_clause_c_group_aad_field_set_enforced_blinded() {
 /// `Ok(plaintext)` — silent censorship.
 #[test]
 fn f_disc_2_inv19_inv20_truncation_defense_enforced_fail_closed() {
-    let pks: [RecipientPubKey; 3] = [[0x61u8; 32], [0x62u8; 32], [0x63u8; 32]];
-    let sks: [[u8; 32]; 3] = [[0xE1u8; 32], [0xE2u8; 32], [0xE3u8; 32]];
+    // R9 GAP-1: pk + sk must be the SAME real keypair per recipient (the old
+    // fixture paired them via the deleted `sk = pk + 0x80` placeholder).
+    let pks = [fixed_pk(0x61), fixed_pk(0x62), fixed_pk(0x63)];
+    let sks = [fixed_sk(0x61), fixed_sk(0x62), fixed_sk(0x63)];
     let params = GroupSealParams {
         membership_set_id: b"benten:set:inv19".to_vec(),
         member_key_generation: 1,

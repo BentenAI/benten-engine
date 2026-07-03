@@ -280,15 +280,19 @@ pub const DROP_TO_RECIPIENT_SEALED_SENDER: u16 = 0x6510;
 pub const LAYER_C_DROP_MULTI_RECIPIENT: u16 = 0x6520;
 
 // ---------------------------------------------------------------------------
-// Type aliases (mirroring the intended public surface).
+// Recipient key types (the REAL X25519⊕ML-KEM-768 hybrid key material).
 // ---------------------------------------------------------------------------
 
-/// A recipient identity fingerprint (the X25519⊕ML-KEM-768 hybrid pubkey
-/// fingerprint; the seal/open path expands it to a deterministic real
-/// hybrid keypair via [`benten_crypto_suite`]).
-pub type RecipientPubKey = [u8; 32];
-/// A recipient secret fingerprint (paired with [`RecipientPubKey`]).
-pub type RecipientSecKey = [u8; 32];
+// R9 GAP-1: the frozen encrypt-to-recipient surface takes the REAL hybrid
+// recipient key types from [`benten_crypto_suite`], NOT a `[u8; 32]`
+// placeholder fingerprint. The seal path wraps the CEK to the recipient's
+// real public key; the open path unwraps it with the recipient's real secret
+// (which carries genuine entropy — the deleted placeholder derived the
+// "secret" from the public via `pk + 0x80`, so anyone with the public key
+// could decrypt). This module stays pure crypto glue (no DID knowledge) and
+// exposes the real types coherently on its public surface.
+pub use benten_crypto_suite::cipher_suite::{RecipientPublic, RecipientSecret};
+
 /// A sender DID (`did:key` multibase string in production), as raw bytes.
 pub type SenderDid = Vec<u8>;
 /// A recipient DID (an element of the BLINDED roster bound via the
@@ -640,19 +644,18 @@ fn decode_wrapped_key(bytes: &[u8]) -> Option<WrappedKey> {
 }
 
 /// Seal the `0x6510` inner payload under a fresh CEK with the given AAD;
-/// HPKE-wrap the CEK to the recipient (derived deterministically from the
-/// pubkey fingerprint). The inner payload carries the ORIGIN-AUTH signature
-/// in the once-sealed region (B2):
+/// HPKE-wrap the CEK to the recipient's REAL hybrid public key. The inner
+/// payload carries the ORIGIN-AUTH signature in the once-sealed region (B2):
 /// `inner_v2 = lp_u32(sender_did) ‖ sig_codepoint(u16 BE) ‖ lp_u32(sender_sig) ‖ body`.
 /// `M_auth` binds the `audience_did` the sender is sending TO (the recipient
 /// re-derives it from its OWN audience — F-2). Returns `(enc, ciphertext)`.
-// The B2 origin-auth binding genuinely needs all of {recipient_pk, sender_did,
+// The B2 origin-auth binding genuinely needs all of {recipient_pub, sender_did,
 // sender_kp, envelope_codepoint, audience_did, body_cid, recipient_key_generation,
 // aad, body}; bundling them into a params struct would obscure the seal flow's
 // 1:1 correspondence with M_auth's fields. Internal (crate-private) helper.
 #[allow(clippy::too_many_arguments)]
 fn seal_inner(
-    recipient_pk: &RecipientPubKey,
+    recipient_pub: &RecipientPublic,
     sender_did: &SenderDid,
     sender_kp: &benten_crypto_suite::sig::Keypair,
     envelope_codepoint: u16,
@@ -664,11 +667,13 @@ fn seal_inner(
 ) -> (Vec<u8>, Vec<u8>) {
     let suite = hybrid_suite();
     // The CEK is a fresh per-send symmetric key. Derived from a hash of the
-    // recipient pubkey + sender + AAD so it is deterministic per (recipient,
-    // send) while still HPKE-wrapped (the relay never sees it).
+    // recipient public key + sender + AAD so it is deterministic per (recipient,
+    // send) while still HPKE-wrapped (the relay never sees it; the open side
+    // recovers it by HPKE-unwrap, NEVER by re-hashing — so the CEK derivation
+    // is a seal-local freshness source, not a round-trip contract).
     let mut cek_h = blake3::Hasher::new();
     cek_h.update(LAYER_C_CEK_CONTEXT);
-    cek_h.update(recipient_pk);
+    cek_h.update(&recipient_pub.to_bytes());
     cek_h.update(sender_did);
     cek_h.update(aad);
     cek_h.update(body);
@@ -710,10 +715,9 @@ fn seal_inner(
         .expect("ChaCha20-Poly1305 seal of the Layer-C inner payload must succeed");
     let ciphertext = body_env.to_wire_bytes();
 
-    // HPKE-wrap the CEK to the recipient.
-    let recipient_kp = suite.generate_recipient_keypair_deterministic(recipient_pk);
+    // HPKE-wrap the CEK to the recipient's REAL public key (R9 GAP-1).
     let wrapped = suite
-        .wrap_key_material(recipient_kp.public(), &cek)
+        .wrap_key_material(recipient_pub, &cek)
         .expect("X-Wing wrap of the Layer-C CEK must succeed");
     let enc = encode_wrapped_key(&wrapped);
     (enc, ciphertext)
@@ -729,7 +733,7 @@ fn seal_inner(
 // (F-2); internal (crate-private) helper. See seal_inner's note.
 #[allow(clippy::too_many_arguments)]
 fn open_inner(
-    recipient_sk: &RecipientSecKey,
+    recipient_sec: &RecipientSecret,
     enc: &[u8],
     ciphertext: &[u8],
     aad: &[u8],
@@ -739,19 +743,16 @@ fn open_inner(
     recipient_key_generation: u32,
 ) -> Result<(Vec<u8>, SenderDid), LayerCError> {
     let suite = hybrid_suite();
-    // Reconstruct the recipient keypair from the secret fingerprint. The
-    // seed for the pubkey-side keypair is the *pubkey* fingerprint; the test
-    // fixtures pair `fixed_sk(seed) = fixed_pk(seed) + 0x80` per byte, so the
-    // pubkey fingerprint is recovered by subtracting 0x80 from each byte.
-    let mut pk_fingerprint = [0u8; 32];
-    for (i, b) in recipient_sk.iter().enumerate() {
-        pk_fingerprint[i] = b.wrapping_sub(0x80);
-    }
-    let recipient_kp = suite.generate_recipient_keypair_deterministic(&pk_fingerprint);
 
+    // R9 GAP-1: HPKE-unwrap the CEK with the recipient's REAL secret key
+    // (genuine entropy). The deleted placeholder reconstructed a "secret" from
+    // the PUBLIC fingerprint (`pk = sk - 0x80`) → zero secret entropy → any
+    // holder of the public key could decrypt. A secret that does NOT match the
+    // public key the sender wrapped to yields a different X-Wing shared secret
+    // and the AEAD unwrap fails closed.
     let wrapped = decode_wrapped_key(enc).ok_or(LayerCError::AeadAuthenticationFailed)?;
     let cek = suite
-        .unwrap_key_material(recipient_kp.secret(), &wrapped)
+        .unwrap_key_material(recipient_sec, &wrapped)
         .map_err(|_| LayerCError::AeadAuthenticationFailed)?;
 
     let cek_key = AeadKeyMaterial::from_raw_bytes(
@@ -842,7 +843,7 @@ fn open_inner(
 /// single-recipient seal.
 #[must_use]
 pub fn seal_sealed_sender(
-    recipient_pk: &RecipientPubKey,
+    recipient_pub: &RecipientPublic,
     audience_did: &AudienceDid,
     sender_did: &SenderDid,
     sender_kp: &benten_crypto_suite::sig::Keypair,
@@ -860,7 +861,7 @@ pub fn seal_sealed_sender(
     };
     let aad = binding.plaintext_aad_bytes();
     let (enc, ciphertext) = seal_inner(
-        recipient_pk,
+        recipient_pub,
         sender_did,
         sender_kp,
         DROP_TO_RECIPIENT_SEALED_SENDER,
@@ -885,7 +886,7 @@ pub fn seal_sealed_sender(
 /// see `sender_kp` on [`seal_sealed_sender`].
 #[must_use]
 pub fn seal_plaintext_sender(
-    recipient_pk: &RecipientPubKey,
+    recipient_pub: &RecipientPublic,
     audience_did: &AudienceDid,
     sender_did: &SenderDid,
     sender_kp: &benten_crypto_suite::sig::Keypair,
@@ -904,7 +905,7 @@ pub fn seal_plaintext_sender(
     };
     let aad = binding.plaintext_aad_bytes();
     let (enc, ciphertext) = seal_inner(
-        recipient_pk,
+        recipient_pub,
         sender_did,
         sender_kp,
         LAYER_C_DROP,
@@ -939,7 +940,7 @@ pub fn seal_plaintext_sender(
 /// signature does not verify (impersonation / re-target / suite-downgrade /
 /// stripped-half).
 pub fn open_single(
-    recipient_sk: &RecipientSecKey,
+    recipient_sec: &RecipientSecret,
     recipient_audience_did: &AudienceDid,
     recipient_key_generation: u32,
     env: &EncryptedEnvelope,
@@ -965,7 +966,7 @@ pub fn open_single(
             };
             let aad = binding.plaintext_aad_bytes();
             open_inner(
-                recipient_sk,
+                recipient_sec,
                 enc,
                 ciphertext,
                 &aad,
@@ -987,16 +988,18 @@ pub fn open_single(
 
 /// Build the per-recipient blinded roster: each recipient's stanza binds the
 /// WHOLE roster as the commitment input (so re-target flips the commitment).
-fn group_roster(recipient_pks: &[RecipientPubKey]) -> Vec<RecipientDid> {
-    // Derive a stable per-recipient DID from each pubkey fingerprint so the
-    // roster is content-bound. (In production the roster is the actual
-    // recipient DIDs; here we derive deterministically from the pubkey.)
-    recipient_pks
+fn group_roster(recipient_pubs: &[RecipientPublic]) -> Vec<RecipientDid> {
+    // Derive a stable per-recipient DID from each recipient's REAL public key
+    // so the roster is content-bound. (In production the roster is the actual
+    // recipient DIDs; here we derive deterministically from the pubkey. R9
+    // GAP-1: the input is now the real hybrid public key bytes, not a `[u8; 32]`
+    // placeholder fingerprint — the derivation shape is unchanged.)
+    recipient_pubs
         .iter()
         .map(|pk| {
             let mut h = blake3::Hasher::new();
             h.update(b"benten-drop:layer-c:recipient-did");
-            h.update(pk);
+            h.update(&pk.to_bytes());
             let d = h.finalize();
             let mut did = b"did:key:z".to_vec();
             did.extend_from_slice(d.as_bytes());
@@ -1006,15 +1009,15 @@ fn group_roster(recipient_pks: &[RecipientPubKey]) -> Vec<RecipientDid> {
 }
 
 /// **Test-only (B2 / F-2):** the recipient-DID roster the `0x6520` seal
-/// derives from the recipient pubkeys — the INDEPENDENTLY-held roster an
+/// derives from the recipient public keys — the INDEPENDENTLY-held roster an
 /// honest `open_group_stanza` recipient passes to recompute the B2
 /// `audience_set_commitment` (NEVER the wire `stanza.recipient_dids`). In
 /// production a recipient holds the actual roster; this mirrors the seal-side
 /// derivation so the round-trip pins model the held-roster faithfully.
 #[cfg(any(test, feature = "testing"))]
 #[must_use]
-pub fn group_roster_for_test(recipient_pks: &[RecipientPubKey]) -> Vec<RecipientDid> {
-    group_roster(recipient_pks)
+pub fn group_roster_for_test(recipient_pubs: &[RecipientPublic]) -> Vec<RecipientDid> {
+    group_roster(recipient_pubs)
 }
 
 /// **Test-only content-splice model (F-01, `0x6520`):** a second sealer who can
@@ -1101,7 +1104,7 @@ pub fn splice_group_multi_body_for_test(
 }
 
 fn seal_group_impl(
-    recipient_pks: &[RecipientPubKey],
+    recipient_pubs: &[RecipientPublic],
     sender_did: &SenderDid,
     sender_kp: &benten_crypto_suite::sig::Keypair,
     body_cid: &BodyCidDigest,
@@ -1110,8 +1113,8 @@ fn seal_group_impl(
     plaintext_sender: bool,
 ) -> EncryptedEnvelope {
     let suite = hybrid_suite();
-    let roster = group_roster(recipient_pks);
-    let stanza_count = u32::try_from(recipient_pks.len()).expect("stanza count fits u32");
+    let roster = group_roster(recipient_pubs);
+    let stanza_count = u32::try_from(recipient_pubs.len()).expect("stanza count fits u32");
     let cid = self_describing_cid(body_cid);
 
     // One shared CEK seals the bulk body ONCE; each recipient gets a wrapped
@@ -1163,8 +1166,8 @@ fn seal_group_impl(
     cek_aead_nonce.copy_from_slice(&body_env.nonce[..12]);
     let cek_aead_ciphertext = body_env.to_wire_bytes();
 
-    let mut stanzas = Vec::with_capacity(recipient_pks.len());
-    for (idx, pk) in recipient_pks.iter().enumerate() {
+    let mut stanzas = Vec::with_capacity(recipient_pubs.len());
+    for (idx, pk) in recipient_pubs.iter().enumerate() {
         let stanza_index = u32::try_from(idx).expect("stanza index fits u32");
         let plaintext_sender_did = if plaintext_sender {
             Some(sender_did.clone())
@@ -1194,10 +1197,9 @@ fn seal_group_impl(
             .expect("per-stanza sealed_inner seal must succeed");
         let sealed_inner = sealed_env.to_wire_bytes();
 
-        // HPKE-wrap the shared CEK to THIS recipient.
-        let recipient_kp = suite.generate_recipient_keypair_deterministic(pk);
+        // HPKE-wrap the shared CEK to THIS recipient's REAL public key (R9 GAP-1).
         let wrapped = suite
-            .wrap_key_material(recipient_kp.public(), &cek)
+            .wrap_key_material(pk, &cek)
             .expect("per-stanza CEK wrap must succeed");
         let wrapped_cek = encode_wrapped_key(&wrapped);
 
@@ -1222,7 +1224,7 @@ fn seal_group_impl(
 /// roster; the inner-sender-DID is sealed inside the per-stanza payload.
 #[must_use]
 pub fn seal_group_multi(
-    recipient_pks: &[RecipientPubKey],
+    recipient_pubs: &[RecipientPublic],
     sender_did: &SenderDid,
     sender_kp: &benten_crypto_suite::sig::Keypair,
     body_cid: &BodyCidDigest,
@@ -1230,7 +1232,7 @@ pub fn seal_group_multi(
     plaintext: &[u8],
 ) -> EncryptedEnvelope {
     seal_group_impl(
-        recipient_pks,
+        recipient_pubs,
         sender_did,
         sender_kp,
         body_cid,
@@ -1245,7 +1247,7 @@ pub fn seal_group_multi(
 /// non-default — paired control only (BR-1 ruling 1).
 #[must_use]
 pub fn seal_group_multi_plaintext_sender(
-    recipient_pks: &[RecipientPubKey],
+    recipient_pubs: &[RecipientPublic],
     sender_did: &SenderDid,
     sender_kp: &benten_crypto_suite::sig::Keypair,
     body_cid: &BodyCidDigest,
@@ -1253,7 +1255,7 @@ pub fn seal_group_multi_plaintext_sender(
     plaintext: &[u8],
 ) -> EncryptedEnvelope {
     seal_group_impl(
-        recipient_pks,
+        recipient_pubs,
         sender_did,
         sender_kp,
         body_cid,
@@ -1288,7 +1290,7 @@ pub fn seal_group_multi_plaintext_sender(
 /// body payload, and [`LayerCError::SenderOriginAuthFailed`] when the
 /// per-message origin-auth signature does not verify.
 pub fn open_group_stanza(
-    recipient_sk: &RecipientSecKey,
+    recipient_sec: &RecipientSecret,
     my_index: usize,
     independent_roster: &[RecipientDid],
     recipient_key_generation: u32,
@@ -1323,17 +1325,14 @@ pub fn open_group_stanza(
     }
 
     let suite = hybrid_suite();
-    let mut pk_fingerprint = [0u8; 32];
-    for (i, b) in recipient_sk.iter().enumerate() {
-        pk_fingerprint[i] = b.wrapping_sub(0x80);
-    }
-    let recipient_kp = suite.generate_recipient_keypair_deterministic(&pk_fingerprint);
 
-    // Unwrap the shared CEK from THIS stanza.
+    // Unwrap the shared CEK from THIS stanza with the recipient's REAL secret
+    // key (R9 GAP-1 — the placeholder `sk - 0x80` public-fingerprint
+    // reconstruction is deleted; a non-matching secret fails the AEAD closed).
     let wrapped =
         decode_wrapped_key(&stanza.wrapped_cek).ok_or(LayerCError::AeadAuthenticationFailed)?;
     let cek = suite
-        .unwrap_key_material(recipient_kp.secret(), &wrapped)
+        .unwrap_key_material(recipient_sec, &wrapped)
         .map_err(|_| LayerCError::AeadAuthenticationFailed)?;
     let cek_key = AeadKeyMaterial::from_raw_bytes(
         CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
@@ -1724,10 +1723,12 @@ pub mod group_posture {
 
     /// A sender DID, as raw bytes.
     pub type SenderDid = Vec<u8>;
-    /// A recipient pubkey fingerprint.
-    pub type RecipientPubKey = [u8; 32];
-    /// A recipient secret fingerprint.
-    pub type RecipientSecKey = [u8; 32];
+
+    // R9 GAP-1: the `0x6610` MembershipSet seal/open surface takes the REAL
+    // hybrid recipient key types (NOT a `[u8; 32]` placeholder fingerprint).
+    // Re-exported here so the `group_posture` public surface exposes the real
+    // types coherently (identical to the parent `layer_c` re-export).
+    pub use benten_crypto_suite::cipher_suite::{RecipientPublic, RecipientSecret};
 
     /// The MembershipSet-specific keying generations + raw set-id the `0x6610`
     /// BLINDED 11-field AAD binds (over and above the roster/index/count that
@@ -1821,12 +1822,15 @@ pub mod group_posture {
             .expect("0x647a wire-locked")
     }
 
-    fn group_roster(pks: &[RecipientPubKey]) -> Vec<Vec<u8>> {
+    fn group_roster(pks: &[RecipientPublic]) -> Vec<Vec<u8>> {
+        // R9 GAP-1: derive from the recipient's REAL public key bytes (not a
+        // `[u8; 32]` placeholder). The derivation shape is unchanged; only the
+        // key representation moved placeholder → real hybrid pubkey.
         pks.iter()
             .map(|pk| {
                 let mut h = blake3::Hasher::new();
                 h.update(b"benten-drop:layer-c:recipient-did");
-                h.update(pk);
+                h.update(&pk.to_bytes());
                 let d = h.finalize();
                 let mut did = b"did:key:z".to_vec();
                 did.extend_from_slice(d.as_bytes());
@@ -2095,7 +2099,7 @@ pub mod group_posture {
     /// set blinds.
     #[must_use]
     pub fn seal_membership_set_group(
-        recipient_pks: &[RecipientPubKey],
+        recipient_pubs: &[RecipientPublic],
         sender_did: &SenderDid,
         sender_kp: &benten_crypto_suite::sig::Keypair,
         k_set: &[u8; 32],
@@ -2103,8 +2107,8 @@ pub mod group_posture {
         plaintext: &[u8],
     ) -> GroupSealedEnvelope {
         let suite = hybrid_suite();
-        let roster = group_roster(recipient_pks);
-        let stanza_count = u32::try_from(recipient_pks.len()).expect("count fits u32");
+        let roster = group_roster(recipient_pubs);
+        let stanza_count = u32::try_from(recipient_pubs.len()).expect("count fits u32");
         let body_digest = *blake3::hash(plaintext).as_bytes();
         let cid = self_describing_cid(&body_digest);
         // The group CEK is the K_Set-derived PER-MESSAGE key (READ K_Set; the
@@ -2181,8 +2185,8 @@ pub mod group_posture {
         wire.extend_from_slice(&cid);
         wire.extend_from_slice(&body_wire);
 
-        let mut stanzas = Vec::with_capacity(recipient_pks.len());
-        for (idx, pk) in recipient_pks.iter().enumerate() {
+        let mut stanzas = Vec::with_capacity(recipient_pubs.len());
+        for (idx, pk) in recipient_pubs.iter().enumerate() {
             let stanza_index = u32::try_from(idx).expect("idx fits u32");
             // Per-stanza AAD = the BLINDED 11-field set assembled LOCALLY (F-02
             // option-(b); benten-drop-owned, NO production membership-set dep).
@@ -2204,9 +2208,9 @@ pub mod group_posture {
                 .expect("per-stanza sealed_inner seal must succeed");
             let sealed_inner = sealed_env.to_wire_bytes();
 
-            let kp = suite.generate_recipient_keypair_deterministic(pk);
+            // R9 GAP-1: HPKE-wrap the CEK to the recipient's REAL public key.
             let wrapped = suite
-                .wrap_key_material(kp.public(), &cek)
+                .wrap_key_material(pk, &cek)
                 .expect("CEK wrap must succeed");
             let wrapped_cek = encode_wrapped(&wrapped);
             // The opaque wrapped CEK trails the body on the wire (relay sees
@@ -2275,7 +2279,7 @@ pub mod group_posture {
     /// signature does not verify (co-member impersonation / re-target / stale-
     /// generation replay / suite-downgrade).
     pub fn open_membership_set_group(
-        sk: &RecipientSecKey,
+        recipient_sec: &RecipientSecret,
         my_index: usize,
         ctx: &GroupVerifyContext,
         env: &GroupSealedEnvelope,
@@ -2295,12 +2299,11 @@ pub mod group_posture {
         }
 
         let suite = hybrid_suite();
-        let mut pk_fingerprint = [0u8; 32];
-        for (i, b) in sk.iter().enumerate() {
-            pk_fingerprint[i] = b.wrapping_sub(0x80);
-        }
-        let kp = suite.generate_recipient_keypair_deterministic(&pk_fingerprint);
 
+        // R9 GAP-1: HPKE-unwrap the CEK with the recipient's REAL secret key.
+        // The deleted placeholder reconstructed the "secret" from the PUBLIC
+        // fingerprint (`pk = sk - 0x80`) → zero secret entropy → any holder of
+        // the public key could open. A non-matching secret fails closed.
         let stanza = env
             .stanzas
             .get(my_index)
@@ -2308,7 +2311,7 @@ pub mod group_posture {
         let wrapped =
             decode_wrapped(&stanza.wrapped_cek).ok_or(GroupError::AeadAuthenticationFailed)?;
         let cek = suite
-            .unwrap_key_material(kp.secret(), &wrapped)
+            .unwrap_key_material(recipient_sec, &wrapped)
             .map_err(|_| GroupError::AeadAuthenticationFailed)?;
         let cek_key = AeadKeyMaterial::from_raw_bytes(
             CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,

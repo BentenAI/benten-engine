@@ -185,6 +185,9 @@ use abuse_stub::{
     AdmitError, DeliveryToken, TokenBindingAad, admit_sealed_sender, admit_sealed_sender_bound,
     decrypt_was_attempted_for_last_admit, serialize_token_binding_aad,
 };
+use benten_crypto_suite::cipher_suite::{
+    CipherSuite, CipherSuiteCodepoint, RecipientPublic, RecipientSecret,
+};
 use benten_crypto_suite::sig::{Keypair as SigKeypair, SignatureSuite};
 use benten_id::did::Did;
 use group_posture_stub::{
@@ -201,9 +204,32 @@ fn hybrid_sender() -> (SigKeypair, Vec<u8>) {
     (kp, did_str.into_bytes())
 }
 
+/// R9 GAP-1 recipient-key helpers: a stable REAL hybrid keypair per `seed`
+/// (secret seed → both halves; `.public()`/`.secret()` genuinely correspond).
+/// Replaces the deleted `[u8; 32]` placeholder pubkeys.
+fn fixed_kp(seed: u8) -> benten_crypto_suite::cipher_suite::RecipientKeypair {
+    CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
+        .expect("0x647a wire-locked")
+        .generate_recipient_keypair_deterministic(&[seed; 32])
+}
+fn fixed_pk(seed: u8) -> RecipientPublic {
+    RecipientPublic::from_bytes(
+        CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+        &fixed_kp(seed).public().to_bytes(),
+    )
+    .expect("re-parse of recipient public must succeed")
+}
+fn fixed_sk(seed: u8) -> RecipientSecret {
+    RecipientSecret::from_bytes(
+        CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+        &fixed_kp(seed).secret().to_bytes(),
+    )
+    .expect("re-parse of recipient secret must succeed")
+}
+
 /// The independently-held `GroupVerifyContext` over a derived roster (all
 /// generations = 1, matching `group_seal_params`).
-fn verify_ctx(pks: &[[u8; 32]]) -> GroupVerifyContext {
+fn verify_ctx(pks: &[RecipientPublic]) -> GroupVerifyContext {
     let member_dids = benten_drop::layer_c::group_roster_for_test(pks)
         .iter()
         .map(|d| String::from_utf8_lossy(d).into_owned())
@@ -506,7 +532,7 @@ fn f_lc_8_mutated_token_binding_aad_fails_admit() {
 /// plaintext wire field.
 #[test]
 fn f_lc_9_group_send_honors_sealed_sender_no_plaintext_sender_did() {
-    let pks = [[0x10u8; 32], [0x11u8; 32], [0x12u8; 32]];
+    let pks = [fixed_pk(0x10), fixed_pk(0x11), fixed_pk(0x12)];
     let (sender_kp, sender) = hybrid_sender();
     let k_set = [0x33u8; 32];
 
@@ -545,8 +571,9 @@ fn f_lc_9_group_send_honors_sealed_sender_no_plaintext_sender_did() {
 /// attribution entirely for groups.
 #[test]
 fn f_lc_9_group_recipient_recovers_inner_sender_did() {
-    let pks = [[0x20u8; 32], [0x21u8; 32]];
-    let sks = [[0xA0u8; 32], [0xA1u8; 32]];
+    // R9 GAP-1: pk + sk are the SAME real keypair per recipient (paired seed).
+    let pks = [fixed_pk(0x20), fixed_pk(0x21)];
+    let sks = [fixed_sk(0x20), fixed_sk(0x21)];
     let (sender_kp, sender) = hybrid_sender();
     let k_set = [0x44u8; 32];
 
@@ -589,7 +616,7 @@ fn f_lc_9_group_codepoints_distinct_and_dispatch_strict_reject() {
     // Feed 0x6610-declared bytes to the 0x6520 arm → strict-reject.
     let (sender_kp, sender) = hybrid_sender();
     let env = seal_membership_set_group(
-        &[[0x30u8; 32]],
+        &[fixed_pk(0x30)],
         &sender,
         &sender_kp,
         &[0x55u8; 32],
@@ -853,21 +880,25 @@ fn f_lc_7_hpke_non_fs_old_envelope_still_opens_with_recovered_sk() {
     // FS-gap reality (Compromise #42). Exercises the REAL Layer-C path: seal
     // to a long-term recipient pubkey, then open with the matching long-term
     // sk (the "recovered" key). The open SUCCEEDS — that IS the non-FS gap.
-    use benten_drop::layer_c::{open_single, seal_sealed_sender};
+    use benten_drop::layer_c::{RecipientSecret, open_single, seal_sealed_sender};
     fn open_with_recovered_sk(
         _old_envelope_marker: &[u8],
-        recovered_sk: &[u8; 32],
+        recovered_kp: &benten_crypto_suite::cipher_suite::RecipientKeypair,
     ) -> Result<Vec<u8>, ()> {
-        // The recovered long-term sk corresponds to a long-term pubkey
-        // fingerprint (pk = sk - 0x80 per byte, matching the fixture pairing).
-        let mut pk = [0u8; 32];
-        for (i, b) in recovered_sk.iter().enumerate() {
-            pk[i] = b.wrapping_sub(0x80);
-        }
+        // R9 GAP-1: the "recovered long-term sk" is the REAL secret half of the
+        // long-term recipient keypair; the old envelope was sealed to the
+        // matching REAL public half. Recovering the genuine secret (not a
+        // public-derived forgery) is what opens the old envelope — that IS the
+        // non-FS gap the test documents.
+        let recovered_sk = RecipientSecret::from_bytes(
+            benten_crypto_suite::cipher_suite::CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+            &recovered_kp.secret().to_bytes(),
+        )
+        .expect("re-parse of recipient secret must succeed");
         let audience = b"did:key:zLongTermRecipient".to_vec();
         let (sender_kp, sender) = hybrid_sender();
         let env = seal_sealed_sender(
-            &pk,
+            recovered_kp.public(),
             &audience,
             &sender,
             &sender_kp,
@@ -877,14 +908,18 @@ fn f_lc_7_hpke_non_fs_old_envelope_still_opens_with_recovered_sk() {
             b"old 2026 content",
         );
         // A 2030 recovery of the SAME long-term sk decrypts the 2026 envelope.
-        open_single(recovered_sk, &audience, 0, &env)
+        open_single(&recovered_sk, &audience, 0, &env)
             .map(|(pt, _sender)| pt)
             .map_err(|_| ())
     }
 
     let old_env = b"V2 HPKE-base envelope sealed in 2026".to_vec();
-    let recovered_sk = [0x99u8; 32];
-    let opened = open_with_recovered_sk(&old_env, &recovered_sk);
+    let recovered_kp = benten_crypto_suite::cipher_suite::CipherSuite::resolve(
+        benten_crypto_suite::cipher_suite::CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+    )
+    .expect("0x647a wire-locked")
+    .generate_recipient_keypair_deterministic(&[0x99u8; 32]);
+    let opened = open_with_recovered_sk(&old_env, &recovered_kp);
     assert!(
         opened.is_ok(),
         "F-LC-7: HPKE-mode-base is NON-FS at the long-term-sk axis — a \
