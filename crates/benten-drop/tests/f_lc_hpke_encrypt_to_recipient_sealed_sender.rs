@@ -1739,10 +1739,13 @@ fn f_lc_3_content_splice_rejected_membership_group() {
 }
 
 /// F-LC-3 PIN 5f (B2 SUBSTANTIVE — `0x6520` CONTENT-SPLICE, F-01
-/// SOUNDNESS-CRITICAL) — same shape as 5e for the Layer-C group, where the CEK
-/// is derivable from PUBLIC inputs → ANY party can splice. B keeps A's real
-/// `sender_sig` + the ORIGINAL `body_cid` but substitutes a DIFFERENT body;
-/// every honest recipient REJECTS with `LayerCError::SenderOriginAuthFailed`.
+/// SOUNDNESS-CRITICAL) — the RESIDUAL insider threat after R11 MC-1: the
+/// `0x6520` group CEK is now a fresh random per-message value delivered ONLY
+/// via the per-stanza HPKE-wrap, so a NON-recipient can no longer recover it
+/// (see [`mc_1_non_recipient_cannot_recover_group_cek`]). But a legitimate
+/// CO-RECIPIENT B holds the CEK (it unwraps its own stanza), so B CAN keep A's
+/// real `sender_sig` + the ORIGINAL `body_cid` and substitute a DIFFERENT body.
+/// Every honest recipient REJECTS with `LayerCError::SenderOriginAuthFailed`.
 ///
 /// would-FAIL-on-revert: WITHOUT the F-01 content-splice guard,
 /// `open_group_stanza` recovers the SUBSTITUTED body, rebuilds M_auth from the
@@ -1769,28 +1772,112 @@ fn f_lc_3_content_splice_rejected_layer_c_group() {
         assert_eq!(pt, b"honest body", "honest body recovered byte-exact");
     }
 
-    // ATTACK: keep A's REAL sender_sig + the ORIGINAL body_cid, splice a
-    // DIFFERENT body under the public-input-derived CEK.
-    let spliced = splice_group_multi_body_for_test(
-        &honest,
-        &a_did,
-        &body_cid,
-        0,
-        b"FORGED splice attributed to A",
-    );
+    // ATTACK: co-recipient B (stanza index 1, holds sks[1]) legitimately
+    // UNWRAPS the shared CEK from its own stanza, keeps A's REAL sender_sig +
+    // the ORIGINAL body_cid, and re-seals a DIFFERENT body under that CEK.
+    let spliced =
+        splice_group_multi_body_for_test(&honest, &sks[1], 1, b"FORGED splice attributed to A");
     for (i, sk) in sks.iter().enumerate() {
         let outcome = open_group_stanza(sk, i, &roster, 0, &spliced);
         assert_eq!(
             outcome,
             Err(LayerCError::SenderOriginAuthFailed),
-            "F-LC-3 (B2 / F-01): a 0x6520 second-sealer who KEEPS A's real \
-             sender_sig + the ORIGINAL body_cid but splices a DIFFERENT body \
-             MUST be rejected by honest recipient {i} (the recovered body no \
-             longer hashes to the wire body_cid). would-FAIL-on-revert: without \
-             the content-splice guard the forged body opens A-attributed. \
-             Got: {outcome:?}"
+            "F-LC-3 (B2 / F-01): a 0x6520 CO-RECIPIENT who unwraps the shared \
+             CEK, KEEPS A's real sender_sig + the ORIGINAL body_cid, and splices \
+             a DIFFERENT body MUST be rejected by honest recipient {i} (the \
+             recovered body no longer hashes to the wire body_cid). \
+             would-FAIL-on-revert: without the content-splice guard the forged \
+             body opens A-attributed. Got: {outcome:?}"
         );
     }
+}
+
+/// R11 MC-1 (SECURITY-CRITICAL — Sealed-Sender confidentiality) — the property
+/// the fresh-random-CEK fix RESTORES: a NON-recipient party (holds NO recipient
+/// secret; only the PUBLIC/wire material — the envelope bytes + the sender's
+/// public DID + the roster + generation) CANNOT recover the group bulk-CEK and
+/// so CANNOT decrypt the `0x6520` body.
+///
+/// would-FAIL-on-revert: if the CEK were reverted to the old public-input
+/// derivation `BLAKE3(LAYER_C_GROUP_CEK_CONTEXT ‖ body_cid ‖ sender_did ‖
+/// generation)`, that recomputed value WOULD unwrap the body (all four inputs
+/// are on the wire / a small guessable set). This test asserts the OPPOSITE:
+/// (1) the old public-derived candidate does NOT equal the real CEK a recipient
+/// unwraps, and (2) it does NOT AEAD-open the body — both would flip if MC-1
+/// were reverted.
+#[test]
+fn mc_1_non_recipient_cannot_recover_group_cek() {
+    use benten_crypto_suite::AeadKeyMaterial;
+    use benten_crypto_suite::aead::{AeadEnvelope, unwrap as aead_unwrap};
+    use benten_drop::layer_c::{LAYER_C_GROUP_CEK_CONTEXT, unwrap_group_cek_for_test};
+
+    let pks = [fixed_pk(0xD0), fixed_pk(0xD1)];
+    let sks = [fixed_sk(0xD0), fixed_sk(0xD1)];
+    let roster = group_roster_for_test(&pks);
+    let generation = 0u32;
+    let body = b"secret group body a relay must not read";
+    let body_cid = body_cid_of(body);
+
+    let (a_kp, a_did) = hybrid_sender();
+    let env = seal_group_multi(&pks, &a_did, &a_kp, &body_cid, generation, body);
+
+    // A LEGITIMATE recipient CAN open (the CEK it unwraps is the real one).
+    let (pt, rec) = open_group_stanza(&sks[0], 0, &roster, generation, &env)
+        .expect("legitimate recipient MUST open the honest group send");
+    assert_eq!(rec, a_did);
+    assert_eq!(pt, body, "recipient recovers the plaintext body");
+
+    // Pull the wire pieces a NON-recipient relay sees.
+    let EncryptedEnvelope::HpkeMultiBase {
+        cek_aead_ciphertext,
+        ..
+    } = &env
+    else {
+        panic!("0x6520 group send must be HpkeMultiBase");
+    };
+    let cid = self_describing_cid(&body_cid);
+
+    // The REAL CEK, recovered the way a recipient does (unwrap from its stanza),
+    // to compare the attacker candidate against it.
+    let real_cek = unwrap_group_cek_for_test(&sks[0], 0, &env);
+
+    // The ATTACKER candidate: the OLD public-input derivation (all wire-known).
+    let attacker_cek = {
+        let mut h = blake3::Hasher::new();
+        h.update(LAYER_C_GROUP_CEK_CONTEXT);
+        h.update(&body_cid);
+        h.update(&a_did);
+        h.update(&generation.to_be_bytes());
+        *h.finalize().as_bytes()
+    };
+
+    // (1) The public-derived candidate is NOT the real (random) CEK.
+    assert_ne!(
+        attacker_cek.as_slice(),
+        real_cek.as_slice(),
+        "R11 MC-1: the fresh random 0x6520 CEK MUST NOT equal the old \
+         public-input-derived value — would-FAIL-on-revert if the CEK were \
+         derived from public wire inputs again"
+    );
+
+    // (2) The public-derived candidate CANNOT decrypt the body.
+    let mut body_aad = Vec::new();
+    body_aad.push(AAD_VERSION);
+    body_aad.extend_from_slice(&LAYER_C_DROP_MULTI_RECIPIENT.to_be_bytes());
+    body_aad.extend_from_slice(&cid);
+    let attacker_key = AeadKeyMaterial::from_raw_bytes(
+        CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+        &attacker_cek,
+    );
+    let body_env = AeadEnvelope::from_wire_bytes(cek_aead_ciphertext)
+        .expect("body envelope parses (public wire framing)");
+    let forged_open = aead_unwrap(&body_env, &attacker_key, &body_aad);
+    assert!(
+        forged_open.is_err(),
+        "R11 MC-1: a NON-recipient using only PUBLIC wire inputs MUST NOT \
+         recover the CEK / decrypt the 0x6520 body — would-FAIL-on-revert to \
+         the public-derived CEK. Got: {forged_open:?}"
+    );
 }
 
 /// F-LC-3 PIN 5d (B2 SUBSTANTIVE — RE-TARGET to a NEW audience, F-2

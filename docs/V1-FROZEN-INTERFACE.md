@@ -17,7 +17,7 @@
 > - `7af94d06` row 4 (Engine::walk_share_scope mint + SubgraphSpecWalkFailed ErrorCode)
 > - `d2616800` row 5 (MerkleRangeProofBackend → DEFERRED to G-COMP-1 per Option A)
 > - `75a1d33a` row 8 bundle (non_exhaustive sweep + wire-format inventory + Compromise #31 [revocation-reach; re-pointed to #62 at F-full per BR-2 — #31 now denotes LAMPS Composite ML-DSA])
-> - `fb7c212d` row 1 (cargo-public-api baselines regenerated — 14 of 14 real)
+> - `fb7c212d` row 1 (cargo-public-api baselines regenerated — 15 of 15 real, one per workspace crate incl. `benten-membership-set`)
 > - `13322df4` row 2 (TS-public-api parity gate workflow + baseline)
 >
 > **Council-readiness statement:** the doc + as-built surface are ready
@@ -942,7 +942,7 @@ SURFACE.
 | `packages/engine/src/identity.ts` `Keypair` / `VerifiableCredential` / `DeviceAttestation` JS-side wrappers | As-shipped (PQ-hybrid sized) | LOCKED |
 | `packages/engine/src/manifest.ts` `ManifestSignature` + plugin-manifest JS shapes | As-shipped (PQ-hybrid sized) | LOCKED |
 | `packages/engine/src/sandbox.ts` SANDBOX JS API | As-shipped | LOCKED |
-| `packages/engine/src/wait.ts` WAIT JS API | As-shipped | LOCKED |
+| `packages/engine/src/dsl.ts` `wait(...)` WAIT JS API | As-shipped | LOCKED |
 
 **#1204 JS-side public-API parity gate LANDED at G-CORE-9
 V1-FROZEN-INTERFACE row 2 (commit `13322df4`).** Workflow at
@@ -973,9 +973,9 @@ agree" at every CI run.
 - The exported TS class/type/function names are locked.
 - The PQ-hybrid sizing (no Ed25519-shaped assumption) is locked at the
   type level — e.g. `keypair_publicKey: Uint8Array` with no length pin
-  in the type, and runtime length-check tests at
-  `packages/engine/src/manifest.test.ts` exercise the hybrid-sized
-  inputs.
+  in the type, and the `signature?: ManifestSignature` parity test at
+  `packages/engine/test/manifest_schema_parity.test.ts` exercises the
+  hybrid-sized manifest-signature shape.
 - The `errors.generated.ts` regen-determinism is part of the contract (a
   re-codegen produces zero diff).
 

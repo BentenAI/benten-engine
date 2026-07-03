@@ -88,7 +88,9 @@ mod shim {
                 user_did_signing_key: vec![0x22; 64],
                 user_did_creation_time: 0,
             };
-            let ciphertext = serialize_vault(&payload, dak.expose())
+            // R11 MC-6: persist salt+params into the frame header (self-
+            // contained bytes). The F-VA-3 constant-time property is unaffected.
+            let ciphertext = serialize_vault(&payload, &salt, FAST_PARAMS, dak.expose())
                 .expect("vault seal is infallible for valid params");
             Self {
                 salt,

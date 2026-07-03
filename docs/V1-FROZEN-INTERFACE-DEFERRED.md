@@ -2192,6 +2192,46 @@ Row D-15's audit-readiness concern.
 
 ---
 
+## R11 (post-F-full phase-close, round 11) NAMED-CARRY rows
+
+> The rows below land at the R11 phase-close convergence council fix wave (branch
+> `phase-4-meta-core/r11-council-fix`). Each is a HARD-RULE clause-(b) deferral
+> whose ENTRY lands NOW with a NAMED destination; the substantive change ships in
+> the named downstream wave. Cites verified live at HEAD `a3a1ef03` at author-time.
+
+### Row D-67 — MC-11: `DropBundle::parse_cbor_bytes` uncapped decode → v1-GM decode-cap hardening (bundled with remote-permission wiring)
+
+- **Uncapped-decode disclosure (v1-beta):** `benten_drop::bundle::DropBundle::parse_cbor_bytes`
+  (`crates/benten-drop/src/bundle.rs:354`) calls `serde_ipld_dagcbor::from_slice(bytes)`
+  with **NO byte-length ceiling** before decoding — an unbounded-decode surface.
+  There is **no live production caller** at v1-beta (only the `tf3f_*` offline-consume
+  test pins drive it — `crates/benten-drop/tests/tf3f_drop_bundle_offline_consume.rs`
+  + `tf3f_no_mode3_inline_tiny_arm.rs`); the Drop offline-consume path gains its
+  first production caller when the remote-permission / Drop-consume engine wiring
+  lands. Consequently there is no live DoS exploit at v1-beta (no attacker-reachable
+  entry point), but the decode-cap MUST be added before the surface goes live.
+- **Deferred hardening (v1-GM destination):** add a `DROP_BUNDLE_MAX_SIZE_BYTES`-scoped
+  length ceiling (the const already exists — `benten_drop::DROP_BUNDLE_MAX_SIZE_BYTES`)
+  to `parse_cbor_bytes` (reject over-cap bytes BEFORE `from_slice`), co-scheduled
+  with the remote-permission-call wiring (Row D-64 engine encrypt-to-recipient +
+  Row D-65 keyring/Tauri IPC) that first exposes the Drop-consume path to untrusted
+  input. Bundle with the v1-GM decode-cap hardening sweep.
+- **Anchor:** R11-council MC-11; `crates/benten-drop/src/bundle.rs::DropBundle::parse_cbor_bytes`
+  (:354); co-routes with Row D-64 / D-65 (remote-permission wiring).
+
+### Row D-68 — MC-16: `f_hlc_2` no-mutation claim precision (doc-tense) → tightened this round; residual precision NAMED
+
+- **Observation (NAMED):** the `f_hlc_2` HLC test's no-mutation claim wording was
+  imprecise about exactly what invariant the test pins (the test pins that the HLC
+  read/observe path performs no in-place mutation of the observed clock state, NOT
+  a broader "HLC is never mutated" claim). The doc/comment wording is tightened to
+  exactly what the test asserts in this same round (MC-16 doc-precision). Recorded
+  here per HARD-RULE clause-(b) for forensic continuity; no downstream substantive
+  change — this is a doc-tense precision fix, not a code carry.
+- **Anchor:** R11-council MC-16; the `f_hlc_2` HLC no-mutation pin.
+
+---
+
 ## Update discipline
 
 This document updates via PR:

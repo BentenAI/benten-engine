@@ -1263,7 +1263,9 @@ impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::Dak
 pub struct benten_crypto_suite::vault::DecodedVault
 pub benten_crypto_suite::vault::DecodedVault::codepoint: u16
 pub benten_crypto_suite::vault::DecodedVault::nonce: alloc::vec::Vec<u8>
+pub benten_crypto_suite::vault::DecodedVault::params: benten_crypto_suite::vault::Argon2idParams
 pub benten_crypto_suite::vault::DecodedVault::payload: benten_crypto_suite::vault::VaultPayload
+pub benten_crypto_suite::vault::DecodedVault::salt: [u8; 16]
 impl core::clone::Clone for benten_crypto_suite::vault::DecodedVault
 pub fn benten_crypto_suite::vault::DecodedVault::clone(&self) -> benten_crypto_suite::vault::DecodedVault
 impl core::fmt::Debug for benten_crypto_suite::vault::DecodedVault
@@ -1283,6 +1285,8 @@ pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::new([u8; 32], alloc::vec
 pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::user_did_signing_key(&self) -> &[u8]
 impl core::fmt::Debug for benten_crypto_suite::vault::UnlockedKeyMaterial
 pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::ops::drop::Drop for benten_crypto_suite::vault::UnlockedKeyMaterial
+pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::drop(&mut self)
 impl core::marker::Freeze for benten_crypto_suite::vault::UnlockedKeyMaterial
 impl core::marker::Send for benten_crypto_suite::vault::UnlockedKeyMaterial
 impl core::marker::Sync for benten_crypto_suite::vault::UnlockedKeyMaterial
@@ -1340,7 +1344,8 @@ pub const benten_crypto_suite::vault::VAULT_XNONCE_LEN: usize
 pub fn benten_crypto_suite::vault::decode_vault(&[u8], &[u8; 32]) -> core::result::Result<benten_crypto_suite::vault::DecodedVault, benten_crypto_suite::vault::VaultError>
 pub fn benten_crypto_suite::vault::decode_vault_strict(u16, usize) -> core::result::Result<(), benten_crypto_suite::vault::VaultError>
 pub fn benten_crypto_suite::vault::derive_dak(&[u8], &[u8; 16], benten_crypto_suite::vault::Argon2idParams, &[u8]) -> benten_crypto_suite::vault::Dak
-pub fn benten_crypto_suite::vault::serialize_vault(&benten_crypto_suite::vault::VaultPayload, &[u8; 32]) -> core::result::Result<alloc::vec::Vec<u8>, benten_crypto_suite::vault::VaultError>
+pub fn benten_crypto_suite::vault::open_vault(&[u8], &[u8], &[u8]) -> core::result::Result<benten_crypto_suite::vault::DecodedVault, benten_crypto_suite::vault::VaultError>
+pub fn benten_crypto_suite::vault::serialize_vault(&benten_crypto_suite::vault::VaultPayload, &[u8; 16], benten_crypto_suite::vault::Argon2idParams, &[u8; 32]) -> core::result::Result<alloc::vec::Vec<u8>, benten_crypto_suite::vault::VaultError>
 #[non_exhaustive] pub enum benten_crypto_suite::AeadError
 pub benten_crypto_suite::AeadError::AeadAuthFailed
 pub benten_crypto_suite::AeadError::MalformedEnvelope(&'static str)
@@ -2076,6 +2081,8 @@ pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::new([u8; 32], alloc::vec
 pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::user_did_signing_key(&self) -> &[u8]
 impl core::fmt::Debug for benten_crypto_suite::vault::UnlockedKeyMaterial
 pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::ops::drop::Drop for benten_crypto_suite::vault::UnlockedKeyMaterial
+pub fn benten_crypto_suite::vault::UnlockedKeyMaterial::drop(&mut self)
 impl core::marker::Freeze for benten_crypto_suite::vault::UnlockedKeyMaterial
 impl core::marker::Send for benten_crypto_suite::vault::UnlockedKeyMaterial
 impl core::marker::Sync for benten_crypto_suite::vault::UnlockedKeyMaterial

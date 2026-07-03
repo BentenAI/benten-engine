@@ -37,7 +37,7 @@ Two cryptographic layers protect bundle integrity:
 
 ### Revocation reach (R6 reality, per RATIFIED-S&C §R6)
 
-Drop bundles are **forever-valid once distributed**: revocation of the embedded UCAN cuts FUTURE serves on the online (G-CORE-3e) ALPN path, but already-derived keys remain decryptable (cryptographic limit — the key material is already in the recipient's hands). The mitigation is **tight `nbf`/`exp` + periodic key rotation**. This is an OPEN ARCHITECTURAL TRADE-OFF per Compromise #31 (SECURITY-POSTURE.md). Cross-referenced by `tf3f_revocation_reach_forever_valid_documented` pins.
+Drop bundles are **forever-valid once distributed**: revocation of the embedded UCAN cuts FUTURE serves on the online (G-CORE-3e) ALPN path, but already-derived keys remain decryptable (cryptographic limit — the key material is already in the recipient's hands). The mitigation is **tight `nbf`/`exp` + periodic key rotation**. This is an OPEN ARCHITECTURAL TRADE-OFF per Compromise #62 (SECURITY-POSTURE.md; revocation-reach was re-pointed from the in-tree #31 occupant per BR-2 — #31 is now the LAMPS Composite ML-DSA EUF-CMA-only compromise). Cross-referenced by `tf3f_revocation_reach_forever_valid_documented` pins.
 
 ---
 
@@ -122,6 +122,6 @@ This crate's public surface IS frozen as part of **V1-FROZEN-INTERFACE.md item 1
 
 - **Item 15(a) SubgraphSpec primitive** — `DropBundle::spec` carries a `RestrictedScopeSpec` shaped per item 15(a)'s 4-thing thin core.
 - **Item 15(d) AuthorizationGrant envelope** — `DropBundle::auth_grant` carries the ONE signed `AuthorizationGrant {ucan, key_material, binding_sig}` per item 15(d).
-- **Item 15(i) Revocation reach** — the forever-valid-once-distributed property is documented at Compromise #31 (SECURITY-POSTURE.md) per item 15(i); the open architectural trade-off is MITIGATED (not closed) by tight `nbf`/`exp` + key rotation.
+- **Item 15(i) Revocation reach** — the forever-valid-once-distributed property is documented at Compromise #62 (SECURITY-POSTURE.md; re-pointed from the in-tree #31 occupant per BR-2) per item 15(i); the open architectural trade-off is MITIGATED (not closed) by tight `nbf`/`exp` + key rotation.
 
 The cargo-public-api baseline at `docs/public-api/benten-drop.txt` is the byte-stable v1-beta surface; drift fails CI per the G-CORE-9 R1 Fork 3 FREEZE-FLIP.

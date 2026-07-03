@@ -60,16 +60,24 @@
 #![allow(dead_code)]
 
 // R5: wired to the LIVE vault surface (serde_ipld_dagcbor + XChaCha20-Poly1305).
+// R11 MC-6: the frame header now persists the Argon2id salt + params.
 use benten_crypto_suite::vault::{
-    DecodedVault, SYMMETRIC_AEAD_12B_CODEPOINT, VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT,
-    VAULT_XNONCE_LEN as FROZEN_XNONCE_LEN, VaultError, VaultPayload, decode_vault,
-    decode_vault_strict, serialize_vault,
+    Argon2idParams, DAK_HKDF_INFO_TAG, DecodedVault, OWASP_DEFAULT, SYMMETRIC_AEAD_12B_CODEPOINT,
+    VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT, VAULT_XNONCE_LEN as FROZEN_XNONCE_LEN, VaultError,
+    VaultPayload, decode_vault, decode_vault_strict, derive_dak, open_vault, serialize_vault,
 };
+
+/// A deterministic fixture salt (R11 MC-6: persisted in the frame header).
+fn fixture_salt() -> [u8; 16] {
+    [0x5Au8; 16]
+}
 
 /// Adapter: the real `serialize_vault` returns `Result`; the test calls a
 /// `_for_test`-shaped fn returning the bytes (panics on the infallible path).
+/// R11 MC-6: threads the fixture salt + OWASP params into the frame header.
 fn serialize_vault_for_test(payload: &VaultPayload, dak: &[u8; 32]) -> Vec<u8> {
-    serialize_vault(payload, dak).expect("vault serialize is infallible for the fixture")
+    serialize_vault(payload, &fixture_salt(), OWASP_DEFAULT, dak)
+        .expect("vault serialize is infallible for the fixture")
 }
 
 fn decode_vault_for_test(bytes: &[u8], dak: &[u8; 32]) -> Result<DecodedVault, VaultError> {
@@ -224,4 +232,94 @@ fn vault_cbor_payload_canonical_and_reserializes_byte_identical() {
          (field order k_principal ‖ user_did_signing_key ‖ user_did_creation_time; \
          big-endian creation-time per M-19); a reorder/encoding/endianness drift flips this"
     );
+}
+
+/// F-VA-1 (e) — R11 MC-6 frame-header freeze: the vault frame persists the
+/// 16-byte Argon2id salt + `{m_cost,t_cost,p_cost}` (each u32 BE) in the header
+/// BEFORE the nonce, at the fixed offsets
+/// `magic(1) | V2(1) | codepoint(2) | salt(16) | m_cost(4) | t_cost(4) |
+///  p_cost(4) | nonce_len(1) | nonce(24) | ct`.
+///
+/// would-FAIL-if-reverted: if the frame dropped salt+params, the header bytes
+/// at offsets 4..32 would not equal the sealed salt/params and `nonce_len`
+/// would not sit at offset 32.
+#[test]
+fn vault_frame_persists_salt_and_params_in_header() {
+    let payload = fixture_payload();
+    let dak = fixture_dak();
+    let salt = fixture_salt();
+    let params = OWASP_DEFAULT;
+    let bytes = serialize_vault(&payload, &salt, params, &dak)
+        .expect("vault serialize is infallible for the fixture");
+
+    // Fixed header offsets (R11 MC-6).
+    assert_eq!(
+        &bytes[4..20],
+        &salt[..],
+        "salt persisted at header offset 4..20"
+    );
+    assert_eq!(
+        u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]),
+        params.m_cost,
+        "m_cost (u32 BE) persisted at offset 20"
+    );
+    assert_eq!(
+        u32::from_be_bytes([bytes[24], bytes[25], bytes[26], bytes[27]]),
+        params.t_cost,
+        "t_cost (u32 BE) persisted at offset 24"
+    );
+    assert_eq!(
+        u32::from_be_bytes([bytes[28], bytes[29], bytes[30], bytes[31]]),
+        params.p_cost,
+        "p_cost (u32 BE) persisted at offset 28"
+    );
+    assert_eq!(
+        bytes[32] as usize, FROZEN_XNONCE_LEN,
+        "nonce_len byte sits at offset 32 (after the 32-byte header) and == 24"
+    );
+
+    // The decode path surfaces the header salt+params.
+    let decoded = decode_vault(&bytes, &dak).expect("decode succeeds");
+    assert_eq!(decoded.salt, salt);
+    assert_eq!(decoded.params, params);
+}
+
+/// F-VA-1 (f) — R11 MC-6 self-containment: `vault.cbor` bytes + password ALONE
+/// re-derive the DAK (salt+params sourced from the frame header) and decrypt.
+/// This is the load-bearing property MC-6 restores — before it, the salt+params
+/// lived only in an un-persisted in-RAM struct.
+///
+/// would-FAIL-on-revert: without salt+params in the frame, `open_vault` could
+/// not re-derive the DAK from the bytes alone.
+#[test]
+fn vault_opens_from_bytes_and_password_alone() {
+    let payload = fixture_payload();
+    // Runtime-built inputs (CodeQL hard-coded-crypto hygiene).
+    let password: Vec<u8> = (0u8..20)
+        .map(|i| i.wrapping_mul(9).wrapping_add(2))
+        .collect();
+    let salt: [u8; 16] = core::array::from_fn(|i| (i as u8).wrapping_add(0x40));
+    let params: Argon2idParams = OWASP_DEFAULT;
+
+    let dak = derive_dak(&password, &salt, params, DAK_HKDF_INFO_TAG);
+    let bytes = serialize_vault(&payload, &salt, params, dak.expose())
+        .expect("vault serialize is infallible for the fixture");
+
+    // Open with the frame bytes + password ALONE — no external salt.
+    let decoded: DecodedVault = open_vault(&bytes, &password, DAK_HKDF_INFO_TAG)
+        .expect("vault.cbor bytes + password alone MUST decrypt (MC-6)");
+    assert_eq!(decoded.payload, payload);
+    assert_eq!(
+        decoded.salt, salt,
+        "the recovered salt matches the sealed salt"
+    );
+    assert_eq!(decoded.params, params);
+
+    // A wrong password fails closed.
+    let mut wrong = password.clone();
+    wrong[0] ^= 0xAA;
+    assert!(matches!(
+        open_vault(&bytes, &wrong, DAK_HKDF_INFO_TAG),
+        Err(VaultError::AeadFailed)
+    ));
 }

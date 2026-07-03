@@ -1,20 +1,30 @@
 //! Layer-A vault — the at-rest `K_principal` + user-DID-signing-key store
 //! (G-CORE-3 #1301; F-full Layer-A).
 //!
-//! # On-disk format (FROZEN; R0.5 §3.1)
+//! # On-disk format (R11 MC-6 frame extension — salt + Argon2id params in-header)
 //!
 //! `${BENTEN_DATA_DIR}/vault.cbor` — a **hand-rolled magic-prefixed AEAD
 //! frame** (NOT a DAG-CBOR-encoded [`EncryptedEnvelope`](crate::envelope::EncryptedEnvelope))
 //! built by [`serialize_vault`]:
-//! `magic 0xae | format-version V2 | codepoint(BE) | nonce_len | nonce | ct`
+//! `magic 0xae | format-version V2 | codepoint(BE u16) | salt(16 B) |
+//!  m_cost(u32 BE) | t_cost(u32 BE) | p_cost(u32 BE) | nonce_len(u8) | nonce | ct`
 //! at the vault band codepoint [`VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT`]
 //! (`0x6100`). The AEAD-sealed inner payload IS canonical DAG-CBOR — the
 //! [`VaultPayload`] `{ k_principal:[u8;32], user_did_signing_key,
 //! user_did_creation_time:u64 }` — but the outer on-disk frame is the fixed
-//! binary layout above, not a CBOR-envelope wrapper. (The frame is a
-//! byte-twin of the [`EncryptedEnvelope`](crate::envelope::EncryptedEnvelope)
-//! symmetric-AEAD wire header; the duplication is noted in the
-//! V1-WIRE-FORMAT-INVENTORY.)
+//! binary layout above, not a CBOR-envelope wrapper.
+//!
+//! **R11 MC-6 (frame extension; pre-freeze).** The frame now persists the
+//! 16-byte Argon2id salt + the `{m_cost, t_cost, p_cost}` params in the header
+//! (they are NON-secret — the standard PBKDF-header shape). This is the
+//! load-bearing self-containment property: [`open_vault`] takes the frame bytes
+//! + the password ALONE and re-derives the DAK from the header salt+params — no
+//! external salt/param source is needed to open a `vault.cbor` across a restart.
+//! (Before MC-6 the salt+params lived only in an in-RAM struct that was never
+//! persisted, so the frame bytes alone could not re-derive the DAK.) There is
+//! no surviving V1/V2 vault golden vector (F-VA-1), so redefining the V2 frame
+//! carries no migration burden. `format-version V2` is retained as the vault
+//! frame version.
 //!
 //! # XChaCha20-Poly1305 24-byte nonce (m-4)
 //!
@@ -231,22 +241,42 @@ impl VaultPayload {
 pub struct DecodedVault {
     /// The vault wire codepoint (`0x6100` XNonce).
     pub codepoint: u16,
+    /// The 16-byte Argon2id salt read FROM the frame header (R11 MC-6).
+    pub salt: [u8; 16],
+    /// The Argon2id params read FROM the frame header (R11 MC-6).
+    pub params: Argon2idParams,
     /// The XChaCha20-Poly1305 24-byte nonce.
     pub nonce: Vec<u8>,
     /// The decoded canonical payload.
     pub payload: VaultPayload,
 }
 
-/// Serialize a vault on-disk envelope for a fixed payload under a fixed DAK.
+/// The fixed vault frame header length up to (but excluding) the `nonce_len`
+/// byte: `magic(1) | V2(1) | codepoint(2) | salt(16) | m_cost(4) | t_cost(4) |
+/// p_cost(4)` = 32 bytes (R11 MC-6).
+const VAULT_HEADER_LEN: usize = 1 + 1 + 2 + 16 + 4 + 4 + 4;
+
+/// Serialize a vault on-disk envelope for a fixed payload under a fixed DAK,
+/// persisting the Argon2id `salt` + `params` in the frame header (R11 MC-6).
 ///
 /// The envelope is XChaCha20-Poly1305-sealed (24-byte nonce) at the vault
 /// codepoint `0x6100`, over the canonical DAG-CBOR payload. Deterministic
 /// only in the sense the format is fixed; the nonce is random per seal.
 ///
+/// The `salt` + `params` MUST be the SAME salt+params the `dak` was derived
+/// under ([`derive_dak`]) — they are written into the frame header so a later
+/// [`open_vault`] can re-derive the DAK from the frame bytes + the password
+/// ALONE (the MC-6 self-containment property). They are NON-secret.
+///
 /// # Errors
 ///
 /// Returns [`VaultError`] on an internal AEAD error.
-pub fn serialize_vault(payload: &VaultPayload, dak: &[u8; 32]) -> Result<Vec<u8>, VaultError> {
+pub fn serialize_vault(
+    payload: &VaultPayload,
+    salt: &[u8; 16],
+    params: Argon2idParams,
+    dak: &[u8; 32],
+) -> Result<Vec<u8>, VaultError> {
     use chacha20poly1305::aead::{Aead, AeadCore, KeyInit, OsRng};
     use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 
@@ -266,15 +296,103 @@ pub fn serialize_vault(payload: &VaultPayload, dak: &[u8; 32]) -> Result<Vec<u8>
         )
         .map_err(|_| VaultError::AeadFailed)?;
 
-    // On-disk layout: magic 0xae | V2 | codepoint BE | nonce_len | nonce | ct.
-    let mut out = Vec::with_capacity(5 + nonce_bytes.len() + ct.len());
+    // On-disk layout (R11 MC-6): magic 0xae | V2 | codepoint BE | salt(16) |
+    // m_cost BE | t_cost BE | p_cost BE | nonce_len | nonce | ct.
+    let mut out = Vec::with_capacity(VAULT_HEADER_LEN + 1 + nonce_bytes.len() + ct.len());
     out.push(crate::envelope::ENVELOPE_MAGIC);
     out.push(crate::envelope::ENVELOPE_FORMAT_VERSION_V2);
     out.extend_from_slice(&VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT.to_be_bytes());
+    out.extend_from_slice(salt);
+    out.extend_from_slice(&params.m_cost.to_be_bytes());
+    out.extend_from_slice(&params.t_cost.to_be_bytes());
+    out.extend_from_slice(&params.p_cost.to_be_bytes());
     out.push(u8::try_from(nonce_bytes.len()).unwrap_or(u8::MAX));
     out.extend_from_slice(&nonce_bytes);
     out.extend_from_slice(&ct);
     Ok(out)
+}
+
+/// The parsed vault frame header + the borrowed nonce/ct slices (R11 MC-6).
+struct VaultFrame<'a> {
+    salt: [u8; 16],
+    params: Argon2idParams,
+    nonce: &'a [u8],
+    ct: &'a [u8],
+}
+
+/// Parse the vault frame header (R11 MC-6): validate the magic / version /
+/// codepoint / nonce-width and return the [`VaultFrame`]. The salt+params are
+/// read FROM the frame — the MC-6 self-containment property.
+///
+/// # Errors
+///
+/// Returns [`VaultError`] on a malformed / wrong-width / unknown-codepoint
+/// frame.
+fn parse_vault_frame(bytes: &[u8]) -> Result<VaultFrame<'_>, VaultError> {
+    // Need the fixed header + the 1-byte nonce_len.
+    if bytes.len() < VAULT_HEADER_LEN + 1 {
+        return Err(VaultError::MalformedCbor);
+    }
+    if bytes[0] != crate::envelope::ENVELOPE_MAGIC {
+        return Err(VaultError::MalformedCbor);
+    }
+    if bytes[1] != crate::envelope::ENVELOPE_FORMAT_VERSION_V2 {
+        return Err(VaultError::MalformedCbor);
+    }
+    let codepoint = u16::from_be_bytes([bytes[2], bytes[3]]);
+    if codepoint != VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT {
+        return Err(VaultError::UnknownCodepoint);
+    }
+    let mut salt = [0u8; 16];
+    salt.copy_from_slice(&bytes[4..20]);
+    let m_cost = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
+    let t_cost = u32::from_be_bytes([bytes[24], bytes[25], bytes[26], bytes[27]]);
+    let p_cost = u32::from_be_bytes([bytes[28], bytes[29], bytes[30], bytes[31]]);
+    let params = Argon2idParams {
+        m_cost,
+        t_cost,
+        p_cost,
+    };
+    let nonce_len = bytes[VAULT_HEADER_LEN] as usize;
+    // U2 strict-decode: the XNonce codepoint discriminates the nonce width.
+    if nonce_len != VAULT_XNONCE_LEN {
+        return Err(VaultError::NonceWidthMismatch);
+    }
+    let nonce_start = VAULT_HEADER_LEN + 1;
+    if bytes.len() < nonce_start + nonce_len {
+        return Err(VaultError::MalformedCbor);
+    }
+    let nonce = &bytes[nonce_start..nonce_start + nonce_len];
+    let ct = &bytes[nonce_start + nonce_len..];
+    Ok(VaultFrame {
+        salt,
+        params,
+        nonce,
+        ct,
+    })
+}
+
+/// Open a vault from the frame bytes + password ALONE (R11 MC-6).
+///
+/// This is the self-contained open path: the Argon2id salt + params are read
+/// FROM the frame header, the DAK is re-derived via [`derive_dak`] under
+/// `info_tag`, and the AEAD is opened. No external salt/param source is needed
+/// — `vault.cbor` bytes + password suffice to decrypt across a restart.
+///
+/// # Errors
+///
+/// Returns [`VaultError`] on a malformed / wrong-width / unknown-codepoint /
+/// wrong-password (AEAD-failure) input. All failure causes collapse to a typed
+/// error with no salt/params/tag side-channel beyond the frame-shape checks.
+pub fn open_vault(
+    bytes: &[u8],
+    password: &[u8],
+    info_tag: &[u8],
+) -> Result<DecodedVault, VaultError> {
+    let frame = parse_vault_frame(bytes)?;
+    // Re-derive the DAK from the FRAME salt+params (self-contained; MC-6).
+    let dak = derive_dak(password, &frame.salt, frame.params, info_tag);
+    decode_vault(bytes, dak.expose())
 }
 
 /// Decode + AEAD-open a vault envelope under a DAK. Enforces the XNonce
@@ -288,44 +406,28 @@ pub fn decode_vault(bytes: &[u8], dak: &[u8; 32]) -> Result<DecodedVault, VaultE
     use chacha20poly1305::aead::{Aead, KeyInit};
     use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 
-    if bytes.len() < 5 {
-        return Err(VaultError::MalformedCbor);
-    }
-    if bytes[0] != crate::envelope::ENVELOPE_MAGIC {
-        return Err(VaultError::MalformedCbor);
-    }
-    if bytes[1] != crate::envelope::ENVELOPE_FORMAT_VERSION_V2 {
-        return Err(VaultError::MalformedCbor);
-    }
-    let codepoint = u16::from_be_bytes([bytes[2], bytes[3]]);
-    if codepoint != VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT {
-        return Err(VaultError::UnknownCodepoint);
-    }
-    let nonce_len = bytes[4] as usize;
-    // U2 strict-decode: the XNonce codepoint discriminates the nonce width.
-    if nonce_len != VAULT_XNONCE_LEN {
-        return Err(VaultError::NonceWidthMismatch);
-    }
-    if bytes.len() < 5 + nonce_len {
-        return Err(VaultError::MalformedCbor);
-    }
-    let nonce_bytes = &bytes[5..5 + nonce_len];
-    let ct = &bytes[5 + nonce_len..];
+    // Parse + validate the frame header (R11 MC-6: reads salt+params too).
+    let frame = parse_vault_frame(bytes)?;
 
     let key = Key::from_slice(dak);
     let cipher = XChaCha20Poly1305::new(key);
-    let nonce = XNonce::from_slice(nonce_bytes);
+    let nonce = XNonce::from_slice(frame.nonce);
     let aad = vault_aad();
     let pt = cipher
         .decrypt(
             nonce,
-            chacha20poly1305::aead::Payload { msg: ct, aad: &aad },
+            chacha20poly1305::aead::Payload {
+                msg: frame.ct,
+                aad: &aad,
+            },
         )
         .map_err(|_| VaultError::AeadFailed)?;
     let payload = VaultPayload::from_canonical_cbor(&pt)?;
     Ok(DecodedVault {
-        codepoint,
-        nonce: nonce_bytes.to_vec(),
+        codepoint: VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT,
+        salt: frame.salt,
+        params: frame.params,
+        nonce: frame.nonce.to_vec(),
         payload,
     })
 }
@@ -428,6 +530,18 @@ impl core::fmt::Debug for UnlockedKeyMaterial {
             .field("k_principal", &"SecretBox<[u8; 32]>")
             .field("user_did_signing_key", &"<redacted>")
             .finish()
+    }
+}
+
+impl Drop for UnlockedKeyMaterial {
+    /// R11 MC-13: zeroize `user_did_signing_key` on drop for symmetry with
+    /// `K_principal` (which is wiped by its `SecretBox`). The signing key is a
+    /// long-lived at-rest secret (the user-DID hybrid signing key hydrated from
+    /// the vault); wiping it on drop closes the same coredump/freed-heap window
+    /// `K_principal` already closes (Compromise #36/#39). `k_principal`'s own
+    /// `SecretBox` handles its zeroize independently.
+    fn drop(&mut self) {
+        self.user_did_signing_key.zeroize();
     }
 }
 
@@ -569,12 +683,58 @@ mod tests {
             user_did_signing_key: vec![0x22u8; 64],
             user_did_creation_time: 0x0000_0000_6543_2100,
         };
+        let salt = [0x77u8; 16];
         let dak = [0x33u8; 32];
-        let bytes = serialize_vault(&payload, &dak).unwrap();
+        let bytes = serialize_vault(&payload, &salt, OWASP_DEFAULT, &dak).unwrap();
         let decoded = decode_vault(&bytes, &dak).unwrap();
         assert_eq!(decoded.nonce.len(), VAULT_XNONCE_LEN);
         assert_eq!(decoded.codepoint, VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT);
+        assert_eq!(decoded.salt, salt, "salt round-trips from the frame header");
+        assert_eq!(
+            decoded.params, OWASP_DEFAULT,
+            "params round-trip from the frame header"
+        );
         assert_eq!(decoded.payload, payload);
+    }
+
+    /// R11 MC-6 — the self-containment property: `vault.cbor` bytes + password
+    /// ALONE re-derive the DAK (salt+params from the frame header) and decrypt.
+    /// NO external salt is needed. would-FAIL-on-revert: if the frame did not
+    /// persist salt+params, `open_vault` could not re-derive the DAK from the
+    /// bytes alone.
+    #[test]
+    fn open_vault_from_bytes_and_password_alone() {
+        let payload = VaultPayload {
+            k_principal: [0xA1u8; 32],
+            user_did_signing_key: vec![0xB2u8; 64],
+            user_did_creation_time: 7,
+        };
+        // Build inputs at runtime (CodeQL hard-coded-crypto hygiene).
+        let password: Vec<u8> = (0u8..24)
+            .map(|i| i.wrapping_mul(5).wrapping_add(1))
+            .collect();
+        let salt: [u8; 16] = core::array::from_fn(|i| (i as u8).wrapping_mul(3) ^ 0x2C);
+        let params = OWASP_DEFAULT;
+
+        // Seal: derive the DAK from (password, salt, params) and serialize the
+        // frame WITH salt+params in the header.
+        let dak = derive_dak(&password, &salt, params, DAK_HKDF_INFO_TAG);
+        let bytes = serialize_vault(&payload, &salt, params, dak.expose()).unwrap();
+
+        // Open with ONLY the frame bytes + the password (drop the in-RAM salt).
+        let decoded = open_vault(&bytes, &password, DAK_HKDF_INFO_TAG)
+            .expect("vault.cbor bytes + password alone MUST decrypt");
+        assert_eq!(decoded.payload, payload);
+        assert_eq!(decoded.salt, salt);
+        assert_eq!(decoded.params, params);
+
+        // A wrong password fails closed (single typed rejection).
+        let mut wrong = password.clone();
+        wrong[0] ^= 0xFF;
+        assert!(matches!(
+            open_vault(&bytes, &wrong, DAK_HKDF_INFO_TAG),
+            Err(VaultError::AeadFailed)
+        ));
     }
 
     #[test]

@@ -76,6 +76,10 @@ use alloc::vec::Vec;
 
 use benten_crypto_suite::cipher_suite::{CipherSuite, CipherSuiteCodepoint, WrappedKey};
 use benten_crypto_suite::{AeadEnvelope, AeadKeyMaterial};
+// R11 MC-1: `RngCore` in scope for `OsRng.fill_bytes` (fresh random 0x6520
+// group CEK). `rand_core` is the workspace CSPRNG crate (see
+// `benten_crypto_suite::cipher_suite` `rand_core::OsRng`).
+use rand_core::RngCore as _;
 
 /// Fail-closed length-prefix range end (F-12).
 ///
@@ -141,11 +145,19 @@ pub const SENDER_AUTH_SIG_CODEPOINT: u16 =
 /// `domain_registry_mirror` test pins byte-equality). Canonical home is HERE.
 pub const LAYER_C_CEK_CONTEXT: &[u8] = b"benten-drop:layer-c:cek";
 
-/// Layer-C `0x6520` group bulk-CEK BLAKE3 derivation context (the shared
-/// per-send content-encryption-key domain prefix for the `HpkeMultiBase`
-/// group send). A registered cross-surface domain-separation tag mirrored in
-/// [`benten_crypto_suite::domain_registry::LAYER_C_GROUP_CEK_CONTEXT`].
-/// Canonical home is HERE.
+/// Layer-C `0x6520` group bulk-CEK domain-separation context.
+///
+/// **RESERVED (R11 MC-1) — the `0x6520` group CEK is now a fresh random value,
+/// no longer derived from this label.** Deriving the group CEK from PUBLIC wire
+/// inputs (`body_cid ‖ sender_did ‖ generation`) under this prefix was a
+/// Sealed-Sender confidentiality break (any relay guessing the sender's public
+/// DID could recompute the CEK and decrypt the body); `seal_group_impl` now
+/// samples a fresh 32-byte CEK from the OS CSPRNG per message and delivers it
+/// ONLY via the per-stanza HPKE-wrap. This const is RETAINED (not deleted) as a
+/// registered cross-surface domain-separation tag mirrored in
+/// [`benten_crypto_suite::domain_registry::LAYER_C_GROUP_CEK_CONTEXT`] so the
+/// frozen domain registry + its prefix-free/no-collision drift invariant stay
+/// byte-stable. Canonical home is HERE.
 pub const LAYER_C_GROUP_CEK_CONTEXT: &[u8] = b"benten-drop:layer-c:group-cek";
 
 /// The fields bound by the per-message `M_auth` ORIGIN-AUTH binding.
@@ -1064,32 +1076,36 @@ pub fn group_roster_for_test(recipient_pubs: &[RecipientPublic]) -> Vec<Recipien
     group_roster(recipient_pubs)
 }
 
-/// **Test-only content-splice model (F-01, `0x6520`):** a second sealer who can
-/// reconstruct the `0x6520` group CEK (it is derived from PUBLIC inputs —
-/// `body_cid` digest + `sender_did` + `recipient_key_generation`) captures the
-/// VICTIM A's HONEST send, KEEPS A's real `sender_sig` + the ORIGINAL
-/// (unchanged) `body_cid`, but re-seals a DIFFERENT `new_body` under that CEK.
-/// Every stanza (carrying `sender_did = A`) and the wire `body_cid` are left
-/// byte-unchanged; only the shared bulk-body ciphertext is rebuilt. Without the
-/// F-01 content-splice guard, [`open_group_stanza`] would recover `new_body`,
+/// **Test-only content-splice model (F-01, `0x6520`):** a CO-RECIPIENT B who
+/// LEGITIMATELY holds a recipient secret (`co_recipient_sec` at stanza
+/// `co_recipient_index`) captures VICTIM A's HONEST send, UNWRAPS the shared
+/// bulk-CEK from its OWN stanza (exactly as [`open_group_stanza`] does — the
+/// only way to recover the CEK now that it is a fresh random per-message value,
+/// R11 MC-1), KEEPS A's real `sender_sig` + the ORIGINAL (unchanged)
+/// `body_cid`, but re-seals a DIFFERENT `new_body` under that CEK. Every stanza
+/// (carrying `sender_did = A`) and the wire `body_cid` are left byte-unchanged;
+/// only the shared bulk-body ciphertext is rebuilt. Without the F-01
+/// content-splice guard, [`open_group_stanza`] would recover `new_body`,
 /// rebuild M_auth from the WIRE `body_cid` (A's original), and verify A's real
 /// sig — accepting the substituted body attributed to A.
 ///
-/// `sender_did` MUST be A's DID and `recipient_key_generation` / `body_cid` MUST
-/// match the honest send (the CEK + body AAD are keyed by them).
+/// This models the RESIDUAL insider threat: even after MC-1 makes the CEK
+/// non-public, a legitimate co-member of the recipient set holds the CEK and so
+/// COULD forge a body attributed to A — which is exactly what the F-01 CID
+/// recompute guard defeats (a NON-recipient party, by contrast, can no longer
+/// even recover the CEK; see the MC-1 confidentiality test).
 ///
 /// # Panics
 ///
 /// Panics if `env` is not the `0x6520` [`EncryptedEnvelope::HpkeMultiBase`]
-/// variant, or if the honest body region cannot be unwrapped under the
-/// reconstructed CEK (a mis-supplied `sender_did` / generation / `body_cid`).
+/// variant, if `co_recipient_index` is out of range, or if the co-recipient's
+/// secret cannot unwrap the honest body (a mis-supplied secret / index).
 #[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn splice_group_multi_body_for_test(
     env: &EncryptedEnvelope,
-    sender_did: &SenderDid,
-    body_cid: &BodyCidDigest,
-    recipient_key_generation: u32,
+    co_recipient_sec: &RecipientSecret,
+    co_recipient_index: usize,
     new_body: &[u8],
 ) -> EncryptedEnvelope {
     let EncryptedEnvelope::HpkeMultiBase {
@@ -1102,18 +1118,23 @@ pub fn splice_group_multi_body_for_test(
         panic!("splice_group_multi_body_for_test requires the 0x6520 HpkeMultiBase variant");
     };
 
-    // Reconstruct the per-send CEK exactly as `seal_group_impl` does (PUBLIC
-    // inputs only — this is the property that makes the 0x6520 splice possible
-    // for any party, which is precisely what the F-01 guard must defeat).
-    let cid = self_describing_cid(body_cid);
-    let mut cek_h = blake3::Hasher::new();
-    cek_h.update(LAYER_C_GROUP_CEK_CONTEXT);
-    cek_h.update(body_cid);
-    cek_h.update(sender_did);
-    cek_h.update(&recipient_key_generation.to_be_bytes());
-    let cek = *cek_h.finalize().as_bytes();
-    let cek_key =
-        AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &cek);
+    // Recover the shared per-send CEK by UNWRAPPING it from the co-recipient's
+    // OWN stanza with the co-recipient's REAL secret — the ONLY way to obtain
+    // the CEK now that it is a fresh random value (R11 MC-1). This mirrors the
+    // CEK unwrap in `open_group_stanza`; it is the residual insider capability
+    // the F-01 CID-recompute guard must still defeat.
+    let suite = hybrid_suite();
+    let co_stanza = &stanzas[co_recipient_index];
+    let cid = co_stanza.body_cid.clone();
+    let wrapped = decode_wrapped_key(&co_stanza.wrapped_cek)
+        .expect("co-recipient stanza wrapped_cek must decode");
+    let cek = suite
+        .unwrap_key_material(co_recipient_sec, &wrapped)
+        .expect("co-recipient secret must unwrap the shared 0x6520 CEK");
+    let cek_key = AeadKeyMaterial::from_raw_bytes(
+        CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+        cek.as_bytes(),
+    );
 
     // The shared bulk-body AAD (binds the ORIGINAL body_cid + group codepoint).
     let mut body_aad = Vec::new();
@@ -1126,7 +1147,7 @@ pub fn splice_group_multi_body_for_test(
     let honest_env = AeadEnvelope::from_wire_bytes(cek_aead_ciphertext)
         .expect("honest 0x6520 body envelope must parse");
     let honest_v2 = benten_crypto_suite::aead::unwrap(&honest_env, &cek_key, &body_aad)
-        .expect("reconstructed CEK can unwrap the honest 0x6520 body");
+        .expect("co-recipient-unwrapped CEK can unwrap the honest 0x6520 body");
     let sig_len =
         u32::from_be_bytes([honest_v2[2], honest_v2[3], honest_v2[4], honest_v2[5]]) as usize;
     let sig_prefix_end = 6 + sig_len; // 2 (codepoint) + 4 (lp) + sig
@@ -1147,6 +1168,35 @@ pub fn splice_group_multi_body_for_test(
     }
 }
 
+/// **Test-only accessor (R11 MC-1):** the REAL shared `0x6520` group CEK a
+/// recipient recovers by HPKE-unwrapping its own stanza's `wrapped_cek` with
+/// `recipient_sec`. Exposes the fresh-random CEK so the MC-1 confidentiality
+/// test can assert it is NOT byte-equal to the old public-input-derived
+/// candidate (the would-FAIL-on-revert demonstration).
+///
+/// # Panics
+///
+/// Panics if `env` is not the `0x6520` variant, `stanza_index` is out of range,
+/// the stanza `wrapped_cek` is malformed, or `recipient_sec` cannot unwrap it.
+#[cfg(any(test, feature = "testing"))]
+#[must_use]
+pub fn unwrap_group_cek_for_test(
+    recipient_sec: &RecipientSecret,
+    stanza_index: usize,
+    env: &EncryptedEnvelope,
+) -> Vec<u8> {
+    let EncryptedEnvelope::HpkeMultiBase { stanzas, .. } = env else {
+        panic!("unwrap_group_cek_for_test requires the 0x6520 HpkeMultiBase variant");
+    };
+    let stanza = &stanzas[stanza_index];
+    let wrapped = decode_wrapped_key(&stanza.wrapped_cek).expect("stanza wrapped_cek must decode");
+    hybrid_suite()
+        .unwrap_key_material(recipient_sec, &wrapped)
+        .expect("recipient secret must unwrap the real 0x6520 CEK")
+        .as_bytes()
+        .to_vec()
+}
+
 fn seal_group_impl(
     recipient_pubs: &[RecipientPublic],
     sender_did: &SenderDid,
@@ -1163,12 +1213,21 @@ fn seal_group_impl(
 
     // One shared CEK seals the bulk body ONCE; each recipient gets a wrapped
     // copy (the Q4 share-to-N efficiency property).
-    let mut cek_h = blake3::Hasher::new();
-    cek_h.update(LAYER_C_GROUP_CEK_CONTEXT);
-    cek_h.update(body_cid);
-    cek_h.update(sender_did);
-    cek_h.update(&recipient_key_generation.to_be_bytes());
-    let cek = *cek_h.finalize().as_bytes();
+    //
+    // R11 MC-1 (SECURITY-CRITICAL — Sealed-Sender confidentiality): the CEK is
+    // a FRESH RANDOM 32-byte value from the OS CSPRNG, NOT a BLAKE3 of public
+    // wire inputs. Deriving it from `body_cid ‖ sender_did ‖ generation` (all
+    // PUBLIC / wire-derivable, no secret) let ANY relay/non-recipient who
+    // guesses the sender's public DID (a small known set per group) recompute
+    // the CEK and decrypt the bulk body — the per-recipient HPKE-wrap was
+    // pointless. A random CEK is delivered ONLY via each stanza's HPKE-wrap
+    // (`suite.wrap_key_material` below); a party without a recipient secret
+    // cannot recover it. Wire-transparent: the CEK still flows through the
+    // exact same wrap + body-seal + stanza code, and `open_group_stanza`
+    // already UNWRAPS the CEK from `stanza.wrapped_cek` (never recomputes from
+    // public inputs), so no decode path changes.
+    let mut cek = [0u8; 32];
+    rand_core::OsRng.fill_bytes(&mut cek);
     let cek_key =
         AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &cek);
     // The bulk body AAD binds the body-CID + group codepoint (shared across
@@ -2115,11 +2174,12 @@ pub mod group_posture {
     /// PER-MESSAGE-unique: two distinct sends from the SAME sender under the
     /// SAME K_Set generation seal under DISTINCT CEKs, so the random 96-bit
     /// AEAD nonce never reuses a key (no birthday-wall keystream reuse /
-    /// Poly1305 forgery). This binds the body identity into the CEK exactly as
-    /// the `0x6520` [`seal_group_impl`] CEK binds `body_cid` per send. Any
-    /// holder of the envelope can reconstruct the CEK from `k_set` + the WIRE
-    /// `cid` (the recipient itself HPKE-unwraps the per-stanza `wrapped_cek`
-    /// rather than re-deriving).
+    /// Poly1305 forgery). This is a DISTINCT construction from the `0x6520`
+    /// [`seal_group_impl`] CEK, which is a fresh random per-message value
+    /// (R11 MC-1) rather than a K_Set-keyed derivation. Here a member holding
+    /// the SECRET `k_set` can reconstruct THIS CEK from `k_set` + the WIRE
+    /// `cid` (a non-member cannot — `k_set` is never on the wire); the recipient
+    /// itself HPKE-unwraps the per-stanza `wrapped_cek` rather than re-deriving.
     fn derive_group_cek(k_set: &[u8; 32], sender_did: &[u8], cid: &[u8]) -> [u8; 32] {
         let mut h = blake3::Hasher::new();
         h.update(MEMBERSHIP_GROUP_CEK_CONTEXT);

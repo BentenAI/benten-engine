@@ -114,11 +114,13 @@ own AAD field-set under its own HPKE-derived AEAD key, so **each stanza independ
 - **Truncation / censorship defense:** `stanza_count` is bound alongside `stanza_index`, so dropping trailing
   stanzas to censor a co-recipient is detectable — each surviving stanza still names the original `stanza_count`,
   which no longer matches the delivered count.
-- **Inter-member non-forgeability (B2 ORIGIN-AUTHENTICATION — NOW TRUE in code).** A member — even one holding
-  `K_Set` and thus able to derive the CEK and produce valid AEAD tags — **cannot** mint a send attributed to
-  another member, nor re-target another member's real body to a recipient set that member never chose. The AEAD
-  tag alone CANNOT provide this (a co-member can produce a valid tag), so the property rests on a real signature,
-  NOT on the un-authenticated sealed-inner-DID parse. Each Sealed-Sender send carries, **inside the once-sealed
+- **Inter-member non-forgeability (B2 ORIGIN-AUTHENTICATION — NOW TRUE in code).** A member who legitimately
+  holds the bulk-CEK and can produce valid AEAD tags — a `0x6610` member holding `K_Set` (which derives the
+  `0x6610` CEK), OR a `0x6520` **co-recipient** who HPKE-unwraps the fresh-random group CEK from its own stanza
+  (R11 MC-1) — **cannot** mint a send attributed to another member, nor re-target another member's real body to a
+  recipient set that member never chose. The AEAD tag alone CANNOT provide this (a CEK-holding co-member can
+  produce a valid tag), so the property rests on a real signature, NOT on the un-authenticated sealed-inner-DID
+  parse. Each Sealed-Sender send carries, **inside the once-sealed
   body region** (on the wire exactly ONCE; sender-confidential), a single per-MESSAGE LAMPS-hybrid
   `id-MLDSA65-Ed25519-SHA512` (`0x0001`) signature over a domain-separated binding `M_auth`
   (`SENDER_AUTH_DOMAIN` ‖ sig/envelope codepoints ‖ sender-DID ‖ `body_cid` ‖ audience commitment ‖ key-epoch
@@ -145,14 +147,16 @@ device-link / remote-permission flows admit a chosen-recipient-pubkey surface �
 **external-cryptographer-audit deliverable** (§9.3 audit line; Compromise #45 / #59), NOT a unit-test "proof" in
 this doc.
 
-**Inner-format domain-separation (single vs group).** The single (`benten_drop::layer_c::seal_inner`) and group
-(`benten_drop::layer_c::seal_group_impl`) inner formats are domain-separated by the distinct CEK
-domain-separators (`"benten-drop:layer-c:cek"` vs `"benten-drop:layer-c:group-cek"`) plus the outer per-stanza
-AAD context, **NOT** by the inner payload bytes themselves: a single-format inner and a group-format inner are
-sealed under independently-derived CEKs and bound to distinct AAD shapes, so neither can be reinterpreted as the
-other (cross-format substitution flips the AEAD tag). The property holds in the current code; documenting it here
-prevents a future inner-builder refactor (e.g. unifying or re-laying-out the inner bytes) from silently
-regressing it by accidentally collapsing the CEK separator or AAD distinction.
+**Inner-format domain-separation (single vs group).** The single
+(`benten_drop::layer_c::seal_inner`, `0x6500`/`0x6510`) inner format is domain-separated from the group
+(`benten_drop::layer_c::seal_group_impl`, `0x6520`) inner format by **independently-keyed CEKs plus the outer
+per-stanza AAD context**, **NOT** by the inner payload bytes themselves: a single-format inner and a group-format
+inner are sealed under CEKs that can never coincide — the single CEK is a body-mixing BLAKE3 derivation under the
+`"benten-drop:layer-c:cek"` separator, while the group CEK is a **fresh random per-message value** (R11 MC-1, no
+longer derived under `"benten-drop:layer-c:group-cek"`) — and each is bound to a distinct AAD shape, so neither
+inner can be reinterpreted as the other (cross-format substitution flips the AEAD tag). The property holds in the
+current code; documenting it here prevents a future inner-builder refactor (e.g. unifying or re-laying-out the
+inner bytes) from silently regressing it by accidentally collapsing the CEK/AAD distinction.
 
 **Cross-surface domain-tag registry (prefix-free) — the v1-beta structural shape.** The single-vs-group CEK
 separation above is one instance of a **substrate-wide property**: every cryptographic surface that keys, signs,
@@ -184,8 +188,19 @@ is no tag to register.)
 
 ## §4.2 — Deterministic-CEK confirmation-oracle property (GAP-2 honest disclosure)
 
-**Property (additive disclosure; does NOT weaken any claim above).** The Layer-C content-encryption key (CEK) is
-**deterministically derived** from the plaintext context, not freshly random:
+**Band scope (R11 MC-1).** This deterministic-CEK property is specific to the **single-recipient** Layer-C bands
+(`0x6500`/`0x6510`, `benten_drop::layer_c::seal_inner`). The **`0x6520` group** CEK is a **fresh random per-message
+value** sampled from the OS CSPRNG (R11 MC-1), delivered ONLY via each stanza's HPKE-wrap — it is NOT derived from
+any wire input, so the group band has **NO** CEK confirmation-oracle at all (a party without a recipient secret
+cannot even recover the group CEK; see §4.1 and the `mc_1_non_recipient_cannot_recover_group_cek` pin). The prior
+`0x6520` CEK derivation from PUBLIC inputs (`body_cid ‖ sender_did ‖ generation`) was a confidentiality break —
+any relay guessing the sender's public DID could recompute the CEK and decrypt the group body — and is **DELETED**.
+The residual `body_cid` low-entropy disclosure below applies to **all** bands (it is a property of the wire
+`body_cid`, not the CEK); the CEK confirmation-oracle below applies to the single-recipient bands **only**.
+
+**Property (single-recipient bands; additive disclosure; does NOT weaken any claim above).** For the
+single-recipient bands the content-encryption key (CEK) is **deterministically derived** from the plaintext
+context, not freshly random:
 `CEK = BLAKE3("benten-drop:layer-c:cek" ‖ recipient_pk ‖ sender_did ‖ aad ‖ body)` (`benten_drop::layer_c::seal_inner`).
 Because the CEK is a deterministic function of the body, **a party that holds (or can recompute) the CEK can
 *confirm* a guessed plaintext**: re-deriving the CEK over a candidate `body` and checking it matches the bound

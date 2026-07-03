@@ -225,8 +225,12 @@ who-can-degrade-service. Availability against a resource-exhaustion adversary is
 concern handled outside the crypto threat model**, and where a specific amplification vector touches the crypto
 substrate it is disclosed at its own site rather than here — e.g. the `dedup_synchronized_revocations`
 substrate-growth defense (`crates/benten-sync/src/handshake.rs`, adversarial duplicate-packing + rejoin-churn),
-the bounded-decode ceilings on every wire-decode path (`membership_count` / stanza-count over-run rejects), the
-per-Kind `wire_cost_ceiling` (Compromise #46), and the 4-MiB `recv_bytes` sync cap. A dedicated
+the bounded-decode ceilings on wire-decode paths (e.g. the stanza-count over-run reject), the
+per-Kind `wire_cost_ceiling` (Compromise #46), and the 4-MiB `recv_bytes` sync cap. The MembershipSet member
+count is a strictly stronger case: it is **NEVER wire-decoded** — the `member_count` is always COMPUTED from the
+recipient's own held roster (`member_dids.len()`) and bound INTO the AAD, never read from an untrusted wire field
+into an allocation-sizing count, so there is no member-count over-run to reject (the `#46 wire_cost_ceiling` bounds
+the AUTHOR-side roster size, not a decoder). A dedicated
 availability/DoS threat model (rate-limiting, connection-flood, storage-amplification, compute-exhaustion at the
 engine + transport layers) is **NAMED-DEFERRED to a later phase** — it is not a v1-beta-core crypto-freeze
 concern. This note exists so a reader does NOT mistake the absence of a DoS section for a claim that DoS is

@@ -78,6 +78,13 @@ thiserror = { workspace = true }
 # call site). `default-features = false` — the core hashing API suffices.
 blake3 = { workspace = true }
 
+# R11 MC-1: OS CSPRNG for the fresh random `0x6520` group content-encryption-
+# key (`OsRng.fill_bytes`). The workspace `rand_core` (0.6, `getrandom` + `std`)
+# is the same CSPRNG `benten-crypto-suite` seeds its keygen from — the group
+# CEK is now sampled fresh per message rather than derived from public wire
+# inputs (Sealed-Sender confidentiality fix).
+rand_core = { workspace = true }
+
 # Cryptographic surface for the envelope-level signature (the defense-
 # in-depth outer layer per Spike G). Goes through `benten-id` for the
 # `Keypair`/`PublicKey` API (which itself routes to ed25519-dalek via
