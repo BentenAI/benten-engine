@@ -71,6 +71,14 @@ AeadError::Authentication
 AeadError::CiphertextTooShort
 AeadError::KeyMismatch
 AeadError::MalformedEnvelope
+# R9 GAP-1 (2026-07-02): RecipientPublic/Secret::from_bytes decode-time
+# typed-rejects — exactly the same crypto-suite-internal category as the
+# AeadError siblings here (AeadError is not ErrorCode/napi-mirrored by design;
+# no AeadError->ErrorCode mapping exists). Join the SAME post-FREEZE §3.5g
+# item-6 drain wave; encrypt-to-recipient napi surfacing is deferred to
+# Phase-4-Meta-Composing (V1-FROZEN-INTERFACE-DEFERRED Row D-64).
+AeadError::MalformedRecipientPublic
+AeadError::MalformedRecipientSecret
 AeadError::RecipientLacksKeysForSuite
 AeadError::TagMismatch
 AeadError::Unsupported
