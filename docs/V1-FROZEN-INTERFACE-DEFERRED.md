@@ -2230,6 +2230,31 @@ Row D-15's audit-readiness concern.
   change — this is a doc-tense precision fix, not a code carry.
 - **Anchor:** R11-council MC-16; the `f_hlc_2` HLC no-mutation pin.
 
+### Row D-69 — MC-6 vault salt origination → production vault-creation wiring (deferred with device-auth)
+
+- **Caller-contract disclosure (v1-beta):** the R11 MC-6 fix makes the vault
+  on-disk frame self-contained (the 16-byte Argon2id salt + params are persisted
+  in the header, so `vault.cbor` bytes + password alone re-derive the DAK across
+  a restart — `benten_crypto_suite::vault::serialize_vault` / `open_vault`).
+  `serialize_vault` threads a **caller-supplied** `salt`; it does NOT originate
+  it. At v1-beta there is **no production vault-*creation* call site** — the only
+  callers are tests passing fixed-constant salts (`HeadlessDeviceAuth::seal_and_build`
+  is exercised only by tests). No live weak-salt exposure exists (no production
+  vault is created from a low-entropy salt because no production vault is created
+  at all yet).
+- **Caller contract (MUST hold when creation lands):** the production
+  vault-creation wiring MUST seed the 16-byte `salt` from an OS CSPRNG
+  (`OsRng` / `getrandom`), **unique per vault**. The salt+params are self-authenticating
+  through the DAK derivation (tampering → wrong DAK → fail-closed `AeadFailed`),
+  so they are intentionally not AEAD-AAD-covered (standard PBKDF-header posture).
+- **Deferred (destination):** vault-creation-from-OS-entropy is deferred with the
+  device-auth / keyring surface (co-routes with Row D-64 engine encrypt-to-recipient
+  + Row D-65 keyring/Tauri IPC). When it lands, the salt-origination CSPRNG contract
+  above becomes an enforced construction site.
+- **Anchor:** R11-council MC-6 adversarial-review observation;
+  `crates/benten-crypto-suite/src/vault.rs::serialize_vault` (caller-supplied salt);
+  `crates/benten-engine/src/layer_d/device_auth.rs::HeadlessDeviceAuth::seal_and_build`.
+
 ---
 
 ## Update discipline

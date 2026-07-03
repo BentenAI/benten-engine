@@ -268,6 +268,16 @@ const VAULT_HEADER_LEN: usize = 1 + 1 + 2 + 16 + 4 + 4 + 4;
 /// [`open_vault`] can re-derive the DAK from the frame bytes + the password
 /// ALONE (the MC-6 self-containment property). They are NON-secret.
 ///
+/// # Caller contract (salt origination)
+///
+/// `salt` MUST be freshly generated from an OS CSPRNG (`OsRng` / `getrandom`),
+/// unique per vault, at vault-*creation* time. This function threads the
+/// caller-supplied salt into the self-contained header (R11 MC-6); it does NOT
+/// originate it. The production vault-creation wiring that seeds the salt from
+/// OS entropy is deferred with the device-auth surface (see
+/// `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-69); until then the only
+/// callers are tests passing fixed-constant salts.
+///
 /// # Errors
 ///
 /// Returns [`VaultError`] on an internal AEAD error.
@@ -298,6 +308,14 @@ pub fn serialize_vault(
 
     // On-disk layout (R11 MC-6): magic 0xae | V2 | codepoint BE | salt(16) |
     // m_cost BE | t_cost BE | p_cost BE | nonce_len | nonce | ct.
+    //
+    // The header salt+params are intentionally NOT covered by the AEAD AAD
+    // (`vault_aad()` binds only domain + codepoint): they are self-authenticating
+    // THROUGH the key derivation — tampering the in-header salt/params yields a
+    // different DAK, so the AEAD tag then fails (fail-closed `AeadFailed`), never
+    // a silently-weakened key. This is the standard, safe PBKDF-header posture
+    // (age / gpg / LUKS): an attacker can DoS their own tampered copy but cannot
+    // force a weak-param key onto a victim.
     let mut out = Vec::with_capacity(VAULT_HEADER_LEN + 1 + nonce_bytes.len() + ct.len());
     out.push(crate::envelope::ENVELOPE_MAGIC);
     out.push(crate::envelope::ENVELOPE_FORMAT_VERSION_V2);

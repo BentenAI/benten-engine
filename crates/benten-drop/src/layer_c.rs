@@ -1230,6 +1230,14 @@ fn seal_group_impl(
     rand_core::OsRng.fill_bytes(&mut cek);
     let cek_key =
         AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &cek);
+    // Defense-in-depth (R11 adversarial-review observation — benign, not
+    // soundness-bearing): the raw `cek` stack local is not explicitly zeroized
+    // on drop — `benten-drop` carries no `zeroize` dependency. The load-bearing
+    // copy inside `AeadKeyMaterial` (`cek_key`) IS zeroized on drop, the CEK
+    // never leaves the process un-wrapped, and this matches the pre-R11 pattern
+    // (the old derived CEK was an identical un-zeroized `[u8; 32]`). A future
+    // hygiene sweep adopting `zeroize` in `benten-drop` can wrap this local for
+    // symmetry with the R11 MC-13 `user_did_signing_key` zeroize.
     // The bulk body AAD binds the body-CID + group codepoint (shared across
     // stanzas; the per-stanza AAD adds the index/count binding).
     let mut body_aad = Vec::new();
