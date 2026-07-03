@@ -3,6 +3,8 @@ pub mod benten_crypto_suite::aead
 #[non_exhaustive] pub enum benten_crypto_suite::aead::AeadError
 pub benten_crypto_suite::aead::AeadError::AeadAuthFailed
 pub benten_crypto_suite::aead::AeadError::MalformedEnvelope(&'static str)
+pub benten_crypto_suite::aead::AeadError::MalformedRecipientPublic(&'static str)
+pub benten_crypto_suite::aead::AeadError::MalformedRecipientSecret(&'static str)
 pub benten_crypto_suite::aead::AeadError::RecipientLacksKeysForSuite
 pub benten_crypto_suite::aead::AeadError::Unsupported(benten_crypto_suite::error::UnsupportedAlgorithm)
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::aead::AeadError
@@ -105,6 +107,7 @@ pub mod benten_crypto_suite::cipher_suite
 pub struct benten_crypto_suite::cipher_suite::CipherSuite
 impl benten_crypto_suite::cipher_suite::CipherSuite
 pub const fn benten_crypto_suite::cipher_suite::CipherSuite::codepoint(&self) -> benten_crypto_suite::codepoint::CipherSuiteCodepoint
+pub fn benten_crypto_suite::cipher_suite::CipherSuite::generate_recipient_keypair(&self) -> benten_crypto_suite::cipher_suite::RecipientKeypair
 pub fn benten_crypto_suite::cipher_suite::CipherSuite::generate_recipient_keypair_deterministic(&self, &[u8; 32]) -> benten_crypto_suite::cipher_suite::RecipientKeypair
 pub fn benten_crypto_suite::cipher_suite::CipherSuite::is_hybrid_default(&self) -> bool
 pub fn benten_crypto_suite::cipher_suite::CipherSuite::open_aead(&self, &[u8], &benten_crypto_suite::aead::AeadEnvelope, &[u8]) -> core::result::Result<benten_crypto_suite::cipher_suite::DecryptedPlaintext, benten_crypto_suite::aead::AeadError>
@@ -174,6 +177,8 @@ impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::cipher_suite:
 pub struct benten_crypto_suite::cipher_suite::RecipientPublic
 impl benten_crypto_suite::cipher_suite::RecipientPublic
 pub const fn benten_crypto_suite::cipher_suite::RecipientPublic::codepoint(&self) -> benten_crypto_suite::codepoint::CipherSuiteCodepoint
+pub fn benten_crypto_suite::cipher_suite::RecipientPublic::from_bytes(benten_crypto_suite::codepoint::CipherSuiteCodepoint, &[u8]) -> core::result::Result<Self, benten_crypto_suite::aead::AeadError>
+pub fn benten_crypto_suite::cipher_suite::RecipientPublic::to_bytes(&self) -> alloc::vec::Vec<u8>
 impl core::marker::Freeze for benten_crypto_suite::cipher_suite::RecipientPublic
 impl core::marker::Send for benten_crypto_suite::cipher_suite::RecipientPublic
 impl core::marker::Sync for benten_crypto_suite::cipher_suite::RecipientPublic
@@ -184,6 +189,12 @@ impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::cipher_suite:
 pub struct benten_crypto_suite::cipher_suite::RecipientSecret
 impl benten_crypto_suite::cipher_suite::RecipientSecret
 pub const fn benten_crypto_suite::cipher_suite::RecipientSecret::codepoint(&self) -> benten_crypto_suite::codepoint::CipherSuiteCodepoint
+pub fn benten_crypto_suite::cipher_suite::RecipientSecret::from_bytes(benten_crypto_suite::codepoint::CipherSuiteCodepoint, &[u8]) -> core::result::Result<Self, benten_crypto_suite::aead::AeadError>
+pub fn benten_crypto_suite::cipher_suite::RecipientSecret::to_bytes(&self) -> zeroize::Zeroizing<alloc::vec::Vec<u8>>
+impl core::fmt::Debug for benten_crypto_suite::cipher_suite::RecipientSecret
+pub fn benten_crypto_suite::cipher_suite::RecipientSecret::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::ops::drop::Drop for benten_crypto_suite::cipher_suite::RecipientSecret
+pub fn benten_crypto_suite::cipher_suite::RecipientSecret::drop(&mut self)
 impl core::marker::Freeze for benten_crypto_suite::cipher_suite::RecipientSecret
 impl core::marker::Send for benten_crypto_suite::cipher_suite::RecipientSecret
 impl core::marker::Sync for benten_crypto_suite::cipher_suite::RecipientSecret
@@ -218,6 +229,8 @@ impl core::marker::UnsafeUnpin for benten_crypto_suite::cipher_suite::WrappedKey
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::cipher_suite::WrappedKey
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::cipher_suite::WrappedKey
 pub const benten_crypto_suite::cipher_suite::RECIPIENT_SEED_LABEL: &[u8]
+pub const benten_crypto_suite::cipher_suite::X25519_PUBLIC_LEN: usize
+pub const benten_crypto_suite::cipher_suite::X25519_SECRET_LEN: usize
 pub const benten_crypto_suite::cipher_suite::X_WING_LABEL: [u8; 6]
 pub fn benten_crypto_suite::cipher_suite::classical_combine(&[u8], &[u8], &[u8]) -> [u8; 32]
 pub fn benten_crypto_suite::cipher_suite::combine_x_wing(&[u8], &[u8], &[u8], &[u8]) -> [u8; 32]
@@ -1331,6 +1344,8 @@ pub fn benten_crypto_suite::vault::serialize_vault(&benten_crypto_suite::vault::
 #[non_exhaustive] pub enum benten_crypto_suite::AeadError
 pub benten_crypto_suite::AeadError::AeadAuthFailed
 pub benten_crypto_suite::AeadError::MalformedEnvelope(&'static str)
+pub benten_crypto_suite::AeadError::MalformedRecipientPublic(&'static str)
+pub benten_crypto_suite::AeadError::MalformedRecipientSecret(&'static str)
 pub benten_crypto_suite::AeadError::RecipientLacksKeysForSuite
 pub benten_crypto_suite::AeadError::Unsupported(benten_crypto_suite::error::UnsupportedAlgorithm)
 impl core::convert::From<benten_crypto_suite::error::UnsupportedAlgorithm> for benten_crypto_suite::aead::AeadError
@@ -2116,6 +2131,8 @@ pub const benten_crypto_suite::ENVELOPE_FORMAT_VERSION_V2: u8
 pub const benten_crypto_suite::ENVELOPE_MAGIC: u8
 pub const benten_crypto_suite::MAX_NONCE_LEN: usize
 pub const benten_crypto_suite::OWASP_DEFAULT: benten_crypto_suite::vault::Argon2idParams
+pub const benten_crypto_suite::X25519_PUBLIC_LEN: usize
+pub const benten_crypto_suite::X25519_SECRET_LEN: usize
 pub const benten_crypto_suite::X_WING_LABEL: [u8; 6]
 pub const fn benten_crypto_suite::audit_landed_pure_pq_flag() -> bool
 pub fn benten_crypto_suite::canonical_tlv_encode(u16, &benten_crypto_suite::envelope::BindingContext) -> alloc::vec::Vec<u8>

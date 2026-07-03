@@ -818,7 +818,9 @@ impl SwapMatrixError {
     fn from_aead(e: AeadError) -> Self {
         match e {
             AeadError::AeadAuthFailed => Self::AeadAuthFailed,
-            AeadError::MalformedEnvelope(m) => Self::CipherSuite(m),
+            AeadError::MalformedEnvelope(m)
+            | AeadError::MalformedRecipientPublic(m)
+            | AeadError::MalformedRecipientSecret(m) => Self::CipherSuite(m),
             AeadError::RecipientLacksKeysForSuite => Self::ConfigMismatch {
                 detail: "recipient lacks one of the required key halves for the suite",
             },

@@ -429,6 +429,22 @@ pub enum AeadError {
     #[error("recipient lacks one of the required key halves for the dispatched cipher-suite")]
     RecipientLacksKeysForSuite,
 
+    /// A serialized [`crate::cipher_suite::RecipientPublic`] byte blob was
+    /// malformed for its codepoint (wrong total length / truncated ML-KEM
+    /// encapsulation key). Fail-closed typed-reject on
+    /// `RecipientPublic::from_bytes` — never a silent default (CLAUDE.md
+    /// baked-in #5 typed-reject-on-malformed).
+    #[error("malformed serialized recipient public material: {0}")]
+    MalformedRecipientPublic(&'static str),
+
+    /// A serialized [`crate::cipher_suite::RecipientSecret`] byte blob was
+    /// malformed for its codepoint (wrong total length / truncated ML-KEM
+    /// decapsulation key). Fail-closed typed-reject on
+    /// `RecipientSecret::from_bytes` — never a silent default (CLAUDE.md
+    /// baked-in #5 typed-reject-on-malformed).
+    #[error("malformed serialized recipient secret material: {0}")]
+    MalformedRecipientSecret(&'static str),
+
     /// Codepoint dispatch surfaced typed-unsupported (NEVER silent
     /// fallback per CLAUDE.md baked-in #5).
     #[error(transparent)]

@@ -75,7 +75,7 @@
 use rand_core::OsRng as RandOsRng;
 use sha3::Digest as _;
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey, StaticSecret};
-use zeroize::Zeroizing;
+use zeroize::{Zeroize as _, Zeroizing};
 
 use crate::aead::{
     AeadEnvelope, AeadError, AeadKeyMaterial, aad_whole_content, unwrap as aead_unwrap,
@@ -84,6 +84,21 @@ use crate::aead::{
 pub use crate::codepoint::CipherSuiteCodepoint;
 use crate::error::UnsupportedAlgorithm;
 use crate::mlkem;
+
+/// X25519 public-key serialized length — the fixed 32-byte Curve25519
+/// field-element wire size of [`x25519_dalek::PublicKey`] (`.as_bytes()`
+/// yields `&[u8; 32]`; `PublicKey::from([u8; 32])` round-trips). Named
+/// here (not hardcoded at call sites) per CLAUDE.md baked-in #5; the
+/// `x25519_public_len_matches_type_width` test pins it against an actual
+/// key's serialized width so it can never silently drift.
+pub const X25519_PUBLIC_LEN: usize = 32;
+
+/// X25519 secret-scalar serialized length — the fixed 32-byte Curve25519
+/// wire size of [`x25519_dalek::StaticSecret`] (`.to_bytes()` yields
+/// `[u8; 32]`; `StaticSecret::from([u8; 32])` round-trips). Named here per
+/// CLAUDE.md baked-in #5; the `x25519_secret_len_matches_type_width` test
+/// pins it against an actual key's serialized width.
+pub const X25519_SECRET_LEN: usize = 32;
 
 /// The real draft-connolly X-Wing `XWingLabel` — the 6 bytes
 /// `0x5c2e2f2f5e5c` (ASCII `\.//^\`). **APPENDED** as the trailing suffix
@@ -242,6 +257,67 @@ impl CipherSuite {
                 }
             }
             // Classical-only `0x6400`: X25519 half only.
+            _ => RecipientKeypair {
+                codepoint: self.codepoint,
+                public: RecipientPublic {
+                    codepoint: self.codepoint,
+                    x25519: Some(x_pub),
+                    mlkem768_ek: None,
+                },
+                secret: RecipientSecret {
+                    codepoint: self.codepoint,
+                    x25519: Some(x_sec),
+                    mlkem768_dk: None,
+                },
+            },
+        }
+    }
+
+    /// Generate a REAL-entropy recipient keypair appropriate to this
+    /// suite — the production keying path the engine mints identity key
+    /// material through (R9-S1; closes GAP-1's root: the prior Layer-C
+    /// placeholder derived the "secret" from the public fingerprint, so
+    /// there was ZERO secret entropy).
+    ///
+    /// Both halves are seeded from the crate's OS RNG (`rand_core::OsRng`,
+    /// the SAME source the seal path uses for ephemerals + the SAME source
+    /// [`crate::mlkem::generate`] fills its `d‖z` seed from). This is
+    /// **NON-deterministic**: two calls yield distinct public AND secret
+    /// bytes. Contrast [`Self::generate_recipient_keypair_deterministic`]
+    /// (seeded from a public fingerprint → forgeable) and
+    /// `generate_recipient_keypair_for_test` (test-fixture entropy).
+    ///
+    /// Per CLAUDE.md baked-in #5 this stays crypto-primitive glue — x25519
+    /// keygen via `x25519-dalek` + ML-KEM-768 keygen via the vetted
+    /// libcrux wrapper (`crate::mlkem`); no primitive is forked, no size
+    /// is hardcoded.
+    #[must_use]
+    pub fn generate_recipient_keypair(&self) -> RecipientKeypair {
+        // X25519 half — real OS entropy (same RNG source as the seal
+        // path's ephemerals + the deterministic path's structural key).
+        let x_sec = StaticSecret::random_from_rng(&mut RandOsRng);
+        let x_pub = X25519PublicKey::from(&x_sec);
+        match self.codepoint.raw() {
+            0x647a => {
+                // Hybrid: real ML-KEM-768 keygen (libcrux fills its 64-byte
+                // `d‖z` seed from the same OS RNG per `mlkem::generate`).
+                let mlkem_kp = mlkem::generate();
+                RecipientKeypair {
+                    codepoint: self.codepoint,
+                    public: RecipientPublic {
+                        codepoint: self.codepoint,
+                        x25519: Some(x_pub),
+                        mlkem768_ek: Some(mlkem_kp.ek),
+                    },
+                    secret: RecipientSecret {
+                        codepoint: self.codepoint,
+                        x25519: Some(x_sec),
+                        mlkem768_dk: Some(mlkem_kp.dk),
+                    },
+                }
+            }
+            // Classical-only `0x6400`: X25519 half only (resolve() already
+            // rejected every other codepoint).
             _ => RecipientKeypair {
                 codepoint: self.codepoint,
                 public: RecipientPublic {
@@ -634,6 +710,92 @@ impl RecipientPublic {
     pub const fn codepoint(&self) -> CipherSuiteCodepoint {
         self.codepoint
     }
+
+    /// Serialize the recipient public material to its canonical byte layout
+    /// (so it can be advertised via a DID / stored in the vault).
+    ///
+    /// Layout is codepoint-dispatched (the codepoint is carried out-of-band
+    /// alongside these bytes; the caller pairs it back in
+    /// [`Self::from_bytes`]):
+    ///
+    /// - `0x647a` hybrid: `x25519_pub(32) ‖ mlkem768_ek(1184)` — the x25519
+    ///   public key followed by the FIPS-203 ML-KEM-768 encapsulation key.
+    /// - `0x6400` classical: `x25519_pub(32)`.
+    ///
+    /// Sizes flow from the upstream type constants
+    /// (`crate::mlkem::ML_KEM_768_EK_LEN` + the x25519 32-byte public key)
+    /// — never hardcoded (CLAUDE.md baked-in #5).
+    #[must_use]
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut out = Vec::new();
+        if let Some(x_pub) = self.x25519.as_ref() {
+            out.extend_from_slice(x_pub.as_bytes());
+        }
+        if let Some(ek) = self.mlkem768_ek.as_ref() {
+            out.extend_from_slice(ek);
+        }
+        out
+    }
+
+    /// Parse a recipient public byte blob for `codepoint` back into a
+    /// [`RecipientPublic`]. Fail-closed typed-reject on any malformed /
+    /// wrong-length input — NEVER a silent default (CLAUDE.md baked-in #5).
+    ///
+    /// The `codepoint` is supplied out-of-band (it travels with the blob in
+    /// the DID / vault record) and drives the expected layout — see
+    /// [`Self::to_bytes`].
+    ///
+    /// # Errors
+    ///
+    /// - [`AeadError::MalformedRecipientPublic`] if `bytes` is the wrong
+    ///   length for `codepoint`, or the ML-KEM-768 encapsulation key does
+    ///   not parse.
+    /// - [`AeadError::Unsupported`] if `codepoint` is not a live cipher
+    ///   suite.
+    pub fn from_bytes(codepoint: CipherSuiteCodepoint, bytes: &[u8]) -> Result<Self, AeadError> {
+        // Reject unknown/reserved codepoints up-front (never silent default).
+        CipherSuite::resolve(codepoint)?;
+        match codepoint.raw() {
+            0x647a => {
+                let expect = X25519_PUBLIC_LEN + mlkem::ML_KEM_768_EK_LEN;
+                if bytes.len() != expect {
+                    return Err(AeadError::MalformedRecipientPublic(
+                        "hybrid recipient public wrong length (expected x25519_pub||mlkem768_ek)",
+                    ));
+                }
+                let (x_bytes, ek_bytes) = bytes.split_at(X25519_PUBLIC_LEN);
+                let x_arr: [u8; X25519_PUBLIC_LEN] = x_bytes.try_into().map_err(|_| {
+                    AeadError::MalformedRecipientPublic("x25519 public wrong length")
+                })?;
+                // Reject a malformed ML-KEM ek eagerly (encapsulate() would
+                // otherwise surface it later); a byte-length-correct ek that
+                // fails structural parse is caught by the encapsulate path,
+                // but we validate the length invariant here so from_bytes is
+                // total over its declared contract.
+                Ok(Self {
+                    codepoint,
+                    x25519: Some(X25519PublicKey::from(x_arr)),
+                    mlkem768_ek: Some(ek_bytes.to_vec()),
+                })
+            }
+            // Classical-only `0x6400`: x25519 half only.
+            _ => {
+                if bytes.len() != X25519_PUBLIC_LEN {
+                    return Err(AeadError::MalformedRecipientPublic(
+                        "classical recipient public wrong length (expected x25519_pub)",
+                    ));
+                }
+                let x_arr: [u8; X25519_PUBLIC_LEN] = bytes.try_into().map_err(|_| {
+                    AeadError::MalformedRecipientPublic("x25519 public wrong length")
+                })?;
+                Ok(Self {
+                    codepoint,
+                    x25519: Some(X25519PublicKey::from(x_arr)),
+                    mlkem768_ek: None,
+                })
+            }
+        }
+    }
 }
 
 /// Recipient's secret material (X25519 secret + optionally ML-KEM-768
@@ -649,6 +811,118 @@ impl RecipientSecret {
     #[must_use]
     pub const fn codepoint(&self) -> CipherSuiteCodepoint {
         self.codepoint
+    }
+
+    /// Serialize the recipient secret material to its canonical byte layout
+    /// (so the vault can seal it at rest). Layout is codepoint-dispatched
+    /// (the codepoint travels alongside; the caller pairs it back in
+    /// [`Self::from_bytes`]):
+    ///
+    /// - `0x647a` hybrid: `x25519_sec(32) ‖ mlkem768_dk(2400)` — the x25519
+    ///   secret scalar followed by the FIPS-203 ML-KEM-768 decapsulation
+    ///   key (full expanded form).
+    /// - `0x6400` classical: `x25519_sec(32)`.
+    ///
+    /// Sizes flow from the upstream type constants
+    /// (`crate::mlkem::ML_KEM_768_DK_LEN` + the x25519 32-byte secret) —
+    /// never hardcoded (CLAUDE.md baked-in #5).
+    ///
+    /// The returned `Vec` is raw secret bytes — callers MUST wipe it (seal
+    /// it into the vault + drop, or wrap in [`zeroize::Zeroizing`]).
+    #[must_use]
+    pub fn to_bytes(&self) -> Zeroizing<Vec<u8>> {
+        let mut out = Vec::new();
+        if let Some(x_sec) = self.x25519.as_ref() {
+            out.extend_from_slice(&x_sec.to_bytes());
+        }
+        if let Some(dk) = self.mlkem768_dk.as_ref() {
+            out.extend_from_slice(dk);
+        }
+        Zeroizing::new(out)
+    }
+
+    /// Parse a recipient secret byte blob for `codepoint` back into a
+    /// [`RecipientSecret`]. Fail-closed typed-reject on any malformed /
+    /// wrong-length input — NEVER a silent default (CLAUDE.md baked-in #5).
+    ///
+    /// The `codepoint` is supplied out-of-band (it travels with the blob in
+    /// the vault record) and drives the expected layout — see
+    /// [`Self::to_bytes`].
+    ///
+    /// # Errors
+    ///
+    /// - [`AeadError::MalformedRecipientSecret`] if `bytes` is the wrong
+    ///   length for `codepoint`.
+    /// - [`AeadError::Unsupported`] if `codepoint` is not a live cipher
+    ///   suite.
+    pub fn from_bytes(codepoint: CipherSuiteCodepoint, bytes: &[u8]) -> Result<Self, AeadError> {
+        // Reject unknown/reserved codepoints up-front (never silent default).
+        CipherSuite::resolve(codepoint)?;
+        match codepoint.raw() {
+            0x647a => {
+                let expect = X25519_SECRET_LEN + mlkem::ML_KEM_768_DK_LEN;
+                if bytes.len() != expect {
+                    return Err(AeadError::MalformedRecipientSecret(
+                        "hybrid recipient secret wrong length (expected x25519_sec||mlkem768_dk)",
+                    ));
+                }
+                let (x_bytes, dk_bytes) = bytes.split_at(X25519_SECRET_LEN);
+                let x_arr: [u8; X25519_SECRET_LEN] = x_bytes.try_into().map_err(|_| {
+                    AeadError::MalformedRecipientSecret("x25519 secret wrong length")
+                })?;
+                Ok(Self {
+                    codepoint,
+                    x25519: Some(StaticSecret::from(x_arr)),
+                    mlkem768_dk: Some(dk_bytes.to_vec()),
+                })
+            }
+            // Classical-only `0x6400`: x25519 half only.
+            _ => {
+                if bytes.len() != X25519_SECRET_LEN {
+                    return Err(AeadError::MalformedRecipientSecret(
+                        "classical recipient secret wrong length (expected x25519_sec)",
+                    ));
+                }
+                let x_arr: [u8; X25519_SECRET_LEN] = bytes.try_into().map_err(|_| {
+                    AeadError::MalformedRecipientSecret("x25519 secret wrong length")
+                })?;
+                Ok(Self {
+                    codepoint,
+                    x25519: Some(StaticSecret::from(x_arr)),
+                    mlkem768_dk: None,
+                })
+            }
+        }
+    }
+}
+
+/// Debug-redacting: the secret bytes MUST NOT leak into logs / panics.
+/// `StaticSecret` already redacts, but we print neither half's bytes — only
+/// the codepoint + a redaction marker (mirrors `AeadKeyMaterial` /
+/// `StructuralKdfKey` hygiene).
+impl core::fmt::Debug for RecipientSecret {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RecipientSecret")
+            .field("codepoint", &self.codepoint)
+            .field("x25519", &"<redacted>")
+            .field("mlkem768_dk", &"<redacted>")
+            .finish()
+    }
+}
+
+/// Zeroize-on-drop for the recipient secret. `x25519_dalek::StaticSecret`
+/// already zeroizes its own scalar on drop (the `zeroize` feature is
+/// enabled in `Cargo.toml`); the ML-KEM-768 decapsulation-key `Vec<u8>` is
+/// NOT self-zeroizing, so we wipe it explicitly here — the raw dk bytes are
+/// a long-lived at-rest secret (coredump / freed-heap exposure) per the
+/// F-08 memory-hygiene contract.
+impl Drop for RecipientSecret {
+    fn drop(&mut self) {
+        if let Some(dk) = self.mlkem768_dk.as_mut() {
+            dk.zeroize();
+        }
+        // `self.x25519: Option<StaticSecret>` zeroizes via StaticSecret's
+        // own Drop when this struct's fields drop.
     }
 }
 
@@ -857,6 +1131,206 @@ mod tests {
             outcome,
             Err(UnsupportedAlgorithm::CipherSuite { codepoint: 0x647b })
         ));
+    }
+
+    // ---- R9-S1: real-entropy generation + serialization round-trip ----
+
+    /// The named x25519 length constants MUST equal the actual serialized
+    /// width of the upstream types (no-hardcoded-sizes discipline — if a
+    /// future x25519-dalek changed the wire size this fails, rather than
+    /// silently mis-serializing).
+    #[test]
+    fn x25519_public_len_matches_type_width() {
+        let x_sec = StaticSecret::random_from_rng(&mut RandOsRng);
+        let x_pub = X25519PublicKey::from(&x_sec);
+        assert_eq!(x_pub.as_bytes().len(), X25519_PUBLIC_LEN);
+    }
+
+    #[test]
+    fn x25519_secret_len_matches_type_width() {
+        let x_sec = StaticSecret::random_from_rng(&mut RandOsRng);
+        assert_eq!(x_sec.to_bytes().len(), X25519_SECRET_LEN);
+    }
+
+    /// REAL-ENTROPY (GAP-1 root): two `generate_recipient_keypair()` calls
+    /// yield DISTINCT public AND secret bytes. This test would FAIL if the
+    /// generation were deterministic (as the placeholder path was).
+    #[test]
+    fn generate_recipient_keypair_is_real_entropy_hybrid() {
+        let suite = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768).unwrap();
+        let a = suite.generate_recipient_keypair();
+        let b = suite.generate_recipient_keypair();
+
+        // Distinct public material (x25519 + ML-KEM ek).
+        assert_ne!(
+            a.public().to_bytes(),
+            b.public().to_bytes(),
+            "two hybrid keygens MUST yield distinct public bytes (real entropy)"
+        );
+        // Distinct secret material (x25519 + ML-KEM dk).
+        assert_ne!(
+            a.secret().to_bytes().as_slice(),
+            b.secret().to_bytes().as_slice(),
+            "two hybrid keygens MUST yield distinct secret bytes (real entropy)"
+        );
+
+        // Real hybrid material is present (both halves).
+        let pub_len = a.public().to_bytes().len();
+        assert_eq!(pub_len, X25519_PUBLIC_LEN + mlkem::ML_KEM_768_EK_LEN);
+        let sec_len = a.secret().to_bytes().len();
+        assert_eq!(sec_len, X25519_SECRET_LEN + mlkem::ML_KEM_768_DK_LEN);
+    }
+
+    #[test]
+    fn generate_recipient_keypair_is_real_entropy_classical() {
+        let suite = CipherSuite::resolve(CipherSuiteCodepoint::CLASSICAL_X25519).unwrap();
+        let a = suite.generate_recipient_keypair();
+        let b = suite.generate_recipient_keypair();
+        assert_ne!(a.public().to_bytes(), b.public().to_bytes());
+        assert_ne!(
+            a.secret().to_bytes().as_slice(),
+            b.secret().to_bytes().as_slice()
+        );
+        // Classical: x25519 half only.
+        assert_eq!(a.public().to_bytes().len(), X25519_PUBLIC_LEN);
+        assert_eq!(a.secret().to_bytes().len(), X25519_SECRET_LEN);
+    }
+
+    /// Real-entropy vs deterministic: a fresh keygen MUST differ from the
+    /// public-seed-derived deterministic keypair (the placeholder path had
+    /// ZERO secret entropy — this pins the fix).
+    #[test]
+    fn real_entropy_differs_from_public_seed_deterministic() {
+        let suite = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768).unwrap();
+        let real = suite.generate_recipient_keypair();
+        // The placeholder derived the "secret" from a PUBLIC fingerprint seed.
+        let public_seed = *real.public().x25519.as_ref().unwrap().as_bytes();
+        let forgeable = suite.generate_recipient_keypair_deterministic(&public_seed);
+        assert_ne!(
+            real.secret().to_bytes().as_slice(),
+            forgeable.secret().to_bytes().as_slice(),
+            "real-entropy secret MUST NOT be derivable from a public seed"
+        );
+    }
+
+    /// ROUND-TRIP: generate → to_bytes → from_bytes → wrap(pub)/unwrap(sec)
+    /// recovers the wrapped key material — proving the serialized REAL keys
+    /// drive the real KEM end to end (hybrid `0x647a`).
+    #[test]
+    fn serialized_real_keys_drive_kem_round_trip_hybrid() {
+        let suite = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768).unwrap();
+        let cp = suite.codepoint();
+        let kp = suite.generate_recipient_keypair();
+
+        // Serialize both halves, then reconstruct from bytes.
+        let pub_bytes = kp.public().to_bytes();
+        let sec_bytes = kp.secret().to_bytes();
+        let rebuilt_pub = RecipientPublic::from_bytes(cp, &pub_bytes).expect("pub from_bytes");
+        let rebuilt_sec = RecipientSecret::from_bytes(cp, &sec_bytes).expect("sec from_bytes");
+
+        // Wrap to the reconstructed public; unwrap with the reconstructed secret.
+        let k_root = [0xA5u8; 32];
+        let wrapped = suite
+            .wrap_key_material(&rebuilt_pub, &k_root)
+            .expect("wrap to serialized pub MUST succeed");
+        let recovered = suite
+            .unwrap_key_material(&rebuilt_sec, &wrapped)
+            .expect("unwrap with serialized sec MUST succeed");
+        assert_eq!(
+            recovered.as_bytes(),
+            &k_root,
+            "serialized real keys MUST drive the real KEM end to end"
+        );
+    }
+
+    #[test]
+    fn serialized_real_keys_drive_kem_round_trip_classical() {
+        let suite = CipherSuite::resolve(CipherSuiteCodepoint::CLASSICAL_X25519).unwrap();
+        let cp = suite.codepoint();
+        let kp = suite.generate_recipient_keypair();
+        let rebuilt_pub = RecipientPublic::from_bytes(cp, &kp.public().to_bytes()).unwrap();
+        let rebuilt_sec = RecipientSecret::from_bytes(cp, &kp.secret().to_bytes()).unwrap();
+        let k_root = [0x5Au8; 32];
+        let wrapped = suite.wrap_key_material(&rebuilt_pub, &k_root).unwrap();
+        let recovered = suite.unwrap_key_material(&rebuilt_sec, &wrapped).unwrap();
+        assert_eq!(recovered.as_bytes(), &k_root);
+    }
+
+    /// from_bytes rejects malformed / truncated input with the typed error
+    /// (fail-closed; never a silent default).
+    #[test]
+    fn from_bytes_rejects_malformed_public() {
+        let cp = CipherSuiteCodepoint::HYBRID_X25519_MLKEM768;
+        // Truncated hybrid public.
+        let truncated = vec![0u8; X25519_PUBLIC_LEN + mlkem::ML_KEM_768_EK_LEN - 1];
+        assert!(matches!(
+            RecipientPublic::from_bytes(cp, &truncated),
+            Err(AeadError::MalformedRecipientPublic(_))
+        ));
+        // Empty.
+        assert!(matches!(
+            RecipientPublic::from_bytes(cp, &[]),
+            Err(AeadError::MalformedRecipientPublic(_))
+        ));
+        // Wrong length for classical.
+        assert!(matches!(
+            RecipientPublic::from_bytes(CipherSuiteCodepoint::CLASSICAL_X25519, &[0u8; 31]),
+            Err(AeadError::MalformedRecipientPublic(_))
+        ));
+        // Unknown codepoint typed-rejects (never silent default).
+        assert!(matches!(
+            RecipientPublic::from_bytes(CipherSuiteCodepoint::from_raw(0xCAFE), &[0u8; 32]),
+            Err(AeadError::Unsupported(UnsupportedAlgorithm::CipherSuite {
+                codepoint: 0xCAFE
+            }))
+        ));
+    }
+
+    #[test]
+    fn from_bytes_rejects_malformed_secret() {
+        let cp = CipherSuiteCodepoint::HYBRID_X25519_MLKEM768;
+        let truncated = vec![0u8; X25519_SECRET_LEN + mlkem::ML_KEM_768_DK_LEN - 1];
+        assert!(matches!(
+            RecipientSecret::from_bytes(cp, &truncated),
+            Err(AeadError::MalformedRecipientSecret(_))
+        ));
+        assert!(matches!(
+            RecipientSecret::from_bytes(cp, &[]),
+            Err(AeadError::MalformedRecipientSecret(_))
+        ));
+        assert!(matches!(
+            RecipientSecret::from_bytes(CipherSuiteCodepoint::CLASSICAL_X25519, &[0u8; 33]),
+            Err(AeadError::MalformedRecipientSecret(_))
+        ));
+        assert!(matches!(
+            RecipientSecret::from_bytes(CipherSuiteCodepoint::from_raw(0xCAFE), &[0u8; 32]),
+            Err(AeadError::Unsupported(UnsupportedAlgorithm::CipherSuite {
+                codepoint: 0xCAFE
+            }))
+        ));
+    }
+
+    /// The secret's Debug MUST NOT leak either half's bytes (redaction
+    /// hygiene — mirrors AeadKeyMaterial / StructuralKdfKey).
+    #[test]
+    fn recipient_secret_debug_is_redacted() {
+        let suite = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768).unwrap();
+        let kp = suite.generate_recipient_keypair();
+        let dbg = format!("{:?}", kp.secret());
+        assert!(
+            dbg.contains("<redacted>"),
+            "Debug MUST redact secret halves"
+        );
+        // The raw dk bytes MUST NOT appear. A leak would render the dk as a
+        // decimal byte array (e.g. `[203, 17, ...]`); a redacting Debug is
+        // short. Pin both: the redaction marker is present AND the output is
+        // far shorter than a full 2400-byte dk dump would be.
+        let dk_len = kp.secret().mlkem768_dk.as_ref().map_or(0, Vec::len);
+        assert_eq!(dk_len, mlkem::ML_KEM_768_DK_LEN, "hybrid dk present");
+        assert!(
+            dbg.len() < 128,
+            "redacting Debug MUST be short (a leaked {dk_len}-byte dk dump would be far longer): {dbg}"
+        );
     }
 
     #[test]

@@ -154,7 +154,8 @@ pub mod vault;
 // Convenience re-exports of the most-used typed surface.
 pub use crate::aead::{AeadEnvelope, AeadError, AeadKeyMaterial};
 pub use crate::cipher_suite::{
-    X_WING_LABEL, classical_combine, combine_x_wing, x_wing_combiner_preimage,
+    X_WING_LABEL, X25519_PUBLIC_LEN, X25519_SECRET_LEN, classical_combine, combine_x_wing,
+    x_wing_combiner_preimage,
 };
 pub use crate::codepoint::{CipherSuiteCodepoint, CodepointLifecycle, HashCodepoint, SigCodepoint};
 pub use crate::envelope::{
