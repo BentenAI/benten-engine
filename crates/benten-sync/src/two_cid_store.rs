@@ -294,6 +294,15 @@ pub struct Stanza {
     /// The recipient-key generation the stanza was authored under (U19).
     pub recipient_key_generation: u32,
     /// The K_principal generation the stanza was authored under (U20).
+    ///
+    /// **Forward-compat reservation (R9-council F-08):** at v1-beta-core this
+    /// field + its `StaleKPrincipalGeneration` reject are a **model in the
+    /// unwired `TwoCidStore`** (G-CORE-3e) — the field is carried + the
+    /// generation-monotonicity check is property-pinned, but no production
+    /// engine flow currently rotates `K_principal` and threads a real current
+    /// generation through this path. The counter is reserved so that when
+    /// `K_principal` rotation is wired, stale-generation stanzas reject without
+    /// a wire-format change.
     pub k_principal_generation: u32,
 }
 

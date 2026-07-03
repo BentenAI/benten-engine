@@ -484,10 +484,24 @@ pub fn audit_log_query_composition(set_id: &[u8; 32]) -> AuditQueryComposition {
 }
 
 /// Build the canonical `audit:<set_id_hex>:*` read-scope string for a set.
+///
+/// **4-byte-prefix scope caveat (R9-council F-22).** This uses only the FIRST
+/// 4 bytes (8 hex chars) of the 32-byte `set_id` as the `<set_id>` segment —
+/// it is a HUMAN-READABLE / DISPLAY-scope label for the `audit:<set_id>:*`
+/// scope FAMILY, NOT a collision-free set identifier. Two distinct sets sharing
+/// a 4-byte `set_id` prefix would map to the SAME scope string. This is
+/// acceptable ONLY because the scope string is a display/grouping label; the
+/// authoritative set identity is the FULL 32-byte `set_id` (and the full CID
+/// linkage in `link_cid`), never this truncated label. A caller MUST NOT use
+/// this string as a security-load-bearing set discriminator. This surface is a
+/// data-half model with zero production callers (see the crate-root
+/// register-then-enforce disclosure); if it is ever wired into a live
+/// cap-scope, the segment MUST carry the full `set_id`.
 fn audit_set_scope_string(set_id: &[u8; 32]) -> String {
     use std::fmt::Write as _;
-    // Use a short hex prefix of the set CID as the `<set_id>` segment so the
-    // scope is the read-side audit scope family `audit:<set_id>:*`.
+    // Use a short hex prefix of the set CID as the `<set_id>` DISPLAY segment
+    // (NOT a collision-free identifier — see the doc caveat above) so the scope
+    // is the read-side audit scope family `audit:<set_id>:*`.
     let mut hex = String::with_capacity(8);
     for b in set_id.iter().take(4) {
         let _ = write!(hex, "{b:02x}");

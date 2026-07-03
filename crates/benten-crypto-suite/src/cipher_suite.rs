@@ -594,6 +594,18 @@ impl CipherSuite {
 ///
 /// Exposed so the F-W0-1-LABEL construction-order witness pin can assert the
 /// label is the appended suffix (and NOT a prepended prefix).
+///
+/// **`ct_mlkem` is DELIBERATELY absent from the pre-image — SPEC-FAITHFUL
+/// (freeze-record; R9-council GAP-3; DO NOT "fix" by adding `ct_mlkem`).** The
+/// combiner binds `ct_X` (the X25519 ciphertext) but NOT `ct_mlkem` (the
+/// ML-KEM-768 ciphertext) directly, EXACTLY as `draft-connolly-cfrg-xwing-kem-10`
+/// §6 specifies. This is not an omission: ML-KEM-768 is IND-CCA2, so its shared
+/// secret `ss_M` **transitively binds** `ct_mlkem` (the FO-transform ties the
+/// ML-KEM shared secret to its own ciphertext), giving X-Wing its LEAK-freeness
+/// / binding property without re-hashing `ct_mlkem`. Adding `ct_mlkem` to the
+/// pre-image would DIVERGE from the IETF-faithful construction at the reserved
+/// `0x647A` codepoint (a wire-break) for zero security gain. Cross-record:
+/// Inv-17 (hybrid floor); the `tf2_*` strip-resistance pins.
 #[must_use]
 pub fn x_wing_combiner_preimage(ss_m: &[u8], ss_x: &[u8], ct_x: &[u8], pk_x: &[u8]) -> Vec<u8> {
     let mut pre = Vec::with_capacity(ss_m.len() + ss_x.len() + ct_x.len() + pk_x.len() + 6);

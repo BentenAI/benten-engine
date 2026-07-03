@@ -3,11 +3,18 @@
 //!
 //! # On-disk format (FROZEN; R0.5 §3.1)
 //!
-//! `${BENTEN_DATA_DIR}/vault.cbor` — a DAG-CBOR-encoded
-//! [`EncryptedEnvelope`](crate::envelope::EncryptedEnvelope) at the vault
-//! band codepoint [`VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT`] (`0x6100`). The
-//! sealed payload is the canonical DAG-CBOR [`VaultPayload`]
-//! `{ k_principal:[u8;32], user_did_signing_key, user_did_creation_time:u64 }`.
+//! `${BENTEN_DATA_DIR}/vault.cbor` — a **hand-rolled magic-prefixed AEAD
+//! frame** (NOT a DAG-CBOR-encoded [`EncryptedEnvelope`](crate::envelope::EncryptedEnvelope))
+//! built by [`serialize_vault`]:
+//! `magic 0xae | format-version V2 | codepoint(BE) | nonce_len | nonce | ct`
+//! at the vault band codepoint [`VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT`]
+//! (`0x6100`). The AEAD-sealed inner payload IS canonical DAG-CBOR — the
+//! [`VaultPayload`] `{ k_principal:[u8;32], user_did_signing_key,
+//! user_did_creation_time:u64 }` — but the outer on-disk frame is the fixed
+//! binary layout above, not a CBOR-envelope wrapper. (The frame is a
+//! byte-twin of the [`EncryptedEnvelope`](crate::envelope::EncryptedEnvelope)
+//! symmetric-AEAD wire header; the duplication is noted in the
+//! V1-WIRE-FORMAT-INVENTORY.)
 //!
 //! # XChaCha20-Poly1305 24-byte nonce (m-4)
 //!

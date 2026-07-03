@@ -70,9 +70,15 @@
 //!
 //! Couples with the TS-side pin
 //! `bindings/napi/__tests__/index_dts_parity_1204.spec.ts` Gate 24
-//! (TS surface does NOT hardcode classical 32/64 sizes) — the wasm32
-//! arm here verifies the size-dispatch works end-to-end through the
-//! BrowserBackend path that the TS surface fronts.
+//! (TS surface does NOT hardcode classical 32/64 sizes). **Scope-honesty
+//! (R9-council F-16):** this test exercises the `benten-crypto-suite`
+//! wrap/seal/open/unwrap round-trip COMPILED for the `wasm32` target and
+//! asserts cross-target byte-identity of the codepoint-dispatched output. It
+//! does **NOT** instantiate `BrowserBackend` or the thin-compute-surface stack
+//! — it verifies the CRYPTO layer is wasm32-clean (no `std`-only `getrandom` /
+//! `Instant::now` / thread-local deps), which is the property BrowserBackend
+//! DEPENDS ON, not one this test drives. BrowserBackend end-to-end coverage
+//! lives in the browser-runtime test surface, not here.
 
 #![allow(clippy::unwrap_used)]
 #![allow(unused_imports)]

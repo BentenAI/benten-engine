@@ -136,7 +136,16 @@ impl SigCodepoint {
 /// decodes existing content — old-codepoints-supported-forever); a
 /// `Quarantined` or `Burned` codepoint MUST be typed-rejected — a burned
 /// codepoint is permanently un-dispatchable.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future lifecycle state (e.g. a
+/// `Sunset` / `Reserved` transition state) lands ADDITIVELY without a breaking
+/// SemVer bump on the frozen v1 API. This state enum is NOT wire-keying-ordinal
+/// (unlike the deliberately-exhaustive `MembershipSetKind` / `RoleId`, whose
+/// cardinality is wire-load-bearing), so the additive-growth SemVer-readiness
+/// shape is correct here — cross-crate consumers MUST fail-CLOSED on an
+/// unrecognized state (reject, never silently dispatch).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum CodepointLifecycle {
     /// Actively dispatched.
     Live,

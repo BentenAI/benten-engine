@@ -1369,18 +1369,34 @@ Row D-15's audit-readiness concern.
 - **Frozen surface (v1-beta):** the typed error variant
   `DeviceLinkError::SessionIdReplayed` exists at
   `crates/benten-engine/src/layer_d/device_link.rs:185` (the Signal-Provisioning
-  device-link replay-defense arm) + is exercised by the layer_d test suite.
+  device-link replay-defense arm).
+- **Replay defense is DEFERRED — NOT exercised on the production path (R9-council
+  F-06 correction).** `open_provisioning_payload`
+  (`crates/benten-engine/src/layer_d/device_link.rs`) takes NO nonce /
+  session-id-cache argument and NEVER consults a replay store — it can return
+  `SessionIdMismatch` but never `SessionIdReplayed`. The
+  `SessionIdReplayed` variant has **no production emitter at v1-beta**. The test
+  `f_ld_4_model_only_session_id_replay_pin`
+  (`crates/benten-engine/tests/f_ld_4_multi_device_key_wrap_provisioning.rs`)
+  is a **model-only pin** — it drives a test-local `HashSet` (`consumed.insert`)
+  to pin the intended reject shape; it does NOT call
+  `open_provisioning_payload`, so it is NOT a production-path exercise (pim-18
+  SHAPE-not-SUBSTANCE). The prior "exercised by the layer_d test suite" claim was
+  inaccurate and is retracted here.
 - **Deferred consumption (G-COMP-1 destination):** wire the PRODUCTION
   session-id replay store — the durable consumed-session-id set that the
   device-link verify path consults so a replayed provisioning session id fires
-  `SessionIdReplayed` against real persisted state (not just the in-test
-  fixture). The replay-defense LOGIC is built + typed; the production storage
-  binding (per-engine persistent consumed-session-id set, pruned by the offer
-  `exp` window) is the G-COMP-1 deliverable coupled to the device-link UX flow
-  (Phase-4-Meta-Composing).
-- **v1-beta posture:** the typed reject + the in-band session-id-match check are
-  present; the residual is the durable replay-store binding. No exploit at
-  v1-beta on a single trusted engine (sessions are short-lived; the
+  `SessionIdReplayed` against real persisted state — INCLUDING adding the
+  nonce/session-id-cache argument to `open_provisioning_payload` so it can emit
+  `SessionIdReplayed`. The replay-defense LOGIC is typed (the variant exists);
+  the production storage binding (per-engine persistent consumed-session-id set,
+  pruned by the offer `exp` window) + the verify-path wiring are the G-COMP-1
+  deliverable coupled to the device-link UX flow (Phase-4-Meta-Composing).
+- **v1-beta posture:** the typed reject variant + the in-band session-id-MATCH
+  check are present (a substituted payload whose inner session-id disagrees fires
+  `SessionIdMismatch`); the residual is BOTH the durable replay-store binding AND
+  the verify-path argument that lets `SessionIdReplayed` fire at all. No exploit
+  at v1-beta on a single trusted engine (sessions are short-lived; the
   session-id-mismatch arm already rejects substituted payloads).
 - **Anchor:** `crates/benten-engine/src/layer_d/device_link.rs::DeviceLinkError::SessionIdReplayed`
   + the Signal-Provisioning device-link flow (Phase-4-Meta-Composing UX wave).
@@ -2026,6 +2042,40 @@ Row D-15's audit-readiness concern.
 - **Anchor:** R9 GAP-1 closure; CLAUDE.md baked-in #18 (Principal
   confidentiality half); `docs/SECURITY-PROOFS.md` §4.1/§4.2 +
   `docs/THREAT-MODEL.md` §2 rung 4 (the real-keying cross-records).
+
+---
+
+### Row D-65 — `keyring-core` v1.0.0 OS-keychain backend + Tauri IPC bridge wiring → Phase-4-Meta-Composing (R9-council F-14)
+
+- **Frozen surface (v1-beta):** the DAK-wrap secret-store SEAM is BUILT +
+  frozen. `benten_engine::layer_d::secret_store::SecretStore` is the
+  `Box<dyn SecretStore>` trait (`store` / `retrieve` / `backend_name`), the
+  typed `SecretStoreError` (`NotFound` / `KeychainUnavailable`,
+  `#[non_exhaustive]`), the `KeyringCoreStore` keychain backend model, the
+  file-vault fallback, and the `open_dak_wrap_store(keychain_available)`
+  selector whose fallback decision is EXPLICIT (typed
+  `KeychainUnavailable`, never a silent data-loss). The seam SHAPE +
+  fallback are the load-bearing v1-beta-core properties and are unit-pinned
+  by `crates/benten-engine/tests/f_ld_7_keyring_core_file_vault_fallback.rs`.
+- **Deferred consumption (Phase-4-Meta-Composing destination):** wiring the
+  ACTUAL `keyring-core` v1.0.0 crate (NOT the legacy `keyring` crate — per
+  CLAUDE.md 3-tactical-picks) behind the seam, plus the **Tauri IPC bridge**
+  that drives this store as a `Box<dyn SecretStore>` from the embedded-webview
+  shell. The `KeyringCoreStore` at HEAD models the OS-keychain backend
+  behaviorally (its `available` flag models a host with/without a keychain);
+  the concrete OS-keychain binding + the Tauri platform-glue are the
+  Composing-phase platform tasks (they co-design with the Device-link UX +
+  Remote-permission UX flows). Flagged in the module header at
+  `crates/benten-engine/src/layer_d/secret_store.rs` (the "`keyring-core`
+  binding (Composing-phase concern)" doc-block).
+- **v1-beta posture:** the seam + the explicit-fallback decision are frozen +
+  exercised; the residual is the concrete OS-keychain backend crate binding +
+  the Tauri IPC transport. This is **NOT a Compromise** — a correctly-built
+  seam whose concrete backend is deferred (the file-vault fallback is a real,
+  safe backend at v1-beta on any host without an OS keychain).
+- **Anchor:** R9-council F-14; CLAUDE.md 3-tactical-picks (`keyring-core`
+  v1.0.0); `crates/benten-engine/src/layer_d/secret_store.rs::SecretStore` +
+  the Device-link / Remote-permission Phase-4-Meta-Composing UX waves.
 
 ---
 

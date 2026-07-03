@@ -236,7 +236,7 @@ pub fn benten_crypto_suite::cipher_suite::classical_combine(&[u8], &[u8], &[u8])
 pub fn benten_crypto_suite::cipher_suite::combine_x_wing(&[u8], &[u8], &[u8], &[u8]) -> [u8; 32]
 pub fn benten_crypto_suite::cipher_suite::x_wing_combiner_preimage(&[u8], &[u8], &[u8], &[u8]) -> alloc::vec::Vec<u8>
 pub mod benten_crypto_suite::codepoint
-pub enum benten_crypto_suite::codepoint::CodepointLifecycle
+#[non_exhaustive] pub enum benten_crypto_suite::codepoint::CodepointLifecycle
 pub benten_crypto_suite::codepoint::CodepointLifecycle::Burned
 pub benten_crypto_suite::codepoint::CodepointLifecycle::Deprecated
 pub benten_crypto_suite::codepoint::CodepointLifecycle::Live
@@ -1389,7 +1389,7 @@ impl core::marker::Unpin for benten_crypto_suite::envelope::BindingContext
 impl core::marker::UnsafeUnpin for benten_crypto_suite::envelope::BindingContext
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::envelope::BindingContext
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::envelope::BindingContext
-pub enum benten_crypto_suite::CodepointLifecycle
+#[non_exhaustive] pub enum benten_crypto_suite::CodepointLifecycle
 pub benten_crypto_suite::CodepointLifecycle::Burned
 pub benten_crypto_suite::CodepointLifecycle::Deprecated
 pub benten_crypto_suite::CodepointLifecycle::Live

@@ -33,6 +33,33 @@
 //! Garden/Grove sub-config / the members-table relation + derived nature (IVM
 //! views) / the audit log / federation `SubsetRef` links / Compute + economics.
 //!
+//! # Data-half models carry ZERO production callers — enforcement is
+//! engine-layer (register-then-enforce disclosure; R9-council F-01..F-05)
+//!
+//! Several surfaces in this crate MODEL a governance / audit / authz decision
+//! as pure data-half Rust so it can be property-pinned, but they have **zero
+//! production callers at HEAD** — the REAL enforcement lives at the engine
+//! layer (the same register-then-enforce honest disclosure idiom Inv-19 / Inv-21
+//! use). Specifically:
+//!
+//! - [`audit::AuditChain`] tamper-detection (`verify_with_tampered_node_at`) +
+//!   the Inv-13 audit-dedup model — the LIVE tamper/dedup enforcement is
+//!   engine-layer: `benten_engine::Engine::audit_sequence` + the graph-layer
+//!   Inv-13 dedup + `Node::load_verified` mid-chain tamper rejection.
+//! - [`governance::GovernanceTier`] tier promotion (`promote_tier`) — a
+//!   data-half transition model; the LIVE governance authority is engine +
+//!   capability-policy driven.
+//! - [`role`] authz (per-role ability-templates) — the templates are data; the
+//!   LIVE authz enforcement is the UCAN/`CapabilityPolicy` chain at the engine
+//!   write boundary.
+//! - [`governance::MembershipSetPolicy`] — the zero-sized sealed-policy fence
+//!   (mechanism-half boundary marker), NOT a runtime enforcer.
+//!
+//! These models are deliberately RETAINED (they pin the intended shapes +
+//! property-hold under proptest); they do **NOT** themselves enforce, and this
+//! disclosure keeps them from being read as production enforcement points. The
+//! engine-layer wiring is the enforcement of record.
+//!
 //! # Dependency direction (F-CRATE-2)
 //!
 //! The B-1 dep set is `{crypto-suite, core, caps, id, graph, sync}` — every one

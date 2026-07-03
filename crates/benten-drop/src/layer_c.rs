@@ -45,6 +45,28 @@
 //! commitment — never the band u16). The body-CID is bound as a
 //! self-describing CIDv1 (`0x01 0x71 0x1e 0x20 ‖ 32-byte BLAKE3`).
 //!
+//! ## `sender_did` length-prefix width — BY BAND (FROZEN; R9-council F-25 / C-07)
+//!
+//! The `sender_did` field carries **two DIFFERENT length-prefix widths on two
+//! DIFFERENT surfaces** — this asymmetry is DELIBERATE and wire-locked (a
+//! future refactor MUST NOT silently unify them):
+//!
+//! - **M_auth sender-origin-auth binding** (`build_m_auth`) — `lp_u32(sender_did)`
+//!   (**u32-BE**). This is the signed authenticity binding; it matches the
+//!   `u32-BE` framing used for every other variable field in `M_auth`
+//!   (injective canonical framing).
+//! - **Plaintext-sender envelope WIRE** (`0x6500` `LAYER_C_DROP` only —
+//!   `sender_len u16 BE | sender_did`) — **u16-BE**. This is the on-wire
+//!   plaintext-sender header (non-default; Sealed-Sender `0x6510` carries NO
+//!   sender on the wire). The `u16` matches the plaintext-sender band's wire
+//!   header convention.
+//!
+//! Sealed-Sender (`0x6510`, the DEFAULT) and group (`0x6520`/`0x6610`) bands
+//! carry the sender ONLY inside the ciphertext / M_auth binding (u32-BE), never
+//! as a wire header. The widths are independent by design: the M_auth `u32`
+//! bounds the signed binding; the plaintext-sender `u16` bounds the
+//! non-default wire header. Freeze-record: Row D-42 (C-07).
+//!
 //! Per CLAUDE.md baked-in #5, all crypto routes through
 //! [`benten_crypto_suite`] — this module is concat / framing glue only.
 

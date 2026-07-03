@@ -147,12 +147,26 @@ binding shape co-designs with the post-v1-beta runtime enforcement.
 
 ### NQ-T4 — nonce-cache spec + the cross-device replay window (RATIFIED → Compromise #64)
 
-**Rule:** the nonce-cache is **`jti`-keyed**, **durable** (survives engine restart — persisted, not RAM-only), and
-retention is **≥ the full 1-hour bucket window**. **Scope:** **per-device-durable is GUARANTEED** (a nonce
-consumed on a device cannot be replayed against that same device); **user-global is best-effort-eventual-via-sync
-(NOT synchronous)** — a nonce consumed on device B is rejected on device C only after sync propagates the cache
-entry. The pre-sync cross-device replay window is DISCLOSED as a named Compromise: **Compromise #64**
-("best-effort-eventual cross-device nonce-rejection window") in `docs/SECURITY-POSTURE.md`.
+**Rule:** the nonce-cache is **`jti`-keyed** and retention is **≥ the full 1-hour bucket window**; the replay
+rejection is keyed on the `jti` nonce, NOT any time field (a clock rewrite cannot evade it). **Durability is
+provided via a SEAM, not intrinsic disk-persistence at v1-beta-core.** The `JtiNonceCache`
+(`crates/benten-sync/src/handshake.rs`) is a **durable-CAS-marker + hydration seam**: it holds a
+`durable_store` consumed-`jti` set (in-RAM at the type level) plus a `from_durable(...)` **hydration seam** +
+`durable_snapshot()` — a restart OR a cross-device sync feeds the consumed-`jti` set back through
+`from_durable`. **Per-device durability is delivered through this seam** (the engine is responsible for
+persisting `durable_snapshot()` to disk and re-hydrating via `from_durable` on restart — a **caller
+contract**); the accept-grant path (`benten_engine::layer_d::grant_acceptance::accept_grant`, currently
+zero-production-caller) likewise takes a caller-supplied `nonce_cache: &mut HashSet<[u8;32]>`. The FULL
+disk-persistence wiring (and the accept_grant nonce_cache backing) is **DEFERRED with the remote-permission /
+engine-encrypt-to-recipient wiring** (`docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-64-adjacent). **Scope:**
+**per-device-durable is GUARANTEED via the seam** (once the caller persists + re-hydrates, a nonce consumed on
+a device cannot be replayed against that same device); **user-global is best-effort-eventual-via-sync (NOT
+synchronous)** — a nonce consumed on device B is rejected on device C only after sync propagates the
+consumed-`jti` set (via the same `from_durable` hydration seam). The pre-sync cross-device replay window is
+DISCLOSED as a named Compromise: **Compromise #64** ("best-effort-eventual cross-device nonce-rejection
+window") in `docs/SECURITY-POSTURE.md`. (Distinct mechanism: the capability-CHAIN-frame replay marker
+`benten_caps::FrameReplayMarker<B: GraphBackend>` IS genuinely graph-backed-durable, but it defends inbound
+sync FRAMES, not the Layer-D `jti` grant nonce.)
 
 **Nonce-cache is orthogonal to the metadata bucket (NQ-C5).** The epoch bucket
 (`(raw_unix_secs / 3600) * 3600` — round-DOWN, NO jitter, deterministic) is for metadata privacy; the nonce-cache
@@ -191,6 +205,24 @@ the single-vs-group instance this generalizes. **Status:** the registry + its pr
 `crates/benten-crypto-suite/src/domain_registry.rs` (a 19-tag corpus via `registered_domain_tags()` plus the
 `all_domain_tags_are_prefix_free` regression); this row + the SECURITY-PROOFS property record the v1-beta
 commitment the code realizes.
+
+---
+
+## §6 — Availability / DoS scope (honest disclosure — NOT a section of this crypto threat model)
+
+**This document is a CONFIDENTIALITY / INTEGRITY / AUTHENTICITY threat model.** It deliberately has **no
+availability / denial-of-service section** (R9-council F-19 names this gap honestly rather than papering over it):
+the cryptographic substrate's threat surface is about who-can-read / who-can-forge / who-can-replay, not
+who-can-degrade-service. Availability against a resource-exhaustion adversary is a **cross-cutting engineering
+concern handled outside the crypto threat model**, and where a specific amplification vector touches the crypto
+substrate it is disclosed at its own site rather than here — e.g. the `dedup_synchronized_revocations`
+substrate-growth defense (`crates/benten-sync/src/handshake.rs`, adversarial duplicate-packing + rejoin-churn),
+the bounded-decode ceilings on every wire-decode path (`membership_count` / stanza-count over-run rejects), the
+per-Kind `wire_cost_ceiling` (Compromise #46), and the 4-MiB `recv_bytes` sync cap. A dedicated
+availability/DoS threat model (rate-limiting, connection-flood, storage-amplification, compute-exhaustion at the
+engine + transport layers) is **NAMED-DEFERRED to a later phase** — it is not a v1-beta-core crypto-freeze
+concern. This note exists so a reader does NOT mistake the absence of a DoS section for a claim that DoS is
+out-of-scope for the *project*; it is out-of-scope for *this crypto threat model* specifically.
 
 ---
 

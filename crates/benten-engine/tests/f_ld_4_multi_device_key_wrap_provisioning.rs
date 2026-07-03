@@ -182,21 +182,33 @@ fn f_ld_4_forged_offer_signature_rejects() {
     );
 }
 
-/// F-LD-4 replay old session-id → reject. A replayed `ProvisioningPayload`
-/// carrying a session-id B already consumed is refused (session-layer FS /
-/// replay defense via session-id binding).
+/// F-LD-4 session-id replay — **MODEL-ONLY pin (NOT a production-path
+/// exercise; R9-council F-06 correction).**
+///
+/// This pins the INTENDED reject shape of a consumed-session-id replay store
+/// using a test-local `HashSet`. It DELIBERATELY does NOT call
+/// `open_provisioning_payload` — the production `open_provisioning_payload`
+/// takes NO session-id-cache argument and cannot emit
+/// `DeviceLinkError::SessionIdReplayed` at v1-beta (the replay defense is a
+/// DEFERRED seam: `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-30 → G-COMP-1 /
+/// Phase-4-Meta-Composing). Naming makes the model-only nature explicit so this
+/// arm is never mistaken for a production-path pin (pim-18 SHAPE-not-SUBSTANCE).
+/// When Row D-30 wires the production replay store, this arm is replaced by a
+/// substantive pin that drives `open_provisioning_payload` with a real cache.
 #[test]
-fn f_ld_4_replayed_session_id_rejects() {
+fn f_ld_4_model_only_session_id_replay_pin() {
     use std::collections::HashSet;
     let mut consumed: HashSet<[u8; 32]> = HashSet::new();
     let session_id = [0x55; 32];
 
+    // Model-only: the intended reject shape of a consumed-session-id store.
     // First link consumes the session-id.
     assert!(consumed.insert(session_id), "first use MUST be admitted");
-    // Replay of the SAME session-id → rejected.
+    // Replay of the SAME session-id → rejected (model of the deferred store).
     assert!(
         !consumed.insert(session_id),
-        "replayed provisioning session-id MUST be rejected (already consumed)"
+        "replayed provisioning session-id MUST be rejected (already consumed) — \
+         MODEL of the DEFERRED Row D-30 store, not the production path"
     );
 }
 

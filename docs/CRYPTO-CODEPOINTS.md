@@ -39,6 +39,7 @@ This is the NQ-A1 conservative-fallback policy:
 | `0x6500`  | Layer-C drop, plaintext-sender (sender-DID on wire) | LIVE (non-default) |
 | `0x6510`  | Layer-C drop, **Sealed-Sender** (sender-DID inside ciphertext) | **LIVE — default (BR-1)** |
 | `0x6520`  | Layer-C group multi-stanza (`HpkeMultiBase`, blinded per-stanza AAD) | LIVE |
+| `0x6600`  | MembershipSet set-keying envelope (`MEMBERSHIP_SET_ENCRYPTION`; every `MembershipSetKind` binds here; Sealed-Sender default) | LIVE |
 | `0x6610`  | MembershipSet K_Set group multi-stanza (blinded AAD) | LIVE |
 
 > **`0x0001` draft-not-RFC caveat:** the LAMPS composite is pinned to
@@ -177,6 +178,7 @@ symbol; a prose-only mention does not count):
 | `0x6610` | `MEMBERSHIP_SET_GROUP_MULTI_STANZA` | MembershipSet band | **FREEZE** (group K_Set multi-stanza; R4.6-corrected value) |
 | `0x6520` | `LAYER_C_DROP_MULTI_RECIPIENT` | Layer-C drop / recipient band | **FREEZE** (R0.7-blinded Layer-C group multi-stanza; NOT a MembershipSet) |
 | `0x6310..0x631F` | `DEVICE_LINK_BAND_BASE`/`DEVICE_LINK_BAND_END` | Layer-D DeviceLink (Signal-Provisioning) band | **FREEZE** (R0.7 §4.1; out-of-band integers typed-reject fail-closed) |
+| `0x6320..0x632F` | `REMOTE_PERMISSION_BAND_BASE`/`REMOTE_PERMISSION_BAND_END` | Layer-D RemotePermission band (incl. `ExecuteWorkflow` reserve) | **FREEZE** (R0.7 §4.1 band base; out-of-band integers typed-reject fail-closed; per-slot: `PermissionRequest`/`PermissionGrant` LIVE, `ExecuteWorkflow` reserved-typed-reject at v1-beta) |
 | `0x6700..0x67FF` | `LIFECYCLE_BAND_BASE` | Lifecycle / revocation band | CODEPOINT-RESERVE (band base registered; per-slot allocation at Composing) |
 
 The in-code wire-lock for the group-band constants is regression-guarded in

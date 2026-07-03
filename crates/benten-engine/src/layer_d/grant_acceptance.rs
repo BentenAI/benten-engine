@@ -101,7 +101,15 @@ const _ROSTER_INDEX_CONSISTENT: () = {
 pub struct GrantAcceptanceContext<'a> {
     /// The grant's `jti` (replay key).
     pub jti: [u8; 32],
-    /// The per-device `jti` nonce-cache (mutated on admit).
+    /// The per-device `jti` nonce-cache (mutated on admit). This is a
+    /// **caller-supplied** in-RAM set: per-device durability is a **caller
+    /// contract** (the caller persists this set to disk + re-hydrates it on
+    /// restart, mirroring the `benten_sync::handshake::JtiNonceCache`
+    /// durable-CAS-marker + `from_durable` hydration seam). The full
+    /// disk-persistence wiring on this (currently zero-production-caller)
+    /// accept-grant path is DEFERRED with the remote-permission wiring
+    /// (`docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-64-adjacent; Compromise
+    /// #64 / NQ-T4). NOT an intrinsically-durable store at v1-beta-core.
     pub nonce_cache: &'a mut HashSet<[u8; 32]>,
     /// The RotationLog-revoked device-key set.
     pub revoked_device_keys: &'a HashSet<[u8; 32]>,

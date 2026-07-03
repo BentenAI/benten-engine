@@ -172,6 +172,18 @@ pub fn derive_root(
 /// Path-tagged: same Node reached by different predecessors yields
 /// different keys (the selective-share feature; structure-independent
 /// formula DISPROVED by Spike-E).
+///
+/// **Info-concat length-injectivity seam (R9-council F-20; §3.10 / Row D-13).**
+/// The `info` here concatenates the variable-length `edge_label` and `node_cid`
+/// WITHOUT an inter-field length prefix or codepoint tag (unlike [`derive_root`],
+/// which pins a fixed-width `"root:codepoint:" || codepoint_be`). At v1-beta the
+/// callers supply a FIXED-width `node_cid` (32/36-byte CID) so the split is
+/// unambiguous in practice, but the concat is not length-injective *by
+/// construction*. Closing this with an explicit **info-tag codepoint-binding**
+/// (a fixed-width codepoint + length-delimited fields) is a wire-format-coupled
+/// change **NAMED-DEFERRED to G-COMP-1** (`docs/V1-FROZEN-INTERFACE-DEFERRED.md`
+/// Row D-13). Not a v1-beta-core exploit given the fixed-width CID inputs; noted
+/// here so the seam is not read as fully length-injective.
 #[must_use]
 pub fn derive_step(
     predecessor: &StructuralKdfKey,

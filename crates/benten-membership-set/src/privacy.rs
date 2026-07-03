@@ -1,15 +1,19 @@
 //! Per-recipient unlinkability — the SCOPE-HONESTY boundary (Inv-20 clause-d,
 //! m-7; Compromise #58).
 //!
-//! Per-recipient stanza unlinkability is **network-observer-only**. It does
-//! NOT protect against a malicious admin: an admin holds the full
-//! `members_table` snapshot and can therefore correlate members regardless of
-//! the on-wire unlinkability. This module exposes the two sides of that
-//! boundary as explicit predicates so the `f_nat_2` family can assert BOTH —
-//! the property that IS delivered (network-observer cannot link) AND the
-//! boundary that is honestly NOT promised (admin CAN correlate). Asserting the
-//! boundary explicitly is what keeps the unlinkability claim from being
-//! over-claimed as admin-proof (the #58 honest disclosure).
+//! Per-recipient stanza unlinkability is **network-observer-ONLY** — it holds
+//! ONLY against a party that has NEITHER `K_Set` NOR the members_table/roster.
+//! It does **NOT** protect against ANY party holding `K_Set` or the roster: a
+//! malicious admin (or any set-member) holds the full `members_table` snapshot
+//! (and, as a member, `K_Set`) and can therefore correlate members regardless
+//! of the on-wire unlinkability. Unlinkability is a property of the *wire form*
+//! seen by an outside observer, NOT a property against an insider who can
+//! decrypt/read the roster. This module exposes the two sides of that boundary
+//! as explicit predicates so the `f_nat_2` family can assert BOTH — the
+//! property that IS delivered (network-observer cannot link) AND the boundary
+//! that is honestly NOT promised (any `K_Set`/roster holder CAN correlate).
+//! Asserting the boundary explicitly is what keeps the unlinkability claim from
+//! being over-claimed as insider-proof (the #58 honest disclosure).
 //!
 //! Both predicates are derived from a STRUCTURAL property of the inputs, not a
 //! hard-coded literal: per-recipient stanza wire bytes carry NO recipient
