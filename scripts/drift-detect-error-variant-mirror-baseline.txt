@@ -42,10 +42,10 @@
 # category as the pre-existing 156 entries below. Minting public catalog
 # codes for them pre-FREEZE would be the same scope-explosion the FREEZE
 # window must not absorb, so they join the SAME NAMED-DEFERRED post-FREEZE
-# §3.5g item 6 drain wave (PRE-FREEZE-BACKLOG row, above). The 9:
+# §3.5g item 6 drain wave (PRE-FREEZE-BACKLOG row, above). The 7 (GenError's
+# 2 were dropped R9 F-07 with the dead DUAL-CID surface):
 #   AuditChainError::TamperDetectedLinkageBroken,
 #   EnvelopeError::{BadMagic, HostileLengthPrefix, UnsupportedVersion},
-#   GenError::{StaleKPrincipalGeneration, StaleRecipientKeyGeneration},
 #   GroupError::WrongGroupCodepoint, LayerCError::UnsupportedCodepoint,
 #   TransportError::TransportReservedAtV1Beta.
 #
@@ -147,8 +147,6 @@ FixtureError::WasmInvalid
 FixtureError::WasmRead
 FixtureError::WatParse
 FixtureError::WatRead
-GenError::StaleKPrincipalGeneration
-GenError::StaleRecipientKeyGeneration
 GraphError::NestedTransactionNotSupported
 GraphError::Redb
 GroupError::WrongGroupCodepoint

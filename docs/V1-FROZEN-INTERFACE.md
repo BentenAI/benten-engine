@@ -1723,6 +1723,19 @@ different strings) = HALT (cryptographic; breaks downstream derivation).
 - `crates/benten-sync/src/two_cid_store.rs::TwoCidStore` — the wave-3e
   adapter wrapping a ciphertext-bytes backing store + the two-CID
   mapping (plaintext_cid → ciphertext_cid).
+- **NOT frozen (DROPPED R9 F-07):** the F-full DUAL-CID *extension* that
+  once sat alongside `TwoCidStore` in the same module (`DualCidStore` /
+  `plaintext_cid` / `reseal` / `blind_set_cid` / `verify_stanza_generation` /
+  `GenError` / `k_principal_generation`) was DELETED as superseded — its
+  stable-identity, generation-staleness, and blinded-set-CID concepts all
+  ship live in `layer_c` (the `body_cid` recompute-on-open + AAD-bound
+  key-epoch generations + B2 `M_auth`) and `membership-set`
+  (`membership_set_id_commitment`), equal-or-stronger; the dropped surface
+  had no seal-side producer and a single test as its only consumer (see
+  SECURITY-POSTURE.md, "Generation-staleness defense of record"). Only the
+  wave-3e `TwoCidStore` above is frozen — a future reader must NOT re-mint
+  the dropped extension (a genuinely-needed shape re-adds additively against
+  the real types under crypto-agility, not from the wrong-width stand-in).
 - redb-backed `plaintext_cid → ciphertext_cid` mapping table at G-CORE-3d
   (#1323) — durable.
 - UCAN scopes against plaintext_cid; iroh-blobs serves ciphertext blob by
