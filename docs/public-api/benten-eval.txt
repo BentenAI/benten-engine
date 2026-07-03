@@ -2400,16 +2400,10 @@ pub fn benten_core::subgraph::SubgraphBuilder::build_validated_aggregate_all(sel
 pub fn benten_core::subgraph::SubgraphBuilder::build_validated_with_max_depth(self, usize) -> core::result::Result<benten_core::subgraph::Subgraph, benten_eval::RegistrationError>
 pub fn benten_core::subgraph::SubgraphBuilder::wait_signal_typed(&mut self, benten_core::subgraph::NodeHandle, impl core::convert::Into<alloc::string::String>, benten_eval::primitives::wait::SignalShape) -> benten_core::subgraph::NodeHandle
 pub trait benten_eval::subgraph_ext::SubgraphExt: benten_eval::subgraph_ext::private::Sealed
-pub fn benten_eval::subgraph_ext::SubgraphExt::cumulative_budget_for_handle_for_test(&self, benten_core::subgraph::NodeHandle) -> core::option::Option<u64>
-pub fn benten_eval::subgraph_ext::SubgraphExt::cumulative_budget_for_root_for_test(&self) -> u64
-pub fn benten_eval::subgraph_ext::SubgraphExt::has_multiplicative_budget_tracked_for_test(&self) -> bool
 pub fn benten_eval::subgraph_ext::SubgraphExt::load_verified_with_cid(&benten_core::Cid, &[u8]) -> core::result::Result<benten_core::subgraph::Subgraph, benten_eval::RegistrationError>
 pub fn benten_eval::subgraph_ext::SubgraphExt::to_mermaid(&self) -> alloc::string::String
 pub fn benten_eval::subgraph_ext::SubgraphExt::validate(&self, &benten_eval::InvariantConfig) -> core::result::Result<(), benten_eval::EvalError>
 impl benten_eval::subgraph_ext::SubgraphExt for benten_core::subgraph::Subgraph
-pub fn benten_core::subgraph::Subgraph::cumulative_budget_for_handle_for_test(&self, benten_core::subgraph::NodeHandle) -> core::option::Option<u64>
-pub fn benten_core::subgraph::Subgraph::cumulative_budget_for_root_for_test(&self) -> u64
-pub fn benten_core::subgraph::Subgraph::has_multiplicative_budget_tracked_for_test(&self) -> bool
 pub fn benten_core::subgraph::Subgraph::load_verified_with_cid(&benten_core::Cid, &[u8]) -> core::result::Result<benten_core::subgraph::Subgraph, benten_eval::RegistrationError>
 pub fn benten_core::subgraph::Subgraph::to_mermaid(&self) -> alloc::string::String
 pub fn benten_core::subgraph::Subgraph::validate(&self, &benten_eval::InvariantConfig) -> core::result::Result<(), benten_eval::EvalError>
@@ -3428,16 +3422,10 @@ pub fn benten_core::subgraph::SubgraphBuilder::build_validated_aggregate_all(sel
 pub fn benten_core::subgraph::SubgraphBuilder::build_validated_with_max_depth(self, usize) -> core::result::Result<benten_core::subgraph::Subgraph, benten_eval::RegistrationError>
 pub fn benten_core::subgraph::SubgraphBuilder::wait_signal_typed(&mut self, benten_core::subgraph::NodeHandle, impl core::convert::Into<alloc::string::String>, benten_eval::primitives::wait::SignalShape) -> benten_core::subgraph::NodeHandle
 pub trait benten_eval::SubgraphExt: benten_eval::subgraph_ext::private::Sealed
-pub fn benten_eval::SubgraphExt::cumulative_budget_for_handle_for_test(&self, benten_core::subgraph::NodeHandle) -> core::option::Option<u64>
-pub fn benten_eval::SubgraphExt::cumulative_budget_for_root_for_test(&self) -> u64
-pub fn benten_eval::SubgraphExt::has_multiplicative_budget_tracked_for_test(&self) -> bool
 pub fn benten_eval::SubgraphExt::load_verified_with_cid(&benten_core::Cid, &[u8]) -> core::result::Result<benten_core::subgraph::Subgraph, benten_eval::RegistrationError>
 pub fn benten_eval::SubgraphExt::to_mermaid(&self) -> alloc::string::String
 pub fn benten_eval::SubgraphExt::validate(&self, &benten_eval::InvariantConfig) -> core::result::Result<(), benten_eval::EvalError>
 impl benten_eval::subgraph_ext::SubgraphExt for benten_core::subgraph::Subgraph
-pub fn benten_core::subgraph::Subgraph::cumulative_budget_for_handle_for_test(&self, benten_core::subgraph::NodeHandle) -> core::option::Option<u64>
-pub fn benten_core::subgraph::Subgraph::cumulative_budget_for_root_for_test(&self) -> u64
-pub fn benten_core::subgraph::Subgraph::has_multiplicative_budget_tracked_for_test(&self) -> bool
 pub fn benten_core::subgraph::Subgraph::load_verified_with_cid(&benten_core::Cid, &[u8]) -> core::result::Result<benten_core::subgraph::Subgraph, benten_eval::RegistrationError>
 pub fn benten_core::subgraph::Subgraph::to_mermaid(&self) -> alloc::string::String
 pub fn benten_core::subgraph::Subgraph::validate(&self, &benten_eval::InvariantConfig) -> core::result::Result<(), benten_eval::EvalError>
