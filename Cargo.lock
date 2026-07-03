@@ -430,7 +430,6 @@ dependencies = [
  "benten-graph",
  "benten-id",
  "benten-membership-set",
- "benten-sync",
  "blake3",
  "bs58",
  "serde",
