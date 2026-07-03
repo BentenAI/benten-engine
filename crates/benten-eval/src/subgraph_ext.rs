@@ -156,15 +156,29 @@ pub trait SubgraphExt: private::Sealed {
 
     /// Phase 2a G4-A test helper: return the cumulative Inv-8 budget at
     /// the subgraph's worst-case path.
+    ///
+    /// Gated behind `#[cfg(any(test, feature = "testing"))]` per freeze
+    /// §8-A (R9 F-06): test-only helpers must not be in the default
+    /// (frozen) public surface. Discipline-consistent with the sibling
+    /// [`NodeHandleExt::build_validated_for_corruption_test`] gate.
+    #[cfg(any(test, feature = "testing"))]
     fn cumulative_budget_for_root_for_test(&self) -> u64;
 
     /// Phase 2a G4-A test helper: cumulative budget at an arbitrary handle.
     /// Returns `None` when the handle does not correspond to a node in this
     /// subgraph.
+    ///
+    /// Gated behind `#[cfg(any(test, feature = "testing"))]` per freeze
+    /// §8-A (R9 F-06) — see [`Self::cumulative_budget_for_root_for_test`].
+    #[cfg(any(test, feature = "testing"))]
     fn cumulative_budget_for_handle_for_test(&self, h: NodeHandle) -> Option<u64>;
 
     /// Phase 2a G4-A test helper: multiplicative Inv-8 budget tracking is
     /// live in Phase 2a.
+    ///
+    /// Gated behind `#[cfg(any(test, feature = "testing"))]` per freeze
+    /// §8-A (R9 F-06) — see [`Self::cumulative_budget_for_root_for_test`].
+    #[cfg(any(test, feature = "testing"))]
     fn has_multiplicative_budget_tracked_for_test(&self) -> bool;
 
     /// Mermaid flowchart serialization. Behind the `diag` feature; without
@@ -200,14 +214,17 @@ impl SubgraphExt for Subgraph {
         }
     }
 
+    #[cfg(any(test, feature = "testing"))]
     fn cumulative_budget_for_root_for_test(&self) -> u64 {
         invariants::budget::compute_cumulative(self)
     }
 
+    #[cfg(any(test, feature = "testing"))]
     fn cumulative_budget_for_handle_for_test(&self, h: NodeHandle) -> Option<u64> {
         invariants::budget::cumulative_at_handle(self, h)
     }
 
+    #[cfg(any(test, feature = "testing"))]
     fn has_multiplicative_budget_tracked_for_test(&self) -> bool {
         true
     }
