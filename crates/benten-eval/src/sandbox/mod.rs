@@ -26,8 +26,7 @@
 //! preference — line cites in `evaluator.rs` drifted from `:185-192` to
 //! `:281-290` across waves). The SANDBOX call site (G7-C engine
 //! integration) emits the [`crate::TraceStep::BudgetExhausted`] row
-//! BEFORE propagating the typed error; see
-//! [`crate::primitives::sandbox::SandboxError::to_budget_exhausted_trace`].
+//! BEFORE propagating the typed error.
 //!
 //! ## Compile-time wasm32 disable (sec-pre-r1-05)
 //!
