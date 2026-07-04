@@ -456,6 +456,9 @@ pub benten_id::errors::UcanError::DeviceEnvelopeViolated
 pub benten_id::errors::UcanError::DeviceEnvelopeViolated::cap: alloc::string::String
 pub benten_id::errors::UcanError::DeviceEnvelopeViolated::issuer: alloc::string::String
 pub benten_id::errors::UcanError::EmptyChain
+pub benten_id::errors::UcanError::EnvelopeTooLarge
+pub benten_id::errors::UcanError::EnvelopeTooLarge::got: usize
+pub benten_id::errors::UcanError::EnvelopeTooLarge::max: usize
 pub benten_id::errors::UcanError::Expired
 pub benten_id::errors::UcanError::Expired::exp: u64
 pub benten_id::errors::UcanError::Expired::now: u64
@@ -488,6 +491,9 @@ impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::UcanError
 #[non_exhaustive] pub enum benten_id::errors::VcError
 pub benten_id::errors::VcError::BadSignature
 pub benten_id::errors::VcError::DecodeFailed
+pub benten_id::errors::VcError::EnvelopeTooLarge
+pub benten_id::errors::VcError::EnvelopeTooLarge::got: usize
+pub benten_id::errors::VcError::EnvelopeTooLarge::max: usize
 pub benten_id::errors::VcError::Expired
 pub benten_id::errors::VcError::Expired::exp: u64
 pub benten_id::errors::VcError::Expired::now: u64
@@ -786,6 +792,7 @@ impl core::marker::Unpin for benten_id::ucan::UcanClaims
 impl core::marker::UnsafeUnpin for benten_id::ucan::UcanClaims
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::ucan::UcanClaims
 impl core::panic::unwind_safe::UnwindSafe for benten_id::ucan::UcanClaims
+pub const benten_id::ucan::MAX_UCAN_ENVELOPE_BYTES: usize
 pub const benten_id::ucan::MAX_UCAN_PROOF_DEPTH: usize
 pub fn benten_id::ucan::validate_chain_at(&[benten_id::ucan::Ucan], u64) -> core::result::Result<(), benten_id::errors::UcanError>
 pub fn benten_id::ucan::validate_chain_for_audience(&[benten_id::ucan::Ucan], &benten_id::did::Did) -> core::result::Result<(), benten_id::errors::UcanError>
@@ -945,6 +952,7 @@ impl core::marker::Unpin for benten_id::vc::TrustDomain
 impl core::marker::UnsafeUnpin for benten_id::vc::TrustDomain
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::vc::TrustDomain
 impl core::panic::unwind_safe::UnwindSafe for benten_id::vc::TrustDomain
+pub const benten_id::vc::MAX_VC_ENVELOPE_BYTES: usize
 pub const benten_id::vc::VC_CONTEXT_V1: &str
 pub const benten_id::vc::VC_TYPE_BASE: &str
 pub fn benten_id::vc::verify(&benten_id::vc::Credential, &benten_id::did::Did) -> core::result::Result<(), benten_id::errors::VcError>
@@ -1162,6 +1170,9 @@ pub benten_id::UcanError::DeviceEnvelopeViolated
 pub benten_id::UcanError::DeviceEnvelopeViolated::cap: alloc::string::String
 pub benten_id::UcanError::DeviceEnvelopeViolated::issuer: alloc::string::String
 pub benten_id::UcanError::EmptyChain
+pub benten_id::UcanError::EnvelopeTooLarge
+pub benten_id::UcanError::EnvelopeTooLarge::got: usize
+pub benten_id::UcanError::EnvelopeTooLarge::max: usize
 pub benten_id::UcanError::Expired
 pub benten_id::UcanError::Expired::exp: u64
 pub benten_id::UcanError::Expired::now: u64
@@ -1194,6 +1205,9 @@ impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::UcanError
 #[non_exhaustive] pub enum benten_id::VcError
 pub benten_id::VcError::BadSignature
 pub benten_id::VcError::DecodeFailed
+pub benten_id::VcError::EnvelopeTooLarge
+pub benten_id::VcError::EnvelopeTooLarge::got: usize
+pub benten_id::VcError::EnvelopeTooLarge::max: usize
 pub benten_id::VcError::Expired
 pub benten_id::VcError::Expired::exp: u64
 pub benten_id::VcError::Expired::now: u64

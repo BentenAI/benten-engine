@@ -386,6 +386,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::handshake::Session
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::handshake::Session
 pub const benten_sync::handshake::DEFAULT_REPLAY_WINDOW_MS: u64
 pub const benten_sync::handshake::LAYER_D_BUCKET_SECS: u64
+pub const benten_sync::handshake::MAX_HANDSHAKE_PAYLOAD_BYTES: usize
 pub fn benten_sync::handshake::initiate_nonce(&benten_sync::handshake_wire::HandshakeFrame) -> benten_sync::handshake::HandshakeResult<[u8; 32]>
 pub fn benten_sync::handshake::sync_hydrate_consume_recheck_outcome(benten_errors::ErrorCode, &str, &str) -> benten_sync::handshake::HandshakeResult<()>
 pub type benten_sync::handshake::HandshakeResult<T> = core::result::Result<T, benten_sync::handshake::HandshakeError>
@@ -507,6 +508,7 @@ impl core::marker::UnsafeUnpin for benten_sync::handshake_wire::WithPeerId
 impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::handshake_wire::WithPeerId
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::handshake_wire::WithPeerId
 pub const benten_sync::handshake_wire::HANDSHAKE_WIRE_VERSION: u8
+pub const benten_sync::handshake_wire::MAX_HANDSHAKE_FRAME_BYTES: usize
 pub mod benten_sync::light_client
 #[non_exhaustive] pub enum benten_sync::light_client::LightClientError
 pub benten_sync::light_client::LightClientError::BandwidthBudgetExceeded
@@ -862,6 +864,9 @@ impl core::marker::Unpin for benten_sync::mst_proto::MstDiffSession
 impl core::marker::UnsafeUnpin for benten_sync::mst_proto::MstDiffSession
 impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::mst_proto::MstDiffSession
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::mst_proto::MstDiffSession
+pub const benten_sync::mst_proto::MAX_MST_FRAME_BYTES: usize
+pub const benten_sync::mst_proto::MAX_MST_MESSAGES_PER_FRAME: usize
+pub const benten_sync::mst_proto::MAX_MST_MESSAGE_BYTES: usize
 pub const benten_sync::mst_proto::MST_DIFF_WIRE_VERSION: u8
 pub mod benten_sync::peer_discovery
 pub enum benten_sync::peer_discovery::BootstrapMode
@@ -955,6 +960,7 @@ impl core::marker::Unpin for benten_sync::peer_id::PeerIdDecodeError
 impl core::marker::UnsafeUnpin for benten_sync::peer_id::PeerIdDecodeError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::peer_id::PeerIdDecodeError
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::peer_id::PeerIdDecodeError
+pub const benten_sync::peer_id::MAX_PEER_ID_CBOR_BYTES: usize
 pub mod benten_sync::transport
 pub enum benten_sync::transport::TransportKind
 pub benten_sync::transport::TransportKind::Direct
