@@ -108,6 +108,7 @@ CrdtError::LoroInternal
 CrdtError::StampedValueCodec
 DeviceAttestationError::EnvelopeWidening
 DeviceAttestationError::IncompatibleWithRuntime
+DidError::BodyTooLong
 DidError::BodyTooShort
 DidError::HybridBodyTooShort
 DidError::HybridTrailingBytes

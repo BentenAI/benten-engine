@@ -162,7 +162,7 @@ pub enum DidError {
     /// multikey) is well under [`crate::did::MAX_DID_KEY_STRING_LEN`], so
     /// no well-formed DID is ever rejected here.
     #[error("did:key string too long: got {got} bytes, expected at most {max}")]
-    BodyTooLong { // drift-detect: internal-only — DidError is engine-internal, wrapped into a higher-level typed error or discarded at every production boundary, never crosses napi; matches its grandfathered sibling variants which carry no first-class ErrorCode.
+    BodyTooLong {
         /// Length of the DID string presented.
         got: usize,
         /// Maximum accepted DID-string length ([`crate::did::MAX_DID_KEY_STRING_LEN`]).
