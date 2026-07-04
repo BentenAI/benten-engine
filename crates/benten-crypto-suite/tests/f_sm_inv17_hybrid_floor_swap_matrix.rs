@@ -60,9 +60,11 @@ mod f_sm_real {
         ClassicalOnly,
         NoEncryption,
         /// Maps to the real non-PQ-encryption built arm (a non-default
-        /// swap-matrix path; the pure-PQ `0x647c` arm is audit-gated and not
-        /// round-trippable at the v1-beta baseline).
-        Nf1PqPq,
+        /// swap-matrix path — classical-only X25519 KEM under a hybrid
+        /// signature; F-08 corrected the mislabel: this is the
+        /// NON-PQ-ENCRYPTION arm, NOT the NF-1 PQ⊕PQ arm. The pure-PQ `0x647c`
+        /// arm is audit-gated and not round-trippable at the v1-beta baseline).
+        NonPqEncryption,
     }
 
     fn matrix(cfg: Cfg) -> SwapMatrix {
@@ -70,7 +72,7 @@ mod f_sm_real {
             Cfg::HybridDefault => SwapMatrix::v1_beta_default(),
             Cfg::ClassicalOnly => SwapMatrix::classical_only(),
             Cfg::NoEncryption => SwapMatrix::no_encryption_public_class(),
-            Cfg::Nf1PqPq => SwapMatrix::non_pq_encryption(),
+            Cfg::NonPqEncryption => SwapMatrix::non_pq_encryption(),
         }
     }
 
@@ -320,7 +322,7 @@ fn full_bidirectional_cipher_swap_matrix() {
     );
 
     // Bidirectional round-trip for each ENCRYPTING arm.
-    for cfg in [Cfg::HybridDefault, Cfg::ClassicalOnly, Cfg::Nf1PqPq] {
+    for cfg in [Cfg::HybridDefault, Cfg::ClassicalOnly, Cfg::NonPqEncryption] {
         let sealed = seal(cfg, PLAINTEXT, &RECIPIENT_PUB);
         let opened = open(cfg, &sealed, &RECIPIENT_PUB)
             .unwrap_or_else(|| panic!("open(seal(pt,{cfg:?})) must recover plaintext"));

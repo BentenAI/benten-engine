@@ -3,8 +3,8 @@
 //! `member_type` is DELETED. `is_ai_operated(did) = (did.method() ==
 //! "agent")` (did:agent is an optional allowlist ALIAS, not a stored
 //! discriminator); `is_plugin` / `is_autonomous_ai` are derived
-//! (Inv-14 / manifest); ownership comes from `root_issuers(agent_did)`;
-//! any CACHED nature is an IVM-materialized view — never authoritative.
+//! (Inv-14 / manifest); ownership comes from the Inv-14 attribution chain;
+//! any CACHED nature is a derived (recomputed) view — never authoritative.
 //!
 //! Pin sources (F-full R2 test-landscape §1 Group 11 row F-NAT-1; merges
 //! K4 + GNI-11/12/13):

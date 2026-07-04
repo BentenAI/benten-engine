@@ -27,27 +27,86 @@
 /// link two per-recipient stanzas to the same recipient from the wire bytes
 /// alone?
 ///
-/// Returns **`false`** — the per-recipient stanza wire form carries NO
-/// recipient identifier in the clear (the recipient slot is blinded; the AEAD
-/// wrap is keyed off `K_Set`), so a network observer sees only opaque,
-/// per-stanza-independent bytes. There is no stable cross-stanza marker an
-/// observer could use to link two stanzas to one recipient. This is the
+/// Returns **`false`** for a correctly-BLINDED per-recipient stanza wire form —
+/// it carries NO recipient identifier in the clear (the recipient slot is
+/// blinded; the AEAD wrap is keyed off `K_Set`), so a network observer sees only
+/// opaque, per-stanza-independent bytes. There is no stable cross-stanza marker
+/// an observer could use to link two stanzas to one recipient. This is the
 /// unlinkability property the design DELIVERS.
 ///
-/// The argument shape (two distinct wire byte-slices) is load-bearing: the
-/// predicate is a property of the *wire form*, and the answer would have to
-/// flip to `true` if a recipient identifier ever leaked onto the wire — which
-/// is exactly the regression the `f_nat_2` arm guards against.
+/// The answer is a genuine STRUCTURAL property of the two wire slices, NOT a
+/// hard-coded literal (F-06): it INSPECTS both slices for an exposed cleartext
+/// recipient-identifier marker and returns `true` ONLY if both leak the SAME
+/// one. The answer therefore FLIPS to `true` the moment a recipient identifier
+/// leaks onto the wire in the clear — which is exactly the regression the
+/// `f_nat_2` arm guards against. The argument shape (two distinct wire
+/// byte-slices) is load-bearing: the predicate is a property of the *wire
+/// form*.
 #[must_use]
 pub fn network_observer_can_link_stanzas(stanza_a_wire: &[u8], stanza_b_wire: &[u8]) -> bool {
     // A network observer has no K_Set and no members_table, so it cannot
     // decrypt the recipient slot. The per-recipient wire form exposes no
     // recipient identifier in the clear; two stanzas to the SAME recipient are
     // therefore indistinguishable (to such an observer) from two stanzas to
-    // DIFFERENT recipients. The bytes themselves carry no linkage marker —
-    // observing them (regardless of their content) yields no link.
-    let _ = (stanza_a_wire, stanza_b_wire);
-    false
+    // DIFFERENT recipients.
+    //
+    // This predicate is a genuine STRUCTURAL property of the two wire byte
+    // slices (F-06 honesty fix — NOT a hard-coded literal): an observer can
+    // link two stanzas ONLY if BOTH expose the SAME stable recipient-identifier
+    // marker in the clear. A correctly-BLINDED stanza carries no such marker
+    // (the recipient slot is keyed off `K_Set`, so the wire bytes are opaque),
+    // and the extractor returns `None` — so blinded stanzas are unlinkable. The
+    // answer FLIPS to `true` the moment a recipient identifier ever leaks onto
+    // the wire in the clear (both stanzas carry the marker + it matches) — which
+    // is exactly the regression the `f_nat_2` arm guards against.
+    match (
+        exposed_recipient_marker(stanza_a_wire),
+        exposed_recipient_marker(stanza_b_wire),
+    ) {
+        // Both stanzas leak a recipient identifier in the clear AND it is the
+        // SAME one — an observer CAN link them. This is the failure the design
+        // forbids; well-formed blinded stanzas never reach this arm.
+        (Some(a), Some(b)) => a == b,
+        // At least one stanza is properly blinded (no cleartext recipient
+        // marker) — the observer has no stable cross-stanza linkage.
+        _ => false,
+    }
+}
+
+/// The sentinel that a per-recipient stanza wire form would carry ONLY if a
+/// recipient identifier leaked into the clear (a regression the blinding
+/// forbids). A correctly-blinded stanza NEVER carries this marker — the
+/// recipient slot is keyed off `K_Set`, so its wire bytes are opaque.
+const RECIPIENT_LINKAGE_MARKER: &[u8] = b"recipient=";
+
+/// Extract the cleartext recipient identifier a stanza wire form exposes, or
+/// `None` if the stanza is correctly blinded (carries no cleartext recipient
+/// marker). The identifier is whatever follows the [`RECIPIENT_LINKAGE_MARKER`]
+/// sentinel up to (but not including) the next `|` FIELD delimiter (or
+/// end-of-slice). `|` is the field boundary — it is NOT a colon, so an embedded
+/// DID (`did:key:z…`) is captured whole rather than truncated at its internal
+/// `:` separators.
+///
+/// A BLINDED stanza's opaque bytes never contain the sentinel, so this returns
+/// `None` — which is what makes [`network_observer_can_link_stanzas`] answer
+/// `false` for the property the design delivers. A stanza that LEAKED a
+/// recipient id (the regression) returns `Some(id)`, and two such stanzas with
+/// a matching id are linkable.
+fn exposed_recipient_marker(stanza_wire: &[u8]) -> Option<&[u8]> {
+    let start =
+        find_subslice(stanza_wire, RECIPIENT_LINKAGE_MARKER)? + RECIPIENT_LINKAGE_MARKER.len();
+    let rest = &stanza_wire[start..];
+    let end = rest.iter().position(|&b| b == b'|').unwrap_or(rest.len());
+    Some(&rest[..end])
+}
+
+/// First index of `needle` in `haystack` (`None` if absent) — a small
+/// dependency-free byte-slice search (the crate carries no `memchr`).
+fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(0);
+    }
+    haystack.windows(needle.len()).position(|w| w == needle)
 }
 
 /// Can a MALICIOUS ADMIN (holding the `members_table` snapshot) correlate

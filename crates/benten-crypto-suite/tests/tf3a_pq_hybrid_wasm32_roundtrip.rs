@@ -28,24 +28,19 @@
 //!
 //! # RED-PHASE STATUS (pim-12 §3.6e) + STUB-SHIM DISCIPLINE
 //!
-//! At HEAD `c9c11c56` `AeadKeyMaterial` + `AeadEnvelope` + the
-//! `wrap_key_material` / `unwrap_key_material` / `seal_aead` / `open_aead`
-//! cipher-suite production API DO NOT EXIST yet (the cipher-suite
-//! codepoint dispatch typed-rejects all arms). G-CORE-3a R5 mints these
-//! types + flips `0x647a` to LIVE.
+//! # LANDED (RED-PHASE discharged at G-CORE-3a; F-17 header retense)
 //!
-//! Per the `faa5475d` stub-shim precedent for G-CORE-3a, this file
-//! commits local stub-shim types so it compiles green at baseline +
-//! `#[ignore]` keeps the runtime gate per pim-12. G-CORE-3a R5
-//! implementer MUST (per the R5 G-CORE-3a 4-step checklist documented
-//! in R4.1 triage §"R5 brief-author-time named destinations"):
-//!   1. DELETE the local `g_core_3a_stub_wasm` module,
-//!   2. INSERT real `use benten_crypto_suite::cipher_suite::*;` against
-//!      the live wrap/seal API,
-//!   3. UN-IGNORE the 2 tests,
-//!   4. Verify both pins PASS green under BOTH `--target` configurations
-//!      (`cargo test --target x86_64-apple-darwin` for native +
-//!      `wasm-pack test --node` or equivalent for wasm32).
+//! `AeadKeyMaterial` + `AeadEnvelope` + the `wrap_key_material` /
+//! `unwrap_key_material` / `seal_aead` / `open_aead` cipher-suite production
+//! API EXIST at HEAD and `0x647a` is LIVE (default). This file wires the real
+//! `benten_crypto_suite::cipher_suite` API (see the `use` below) and runs GREEN
+//! (no `#[ignore]`, no stub-shim). The prior stub-shim + un-ignore staging is
+//! fully discharged.
+//!
+//! The wasm32-portability arm is verified under BOTH `--target` configurations:
+//!   - native: `cargo test --target x86_64-apple-darwin` (or the host triple);
+//!   - wasm32: `cargo test --target wasm32-wasip1` (the WASI preview-1 target
+//!     the workspace uses for wasm32 test execution).
 //!
 //! # `#[cfg(target_arch = "wasm32")]` gating discipline
 //!

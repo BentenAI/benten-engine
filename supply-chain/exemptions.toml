@@ -7,8 +7,9 @@
 # dev/CI environments — not yet wired). An exemption = "unaudited but
 # ACCEPTED" (NOT a fabricated audit); each costs against the budget.
 #
-# ⚠️ FLAG-FOR-BEN (2026-06-05) — exemption-budget raised 5 → 18 for the
-# libcrux-ml-kem adoption. The Cryspen ML-KEM-768 swap (Compromise #32
+# ✅ RATIFIED (2026-06-05) — exemption-budget raised 5 → 18 for the
+# libcrux-ml-kem adoption (Ben-RATIFIED; the ratified cap is 18). The
+# Cryspen ML-KEM-768 swap (Compromise #32
 # → mitigated-live) pulls 13 net-new transitive crates: 10 are
 # Cryspen/libcrux/hax (libcrux-ml-kem / libcrux-sha3 / libcrux-secrets /
 # libcrux-traits / libcrux-intrinsics / libcrux-platform / core-models /
@@ -22,10 +23,11 @@
 # because the cargo-vet CI gate is INFORMATIONAL-ONLY — `|| true`, not a
 # required check). Per the task's "add HONEST exemptions for the new
 # unaudited crates" they ARE recorded here as accepted-unaudited rather
-# than left silent. The budget bump is the one POLICY decision needing
-# Ben ratification: (a) accept the 18-entry budget for the libcrux
-# substrate (recorded here + reflected in the
-# `cargo_vet_exemption_budget_*` self-test), or (b) upgrade these to
+# than left silent. The budget bump was the one POLICY decision needing
+# Ben ratification, and it is now RATIFIED at 18: (a) the 18-entry budget
+# for the libcrux substrate is accepted (recorded here + reflected in the
+# `cargo_vet_exemption_budget_*` self-test), and going forward quarterly
+# review may (b) upgrade these to
 # certified `audits.toml` entries during the quarterly cargo-vet pass
 # (the budget-free path) once cargo-vet is installed in CI, or (c) fold
 # the libcrux family under the bytecode-alliance/mozilla import corpora
@@ -37,7 +39,7 @@
 # Pinned by:
 #   `crates/benten-engine/tests/cargo_vet_policy_self_test.rs::cargo_vet_exemption_budget_within_ratified_cap`
 # (count cap updated 5 → 18 on 2026-06-05 alongside the libcrux-ml-kem
-# adoption, pending Ben ratification per the FLAG above).
+# adoption — Ben-RATIFIED; the ratified cap is 18).
 
 # --- libcrux-ml-kem ML-KEM-768 trust path (Compromise #32 mitigation) ---
 

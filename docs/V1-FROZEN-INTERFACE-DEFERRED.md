@@ -2352,6 +2352,70 @@ Row D-15's audit-readiness concern.
   (device_link / remote_permission assembly); the Layer-C
   `u32::try_from(..).expect(..)` precedent in `benten_drop::layer_c`.
 
+### Row D-74 — F-02: widen `is_for_test_pattern` to catch the bare `for_test` form → v1-GM backstop-completeness hardening
+
+- **Observation (NAMED, not fixed this round):** the workspace guard
+  `is_for_test_pattern` in
+  `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs` matches
+  `_for_test` (with the leading underscore) but NOT the bare `for_test` form (a
+  `pub fn` literally named `for_test`, no leading underscore). This is a
+  backstop-completeness gap in the scanner, NOT a live frozen-surface leak at
+  v1-beta: the ONLY bare-`for_test` public fns at HEAD are the documented,
+  intentionally-public `AtriumConfig::for_test`
+  (`crates/benten-engine/src/atrium_api.rs:80` — a fixture constructor, not a
+  gated test helper) + the exempt `benten_ivm` `with_budget_for_testing`
+  helpers (which the `_for_testing` arm already catches). No ungated
+  `_for_test`-class symbol slips through at v1-beta.
+- **Deferred (destination):** v1-GM hardening — widen `is_for_test_pattern` to
+  also match a bare `for_test` / `for_testing` token (word-boundary aware so it
+  does not over-match unrelated identifiers), and add an explicit allowlist
+  entry for `AtriumConfig::for_test` so the widened scanner stays green.
+- **Anchor:** R14-council F-02;
+  `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs`
+  (`is_for_test_pattern`); `crates/benten-engine/src/atrium_api.rs:80`
+  (`AtriumConfig::for_test`).
+
+### Row D-75 — GAP-1: `UnwrappedKey` `#[derive(Debug)]` renders recovered key bytes + no `ZeroizeOnDrop` → v1-GM secret-hygiene hardening
+
+- **Observation (NAMED, not fixed this round):** `UnwrappedKey`
+  (`crates/benten-crypto-suite/src/cipher_suite.rs`) carries
+  `#[derive(Debug)]`, so a `{:?}` would render the recovered `k_root` key bytes
+  in the clear, and it has NO `ZeroizeOnDrop` — its sibling `RecipientSecret` in
+  the same module DOES both (a redacting `impl Debug` + an `impl Drop` that
+  zeroizes). This is a latent secret-in-`Debug` / secret-in-freed-heap footgun.
+  It is NOT exploited at v1-beta: there are **ZERO** production `{:?}` / `tracing`
+  sinks of `UnwrappedKey` at HEAD (grep-verified), so no key material reaches a
+  log/format sink. See Compromise (SGD) row minted at R14 for the tracked
+  disclosure.
+- **Deferred (destination):** v1-GM hardening — give `UnwrappedKey` (1) a
+  redacting hand-written `impl Debug` (mirror `RecipientSecret`'s `<redacted>`
+  fields) and (2) `ZeroizeOnDrop` (or an explicit `impl Drop` that
+  `zeroize()`s `bytes`), plus a secret-`Debug` meta-test asserting no
+  key-bearing crypto-suite type derives a rendering `Debug`.
+- **Anchor:** R14-council GAP-1;
+  `crates/benten-crypto-suite/src/cipher_suite.rs` (`UnwrappedKey` vs the
+  `RecipientSecret` redact+zeroize precedent); `docs/SECURITY-POSTURE.md`
+  Compromise (the R14 SGD mint).
+
+### Row D-76 — GAP-1: `derive_member_key` returns a raw `Vec<u8>` (not `Zeroizing`) → v1-GM secret-hygiene hardening
+
+- **Observation (NAMED, not fixed this round):**
+  `benten_membership_set::keying::derive_member_key`
+  (`crates/benten-membership-set/src/keying.rs`) returns the per-Node content
+  key `K(N)` as a bare `Vec<u8>` — the raw key bytes are NOT wrapped in
+  `zeroize::Zeroizing`, so a caller that drops the returned `Vec` leaves the
+  key bytes on the freed heap. The sibling secret-returning surfaces
+  (`RecipientSecret::to_bytes` → `Zeroizing<Vec<u8>>`) already wrap. This is a
+  memory-hygiene consistency gap, not a v1-beta correctness bug.
+- **Deferred (destination):** v1-GM hardening — change `derive_member_key`'s
+  return type to `Zeroizing<Vec<u8>>` (or return a `[u8; 32]` that callers
+  wipe), matching the `RecipientSecret::to_bytes` discipline. No wire change
+  (the derived key bytes are identical; only the drop-time wipe is added).
+- **Anchor:** R14-council GAP-1;
+  `crates/benten-membership-set/src/keying.rs` (`derive_member_key`); the
+  `RecipientSecret::to_bytes` → `Zeroizing` precedent in
+  `crates/benten-crypto-suite/src/cipher_suite.rs`.
+
 ---
 
 ## Update discipline

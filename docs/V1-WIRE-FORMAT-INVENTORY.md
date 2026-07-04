@@ -5,7 +5,7 @@
 > Per `docs/V1-FROZEN-INTERFACE.md` item 4 (D2 v1-canonical-bytes contract):
 > "BYTEWISE: a one-bit change to any encoded value ... is a P-III re-decision Ben must make."
 >
-> This doc enumerates every wire-format-bearing surface + the byte-pin test that locks its canonical bytes + the explicit `format_version: u32` discriminator (where present). The drift-detect CI lane walks this inventory + asserts a byte-pin test exists for every surface; missing pins are added in the same wave per the V1-FROZEN-INTERFACE row 8d FIX-NOW.
+> This doc enumerates every wire-format-bearing surface + the byte-pin test that locks its canonical bytes + the explicit `format_version: u32` discriminator (where present). At v1-beta each surface is covered by roundtrip + constant-position + format-version-byte-position pins; the full HEX-PINNED byte-pin sweep (a drift-detect CI lane that walks this inventory and asserts a hex byte-pin test exists for every surface) is a **DEFERRED** lane — 6 of 8 hex byte-pins ship at the **G-COMP-1** wave per `docs/V1-FROZEN-INTERFACE-DEFERRED.md` **Row D-9**, NOT a live lane at v1-beta. See V1-FROZEN-INTERFACE row 8d.
 >
 > **Authority:** V1-FROZEN-INTERFACE.md item 4 + RATIFIED-S&C §R2 + CLAUDE.md baked-in #5 (multiformats framing).
 >

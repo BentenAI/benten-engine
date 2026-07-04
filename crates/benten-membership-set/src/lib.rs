@@ -61,6 +61,13 @@
 //!   `open_membership_set_group` re-derive the key-epoch generation words from
 //!   the recipient's INDEPENDENTLY-held set-state and fail-close the hybrid
 //!   LAMPS verify), NOT this standalone comparator.
+//! - [`member::derive_member_nature`] / [`member::is_ai_operated`] member-nature
+//!   derivation (Inv-22) — a data-half model with **zero production callers** at
+//!   HEAD (R14 F-10); the LIVE member-nature answer is the IVM-materialized
+//!   derived view over `(did_method, has_install_manifest)` at the engine +
+//!   graph layer (`is_ai_operated(did) = (did.method() == "agent")`; nothing is
+//!   read from a stored member field — Inv-22), NOT these standalone derivation
+//!   helpers.
 //!
 //! These models are deliberately RETAINED (they pin the intended shapes +
 //! property-hold under proptest); they do **NOT** themselves enforce, and this

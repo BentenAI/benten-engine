@@ -105,8 +105,8 @@ fn cargo_vet_workflow_non_vacuity_self_test_passes() {
 }
 
 /// `cargo_vet_exemption_budget_within_ratified_cap` —
-/// sec-r1-5 onboarding policy (cap raised 5 → 18, pending Ben
-/// ratification, for the libcrux-ml-kem adoption; see FLAG below).
+/// sec-r1-5 onboarding policy (cap raised 5 → 18 for the libcrux-ml-kem
+/// adoption — Ben-RATIFIED; the ratified cap is 18).
 ///
 /// Counts entries in `supply-chain/exemptions.toml` and asserts the
 /// total is ≤ the ratified budget cap. The Phase-3 G20-A3 onboarding
@@ -160,8 +160,8 @@ fn cargo_vet_exemption_budget_within_ratified_cap() {
         count <= EXEMPTION_BUDGET_CAP,
         "supply-chain/exemptions.toml carries {count} exemptions; the \
          exemption-budget cap is {EXEMPTION_BUDGET_CAP} (raised 5 → 18 for \
-         the libcrux-ml-kem adoption, pending Ben ratification; see \
-         FLAG-FOR-BEN). Quarterly review must upgrade unaudited exemptions \
-         to certified `audits.toml` entries before adding new ones."
+         the libcrux-ml-kem adoption — Ben-RATIFIED). Quarterly review must \
+         upgrade unaudited exemptions to certified `audits.toml` entries \
+         before adding new ones."
     );
 }

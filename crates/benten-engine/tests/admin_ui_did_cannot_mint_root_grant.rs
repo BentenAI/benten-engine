@@ -33,7 +33,7 @@
 mod common;
 
 #[test]
-#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. G24-B-FP closed the workflow editor surface; the synchronous write-boundary chain validator that enforces grant-mint issuer-is-user-DID at admit-time is NOT YET WIRED. Named destination: docs/future/phase-4-backlog.md §4.23 (Phase-4-Meta user-DID root-chain write-boundary validator). Pin source: r4-triage §1 r4-tc-1 + threat-model §T4 step 3; substantive shape preserved in body."]
+#[ignore = "SEAM WIRED (Row D-1 CLOSED at R6 R1 FP-F4 §S1 / sharpened R6 R2 FP-B): the WriteBoundaryChainValidator seam is structurally-always-on at 14 WRITE entry points via Engine::admit_write_chain, with the always-mounted NoopWriteBoundaryChainValidator returning NotApplicable (admit). This elevation-defense arm stays ignored pending a PRODUCTION validator that enforces grant-mint issuer-is-user-DID at admit-time — the G-COMP-1 consumption per docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-1 (FORENSIC). Named destination: Row D-1 (FORENSIC) / G-COMP-1 (docs/future/phase-4-backlog.md §4.23 tracks the same production-validator wave). Pin source: r4-triage §1 r4-tc-1 + threat-model §T4 step 3; substantive shape preserved in body."]
 fn admin_ui_did_attempt_to_mint_root_grant_surfaces_e_not_user_root() {
     // G24-B-FP wave wires this. Substantive shape:
     //

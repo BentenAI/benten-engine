@@ -643,10 +643,12 @@ fn f_disc_2_inv21_inv22_enforcement_owned_elsewhere_flag() {
     assert!(
         invs.contains(&21) && invs.contains(&22),
         "Inv-21 + Inv-22 MUST stay registered in INVARIANT-COVERAGE.md. Their \
-         ENFORCEMENT, however, is OWNED ELSEWHERE (Inv-21 → benten-sync CRDT \
-         fork tie-break; Inv-22 → graph-native member-nature derivation) — NOT \
-         in benten-drop. This catch-net deliberately does NOT assert their \
-         enforcement; that backing belongs in the owner crates' test targets."
+         ENFORCEMENT, however, is OWNED ELSEWHERE (Inv-21 → the fork tie-break \
+         rule `benten_membership_set::set::crdt::fork_a_wins`, over the \
+         benten-sync CRDT/HLC substrate; Inv-22 → graph-native member-nature \
+         derivation) — NOT in benten-drop. This catch-net deliberately does NOT \
+         assert their enforcement; that backing belongs in the owner crates' \
+         test targets."
     );
 }
 
@@ -681,6 +683,20 @@ fn f_disc_2_codepoint_ssot_cross_crate_const_equality() {
         registry::MEMBERSHIP_SET_GROUP_MULTI_STANZA,
         "0x6610 MEMBERSHIP_SET_GROUP_MULTI_STANZA drifted between \
          benten_membership_set::codepoints and benten_crypto_suite::registry"
+    );
+    // R14 F-13: the 4TH independent `0x6610` literal — the drop crate's OWN
+    // group-send producer const (`benten_drop::layer_c::group_posture::
+    // MEMBERSHIP_SET_GROUP_MULTI_STANZA`, which EMITS the wire codepoint at the
+    // Layer-C group-seal sites) — was NOT pinned here. Pin it too so a one-sided
+    // edit to the drop-crate producer fails the build (the AAD-byte-equality
+    // `f_02_*` cross-check locks the assembled AAD *output*, not this codepoint
+    // *value*; this arm closes that gap).
+    assert_eq!(
+        benten_drop::layer_c::group_posture::MEMBERSHIP_SET_GROUP_MULTI_STANZA,
+        registry::MEMBERSHIP_SET_GROUP_MULTI_STANZA,
+        "0x6610 MEMBERSHIP_SET_GROUP_MULTI_STANZA drifted between \
+         benten_drop::layer_c::group_posture (the drop-crate group-send \
+         producer) and benten_crypto_suite::registry"
     );
     assert_eq!(
         codepoints::MEMBERSHIP_SET_RESERVED_0X6620,

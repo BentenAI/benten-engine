@@ -139,10 +139,15 @@ pub fn audience_set_commitment(member_dids: &[String]) -> [u8; 32] {
 }
 
 /// `membership_set_id_commitment = blake3::keyed_hash(K_Set,
-/// "benten:setid:v1" || membership_set_id)` — the SAME §3.9 gossip-topic
-/// keyed-MAC primitive (R0.7 §4.1: `HMAC` = `blake3::keyed_hash`; BLAKE3 is
-/// 32-wide so the truncation is the identity). Replaces the raw set-id
-/// (BLINDED).
+/// "benten:setid:v1" || membership_set_id)` — the SAME keyed-MAC PRIMITIVE the
+/// §3.9 gossip-topic uses (R0.7 §4.1: `HMAC` = `blake3::keyed_hash`; BLAKE3 is
+/// 32-wide so the truncation is the identity), but a DISTINCT construction: this
+/// §3.10 commitment PREPENDS the `"benten:setid:v1"` domain-separation label,
+/// whereas the §3.9 gossip-topic ([`crate::keying::gossip_topic`]) is UNLABELLED
+/// and instead APPENDS `BE(generation)`. Same primitive, different preimage —
+/// the two never collide (see the `keying::gossip_topic` doc for the
+/// authoritative §3.9-labelled-vs-§3.10-unlabelled disambiguation). Replaces the
+/// raw set-id (BLINDED).
 #[must_use]
 pub fn membership_set_id_commitment(k_set: &[u8; 32], membership_set_id: &[u8]) -> [u8; 32] {
     let mut msg = Vec::new();

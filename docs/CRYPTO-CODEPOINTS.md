@@ -250,6 +250,14 @@ The in-code wire-lock for the group-band constants is regression-guarded in
 > `DROP_TO_RECIPIENT_SEALED_SENDER == 0x6510` value is ADDITIONALLY wire-locked
 > by the Layer-C drop-band byte-pins in
 > `crates/benten-drop/tests/f_lc_hpke_encrypt_to_recipient_sealed_sender.rs`.)
+> (**R14 F-13** additionally pinned the FOURTH independent `0x6610` literal —
+> the drop crate's OWN group-send producer const
+> `benten_drop::layer_c::group_posture::MEMBERSHIP_SET_GROUP_MULTI_STANZA`
+> (which emits the wire codepoint at the Layer-C group-seal sites) — against
+> `registry::MEMBERSHIP_SET_GROUP_MULTI_STANZA`, so a one-sided edit to the
+> producer fails the build. The `f_02_*` AAD-byte-equality cross-check locks the
+> assembled AAD *output*, not this codepoint *value*; this const-equality arm
+> closes that gap.)
 
 The Layer-D DeviceLink band `0x6310..0x631F` is the R0.7 §4.1 Signal-Provisioning
 device-link wire band (`crates/benten-engine/src/layer_d/device_link.rs`

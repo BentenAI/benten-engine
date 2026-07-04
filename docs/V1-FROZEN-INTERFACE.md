@@ -20,6 +20,25 @@
 > > cargo-public-api baselines). Should further phase-close rounds mutate the
 > > enum/struct set before the tag lands, re-run the count once more at the
 > > final pre-tag pass.
+> >
+> > **⚑ R14 F-04 pre-tag-sweep line — banner/description retense (couples to
+> > F-19 above; Ben-gated).** The R6–R14 phase-close council has CONVERGED
+> > (0 BLOCKER/MAJOR at R14; MINOR/OBS residual closed at the R14 pre-tag doc
+> > sweep 2026-07-03). At the (Ben-gated) pre-tag sweep, retense BOTH (a) the
+> > "POST-BUILD-OUT-WAVE" status banner below and (b) the `# … (TRIAGE
+> > SYNTHESIS)` H1 title/description to the AS-BUILT freeze-ready state — the
+> > same retense F-19 names, now extended to reflect the full R6–R14
+> > convergence, not just R6–R12. Registered here (with F-19) so the single
+> > pre-tag-sweep pass discharges both; NOT retensed now because the retense
+> > couples to the SHA + date the tag lands.
+> >
+> > **⚑ R14 §16 pre-tag-sweep line — §1.A.FROZEN inclusion sign-off (Ben-gated).**
+> > The §16 MembershipSet frozen-surface table's HEAD re-pin was DISCHARGED at
+> > the R14 pre-tag sweep (2026-07-03) — the table matches HEAD's `lib.rs`
+> > pub-use set + the cargo-public-api baseline, verified. The ONE residual is
+> > the freeze-lens + Ben §1.A.FROZEN-inclusion sign-off on the 15th crate's
+> > surface, a tag-gate decision that legitimately waits for the tag SHA.
+> > Registered here so the pre-tag-sweep pass surfaces it to Ben.
 >
 > **Status: POST-BUILD-OUT-WAVE.** Round 0.5 triage-synthesis refreshed
 > at the V1-FROZEN-INTERFACE build-out wave (2026-05-23). The 8 cross-
@@ -610,6 +629,26 @@ each codepoint = SWAPPABLE within the framing):**
    | Cipher | `CipherSuiteCodepoint::NONE_PLAINTEXT` | `0x0000` | LIVE, non-default plaintext-partition downgrade |
    | Cipher | `CipherSuiteCodepoint::HYBRID_MLKEM768_HQC` | `0x647b` | reserved-unimplemented (NF-1 KEM end-state; FIPS 207-final build-gated) |
    | Cipher | `CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY` | `0x647c` | reserved swap-matrix arm (NOT default; pre-FREEZE bundle #1342 mint per Ben morning queue item 1; **typed-rejected by default — gated by `AUDIT_LANDED_PURE_PQ_FLAG` per the C11b safety gate**) |
+
+   **Envelope-band codepoints cross-ref (F-15).** The table above is the
+   Hash/Sig/Cipher-SUITE codepoints. The distinct **envelope-band** codepoints
+   (which layer/envelope a wire blob is) live in their own producing-crate
+   registries, mirrored to `benten_crypto_suite::registry` and enumerated in
+   `docs/CRYPTO-CODEPOINTS.md`:
+   - **Layer-C drop band `0x65xx`** — `LAYER_C_DROP == 0x6500` /
+     `DROP_TO_RECIPIENT_SEALED_SENDER == 0x6510` /
+     `LAYER_C_DROP_MULTI_RECIPIENT == 0x6520`
+     (`crates/benten-drop/src/layer_c.rs`).
+   - **MembershipSet band `0x66xx`** — `MEMBERSHIP_SET_ENCRYPTION == 0x6600` /
+     `MEMBERSHIP_SET_GROUP_MULTI_STANZA == 0x6610` /
+     `MEMBERSHIP_SET_RESERVED_0X6620 == 0x6620`
+     (`crates/benten-membership-set/src/codepoints.rs`).
+
+   These `0x65xx`/`0x66xx` values are FROZEN-band-owned (Inv-18 / NQ-W2) and
+   const-equality-pinned cross-crate against the registry by
+   `crates/benten-drop/tests/f_disc_1_compromise_disclosure_coherence_catch_net.rs`'s
+   sibling SSOT arm (`f_disc_2_codepoint_ssot_cross_crate_const_equality`). A
+   one-sided edit to any producer const fails the build.
 
 3. **Swap-matrix constructors** at
    `crates/benten-crypto-suite/src/swap_matrix.rs::SwapMatrix`:
@@ -1954,13 +1993,20 @@ semantics in Composing = HALT.
 
 ## 16. MembershipSet keying primitive public surface frozen (the 15th crate `benten-membership-set`)
 
-> **⚠️ FLAG-FOR-BEN / FLAG-FOR-ORCHESTRATOR-REVIEW.** This section
-> documents the AS-BUILT shipped MembershipSet surface (F-full TIER-1/2,
-> HEAD `b93b2efc`). It is added by the R6 R1 doc-reconciler to make the
-> 15th crate's frozen surface referenceable; the freeze-lens + Ben sign
-> off the §1.A.FROZEN inclusion at the freeze gate. Read against
-> `crates/benten-membership-set/src/lib.rs` pub-use set +
-> `docs/public-api/benten-membership-set.txt` baseline.
+> **✅ HEAD RE-PIN DISCHARGED at R14 pre-tag sweep (2026-07-03); §1.A.FROZEN
+> inclusion sign-off remains Ben-gated at the tag.** This section documents the
+> AS-BUILT shipped MembershipSet surface. At the R14 pre-tag sweep the frozen
+> surface table below was re-verified against HEAD's
+> `crates/benten-membership-set/src/lib.rs` pub-use set (`error::{…}` +
+> `kind::{KindDispatchError, MembershipSetKind, RequestedReserveKind,
+> dispatch_reserve}` + `member::{Did, Hlc, MemberEntry, MemberNature, MemberRef,
+> MembersTable, RoleId, SigPubKey, derive_member_nature, is_ai_operated}` +
+> `set::{MembershipSet, wire_cost_ceiling}` + the `aad::*` assembler surface) +
+> the `docs/public-api/benten-membership-set.txt` cargo-public-api baseline —
+> the table matches HEAD (no drift). The ONE residual that genuinely couples to
+> the tag is the freeze-lens + Ben §1.A.FROZEN-inclusion sign-off, which is a
+> tag-gate decision (registered on the pre-tag-sweep checklist at the top of
+> this doc alongside F-19 / F-04), NOT force-discharged here.
 
 **The 15th workspace crate** is `benten-membership-set` — a thin
 keying-glue Rust engine plugin (mechanism-half per GN-2 / R0 §6.1). Its

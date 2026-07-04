@@ -32,7 +32,7 @@
 | Compromise #55 | `SGD` | Compromise #56 | `SGD` | Compromise #57 | `SGD` |
 | Compromise #58 | `CHD` | Compromise #59 | `SGD` | Compromise #60 | `SGD` |
 | Compromise #61 | `CHD` | Compromise #62 | `SGD` (revocation-reach; Drops forever-valid) | Compromise #63 | `ATO` |
-| Compromise #64 | `SGD` (cross-device best-effort nonce / jti replay window) | Compromise #65 | `SGD` (wave-3e per-Node AEAD publicly-derivable-`K_principal` confidentiality limit at v1-beta) | | |
+| Compromise #64 | `SGD` (cross-device best-effort nonce / jti replay window) | Compromise #65 | `SGD` (wave-3e per-Node AEAD publicly-derivable-`K_principal` confidentiality limit at v1-beta) | Compromise #66 | `SGD` (`UnwrappedKey` `#[derive(Debug)]` renders key bytes + no `ZeroizeOnDrop`; zero v1-beta sinks) |
 
 This document records the security claims Benten makes through Phase
 4-Foundation close and the known compromises those claims rest on. This
@@ -2480,8 +2480,8 @@ pulls in **13 net-new transitive crates** — of which **10 are Cryspen/libcrux/
 crates** (`pastey` / `proc-macro-error2` / `proc-macro-error-attr2`, pulled by the
 hax proc-macro layer; NOT Cryspen-authored). These are added to the v1-GM
 C-GM-AUDIT scope as honest `cargo-vet` exemptions (the exemption-budget
-*cap* was raised **5 → 18** on 2026-06-05 to cover them — a **FLAG-FOR-BEN
-policy decision, pending ratification** (see the consolidated flag at
+*cap* was raised **5 → 18** on 2026-06-05 to cover them — a policy decision
+**Ben-RATIFIED** (see the consolidated flag at
 Compromise #39); pinned by `supply-chain/exemptions.toml` +
 `crates/benten-engine/tests/cargo_vet_policy_self_test.rs`). The `5 → 18`
 is a *cap* raise, not an entry count: the file holds **13** exemption
@@ -2696,6 +2696,31 @@ confidentiality substrate); `docs/future/phase-4-backlog.md §3.10` (K_principal
 Contrast the Tier-1 network-observer "sees plaintext = NO" (Layer-C encrypt-to-recipient — a DIFFERENT, live
 mechanism, NOT this stand-in).
 
+### Compromise #66 — `UnwrappedKey` `#[derive(Debug)]` renders recovered key bytes + no `ZeroizeOnDrop` (latent secret-in-`Debug` footgun)
+
+**Status.** OPEN; SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** NEW — minted at R14 (GAP-1). **Class.** `SGD`
+— a latent secret-hygiene footgun that is NOT exploited at v1-beta (zero production sinks), disclosed honestly so a
+future `{:?}`/tracing sink can't slip a key into a log.
+
+The `UnwrappedKey` type (`crates/benten-crypto-suite/src/cipher_suite.rs`) — the recovered `k_root` returned by
+`unwrap_key_material` — carries `#[derive(Debug)]`, so a `{:?}` render would print the recovered KEY BYTES in the
+clear, and it has **NO** `ZeroizeOnDrop`, so its bytes linger on the freed heap after drop. Its sibling
+`RecipientSecret` in the SAME module already does BOTH: a redacting hand-written `impl Debug` (fields rendered as
+`<redacted>`) + an `impl Drop` that `zeroize()`s the secret. `UnwrappedKey` is the asymmetric outlier.
+
+**Why this is accepted at v1-beta.** There are **ZERO** production `{:?}` / `tracing` / `format!` sinks of
+`UnwrappedKey` at HEAD (grep-verified) — no code path renders one — so no key material reaches a log or format
+sink at the v1-beta binary. The footgun is LATENT (a future careless `debug!("{unwrapped:?}")` would expose it),
+not live.
+
+**Stays OPEN at v1-beta; CLOSES at v1-GM** via the hardening in
+`docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-75: (1) a redacting hand-written `impl Debug` on `UnwrappedKey`
+(mirroring `RecipientSecret`), (2) `ZeroizeOnDrop` (or an explicit zeroizing `Drop`), and (3) a secret-`Debug`
+meta-test asserting no key-bearing crypto-suite type derives a rendering `Debug`. The sibling
+`derive_member_key` raw-`Vec<u8>`-not-`Zeroizing` hardening rides Row D-76.
+**Cross-ref:** `crates/benten-crypto-suite/src/cipher_suite.rs` (`UnwrappedKey` vs the `RecipientSecret`
+redact+zeroize precedent); `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-75 + Row D-76 (v1-GM hardening).
+
 > **Compromise #62 detail (revocation reach)** lives at the renumbered in-tree section
 > "Revocation reach (§R6) — Compromise #62 detail (RE-POINTED from in-tree #31 per BR-2)" below +
 > the "Revocation reach — online-pull vs offline-Drop asymmetry (G-CORE-3f)" section — verbatim-preserved
@@ -2787,12 +2812,12 @@ disclosure (2026-06-05):** the production ML-KEM-768 swap to **libcrux-ml-kem** 
 13 net-new transitive crates (the `libcrux-*` / `hax-lib*` / `pastey` / `proc-macro-error2*` / `core-models`
 family — all Cryspen / well-known, all Apache-2.0 / MIT-OR-Apache-2.0). These are **unaudited-by-Benten** and
 recorded HONESTLY as accepted-unaudited `cargo-vet` exemptions in `supply-chain/exemptions.toml` (the
-exemption-budget raised 5 → 18 on 2026-06-05 — a FLAG-FOR-BEN policy decision, **pending Ben ratification**;
+exemption-budget raised 5 → 18 on 2026-06-05 — a policy decision now **Ben-RATIFIED**;
 pinned by
 `crates/benten-engine/tests/cargo_vet_policy_self_test.rs::cargo_vet_exemption_budget_within_ratified_cap`).
-**⚠️ FLAG-FOR-BEN (authoritative flag site):** the 5 → 18 exemption-budget raise is the one supply-chain
-policy decision awaiting Ben's ratification; until ratified it remains a pending/unresolved status, and every
-other site referencing the budget bump defers to this flag. They are interim until the independent
+**✅ RATIFIED (authoritative site):** the 5 → 18 exemption-budget cap raise is Ben-RATIFIED; the ratified cap is
+**18**, and every other site referencing the budget bump defers to this ratified value. The exemptions are
+interim until the independent
 ML-DSA/ML-KEM audit (NF-2 / C-GM-AUDIT) that GATES v1-GM covers the pinned ML-KEM impl. Full reproducible-builds + SLSA-3+ provenance is the SEPARATE post-v1-GM commitment (#40).
 This row discloses the partial-pinning substrate honestly; it is not a closed guarantee. **Cross-ref:**
 Compromise #32 (ML-KEM production impl); Compromise #40 (reproducible-builds); R0.7 §2.2 (tactical picks);

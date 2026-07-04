@@ -178,6 +178,18 @@ pub struct EncryptedEnvelope {
 
 impl EncryptedEnvelope {
     /// Serialize to wire bytes — V2 layout, codepoint BIG-ENDIAN (M-19).
+    ///
+    /// **NOT AAD-preserving (F-14).** The wire layout carries `magic |
+    /// format_version | cipher_codepoint | nonce_len | nonce | ciphertext` —
+    /// it does **NOT** serialize the [`Self::aad_binding`] field. AAD is
+    /// *authenticated data* bound at seal/open time from independently-held
+    /// context (the recipient reconstructs the same `BindingContext` and passes
+    /// it to `open`), NEVER transmitted on the wire. Consequently
+    /// `from_wire_bytes(to_wire_bytes(e))` does **NOT** round-trip the
+    /// `aad_binding` — the decoded envelope carries a placeholder
+    /// `BindingContext::WholeContent { plaintext_cid: [] }` and the caller MUST
+    /// supply the real AAD out-of-band to open. This is by design (AAD is
+    /// integrity-bound, not confidentiality-carried), not a bug.
     #[must_use]
     pub fn to_wire_bytes(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(5 + self.nonce.len() + self.ciphertext.len());
@@ -194,6 +206,13 @@ impl EncryptedEnvelope {
     /// Decode from wire bytes — V2 only. A V1-framed stream is typed-rejected
     /// post-freeze (no silent V1 acceptance). The declared `nonce_len` is
     /// bounded-decoded on BOTH bounds BEFORE allocating (META #629).
+    ///
+    /// **NOT AAD-preserving (F-14).** The `aad_binding` field is NOT on the wire
+    /// (see [`Self::to_wire_bytes`]), so the decoded envelope carries a
+    /// PLACEHOLDER `BindingContext::WholeContent { plaintext_cid: [] }` — NOT
+    /// the original AAD. To open, the caller MUST reconstruct the real
+    /// `BindingContext` from independently-held context and pass it to the open
+    /// path; this decoder does not (and cannot) recover it from the wire bytes.
     ///
     /// # Errors
     ///

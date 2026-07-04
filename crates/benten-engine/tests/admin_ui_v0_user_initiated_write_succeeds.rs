@@ -28,7 +28,7 @@
 mod common;
 
 #[test]
-#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. G24-B-FP closed the workflow editor surface; the synchronous write-boundary chain validator's positive arm is NOT YET WIRED. Named destination: docs/future/phase-4-backlog.md §4.23 (Phase-4-Meta user-DID root-chain write-boundary validator). Pin source: r4-triage §1 r4-tc-1 + threat-model §T4 regression-guard; substantive shape preserved in body."]
+#[ignore = "SEAM WIRED (Row D-1 CLOSED at R6 R1 FP-F4 §S1 / sharpened R6 R2 FP-B): the WriteBoundaryChainValidator seam is structurally-always-on at 14 WRITE entry points via Engine::admit_write_chain, with the always-mounted NoopWriteBoundaryChainValidator returning NotApplicable (admit). This positive arm stays ignored pending a PRODUCTION validator that ADMITS a user-root-chain write — the G-COMP-1 consumption per docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-1 (FORENSIC). Named destination: Row D-1 (FORENSIC) / G-COMP-1 (docs/future/phase-4-backlog.md §4.23 tracks the same production-validator wave). Pin source: r4-triage §1 r4-tc-1 + threat-model §T4 regression-guard; substantive shape preserved in body."]
 fn admin_ui_v0_user_initiated_write_with_user_root_chain_succeeds() {
     // G24-B-FP wave wires this. Substantive shape:
     //
