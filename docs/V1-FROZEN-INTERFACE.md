@@ -1204,7 +1204,24 @@ verification at HEAD):
 **What's NOT frozen:**
 - The variant SET inside the enum (the whole point of `#[non_exhaustive]`
   is permitting additive future variants).
-- The struct FIELD SET (same — additive future fields).
+- The struct FIELD SET **for the non-wire structs** (same — additive future
+  fields land at the `#[non_exhaustive]` tail).
+
+  **Exception — the serde-canonical-bytes wire structs.** For the category of
+  types whose FIELD LAYOUT *is* the frozen wire contract — the
+  serde/DAG-CBOR-canonical-bytes structs whose declared field order + set is
+  what a signature signs / what round-trips on disk / on the wire (e.g.
+  `VaultPayload`, the Layer-C/Layer-D on-wire payloads, `UcanClaims`
+  canonical-bytes) — the field set is EXHAUSTIVE-BY-WIRE-DESIGN and thus
+  frozen: adding a field is a wire-format break, not a non-breaking additive
+  change. `#[non_exhaustive]` is the WRONG tool for these — it advertises
+  additive-field-readiness that the wire contract forbids, and it does not
+  even prevent the break (a new serialized field changes the canonical bytes
+  regardless of the attribute). These structs are deliberately NOT
+  `#[non_exhaustive]`; their freeze mechanism is the golden-hex / canonical-CBOR
+  KAT pins (e.g. `f_va_1::VAULT_PAYLOAD_GOLDEN_HEX`), not the attribute. This
+  is a distinct carve-out class from the exhaustive-cardinality wire-KEYING
+  enums (`MembershipSetKind` / `RoleId` / `BindingContext`).
 
 **Verification mechanism:**
 - An enumerated-per-type audit test pin

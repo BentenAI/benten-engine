@@ -7,7 +7,7 @@
 //!
 //! Pin source: `.addl/phase-4-meta/f-full-r2-test-landscape.md` §1
 //! Group-12 **F-DISC-1**:
-//!   "for EACH Compromise #30..#64: (a) `SECURITY-POSTURE.md` row exists
+//!   "for EACH Compromise #30..#66: (a) `SECURITY-POSTURE.md` row exists
 //!    with correct `disposition_class` (ATO/SGD/CHD/OOS/MIT); (b) OOS/SGD
 //!    disclosure text present + not over-claimed; (c) the BR-2 re-point
 //!    triple (#31=LAMPS, #62=revocation-reach, #30=unaudited-PQ) at correct
@@ -369,7 +369,7 @@ fn f_disc_1_closed_range_top_is_66_not_65_baseline() {
 
 // ===========================================================================
 // RED-PHASE ARMS (ignored until R5 doc-wave) — assert the F-full
-// end-state disclosure coherence over Compromise #30..#64.
+// end-state disclosure coherence over Compromise #30..#66.
 // ===========================================================================
 
 /// PIN 1 — every Compromise #30..#66 row EXISTS in the doc.

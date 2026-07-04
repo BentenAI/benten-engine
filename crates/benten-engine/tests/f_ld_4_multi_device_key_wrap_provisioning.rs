@@ -334,3 +334,57 @@ fn f_ld_4_device_link_band_base_pinned() {
         "RemotePermission band is out of DeviceLink range"
     );
 }
+
+/// R15 F-05 / F-08 — `ProvisioningInnerPayload`'s manual `Debug` MUST redact
+/// its secret key material (`k_principal` + `user_did_signing_key`) so a
+/// `{:?}` render / log line can never leak the wrapped key. Mirrors
+/// `benten_crypto_suite::…::f_va_4::secret_wrapper_debug_does_not_leak_key`.
+///
+/// would-FAIL-on-revert: if `ProvisioningInnerPayload` reverted to
+/// `#[derive(Debug)]`, the `{:?}` array form would render the secret bytes as
+/// decimal and the distinct-byte scan below would find them → the assert
+/// fires red.
+#[test]
+fn f_ld_4_provisioning_inner_debug_does_not_leak_secret_key_material() {
+    // Distinct-byte fixture for the secret fields (a robust foil): the leading
+    // bytes are non-constant multi-digit decimal values so the leak scan is
+    // unambiguous. 0xDE=222, 0xAD=173, 0xBE=190, 0xEF=239 render as decimal in
+    // the `{:?}` array form. A LEAKING (derived) Debug would render these as
+    // the CONSECUTIVE sequence `222, 173, 190, 239` in the array literal — the
+    // scan looks for that full sequence, which (unlike any single value) cannot
+    // collide with a non-secret field's decimal digits.
+    let mut k_principal = [0u8; 32];
+    let distinctive: [u8; 4] = [0xDE, 0xAD, 0xBE, 0xEF];
+    k_principal[..4].copy_from_slice(&distinctive);
+    let mut signing_key = [0u8; 32];
+    signing_key[..4].copy_from_slice(&distinctive);
+
+    let inner = ProvisioningInnerPayload {
+        k_principal,
+        user_did_signing_key: signing_key,
+        // Non-secret fields use benign constant bytes.
+        user_did_pubkey: [0x33; 32],
+        atrium_memberships: vec![[0x44; 32]],
+        provisioning_session_id: [0x55; 32],
+        granted_at_bucket: 1_900_000_800,
+    };
+    let rendered = format!("{inner:?}");
+
+    // A derived (leaking) Debug renders the secret [u8;32] as an array literal
+    // whose leading bytes are `222, 173, 190, 239, ...`; the redacting Debug
+    // renders the field as `"[REDACTED]"` instead.
+    let leaked = rendered.contains("222, 173, 190, 239");
+    assert!(
+        !leaked,
+        "ProvisioningInnerPayload Debug MUST redact k_principal + \
+         user_did_signing_key ([REDACTED]) — a coredump / log line MUST NOT \
+         contain the wrapped key material (R15 F-05/F-08). would-FAIL while a \
+         derived Debug leaks the raw [u8;32]; rendered=`{rendered}`"
+    );
+    // Positive: the redaction sentinel IS present (the manual Debug ran).
+    assert!(
+        rendered.contains("[REDACTED]"),
+        "expected the redacting Debug to emit `[REDACTED]` for secret fields; \
+         rendered=`{rendered}`"
+    );
+}

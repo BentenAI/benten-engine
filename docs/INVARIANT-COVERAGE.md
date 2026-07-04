@@ -455,6 +455,14 @@ where oldest-anchor-wins prevents an adversary from re-forking with a fabricated
 identity. `created_at_hlc` (set-anchor creation, immutable, participates in the tie-break) is a distinct stamp
 from `admitted_at_hlc` (per-member admission, LWW, does NOT participate) — `F-HLC-1` pins the distinction.
 
+**Inv-21 tie-break antisymmetry ⇄ Compromise #6 (R15 F-24 cross-ref).** The comparator's *totality +
+antisymmetry* — the property that any two distinct forks have a well-defined, agreed winner — rests on the CID
+final tie-break byte being distinct between distinct fork events (distinct-fork-event ⇒ distinct-CID). That
+distinctness is exactly the **BLAKE3 128-bit effective collision-resistance bound of Compromise #6** in
+`docs/SECURITY-POSTURE.md`: a CID collision between two genuinely-distinct forks would defeat antisymmetry (two
+forks tie-break-equal yet non-identical). So Inv-21's convergence guarantee inherits the same collision-resistance
+assumption #6 already discloses — a distinct anchoring for the fork-tie-break axis, not a new assumption.
+
 **Header-count + freeze-gating dependency:** the F-full doc-wave gate (`F-DISC-2`) asserts the end-state
 "INVARIANT-COVERAGE.md REGISTERS Inv-16..22 AND Inv-15 NOT re-registered AND header count correct". The header
 preamble reads "**22 invariants**" (bumped from "15 invariants" by this cascade), with the Inv-15

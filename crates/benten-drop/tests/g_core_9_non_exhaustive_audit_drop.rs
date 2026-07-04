@@ -57,7 +57,7 @@ fn layer_c_error_audit_arm_coverage_non_exhaustive() {
     fn audit(e: &LayerCError) -> &'static str {
         match e {
             LayerCError::AeadAuthenticationFailed => "AeadAuthenticationFailed",
-            LayerCError::InnerSenderDidForged => "InnerSenderDidForged",
+            LayerCError::MalformedInnerPayload => "MalformedInnerPayload",
             LayerCError::SenderOriginAuthFailed => "SenderOriginAuthFailed",
             LayerCError::UnsupportedCodepoint(_) => "UnsupportedCodepoint",
             LayerCError::StanzaCountMismatch { .. } => "StanzaCountMismatch",

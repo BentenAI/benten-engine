@@ -423,7 +423,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::Encrypted
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::EncryptedEnvelope
 #[non_exhaustive] pub enum benten_drop::layer_c::LayerCError
 pub benten_drop::layer_c::LayerCError::AeadAuthenticationFailed
-pub benten_drop::layer_c::LayerCError::InnerSenderDidForged
+pub benten_drop::layer_c::LayerCError::MalformedInnerPayload
 pub benten_drop::layer_c::LayerCError::RecipientCountExceedsBandWidth
 pub benten_drop::layer_c::LayerCError::RecipientCountExceedsBandWidth::count: usize
 pub benten_drop::layer_c::LayerCError::RecipientCountExceedsBandWidth::max: usize

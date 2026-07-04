@@ -296,7 +296,6 @@ GroupError::AeadAuthenticationFailed
 KeypairError::SeedImport
 KindDispatchError::ReserveTypedReject
 LayerCError::AeadAuthenticationFailed
-LayerCError::InnerSenderDidForged
 ManifestError::RuntimeRegistrationDeferred
 ManifestVerifyError::NoPathPresent
 ManifestVerifyError::RegistryInvalid

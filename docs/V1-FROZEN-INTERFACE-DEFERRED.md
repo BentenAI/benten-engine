@@ -2392,10 +2392,28 @@ Row D-15's audit-readiness concern.
   fields) and (2) `ZeroizeOnDrop` (or an explicit `impl Drop` that
   `zeroize()`s `bytes`), plus a secret-`Debug` meta-test asserting no
   key-bearing crypto-suite type derives a rendering `Debug`.
-- **Anchor:** R14-council GAP-1;
+- **Sibling types swept under this same umbrella (R15 F-03 / F-05 / F-08):**
+  - **`VaultPayload`** (`crates/benten-crypto-suite/src/vault.rs:196`) —
+    `#[derive(Debug, ..)]` over a struct holding `k_principal: [u8; 32]` (the
+    at-rest content-encryption root key) + `user_did_signing_key: Vec<u8>`.
+    A `{:?}` render would print the principal's root key + signing-key bytes in
+    the clear; the struct has no zeroizing `Drop`. Same v1-GM hardening as
+    `UnwrappedKey` (redacting `impl Debug` + zeroizing `Drop`); zero v1-beta
+    `{:?}`/`tracing` sinks at HEAD (the frozen-field-layout serde struct is
+    only round-tripped through `to_canonical_cbor`, not formatted).
+  - **`ProvisioningInnerPayload`**
+    (`crates/benten-engine/src/layer_d/device_link.rs:105`) — the
+    multi-device-key-wrap inner payload carrying wrapped key material. Same
+    redacting-`Debug` + zeroizing sweep. A distinct **`Debug`-redaction pin**
+    belongs in `crates/benten-engine/tests/f_ld_4_multi_device_key_wrap_provisioning.rs`
+    (mirror `f_va_4::secret_wrapper_debug_does_not_leak_key`) asserting a
+    `{:?}` render does not leak the wrapped key bytes.
+- **Anchor:** R14-council GAP-1; R15 F-03/F-05/F-08 extension;
   `crates/benten-crypto-suite/src/cipher_suite.rs` (`UnwrappedKey` vs the
-  `RecipientSecret` redact+zeroize precedent); `docs/SECURITY-POSTURE.md`
-  Compromise (the R14 SGD mint).
+  `RecipientSecret` redact+zeroize precedent) +
+  `crates/benten-crypto-suite/src/vault.rs` (`VaultPayload`) +
+  `crates/benten-engine/src/layer_d/device_link.rs` (`ProvisioningInnerPayload`);
+  `docs/SECURITY-POSTURE.md` Compromise #66 (the R14 SGD mint).
 
 ### Row D-76 — GAP-1: `derive_member_key` returns a raw `Vec<u8>` (not `Zeroizing`) → v1-GM secret-hygiene hardening
 

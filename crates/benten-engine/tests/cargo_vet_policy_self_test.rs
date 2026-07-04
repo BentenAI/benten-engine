@@ -124,11 +124,9 @@ fn cargo_vet_workflow_non_vacuity_self_test_passes() {
 /// name is cap-neutral so a future cap change does not require a rename
 /// (the value lives in `EXEMPTION_BUDGET_CAP`).
 ///
-/// ⚠️ FLAG-FOR-BEN: the 5 → 18 cap raise is a security-policy change
-/// tied to the libcrux substrate adoption; **pending Ben
-/// ratification**. Open follow-up: upgrade the libcrux family to certified
-/// `audits.toml` entries once `cargo vet` is installed in CI (then drop
-/// the cap back toward 5).
+/// Open follow-up: upgrade the libcrux family to certified `audits.toml`
+/// entries once `cargo vet` is installed in CI (the budget-free path),
+/// then drop the cap back toward 5.
 #[test]
 fn cargo_vet_exemption_budget_within_ratified_cap() {
     const EXEMPTION_BUDGET_CAP: usize = 18;

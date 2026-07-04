@@ -791,23 +791,40 @@ fn validate_chain_inner(
 /// Subsume rule: parent grants child's capability iff:
 /// - exact match (resource AND ability equal), OR
 /// - parent's `ability` is `*` and resource matches, OR
-/// - parent's `resource` is a prefix of child's resource (path
-///   semantics; `/zone/posts` covers `/zone/posts/foo`) AND ability
-///   matches per the wildcard rule above.
+/// - parent's `resource` is a strict *segment-bounded* prefix of child's
+///   resource (path semantics; `/zone/posts` covers `/zone/posts/foo`)
+///   AND ability matches per the wildcard rule above.
+///
+/// **Segment-boundary guard (F-01 authority-widening defense).** The
+/// prefix rule covers ONLY true sub-paths: parent's `resource` must be
+/// non-empty, child's `resource` must be strictly longer, and the byte
+/// immediately after the matched prefix in the child must be a segment
+/// boundary — `/` (path separator) or `:` (scope separator). A bare
+/// `starts_with` would widen authority across a segment boundary: a grant
+/// for `/zone/posts` would wrongly subsume the SIBLING resource
+/// `/zone/posts-secret` (or `/zone/postsX`), because those literally
+/// start with `/zone/posts`. With the guard, only `/zone/posts/foo`
+/// (boundary `/`) and `/zone/posts:read` (boundary `:`) subsume — never
+/// `/zone/posts-secret`. An empty parent `resource` never subsumes via
+/// this branch (an empty prefix matches everything).
 ///
 /// The basic-attenuation pin
 /// (`crates/benten-id/tests/ucan.rs::ucan_chain_attenuation_rejects_overgrant`)
-/// uses only the exact-match path; the prefix + wildcard widening of the
-/// match relation is a defensive default that does NOT widen child
-/// authority beyond parent's literal grants.
+/// uses only the exact-match path; the sibling-rejection pins
+/// (`caps_match_or_subsume_rejects_sibling_prefix_confusion` +
+/// `validate_chain_rejects_sibling_resource_prefix_confusion`) pin the
+/// segment-boundary guard against regression.
 ///
 /// **Constant-time discipline:** capability `resource` / `ability` strings
-/// are not secret per se (they are the cap-system's public schema), but
-/// the rule-7 brief commits to ct-eq UNIFORMITY at security-decision sites.
-/// All `==` comparisons here go through `ct_signature_eq` so the
-/// `ucan_chain_walk_constant_time_comparison_audit` grep test pins this
-/// surface (resource / ability are the most-likely-future-drift sites for
-/// a contributor who adds a new authority comparison).
+/// are not secret (they are the cap-system's *public* schema), but the
+/// rule-7 brief commits to ct-eq UNIFORMITY at security-decision sites, so
+/// the exact/wildcard `==` comparisons here go through `ct_signature_eq`
+/// and the `ucan_chain_walk_constant_time_comparison_audit` grep test pins
+/// that surface. The prefix branch's `starts_with` / length / boundary-byte
+/// checks are variable-time; this is acceptable precisely because
+/// `resource` / `ability` are non-secret public schema, so no secret is
+/// leaked by an early exit (the constant-time claim is scoped to the
+/// exact/wildcard equality compares, not to the prefix-shape test).
 fn caps_match_or_subsume(parent: &Capability, child: &Capability) -> bool {
     let parent_res = parent.resource.as_bytes();
     let child_res = child.resource.as_bytes();
@@ -823,8 +840,28 @@ fn caps_match_or_subsume(parent: &Capability, child: &Capability) -> bool {
         return true;
     }
     // Path-prefix resource + matching/wildcard ability.
-    if child.resource.starts_with(&parent.resource)
-        && (ct_signature_eq(parent_ab, child_ab) || ct_signature_eq(parent_ab, star))
+    //
+    // SEGMENT-BOUNDARY GUARD (F-01 authority-widening / F-02 empty-parent):
+    // a bare `starts_with` widens authority across a segment boundary — a
+    // grant for `/zone/posts` would otherwise subsume the SIBLING resource
+    // `/zone/posts-secret` because `"/zone/posts-secret".starts_with("/zone/posts")`
+    // is true. The prefix rule MUST only cover TRUE sub-paths, so it
+    // requires all of:
+    //   1. parent.resource NON-EMPTY (F-02: an empty prefix matches every
+    //      resource and would grant blanket authority via this branch).
+    //   2. child.resource is a STRICT extension of parent.resource
+    //      (child longer than parent AND `starts_with` holds).
+    //   3. the byte in child.resource at index parent.resource.len() is a
+    //      SEGMENT BOUNDARY — `/` (path separator) or `:` (scope separator).
+    // So `/zone/posts` subsumes `/zone/posts/foo` (boundary `/`) — and
+    // `/zone/posts` (exact) via the exact-match branch above — but NOT
+    // `/zone/posts-secret` (byte `-`) nor `/zone/postsX` (byte `X`).
+    let ability_ok = ct_signature_eq(parent_ab, child_ab) || ct_signature_eq(parent_ab, star);
+    if !parent_res.is_empty()
+        && child_res.len() > parent_res.len()
+        && child_res.starts_with(parent_res)
+        && matches!(child_res[parent_res.len()], b'/' | b':')
+        && ability_ok
     {
         return true;
     }
@@ -866,5 +903,49 @@ mod tests {
     fn ct_eq_zero_length() {
         // const-time-eq smoke
         assert!(ct_signature_eq(b"", b""));
+    }
+
+    // F-01 / F-02 (authority-widening prefix-confusion) helper-level pin.
+    //
+    // WOULD-FAIL-ON-REVERT: prior to the segment-boundary guard, the prefix
+    // branch was a bare `child.resource.starts_with(&parent.resource)`, so a
+    // grant for `/zone/posts` SUBSUMED the sibling `/zone/posts-secret`
+    // (`"/zone/posts-secret".starts_with("/zone/posts")` is true) — an
+    // authority-widening bug. Reverting the guard flips the `-secret` /
+    // `postsX` / empty-parent asserts below from reject → accept.
+    #[test]
+    fn caps_match_or_subsume_rejects_sibling_prefix_confusion() {
+        let read = |r: &str| Capability::new(r, "read");
+
+        // Legitimate subsumption still holds.
+        assert!(
+            caps_match_or_subsume(&read("/zone/posts"), &read("/zone/posts/foo")),
+            "true sub-path (`/` boundary) must subsume"
+        );
+        assert!(
+            caps_match_or_subsume(&read("/zone/posts"), &read("/zone/posts:read")),
+            "true sub-scope (`:` boundary) must subsume"
+        );
+        assert!(
+            caps_match_or_subsume(&read("/zone/posts"), &read("/zone/posts")),
+            "exact match must subsume (via the exact-match branch)"
+        );
+
+        // Sibling resources sharing a textual prefix must NOT subsume.
+        assert!(
+            !caps_match_or_subsume(&read("/zone/posts"), &read("/zone/posts-secret")),
+            "F-01: sibling `/zone/posts-secret` must NOT be subsumed by `/zone/posts`"
+        );
+        assert!(
+            !caps_match_or_subsume(&read("/zone/posts"), &read("/zone/postsX")),
+            "F-01: sibling `/zone/postsX` must NOT be subsumed by `/zone/posts`"
+        );
+
+        // F-02: an empty parent resource must NOT subsume via the prefix
+        // branch (an empty prefix matches everything).
+        assert!(
+            !caps_match_or_subsume(&read(""), &read("/zone/posts")),
+            "F-02: empty parent resource must NOT subsume via prefix"
+        );
     }
 }

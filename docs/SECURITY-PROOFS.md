@@ -252,6 +252,16 @@ CEK-unwrap fails closed. Consequently:
 against the wire adversary the threat model targets. Cross-link `docs/THREAT-MODEL.md` §1 (Tier-1 network observer
 sees no plaintext) + Compromise #43 (envelope-metadata leakage) in `docs/SECURITY-POSTURE.md`.
 
+**Post-decrypt failure-variant scope (R15 F-10; low-materiality; distinct axis).** The confirmation-oracle axis
+above concerns a party GUESSING the plaintext. On the orthogonal *co-recipient error-classification* axis, note that
+all bands collapse to a **single confidentiality-boundary failure** before any structural detail is revealed: a
+party without the recipient secret cannot AEAD-open at all and gets exactly `AeadAuthenticationFailed` (no branch on
+inner structure). The finer post-decrypt variants (`MalformedInnerPayload` structural-decode vs
+`SenderOriginAuthFailed` wrong-signer) are reachable **only** by a party that has ALREADY AEAD-opened the inner
+payload (a legitimate co-recipient / CEK holder), so they leak nothing across the confidentiality boundary — they
+are diagnostic distinctions available only to a party already entitled to the plaintext, NOT a decryption oracle to
+an outside adversary. This is low-materiality and distinct from the §4.2 plaintext-guessing axis.
+
 ---
 
 ## Cross-references

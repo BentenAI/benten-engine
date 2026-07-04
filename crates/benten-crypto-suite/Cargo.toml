@@ -165,9 +165,16 @@ x25519-dalek = { version = "2", default-features = false, features = ["alloc", "
 # (drops mlkem512/1024 + std + the `rand` randomized helpers we don't use).
 # On wasm32 the portable (formally-verified, constant-time) backend is
 # auto-selected (libcrux's build.rs enables simd128 only on aarch64, simd256
-# only on x86_64; neither fires on wasm) — `getrandom` is absent from the
-# wasm tree entirely (caller-supplied randomness), so the historical wasm
-# getrandom pain does not recur. Pinned EXACTLY (`=0.0.9`) per the spike's
+# only on x86_64; neither fires on wasm) — `getrandom` is absent from
+# libcrux-ml-kem's OWN subtree (this backend takes caller-supplied
+# randomness), so the historical libcrux wasm getrandom pain does not recur.
+# NOTE (R15 GAP-1): this "absent" scope is the libcrux subtree ONLY — the
+# crate as a whole DOES pull `getrandom` at the top level (the `getrandom
+# 0.4 sys_rng` dep above + `ml-dsa`'s `getrandom` feature), so a
+# `wasm32-unknown-unknown` build of the whole crate is NOT
+# getrandom-free and its entropy/getrandom-backend story on that target is
+# CI-unexercised (native-only by dep-graph today; see
+# `docs/future/phase-3-backlog.md`). Pinned EXACTLY (`=0.0.9`) per the spike's
 # maturity caveat (libcrux-ml-kem is pre-0.1; expect API/SemVer churn —
 # vendor-lock the audited version; the NF-2 / C-GM-AUDIT covers whichever
 # impl is pinned at v1-GM). NOT a crypto-primitive FORK — this is the ONLY

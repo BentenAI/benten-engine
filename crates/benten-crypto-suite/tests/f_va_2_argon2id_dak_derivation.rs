@@ -153,3 +153,46 @@ fn hkdf_info_tag_is_load_bearing() {
         "the frozen DAK HKDF info-tag is exactly `benten-dak-v1`"
     );
 }
+
+/// F-VA-2 (d) — ABSOLUTE golden-hex DAK KAT (R15 F-19).
+///
+/// The relative/determinism + sensitivity arms above pin that the DAK RESPONDS
+/// to each input, but none pins the *actual bytes* of the frozen derivation.
+/// A silent change to the Argon2id/HKDF wiring (e.g. an upstream default flip,
+/// a salt-vs-info swap, an HKDF-vs-HKDF-Extract-only slip) could keep every
+/// relative arm green while changing the DAK — breaking every existing vault.
+/// This arm pins the exact DAK bytes for a fixed (password, salt, params,
+/// info-tag) fixture, mirroring `f_va_1`'s `VAULT_PAYLOAD_GOLDEN_HEX`.
+///
+/// The golden was computed via the M-20 throwaway-compute discipline (a
+/// throwaway test printed `derive_dak(fixture_password(), &fixture_salt(),
+/// OWASP_DEFAULT, DAK_HKDF_INFO_TAG).expose()` as hex, then the literal was
+/// pasted here + the throwaway deleted).
+///
+/// would-FAIL-if-no-op'd: any drift in the Argon2id params, the HKDF
+/// construction, the salt/info wiring, or the upstream primitive default flips
+/// these 32 bytes and the assert fires red.
+#[test]
+fn derive_dak_matches_absolute_golden_hex() {
+    use std::fmt::Write as _;
+    // Frozen DAK for pw="correct horse battery staple", salt=[0x5A;16],
+    // params=OWASP_DEFAULT (m=19456,t=2,p=1), info="benten-dak-v1".
+    const DAK_GOLDEN_HEX: &str = "2d21d0c8c88cf0f118febf05732bcbd11c498e186e4c214d45edd3eff67436b8";
+    let dak = derive_dak(
+        fixture_password(),
+        &fixture_salt(),
+        OWASP_DEFAULT,
+        DAK_HKDF_INFO_TAG,
+    );
+    let mut actual_hex = String::with_capacity(64);
+    for b in dak.expose() {
+        let _ = write!(actual_hex, "{b:02x}");
+    }
+    assert_eq!(
+        actual_hex, DAK_GOLDEN_HEX,
+        "the frozen DAK for the fixed (pw, salt, OWASP_DEFAULT, \
+         `benten-dak-v1`) fixture MUST equal the golden KAT — a mismatch means \
+         the Argon2id/HKDF derivation drifted, which breaks every existing \
+         vault. would-FAIL on any derivation-wiring or upstream-default drift."
+    );
+}

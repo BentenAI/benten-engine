@@ -623,8 +623,13 @@ pub enum LayerCError {
     /// The recovered inner payload was malformed (a length-prefix overran
     /// the decrypted buffer / a truncated inner_v2 framing). NOT a forgery
     /// (a wrong-signer forgery surfaces [`LayerCError::SenderOriginAuthFailed`]
-    /// at the post-decrypt verify); this is a structural decode failure.
-    InnerSenderDidForged,
+    /// at the post-decrypt verify); this is a structural decode failure of the
+    /// already-AEAD-opened plaintext. Named for what it IS — a malformed inner
+    /// payload — NOT `InnerSenderDidForged` (R15 F-09 rename: the old name was
+    /// self-contradictory with this docstring's own "NOT a forgery" clause;
+    /// forgery is `SenderOriginAuthFailed`). Reachable only AFTER a successful
+    /// AEAD-open, so it is not a pre-decrypt oracle.
+    MalformedInnerPayload, // drift-detect: internal-only — layer_c-internal; no napi/wire ErrorCode boundary (§3.5g precedent: SenderOriginAuthFailed / StanzaCountMismatch / DidError).
     /// **B2 Sealed-Sender ORIGIN-AUTH (post-decrypt verify) FAILED** — the
     /// envelope AEAD-opened cleanly (so a co-recipient / any party able to
     /// derive the CEK CAN produce a valid AEAD tag), but the per-message
@@ -845,27 +850,28 @@ fn open_inner(
     // lp_u32(sender_sig) ‖ body.
     let mut off = 0usize;
     if inner.len() < off + 4 {
-        return Err(LayerCError::InnerSenderDidForged);
+        return Err(LayerCError::MalformedInnerPayload);
     }
     let sd_len =
         u32::from_be_bytes([inner[off], inner[off + 1], inner[off + 2], inner[off + 3]]) as usize;
     off += 4;
-    let sd_end = lp_range_end(off, sd_len, inner.len()).ok_or(LayerCError::InnerSenderDidForged)?;
+    let sd_end =
+        lp_range_end(off, sd_len, inner.len()).ok_or(LayerCError::MalformedInnerPayload)?;
     let sender_did = inner[off..sd_end].to_vec();
     off = sd_end;
     if inner.len() < off + 2 {
-        return Err(LayerCError::InnerSenderDidForged);
+        return Err(LayerCError::MalformedInnerPayload);
     }
     let sig_codepoint = u16::from_be_bytes([inner[off], inner[off + 1]]);
     off += 2;
     if inner.len() < off + 4 {
-        return Err(LayerCError::InnerSenderDidForged);
+        return Err(LayerCError::MalformedInnerPayload);
     }
     let sig_len =
         u32::from_be_bytes([inner[off], inner[off + 1], inner[off + 2], inner[off + 3]]) as usize;
     off += 4;
     let sig_end =
-        lp_range_end(off, sig_len, inner.len()).ok_or(LayerCError::InnerSenderDidForged)?;
+        lp_range_end(off, sig_len, inner.len()).ok_or(LayerCError::MalformedInnerPayload)?;
     let sender_sig = inner[off..sig_end].to_vec();
     off = sig_end;
     let body = inner[off..].to_vec();
@@ -1012,7 +1018,7 @@ pub fn seal_plaintext_sender(
 ///
 /// Returns [`LayerCError::AeadAuthenticationFailed`] on a wrong recipient
 /// secret / tampered ciphertext / tampered AAD,
-/// [`LayerCError::InnerSenderDidForged`] on a malformed inner payload, and
+/// [`LayerCError::MalformedInnerPayload`] on a malformed inner payload, and
 /// [`LayerCError::SenderOriginAuthFailed`] when the per-message origin-auth
 /// signature does not verify (impersonation / re-target / suite-downgrade /
 /// stripped-half).
@@ -1448,7 +1454,7 @@ pub fn seal_group_multi_plaintext_sender(
 ///
 /// Returns [`LayerCError::AeadAuthenticationFailed`] when the recipient's
 /// stanza fails to authenticate (wrong sk, substituted stanza, tampered AAD),
-/// [`LayerCError::InnerSenderDidForged`] on a malformed recovered inner /
+/// [`LayerCError::MalformedInnerPayload`] on a malformed recovered inner /
 /// body payload, and [`LayerCError::SenderOriginAuthFailed`] when the
 /// per-message origin-auth signature does not verify.
 pub fn open_group_stanza(
@@ -1509,10 +1515,10 @@ pub fn open_group_stanza(
     let inner = benten_crypto_suite::aead::unwrap(&sealed_env, &cek_key, &aad)
         .map_err(|_| LayerCError::AeadAuthenticationFailed)?;
     if inner.len() < 4 {
-        return Err(LayerCError::InnerSenderDidForged);
+        return Err(LayerCError::MalformedInnerPayload);
     }
     let sd_len = u32::from_be_bytes([inner[0], inner[1], inner[2], inner[3]]) as usize;
-    let sd_end = lp_range_end(4, sd_len, inner.len()).ok_or(LayerCError::InnerSenderDidForged)?;
+    let sd_end = lp_range_end(4, sd_len, inner.len()).ok_or(LayerCError::MalformedInnerPayload)?;
     let sender_did = inner[4..sd_end].to_vec();
 
     // Decrypt the shared bulk body (binds the body-CID + group codepoint).
@@ -1529,12 +1535,12 @@ pub fn open_group_stanza(
     // Parse body_v2 = sig_codepoint(u16) ‖ lp_u32(sender_sig) ‖ body.
     let mut off = 0usize;
     if body_v2.len() < off + 2 {
-        return Err(LayerCError::InnerSenderDidForged);
+        return Err(LayerCError::MalformedInnerPayload);
     }
     let sig_codepoint = u16::from_be_bytes([body_v2[off], body_v2[off + 1]]);
     off += 2;
     if body_v2.len() < off + 4 {
-        return Err(LayerCError::InnerSenderDidForged);
+        return Err(LayerCError::MalformedInnerPayload);
     }
     let sig_len = u32::from_be_bytes([
         body_v2[off],
@@ -1544,7 +1550,7 @@ pub fn open_group_stanza(
     ]) as usize;
     off += 4;
     let sig_end =
-        lp_range_end(off, sig_len, body_v2.len()).ok_or(LayerCError::InnerSenderDidForged)?;
+        lp_range_end(off, sig_len, body_v2.len()).ok_or(LayerCError::MalformedInnerPayload)?;
     let sender_sig = body_v2[off..sig_end].to_vec();
     off = sig_end;
     let body = body_v2[off..].to_vec();

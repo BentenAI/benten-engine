@@ -127,13 +127,23 @@ pub fn admin_exclusive_abilities() -> BTreeSet<&'static str> {
 
 /// The role-keyed content key-derivation gate. **Invitee derives NOTHING**
 /// (M-11 zero-content floor); every content-bearing role derives a per-Node
-/// key.
+/// membership key.
 ///
-/// At v1-beta the real `K(N)` derivation delegates to `benten-crypto-suite`
-/// (the #5 ONLY-call-site) via [`crate::keying::derive_member_key`]; this gate
-/// only encodes the role-eligibility rule (which roles are allowed to derive a
-/// content key at all). Returns `None` for `Invitee`, `Some(key_material)` for
-/// any content-bearing role.
+/// **What this actually computes (v1-beta — honest scope).** For a
+/// content-bearing role this returns the membership `K(N)` computed by the
+/// IN-CRATE BLAKE3 KDF [`crate::keying::derive_member_key`] —
+/// `blake3::derive_key("benten-membership-set:K(V):v1", node_cid)` over the
+/// **PUBLIC** `node_cid`. It is NOT a delegation to `benten-crypto-suite`, and
+/// it is NOT the secret-keyed at-rest confidentiality key: the derivation is
+/// keyed only by a public domain-context string + the public CID, so the
+/// output is a **role-eligibility STAND-IN** — a deterministic per-Node handle
+/// that keeps the membership-keying shape stable, gated by role. The
+/// **confidentiality half** of the Principal primitive (secret-keyed
+/// per-principal encryption) is DEFERRED per CLAUDE.md baked-in #18 — the LIVE
+/// protection is the AUTHORITY half (role gate + capability/namespace
+/// isolation), which binds a cooperating engine only. This gate encodes just
+/// the role-eligibility rule (which roles may derive at all): `None` for
+/// `Invitee`, `Some(key_material)` for any content-bearing role.
 #[must_use]
 pub fn derive_member_content_key(role: RoleId, node_cid: &[u8]) -> Option<Vec<u8>> {
     if matches!(role, RoleId::Invitee) {

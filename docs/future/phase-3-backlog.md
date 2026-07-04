@@ -2607,3 +2607,23 @@ Couples to CLAUDE.md baked-in #15 (v1-milestone-gate). v1-assessment-window open
 - CLAUDE.md baked-in #4 ("not Turing complete: DAGs only. Bounded iteration.") — static cycle detection at install time is the natural enforcement of the DAG-only commitment at the cross-handler boundary.
 
 ---
+
+### 15.3 `benten-drop` wasm32 `compile_error!` defense-in-depth gate (R15 F-22)
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Freeze-additive, latent, zero reverse-deps — NOT blocking at v1-beta.
+
+`benten-drop` is native-only by its dep graph (it composes `benten-crypto-suite` + the Layer-C/Layer-D substrate, and its transitive deps are native-only), but — unlike `benten-membership-set` (`crates/benten-membership-set/src/lib.rs:93` `#[cfg(target_arch = "wasm32")] compile_error!(...)`) — it carries NO explicit `wasm32` `compile_error!` guard. A future `wasm32-unknown-unknown` build attempt would fail deep in a transitive dep with a confusing diagnostic rather than at the crate root with a clear "native-only per CLAUDE.md baked-in #17" message.
+
+**When this lands:** add a `#[cfg(target_arch = "wasm32")] compile_error!("benten-drop is native-only per CLAUDE.md baked-in #17 ...")` gate at `crates/benten-drop/src/lib.rs`, mirroring the membership-set precedent (fire-before-the-transitive-guard for a clearer diagnostic). Latent (no code depends on it firing today), zero reverse-deps.
+
+### 15.4 crypto-suite wasm32-unknown-unknown build story is CI-unexercised (R15 F-23)
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Doc/CI-coverage note; no wire change.
+
+`benten-crypto-suite` is native-only by its dep graph today (top-level `getrandom 0.4 sys_rng` + `ml-dsa`'s `getrandom` feature + `libcrux-ml-kem` — see the corrected R15 GAP-1 comment in `crates/benten-crypto-suite/Cargo.toml` and the note added at `docs/V1-WIRE-FORMAT-INVENTORY.md`). Its `wasm32-unknown-unknown` entropy / `getrandom`-backend story (which `getrandom` backend would be selected, whether caller-supplied randomness would be required, whether it even links) is **CI-unexercised** — no CI job builds crypto-suite for `wasm32-unknown-unknown`. When thin-compute-surface crypto is scoped (per CLAUDE.md baked-in #17 shape-b), this needs a CI build job + an entropy-source decision.
+
+### 15.5 crypto-suite wasm32-unknown-unknown entropy / getrandom-backend unproven (R15 GAP-1)
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Companion to §15.4; the over-broad "getrandom absent from the wasm tree entirely" Cargo.toml comment was corrected at R15 GAP-1 (the "absent" scope is the libcrux-ml-kem subtree ONLY; the crate as a whole DOES pull `getrandom` at the top level). The unproven part: on `wasm32-unknown-unknown` a `getrandom` backend must be explicitly selected (there is no default OS entropy source on that target) — whether the current dep set links + how entropy is sourced there is untested. Freeze-additive, no wire change; scoped with §15.4 when thin-compute crypto lands.
+
+---
