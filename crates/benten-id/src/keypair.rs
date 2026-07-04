@@ -281,7 +281,8 @@ impl Keypair {
     }
 
     /// G21-T2 fp-mini-review MAJOR-6 closure (option (b)) — production
-    /// alias of [`Self::secret_bytes_for_test`] with a name that
+    /// alias of `Self::secret_bytes_for_test` (test-only, gated behind
+    /// `#[cfg(any(test, feature = "testing"))]`) with a name that
     /// reflects the lack of zeroize-on-drop on the returned value.
     ///
     /// The returned `[u8; 32]` is a stack-allocated array. Caller is
