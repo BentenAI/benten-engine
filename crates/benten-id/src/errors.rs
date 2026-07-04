@@ -306,6 +306,21 @@ pub enum UcanError {
         /// The configured maximum.
         max: usize,
     },
+    /// The untrusted-input `Ucan` envelope exceeded the total-byte
+    /// ceiling [`crate::ucan::MAX_UCAN_ENVELOPE_BYTES`]. Complements
+    /// `ProofChainTooDeep` (which bounds nesting depth): a within-depth
+    /// but enormous blob would otherwise drive an O(N) allocation DoS
+    /// as `serde` materializes the `iss`/`aud` strings + `att`/`prf`
+    /// vectors. Rejected at the byte boundary BEFORE serde is invoked
+    /// (Compromise #28 / META #629 DoS-sweep). `got` is the observed
+    /// byte length; `max` is the configured ceiling.
+    #[error("UCAN envelope too large: got={got} bytes exceeds max={max}")]
+    EnvelopeTooLarge {
+        /// Observed envelope byte length.
+        got: usize,
+        /// The configured maximum.
+        max: usize,
+    },
     /// Issuer keypair has been rotated; post-rotation UCANs reject
     /// per `crypto-major-3`.
     #[error("UCAN issuer keypair superseded by rotation: issuer={}", sanitize_untrusted(.issuer))]
@@ -388,6 +403,19 @@ pub enum VcError {
     /// VC could not be decoded from canonical bytes.
     #[error("VC decode failed")]
     DecodeFailed,
+    /// The untrusted-input `Credential` envelope exceeded the total-byte
+    /// ceiling [`crate::vc::MAX_VC_ENVELOPE_BYTES`]. Rejected BEFORE
+    /// `serde` allocates the decoded `Credential` so an enormous blob
+    /// cannot drive an O(N) allocation DoS on the VC-verify path
+    /// (Compromise #28 / META #629 DoS-sweep). `got` is the observed
+    /// byte length; `max` is the configured ceiling.
+    #[error("VC envelope too large: got={got} bytes exceeds max={max}")]
+    EnvelopeTooLarge {
+        /// Observed envelope byte length.
+        got: usize,
+        /// The configured maximum.
+        max: usize,
+    },
     /// VC missing a load-bearing field (issuer / issuanceDate / etc.).
     #[error("VC missing required field: {field}")]
     MissingField {

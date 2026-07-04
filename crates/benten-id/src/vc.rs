@@ -101,6 +101,20 @@ pub const VC_CONTEXT_V1: &str = "https://www.w3.org/2018/credentials/v1";
 /// W3C VC v1.1 `type` literal — every VC carries this base type.
 pub const VC_TYPE_BASE: &str = "VerifiableCredential";
 
+/// Fail-closed total-byte ceiling on an untrusted-input `Credential`
+/// envelope (Compromise #28 / META #629 DoS-sweep).
+///
+/// [`verify_bytes_in_trust_domain`] decodes `bytes: &[u8]` (its untrusted
+/// entry parameter) straight into a `Credential` with no prior size cap. A
+/// `Credential` is non-recursive so this is an O(N) linear allocation rather
+/// than a `with_capacity(N)` blow-up, but an enormous blob is still an
+/// allocation DoS on any caller — the production VC-verify path
+/// (`benten_engine::typed_call_dispatch::vc_verify`) is the latent consumer.
+/// A well-formed VC is a few KiB; 16 KiB clears any realistic credential
+/// while bounding a hostile blob. Mirrors the
+/// `keypair.rs::SEED_ENVELOPE_MAX_BYTES` fail-closed pattern.
+pub const MAX_VC_ENVELOPE_BYTES: usize = 16 * 1024;
+
 /// Verifiable Credential — the W3C v1.1 core fields.
 ///
 /// Built via [`Credential::builder`] / [`CredentialBuilder::sign`].
@@ -509,6 +523,14 @@ pub fn verify_bytes_in_trust_domain(
     bytes: &[u8],
     trust_domain: &TrustDomain,
 ) -> Result<(), VcError> {
+    // Fail-closed total-byte cap (Compromise #28 / META #629): reject an
+    // over-large blob BEFORE `serde` allocates the decoded `Credential`.
+    if bytes.len() > MAX_VC_ENVELOPE_BYTES {
+        return Err(VcError::EnvelopeTooLarge {
+            got: bytes.len(),
+            max: MAX_VC_ENVELOPE_BYTES,
+        });
+    }
     let vc: Credential =
         serde_ipld_dagcbor::from_slice(bytes).map_err(|_| VcError::DecodeFailed)?;
     verify_in_trust_domain(&vc, trust_domain)

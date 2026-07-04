@@ -87,6 +87,22 @@ use crate::keypair::{Keypair, PublicKey};
 /// backend read path (`benten_caps::backends::ucan`).
 pub const MAX_UCAN_PROOF_DEPTH: usize = 32;
 
+/// Fail-closed total-byte ceiling on an untrusted-input `Ucan` envelope
+/// (Compromise #28 / META #629 DoS-sweep; the safe-2 #549 sibling to the
+/// nesting-depth bound).
+///
+/// [`Ucan::from_canonical_bytes_bounded`] bounds proof-chain NESTING depth
+/// but applies no cap on the TOTAL blob size before `serde` allocates the
+/// decoded `Ucan` (the `iss`/`aud` `String`s + `Vec<Capability>` att +
+/// `Vec<Ucan>` prf). Both live untrusted-input decode sites — the typed-CALL
+/// `ucan_validate_chain` op and the durable UCAN backend read path — feed the
+/// token bytes VERBATIM with no upstream byte cap, so a within-depth but
+/// enormous blob is an O(N) allocation DoS. `MAX_UCAN_PROOF_DEPTH` (32) × a
+/// generous ~2 KiB per token gives 64 KiB, which comfortably clears any
+/// well-formed multi-hop chain while bounding a hostile blob. Mirrors the
+/// `keypair.rs::SEED_ENVELOPE_MAX_BYTES` fail-closed pattern.
+pub const MAX_UCAN_ENVELOPE_BYTES: usize = 64 * 1024;
+
 /// Capability grant pair: `(resource, ability)`.
 ///
 /// Example: `Capability::new("/zone/posts", "read")`. The
@@ -187,6 +203,16 @@ impl Ucan {
     /// [`UcanError::DecodeFailed`], matching the existing decode
     /// failure contract.
     pub fn from_canonical_bytes_bounded(bytes: &[u8], max_depth: usize) -> Result<Self, UcanError> {
+        // Fail-closed total-byte cap (Compromise #28 / META #629): reject an
+        // over-large blob BEFORE the depth pre-walk / serde allocation so a
+        // within-depth but enormous envelope cannot drive an O(N) allocation
+        // DoS. Complements the nesting-depth bound below.
+        if bytes.len() > MAX_UCAN_ENVELOPE_BYTES {
+            return Err(UcanError::EnvelopeTooLarge {
+                got: bytes.len(),
+                max: MAX_UCAN_ENVELOPE_BYTES,
+            });
+        }
         // Iterative pre-walk: reject over-deep nesting at the byte
         // boundary so serde's recursive deserialize never runs on a
         // pathological blob.

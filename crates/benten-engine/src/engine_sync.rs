@@ -365,6 +365,18 @@ impl DeviceAttestationEnvelope {
     /// silently round-tripping unsigned bytes.
     pub const MAX_WIRE_VERSION: u8 = 2;
 
+    /// Fail-closed ceiling on the raw wire bytes accepted by
+    /// [`DeviceAttestationEnvelope::from_canonical_bytes`] (Compromise #28
+    /// / META #629 DoS-sweep).
+    ///
+    /// The live caller is already bounded by the 4-MiB transport `RECV_CAP`
+    /// (`benten_sync::transport`), but its wire-decode siblings
+    /// (`HandshakeFrame` / `MstDiffFrame` / `PeerId`) got intrinsic byte
+    /// caps in this sweep — "the bound is a property of the decode API, not
+    /// one caller". This matching 4-MiB cap keeps the freeze from baking in
+    /// an inconsistent posture across the wire-decode surface.
+    pub const MAX_ENVELOPE_BYTES: usize = 4 * 1024 * 1024;
+
     /// Construct a legacy `attestation = None` envelope (no signed
     /// attestation; receiver falls back to its own `device_cid`).
     /// Used by handles that have not been bound via
@@ -503,6 +515,20 @@ impl DeviceAttestationEnvelope {
     /// this build understands (`version > MAX_WIRE_VERSION`). Per
     /// crypto-minor-5 fix-pass, version validation is mandatory.
     pub fn from_canonical_bytes(bytes: &[u8]) -> AtriumResult<Self> {
+        // Fail-closed byte cap (Compromise #28 / META #629 DoS-sweep): reject
+        // an over-large envelope blob BEFORE `serde` allocates. Intrinsic to
+        // the decode API (pattern symmetry with the HandshakeFrame /
+        // MstDiffFrame / PeerId sibling caps), even though the live caller is
+        // already RECV_CAP-bounded.
+        if bytes.len() > Self::MAX_ENVELOPE_BYTES {
+            return Err(AtriumError::InvalidState {
+                reason: format!(
+                    "DeviceAttestationEnvelope {} bytes exceeds cap {} (MAX_ENVELOPE_BYTES)",
+                    bytes.len(),
+                    Self::MAX_ENVELOPE_BYTES
+                ),
+            });
+        }
         let env: Self =
             serde_ipld_dagcbor::from_slice(bytes).map_err(|e| AtriumError::InvalidState {
                 reason: format!("DeviceAttestationEnvelope decode failed: {e}"),

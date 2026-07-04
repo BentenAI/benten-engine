@@ -880,6 +880,10 @@ impl<'a, R, P, S> core::marker::Unpin for benten_platform_foundation::plugin_lif
 impl<'a, R, P, S> core::marker::UnsafeUnpin for benten_platform_foundation::plugin_lifecycle::UninstallPorts<'a, R, P, S>
 impl<'a, R, P, S> core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::plugin_lifecycle::UninstallPorts<'a, R, P, S> where R: core::panic::unwind_safe::RefUnwindSafe, P: core::panic::unwind_safe::RefUnwindSafe, S: core::panic::unwind_safe::RefUnwindSafe
 impl<'a, R, P, S> !core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::plugin_lifecycle::UninstallPorts<'a, R, P, S>
+pub const benten_platform_foundation::plugin_lifecycle::MAX_GRANTED_CAPS: usize
+pub const benten_platform_foundation::plugin_lifecycle::MAX_GRANTED_CAP_BYTES: usize
+pub const benten_platform_foundation::plugin_lifecycle::MAX_PLUGIN_MANIFEST_BYTES: usize
+pub const benten_platform_foundation::plugin_lifecycle::MAX_PLUGIN_MANIFEST_REQUIRES: usize
 pub trait benten_platform_foundation::plugin_lifecycle::CapMinter
 pub fn benten_platform_foundation::plugin_lifecycle::CapMinter::mint_root_grant(&mut self, &benten_id::did::Did, &benten_id::did::Did, &str) -> core::result::Result<benten_core::Cid, benten_errors::ErrorCode>
 pub fn benten_platform_foundation::plugin_lifecycle::CapMinter::revoke_root_grant(&mut self, &benten_core::Cid) -> core::result::Result<(), benten_errors::ErrorCode>

@@ -839,6 +839,7 @@ pub benten_engine::engine_sync::DeviceAttestationEnvelope::payload_hash: [u8; 32
 pub benten_engine::engine_sync::DeviceAttestationEnvelope::session_nonce: [u8; 32]
 pub benten_engine::engine_sync::DeviceAttestationEnvelope::version: u8
 impl benten_engine::engine_sync::DeviceAttestationEnvelope
+pub const benten_engine::engine_sync::DeviceAttestationEnvelope::MAX_ENVELOPE_BYTES: usize
 pub const benten_engine::engine_sync::DeviceAttestationEnvelope::MAX_WIRE_VERSION: u8
 pub const benten_engine::engine_sync::DeviceAttestationEnvelope::WIRE_VERSION: u8
 pub fn benten_engine::engine_sync::DeviceAttestationEnvelope::declared_device_did(&self) -> core::option::Option<&str>
@@ -1868,6 +1869,9 @@ impl core::marker::Unpin for benten_engine::module_manifest::RandomHostFnOverrid
 impl core::marker::UnsafeUnpin for benten_engine::module_manifest::RandomHostFnOverride
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::module_manifest::RandomHostFnOverride
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::module_manifest::RandomHostFnOverride
+pub const benten_engine::module_manifest::MAX_MODULE_MANIFEST_BYTES: usize
+pub const benten_engine::module_manifest::MAX_MODULE_MANIFEST_MIGRATIONS: usize
+pub const benten_engine::module_manifest::MAX_MODULE_MANIFEST_MODULES: usize
 pub mod benten_engine::outcome
 #[non_exhaustive] pub enum benten_engine::outcome::TraceStep
 pub benten_engine::outcome::TraceStep::BudgetExhausted

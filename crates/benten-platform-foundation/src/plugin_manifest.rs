@@ -97,6 +97,14 @@ impl PluginManifest {
         if self.requires.is_empty() {
             return Err(ErrorCode::PluginManifestInvalid);
         }
+        // Fail-closed count ceiling (Compromise #28 / META #629 DoS-sweep):
+        // reject a manifest whose `requires` array exceeds the per-manifest
+        // element cap. Amplification guard alongside the byte cap enforced at
+        // decode time in `plugin_lifecycle::install_plugin`. Mirrors the
+        // ModuleManifest `modules` count ceiling.
+        if self.requires.len() > crate::plugin_lifecycle::MAX_PLUGIN_MANIFEST_REQUIRES {
+            return Err(ErrorCode::PluginManifestInvalid);
+        }
         match self.shares.default {
             SharesPolicyDefault::Matching => {
                 if self.shares.rules.as_ref().is_none_or(|r| r.is_empty()) {
@@ -571,17 +579,49 @@ impl InstallRecord {
     /// signature — which is computationally infeasible — so the
     /// signer is bound via pubkey-binding rather than literal-bytes
     /// inclusion. The fields that ARE in the payload (manifest_cid +
-    /// timestamp + nonce + plugin_did_bytes) are the ones that must
-    /// also be bound but cannot be recovered from the signature alone.
+    /// timestamp + nonce + plugin_did_bytes + granted_caps_bytes) are the
+    /// ones that must also be bound but cannot be recovered from the
+    /// signature alone.
+    ///
+    /// ## `granted_caps_bytes` binding (M-2b signed-surface gap)
+    ///
+    /// `granted_caps_bytes` — the UCAN delegations the user consented to
+    /// grant this plugin — IS bound here so it cannot be tampered
+    /// independent of the user's consent signature (a store/filesystem
+    /// tamper appending an un-consented cap → capability-escalation would
+    /// otherwise pass verification). The vector is length-prefixed
+    /// canonically so the payload is deterministic + injective:
+    /// a BE-`u32` element count, then per element a BE-`u32` byte-length
+    /// followed by the element bytes. The length-prefixing (rather than
+    /// bare concatenation) prevents a boundary-shifting collision where
+    /// `[[a, b], [c]]` and `[[a], [b, c]]` would otherwise hash equal.
     #[must_use]
     pub fn signing_payload(&self) -> Vec<u8> {
         let plugin_did_bytes = self.plugin_did.as_str().as_bytes();
-        let mut out = Vec::with_capacity(36 + 8 + self.nonce.len() + plugin_did_bytes.len());
+        let caps_bytes_total: usize = self.granted_caps_bytes.iter().map(Vec::len).sum();
+        let mut out = Vec::with_capacity(
+            36 + 8
+                + self.nonce.len()
+                + plugin_did_bytes.len()
+                + 4
+                + self.granted_caps_bytes.len() * 4
+                + caps_bytes_total,
+        );
         out.extend_from_slice(self.manifest_cid.as_bytes());
         // M-19: timestamp BIG-ENDIAN (migrated from LE at F-full Wave-0).
         out.extend_from_slice(&self.timestamp_stub_nanos.to_be_bytes());
         out.extend_from_slice(&self.nonce);
         out.extend_from_slice(plugin_did_bytes);
+        // M-2b: canonical length-prefixed `granted_caps_bytes`. BE-u32 count,
+        // then per-cap BE-u32-len ‖ bytes. Deterministic + injective so the
+        // granted caps are bound into the user's consent signature.
+        let cap_count = u32::try_from(self.granted_caps_bytes.len()).unwrap_or(u32::MAX);
+        out.extend_from_slice(&cap_count.to_be_bytes());
+        for cap in &self.granted_caps_bytes {
+            let cap_len = u32::try_from(cap.len()).unwrap_or(u32::MAX);
+            out.extend_from_slice(&cap_len.to_be_bytes());
+            out.extend_from_slice(cap);
+        }
         out
     }
 

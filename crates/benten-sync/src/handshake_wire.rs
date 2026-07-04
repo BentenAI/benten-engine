@@ -41,6 +41,18 @@ use crate::peer_id::PeerId;
 /// transport layer (degraded → typed error).
 pub const HANDSHAKE_WIRE_VERSION: u8 = 1;
 
+/// Fail-closed ceiling on the raw wire bytes accepted by
+/// [`HandshakeFrame::from_canonical_bytes`] (Compromise #28 / META #629
+/// DoS-sweep).
+///
+/// This is a `pub` decode API decoding attacker-controlled pre-auth wire
+/// bytes. Today the only production caller is the device-attestation recv path
+/// (bounded by the 4-MiB transport `RECV_CAP`), but the decode carries no
+/// intrinsic cap, so any future un-capped caller would be unbounded. Setting
+/// the intrinsic ceiling to the same 4 MiB the transport enforces makes the
+/// bound a property of the decode API itself rather than of one caller.
+pub const MAX_HANDSHAKE_FRAME_BYTES: usize = 4 * 1024 * 1024;
+
 /// Wire-format frame for the Phase-3 Atrium peer handshake.
 ///
 /// Carries both the peer-DID (account identity) AND the device-DID
@@ -134,6 +146,16 @@ impl HandshakeFrame {
     /// CBOR object missing the field fails serde's required-field
     /// check.
     pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, AtriumTransportError> {
+        // Fail-closed size cap (Compromise #28 / META #629): make the 4-MiB
+        // bound intrinsic to the decode API, not only to the transport caller.
+        if bytes.len() > MAX_HANDSHAKE_FRAME_BYTES {
+            return Err(AtriumTransportError::HandshakeWireFormat {
+                reason: format!(
+                    "handshake frame {} bytes exceeds cap {MAX_HANDSHAKE_FRAME_BYTES}",
+                    bytes.len()
+                ),
+            });
+        }
         serde_ipld_dagcbor::from_slice(bytes).map_err(|e| {
             AtriumTransportError::HandshakeWireFormat {
                 reason: format!("dag-cbor decode failed: {e}"),

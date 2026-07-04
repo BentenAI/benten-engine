@@ -109,6 +109,30 @@ pub const OWASP_DEFAULT: Argon2idParams = Argon2idParams {
     p_cost: 1,
 };
 
+// --- Fail-closed ceilings on the frame-supplied Argon2id cost params
+// (Compromise #28 / META #629 DoS-sweep). ---
+//
+// `parse_vault_frame` reads `m_cost`/`t_cost`/`p_cost` VERBATIM from an
+// attacker-controlled `vault.cbor` HEADER (the untrusted-host /
+// peers-hold-ciphertext / remote-permission threat surface), and those
+// params flow into `derive_dak` → `Params::new` → `Argon2id::hash_password_into`,
+// which allocates `m_cost` KiB and runs `t_cost` passes BEFORE the AEAD/password
+// gate can ever fail. Without a ceiling a single hostile blob dictates the
+// victim's KDF memory/CPU budget (memory-exhaustion / CPU-pinning DoS). These
+// caps sit COMFORTABLY above `OWASP_DEFAULT` (19456 / 2 / 1) so every valid
+// vault frame (which is always sealed under `OWASP_DEFAULT`) decodes byte-
+// identically — the guard rejects only already-invalid oversized headers.
+//
+// `VAULT_ARGON2_MAX_M_COST` = 65_536 KiB (64 MiB) — ~3.4× the OWASP default,
+// enough headroom for a legitimately-hardened future param set while still
+// bounding a hostile header to a fixed, small allocation.
+/// Fail-closed ceiling on the frame-supplied Argon2id memory cost (KiB).
+pub const VAULT_ARGON2_MAX_M_COST: u32 = 65_536;
+/// Fail-closed ceiling on the frame-supplied Argon2id time cost (passes).
+pub const VAULT_ARGON2_MAX_T_COST: u32 = 10;
+/// Fail-closed ceiling on the frame-supplied Argon2id parallelism.
+pub const VAULT_ARGON2_MAX_P_COST: u32 = 4;
+
 /// The Device-Authentication Key — a zeroize-on-drop 32-byte secret.
 ///
 /// Wraps a [`secrecy::SecretBox<[u8; 32]>`] so the DAK Debug-redacts and its
@@ -366,6 +390,23 @@ fn parse_vault_frame(bytes: &[u8]) -> Result<VaultFrame<'_>, VaultError> {
     let m_cost = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
     let t_cost = u32::from_be_bytes([bytes[24], bytes[25], bytes[26], bytes[27]]);
     let p_cost = u32::from_be_bytes([bytes[28], bytes[29], bytes[30], bytes[31]]);
+    // Fail-closed: reject a header whose Argon2id cost params exceed the
+    // safe ceilings BEFORE they can drive `derive_dak`'s memory/CPU budget
+    // (Compromise #28 / META #629). This single choke point covers both the
+    // self-contained `open_vault` and the DAK-supplied `decode_vault` entry
+    // points, and fires ahead of the AEAD/password gate so a hostile blob can
+    // no longer dictate the victim's KDF cost. All valid frames use
+    // `OWASP_DEFAULT`, which is well under every ceiling.
+    if m_cost > VAULT_ARGON2_MAX_M_COST
+        || t_cost > VAULT_ARGON2_MAX_T_COST
+        || p_cost > VAULT_ARGON2_MAX_P_COST
+    {
+        return Err(VaultError::Argon2ParamsOutOfBounds {
+            m_cost,
+            t_cost,
+            p_cost,
+        });
+    }
     let params = Argon2idParams {
         m_cost,
         t_cost,
@@ -650,6 +691,27 @@ pub enum VaultError {
     #[error("malformed vault CBOR")]
     MalformedCbor,
 
+    /// The frame-supplied Argon2id cost params exceed the fail-closed
+    /// ceilings ([`VAULT_ARGON2_MAX_M_COST`] / [`VAULT_ARGON2_MAX_T_COST`] /
+    /// [`VAULT_ARGON2_MAX_P_COST`]). Rejected BEFORE `derive_dak` runs so an
+    /// attacker-supplied `vault.cbor` header cannot dictate the victim's KDF
+    /// memory/CPU budget (Compromise #28 / META #629 DoS-sweep).
+    #[error(
+        "vault Argon2id params out of bounds (m_cost={m_cost} t_cost={t_cost} p_cost={p_cost}; \
+         max m={} t={} p={})",
+        VAULT_ARGON2_MAX_M_COST,
+        VAULT_ARGON2_MAX_T_COST,
+        VAULT_ARGON2_MAX_P_COST
+    )]
+    Argon2ParamsOutOfBounds {
+        /// The offending memory cost (KiB).
+        m_cost: u32,
+        /// The offending time cost (passes).
+        t_cost: u32,
+        /// The offending parallelism.
+        p_cost: u32,
+    },
+
     /// The AEAD seal/open failed.
     #[error("vault AEAD seal/open failed")]
     AeadFailed,
@@ -715,6 +777,44 @@ mod tests {
             "params round-trip from the frame header"
         );
         assert_eq!(decoded.payload, payload);
+    }
+
+    /// Compromise #28 / META #629 DoS-sweep — a `vault.cbor` HEADER whose
+    /// attacker-controlled Argon2id `m_cost` exceeds [`VAULT_ARGON2_MAX_M_COST`]
+    /// is rejected FAST with a typed [`VaultError::Argon2ParamsOutOfBounds`],
+    /// BEFORE `derive_dak` allocates `m_cost` KiB. would-FAIL-on-revert: without
+    /// the `parse_vault_frame` ceiling, `open_vault` on this frame would drive a
+    /// ~4 GiB Argon2id allocation (`m_cost = 0x0040_0000` KiB) — an unbounded
+    /// memory-exhaustion DoS dictated by the hostile blob. The test exercises
+    /// `decode_vault` (which calls `parse_vault_frame` first) so it rejects at
+    /// the header-parse gate WITHOUT ever running the KDF or AEAD.
+    #[test]
+    fn oversized_argon2_params_reject_fast_before_kdf() {
+        // Build a valid frame under OWASP_DEFAULT, then corrupt only the
+        // m_cost field in the header to an oversized value.
+        let payload = VaultPayload {
+            k_principal: [0x11u8; 32],
+            user_did_signing_key: vec![0x22u8; 64],
+            user_did_creation_time: 0,
+        };
+        let salt = [0x77u8; 16];
+        let dak = [0x33u8; 32];
+        let mut bytes = serialize_vault(&payload, &salt, OWASP_DEFAULT, &dak).unwrap();
+        // Header layout: magic(1) version(1) codepoint(2) salt(16)
+        // m_cost@[20..24] t_cost@[24..28] p_cost@[28..32] (big-endian).
+        let hostile_m_cost: u32 = 0x0040_0000; // 4 GiB in KiB — well over the 64 MiB ceiling
+        bytes[20..24].copy_from_slice(&hostile_m_cost.to_be_bytes());
+        let err = decode_vault(&bytes, &dak).unwrap_err();
+        match err {
+            VaultError::Argon2ParamsOutOfBounds { m_cost, .. } => {
+                assert_eq!(m_cost, hostile_m_cost, "reports the offending m_cost");
+            }
+            other => panic!("expected Argon2ParamsOutOfBounds, got {other:?}"),
+        }
+        // And the self-contained open path (which re-derives the DAK) rejects
+        // at the SAME gate before ever calling derive_dak.
+        let err2 = open_vault(&bytes, b"pw", DAK_HKDF_INFO_TAG).unwrap_err();
+        assert!(matches!(err2, VaultError::Argon2ParamsOutOfBounds { .. }));
     }
 
     /// R11 MC-6 — the self-containment property: `vault.cbor` bytes + password

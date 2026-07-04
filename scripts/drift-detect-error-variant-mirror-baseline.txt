@@ -329,3 +329,15 @@ VaultError::NonceWidthMismatch
 VaultError::UnknownCodepoint
 VcError::BadSignature
 VcError::DecodeFailed
+
+# --- Compromise #28 / META #629 DoS-sweep bounded-decode rejects (2026-07-04).
+# These typed reject variants are sibling-consistent with the rest of their
+# already-baselined enums (VaultError has no benten_errors::ErrorCode mirror at
+# all; UcanError/VcError variants are all baselined — internal-to-benten-id
+# typed-error taxonomy that never crosses the benten_errors catalog boundary).
+# Per the freeze-window §3.5g exemption: struct-variant inline annotations get
+# moved off the line by rustfmt (scanner-invisible), so the baseline is the
+# sibling-consistent home for these new bounded-decode reject variants.
+VaultError::Argon2ParamsOutOfBounds
+UcanError::EnvelopeTooLarge
+VcError::EnvelopeTooLarge

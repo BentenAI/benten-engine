@@ -73,6 +73,18 @@ use crate::system_zones::SYSTEM_ZONE_PREFIXES;
 // `benten-graph/src/store.rs`.
 const NODE_KEY_PREFIX: &[u8] = b"n:";
 
+/// Fail-closed ceiling on the raw bytes accepted by
+/// [`Engine::from_snapshot_blob`] (Compromise #28 / META #629 DoS-sweep).
+///
+/// Snapshot blobs are the G13-D thin-client handoff surface; when a snapshot
+/// is fetched from a remote/untrusted full-peer the bytes are attacker-
+/// influenced, and the blob's node-count + per-node body sizes drive
+/// allocation with no total-byte cap before `SnapshotBlob::from_canonical_bytes`
+/// decodes it. (The per-node CID recompute detects tampering, but only AFTER
+/// allocation.) 16 MiB is a generous ceiling for a legitimate thin-client
+/// snapshot while bounding a hostile blob before decode.
+const MAX_SNAPSHOT_BLOB_BYTES: usize = 16 * 1024 * 1024;
+
 // G13-D wave-3: the Phase-2b `SnapshotTempDirGuard` + process-wide
 // `SNAPSHOT_TEMP_DIRS` registry are retired. The hydration target is
 // `RedbBackend::open_in_memory()` — there is no on-disk tempdir to keep
@@ -213,6 +225,17 @@ impl Engine {
     ///   indicates tampering between the source-side canonical encode
     ///   and the destination-side decode.
     pub fn from_snapshot_blob(bytes: &[u8]) -> Result<Self, EngineError> {
+        // Fail-closed byte cap (Compromise #28 / META #629): reject an
+        // over-large snapshot blob BEFORE it is decoded + node-hydrated.
+        if bytes.len() > MAX_SNAPSHOT_BLOB_BYTES {
+            return Err(EngineError::Other {
+                code: ErrorCode::Serialize,
+                message: format!(
+                    "snapshot blob {} bytes exceeds cap {MAX_SNAPSHOT_BLOB_BYTES}",
+                    bytes.len()
+                ),
+            });
+        }
         let blob = SnapshotBlob::from_canonical_bytes(bytes).map_err(EngineError::Core)?;
         if blob.schema_version
             != benten_graph::backends::snapshot_blob::SNAPSHOT_BLOB_SCHEMA_VERSION
