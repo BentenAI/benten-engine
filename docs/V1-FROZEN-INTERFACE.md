@@ -1013,8 +1013,10 @@ total):**
   structural backstop).
 
 **CLOSED post G-CORE-9 build-out (commit `8cc4eddd`):** all 14 baselines-
-at-that-time regenerated as real `cargo public-api -p <crate> --simplified
---omit blanket-impls` output and committed as the canonical v1 baseline
+at-that-time regenerated as real `cargo +nightly public-api --simplified
+-p <crate>` output (the exact CI invocation in
+`.github/workflows/cargo-public-api.yml` — treat the baselines as
+tool-generated, never hand-authored) and committed as the canonical v1 baseline
 (the 15th crate `benten-membership-set` baseline was added at F-full R5,
 2026-06-05); the prior G20-A3 11-LOC placeholder stubs are gone. Per
 L12-R3-MIN-1 closure the gate is now structurally REAL (cf. item 1 "drift
@@ -2119,6 +2121,52 @@ assigned at v1-beta:
 cardinality, the 5-value RoleId ordinal, the one-DID-one-record fusion,
 the `0x6610` 11-field AAD layout, or the `0x6600`/`0x6610`/`0x6620`
 codepoint band = a §1.A.FROZEN mutation → HALT-AND-SURFACE-TO-BEN.
+
+---
+
+## 17. Reserved-seam / stand-in roll-up (F-15) + UCAN-authority key-type scoping (F-22)
+
+**F-15 — reserved-seam / stand-in consolidated pointer.** Several v1-beta
+surfaces are frozen as SEAMS or STAND-INS — the wire-shape / trait-signature /
+codepoint is locked now, but the substantive production behind it is a named
+Phase-4-Meta-Composing / G-COMP-1 / v1-GM deferral. They are individually
+documented; this is the ONE consolidated pointer so a reader can find the whole
+reserved-seam set from a single place:
+
+- **Row D-30** (`docs/V1-FROZEN-INTERFACE-DEFERRED.md`) —
+  `DeviceLinkError::SessionIdReplayed` production replay-store wire-in (the
+  session-id replay-detection seam is present + typed; the durable replay-store
+  is deferred).
+- **Row D-64** (`docs/V1-FROZEN-INTERFACE-DEFERRED.md`) — Engine
+  encrypt-to-recipient wiring → Phase-4-Meta-Composing; includes the
+  `benten_engine::layer_d::secret_store::SecretStore` `keyring-core` seam
+  (`crates/benten-engine/src/layer_d/secret_store.rs`; the frozen `SecretStore`
+  surface with the production keyring backend deferred) and the `derive_kv`
+  keying-glue with zero production callers at HEAD.
+- **Row D-66** (`docs/V1-FROZEN-INTERFACE-DEFERRED.md`) — the associated
+  Composing-side wiring row (reserved-seam sibling of D-64).
+- **Compromise #65** (`docs/SECURITY-POSTURE.md`) — the wave-3e per-Node AEAD
+  publicly-derivable-`K_principal` **STAND-IN** (keeps the substrate shape
+  stable for the production `K_principal`-store swap-in; NOT real untrusted-host
+  confidentiality at v1-beta; closes at the #1301 / D-64 backend).
+
+Freeze discipline: each of these seams is wire/trait/codepoint-LOCKED at
+G-CORE-9, so the deferred production behind it lands ADDITIVELY (no wire break,
+per CLAUDE.md baked-in #5). Any Composing-time discovery requiring a shape change
+to one of these seams is a §1.A.FROZEN mutation → HALT-AND-SURFACE-TO-BEN.
+
+**F-22 — UCAN-authority key-type scoping.** At v1-beta a **hybrid**
+(Ed25519⊕ML-DSA-65 two-component-multikey) `did:key` is NOT UCAN-audience-eligible:
+the UCAN audience/authority path resolves through the Ed25519-only `did:key`
+form (`benten_id::did::Did::resolve`; plugin-DID + user-DID are fresh Ed25519
+`did:key` shapes per §18 / `docs/PLUGIN-MANIFEST.md §3`). The hybrid `did:key`
+form + its `Did::resolve_hybrid` path exist for the signing/verifying-key
+resolution used by the Layer-C sender-origin-auth (per-message LAMPS-hybrid
+signature) — a DISTINCT axis from UCAN delegation authority. A UCAN whose
+audience is a hybrid `did:key` therefore does not resolve to an
+Ed25519-audience match and **fails closed** (no silent admission). This scoping
+is v1-beta-frozen; UCAN-audience eligibility for hybrid `did:key` (if ever
+wanted) is a post-v1-beta additive extension, not a v1-beta behavior.
 
 ---
 

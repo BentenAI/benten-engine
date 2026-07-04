@@ -247,10 +247,14 @@ impl HashCodepoint {
 /// dispatcher level — the pure-PQ arm is only constructible via
 /// [`crate::swap_matrix::SwapMatrix::try_pure_pq_sole_trust_path`]
 /// which gates on `AUDIT_LANDED_PURE_PQ_FLAG`)
-/// + `0x0000` (no-encryption) remain reserved-typed-reject via
-/// [`UnsupportedAlgorithm`] until G-CORE-3c's full swap-matrix wave —
-/// the additive-codepoint discipline + old-codepoints-supported-forever
-/// invariant hold across the partial-light step.
+/// remain reserved-typed-reject via [`UnsupportedAlgorithm`] until
+/// G-CORE-3c's full swap-matrix wave — the additive-codepoint discipline
+/// + old-codepoints-supported-forever invariant hold across the
+/// partial-light step. `0x0000` (no-encryption) is the swap-matrix
+/// no-encryption arm, selectable via the `sign_only` path, and is
+/// TYPED-REJECTED at the v1-beta default `CipherSuite::resolve()` **by
+/// design** (never a silent fallback) — it is not a resolvable default
+/// cipher suite.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CipherSuiteCodepoint(pub(crate) u16);
 
@@ -269,8 +273,12 @@ impl CipherSuiteCodepoint {
     /// (incl. `0x647b` + `0x0000`) lands at G-CORE-3c.
     pub const CLASSICAL_X25519: Self = Self(0x6400);
 
-    /// No-encryption (plaintext partition) downgrade. Reserved at
-    /// G-CORE-2 / live at G-CORE-3c.
+    /// No-encryption (plaintext partition) arm of the swap matrix,
+    /// selectable via the `sign_only` path. TYPED-REJECTED at the v1-beta
+    /// default [`CipherSuiteCodepoint::resolve`] **by design** — never a
+    /// silent fallback and not a resolvable default cipher suite; the
+    /// no-encryption arm is reachable only through the explicit
+    /// `sign_only` swap-matrix path.
     pub const NONE_PLAINTEXT: Self = Self(0x0000);
 
     /// NF-1 KEM PQ⊕PQ end-state: ML-KEM-768 ⊕ HQC. **Reserved-but-

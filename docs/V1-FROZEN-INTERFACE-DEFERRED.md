@@ -2414,76 +2414,83 @@ Row D-15's audit-readiness concern.
   (`is_for_test_pattern`); `crates/benten-engine/src/atrium_api.rs:80`
   (`AtriumConfig::for_test`).
 
-### Row D-75 — GAP-1: `UnwrappedKey` `#[derive(Debug)]` renders recovered key bytes + no `ZeroizeOnDrop` → v1-GM secret-hygiene hardening
+### Row D-75 — GAP-1: recovered-secret `Debug`-render + freed-heap hygiene → per-type redact+zeroize + meta-test LANDED at v1-beta (R19/#3); only bare-`Vec<u8>` copy-site tidy remains for v1-GM
 
-- **Observation (NAMED, not fixed this round):** `UnwrappedKey`
-  (`crates/benten-crypto-suite/src/cipher_suite.rs`) carries
-  `#[derive(Debug)]`, so a `{:?}` would render the recovered `k_root` key bytes
-  in the clear, and it has NO `ZeroizeOnDrop` — its sibling `RecipientSecret` in
-  the same module DOES both (a redacting `impl Debug` + an `impl Drop` that
-  zeroizes). This is a latent secret-in-`Debug` / secret-in-freed-heap footgun.
-  It is NOT exploited at v1-beta: there are **ZERO** production `{:?}` / `tracing`
-  sinks of `UnwrappedKey` at HEAD (grep-verified), so no key material reaches a
-  log/format sink. See Compromise (SGD) row minted at R14 for the tracked
-  disclosure.
-- **Deferred (destination):** v1-GM hardening — give `UnwrappedKey` (1) a
-  redacting hand-written `impl Debug` (mirror `RecipientSecret`'s `<redacted>`
-  fields) and (2) `ZeroizeOnDrop` (or an explicit `impl Drop` that
-  `zeroize()`s `bytes`), plus a secret-`Debug` meta-test asserting no
-  key-bearing crypto-suite type derives a rendering `Debug`.
-- **Sibling types swept under this same umbrella (R15 F-03 / F-05 / F-08):**
-  - **`VaultPayload`** (`crates/benten-crypto-suite/src/vault.rs:196`) —
-    `#[derive(Debug, ..)]` over a struct holding `k_principal: [u8; 32]` (the
-    at-rest content-encryption root key) + `user_did_signing_key: Vec<u8>`.
-    A `{:?}` render would print the principal's root key + signing-key bytes in
-    the clear; the struct has no zeroizing `Drop`. Same v1-GM hardening as
-    `UnwrappedKey` (redacting `impl Debug` + zeroizing `Drop`); zero v1-beta
-    `{:?}`/`tracing` sinks at HEAD (the frozen-field-layout serde struct is
-    only round-tripped through `to_canonical_cbor`, not formatted).
+- **Status (R20 re-tense):** the per-type redact-on-`Debug` + zeroize-on-drop
+  hardening for the WHOLE recovered-secret roster — and the enforcing
+  secret-`Debug` meta-test — **LANDED at v1-beta** in the R19/#3 secret-hygiene
+  sweep. What remains deferred to v1-GM is narrower: three still-bare-`Vec<u8>`
+  copy sites that transiently hold recovered key material before it is wrapped
+  into a redacting/zeroizing type.
+- **History (R14 mint):** `UnwrappedKey`
+  (`crates/benten-crypto-suite/src/cipher_suite.rs`) then carried
+  `#[derive(Debug)]`, so a `{:?}` would have rendered the recovered `k_root` key
+  bytes in the clear, and had no zeroize-on-drop — at mint-time the asymmetric
+  outlier vs its sibling `RecipientSecret` (which already did both). See
+  Compromise #66 (SGD) for the tracked disclosure; that gap is now CLOSED.
+- **DONE (landed at v1-beta, R19/#3 sweep):** each roster type now has a
+  redacting hand-written `impl Debug` (renders `<redacted>` / `[REDACTED]`,
+  never the raw bytes) + an explicit zeroizing `impl Drop`:
+  - **`UnwrappedKey`** — redacting `impl Debug` (`cipher_suite.rs:1072-1078`) +
+    zeroizing `impl Drop` (`cipher_suite.rs:1082-1086`). Now MATCHES
+    `RecipientSecret` — no longer an outlier.
+  - **`DecryptedPlaintext`** (recovered AEAD plaintext) — redacting `impl Debug`
+    (`cipher_suite.rs:1109-1115`) + zeroizing `impl Drop`
+    (`cipher_suite.rs:1120-1124`).
+  - **`VaultPayload`** — redacting `impl Debug` (`k_principal` +
+    `user_did_signing_key` → `<redacted>`, `vault.rs:273-281`) + zeroizing
+    `impl Drop` (`vault.rs:287-292`); also protects the derived-`Debug` cascade
+    through `DecodedVault`.
   - **`ProvisioningInnerPayload`**
-    (`crates/benten-engine/src/layer_d/device_link.rs:105`) — the
-    multi-device-key-wrap inner payload carrying wrapped key material. Same
-    redacting-`Debug` + zeroizing sweep. A distinct **`Debug`-redaction pin**
-    belongs in `crates/benten-engine/tests/f_ld_4_multi_device_key_wrap_provisioning.rs`
-    (mirror `f_va_4::secret_wrapper_debug_does_not_leak_key`) asserting a
-    `{:?}` render does not leak the wrapped key bytes.
-- **Additional zeroize SIBLINGS enumerated under this umbrella (R16 F-11):**
-  three more secret-bearing surfaces that likewise warrant `Zeroizing` /
-  `ZeroizeOnDrop` when this hardening lands (awareness/enumeration only; the
-  work stays deferred with the Compromise #66 ledger):
-  - **`DecryptedPlaintext`** (`crates/benten-crypto-suite/src/cipher_suite.rs:1035`)
-    — holds `bytes: Vec<u8>` (recovered AEAD plaintext) with no `ZeroizeOnDrop`
-    and no redacting `Debug`; give it the same redact+zeroize treatment.
+    (`crates/benten-engine/src/layer_d/device_link.rs`) — redacting `impl Debug`
+    (`device_link.rs:120-134`) + zeroizing `impl Drop` (`device_link.rs:143-149`).
+  - **`PurePqMlKemKeypair`** — zeroize-on-drop landed earlier at R18 C3
+    (`crates/benten-crypto-suite/src/swap_matrix.rs`).
+- **DONE (enforcement, landed at v1-beta):** the secret-`Debug` meta-test is LIVE
+  at `crates/benten-engine/tests/f_secret_hygiene_roster.rs` (447 LOC, ZERO
+  `#[ignore]`): (a) a runtime Debug-does-not-leak assertion over the full roster
+  (constructs each type with a distinctive `0xDEADBEEF` marker, `format!`s it,
+  asserts the leaking decimal-array rendering is ABSENT) + (b) a source-anchored
+  zeroize-coverage grep-defense asserting a `Drop`/`zeroize()`/`ZeroizeOnDrop`/
+  `zeroize`-feature wiring is present in source for every roster type. An
+  in-crate assertion at `cipher_suite.rs:1439` additionally asserts the `Debug`
+  render contains `<redacted>`. This test ALSO satisfies the "type-level
+  zeroize-on-drop meta-assertion" the R18 MEM-H-1 sub-note asked for — the
+  source-anchored zeroize-coverage half IS that roster meta-assertion (over
+  `UnwrappedKey` / `DecryptedPlaintext` / `VaultPayload` / `ProvisioningInnerPayload`
+  / `PurePqMlKemKeypair` / `RecipientSecret` / …), so no additional compile-time
+  roster assertion is needed; a future key-bearing type that reverts the property
+  re-fires the meta-test.
+- **Remaining (v1-GM tidy — still bare `Vec<u8>` at HEAD, verified R20):** three
+  copy sites transiently hold recovered key bytes before wrapping; wrap each in
+  `Zeroizing<Vec<u8>>` (mirrors Row D-76 `derive_member_key`):
   - **The `unwrap_key_from_recipient` return**
-    (`crates/benten-crypto-suite/src/hpke.rs:55` → `Result<Vec<u8>, _>`) — the
-    HPKE-recovered key material is returned as a bare `Vec<u8>`; wrap in
-    `Zeroizing<Vec<u8>>` (mirrors Row D-76 `derive_member_key`).
-  - **The device_link "recovered" secret**
-    (`crates/benten-engine/src/layer_d/device_link.rs:301` — the local
-    `recovered` binding holding the `unwrap_key_from_recipient` return before
-    `parse_inner_be`) — a bare `Vec<u8>` of unwrapped key bytes on the stack;
-    it inherits the `Zeroizing` return above once that lands.
-- **MEM-H-1 sub-note (R18; one sibling ALREADY hardened + a type-level
-  assertion to add):** R18 C3 gave `benten_crypto_suite::swap_matrix::PurePqMlKemKeypair`
-  a zeroize-on-drop (`impl Drop { secret_bytes.zeroize() }`) + confirmed it has
-  no rendering `#[derive(Debug)]` — so the NF-1 pure-PQ ML-KEM secret is now
-  wiped on drop, one member of this umbrella closed early. When the umbrella's
-  v1-GM sweep lands, ALSO add a **type-level zeroize-on-drop meta-assertion**
-  (a compile-or-run test over the roster of key-bearing crypto-suite types —
-  `UnwrappedKey` / `VaultPayload` / `DecryptedPlaintext` / `PurePqMlKemKeypair` /
-  … — asserting each has a zeroizing `Drop` and a non-rendering `Debug`), so a
-  future key-bearing type cannot regress the property silently. Companion to the
-  per-type redact+zeroize items above.
-- **Anchor:** R14-council GAP-1; R15 F-03/F-05/F-08 extension; R16 F-11 sibling
-  enumeration; R18 C3 + MEM-H-1; `crates/benten-crypto-suite/src/cipher_suite.rs`
-  (`UnwrappedKey` vs the `RecipientSecret` redact+zeroize precedent;
-  `DecryptedPlaintext`) + `crates/benten-crypto-suite/src/swap_matrix.rs`
-  (`PurePqMlKemKeypair` — R18 C3 zeroize-on-drop landed) +
+    (`crates/benten-crypto-suite/src/hpke.rs` — `Ok(unwrapped.as_bytes().to_vec())`
+    → `Result<Vec<u8>, _>`) — VERIFIED still a bare `Vec<u8>` return at HEAD.
+  - **The device_link `recovered` binding**
+    (`crates/benten-engine/src/layer_d/device_link.rs` — the local `recovered`
+    binding holding the `unwrap_key_from_recipient` return before
+    `parse_inner_be`) — VERIFIED still a bare `Vec<u8>` on the stack at HEAD; it
+    inherits the `Zeroizing` return once the hpke.rs site lands.
+  - **The `swap_matrix.rs` `k_root` copy** (F-05 site;
+    `crates/benten-crypto-suite/src/swap_matrix.rs` — `let k_root =
+    unwrapped.as_bytes().to_vec();` in the encryption-arm unwrap path, mirroring
+    the hpke.rs copy) — VERIFIED still a bare `Vec<u8>` at HEAD; give it the same
+    `Zeroizing` wrap.
+- **Anchor:** R14-council GAP-1 (mint); R15 F-03/F-05/F-08 + R16 F-11 sibling
+  enumeration; R18 C3 + MEM-H-1; **R19/#3 secret-hygiene sweep (per-type
+  redact+zeroize + `f_secret_hygiene_roster` meta-test LANDED at v1-beta);**
+  R20 re-tense (narrowed residual to the bare-`Vec<u8>` copy sites). Source:
+  `crates/benten-crypto-suite/src/cipher_suite.rs` (`UnwrappedKey` +
+  `DecryptedPlaintext` redact+zeroize) +
   `crates/benten-crypto-suite/src/vault.rs` (`VaultPayload`) +
-  `crates/benten-crypto-suite/src/hpke.rs` (`unwrap_key_from_recipient`) +
-  `crates/benten-engine/src/layer_d/device_link.rs` (`ProvisioningInnerPayload`
-  + the `recovered` binding); `docs/SECURITY-POSTURE.md` Compromise #66 (the R14
-  SGD mint).
+  `crates/benten-crypto-suite/src/swap_matrix.rs` (`PurePqMlKemKeypair`
+  zeroize-on-drop + the residual `k_root` copy) +
+  `crates/benten-crypto-suite/src/hpke.rs` (`unwrap_key_from_recipient` residual
+  return) + `crates/benten-engine/src/layer_d/device_link.rs`
+  (`ProvisioningInnerPayload` + the residual `recovered` binding) +
+  `crates/benten-engine/tests/f_secret_hygiene_roster.rs` (enforcing meta-test);
+  `docs/SECURITY-POSTURE.md` Compromise #66 (now CLOSED-at-v1-beta).
 
 ### Row D-76 — GAP-1: `derive_member_key` returns a raw `Vec<u8>` (not `Zeroizing`) → v1-GM secret-hygiene hardening
 
@@ -2783,6 +2790,66 @@ Row D-15's audit-readiness concern.
   the signing/verify boundary (the cheaper, non-encoding-changing form).
   Required only if a variable-length `nonce` is ever admitted.
 - **Anchor:** #2 M-2b security mini-review (2026-07-04); `plugin_manifest.rs::InstallRecord::signing_payload`.
+
+---
+
+## R20 (post-F-full phase-close, round 20) NAMED-CARRY rows
+
+### Row D-85 — F-10: disclosure-coherence catch-net is STRUCTURAL-ONLY (row-presence + class + text) and cannot detect a FIXED-in-code-but-still-marked-OPEN ledger row → add a status↔hardening-test consistency PIN
+
+- **Observation (the meta-gap F-01 exposed):** the `F-DISC-1`
+  disclosure-coherence catch-net
+  (`crates/benten-drop/tests/f_disc_1_compromise_disclosure_coherence_catch_net.rs`)
+  asserts, for each `Compromise #30..#N`, that a `SECURITY-POSTURE.md` row
+  EXISTS with a correct `disposition_class` (ATO/SGD/CHD/OOS/MIT) + disclosure
+  text present + not over-claimed + the BR-2 re-point triple at correct slots.
+  It is **STRUCTURAL/token-presence-only**: it does NOT cross-check a row's
+  OPEN/CLOSED status against the actual CODE state (whether the hardening the
+  row cites actually landed / a cited enforcement test exists). So a row that
+  is **fixed in code but still marked OPEN** — or the inverse, marked CLOSED
+  with no enforcing test — slips through the catch-net silently. This is
+  EXACTLY the class of gap R20 F-01 shipped for (Compromise #66 + Row D-75 were
+  hardened at v1-beta in the R19/#3 sweep yet the ledger still read
+  "OPEN; CLOSES at v1-GM"; the doc UNDER-claimed safety, and no test caught it).
+- **Deferred (destination + shape):** add a **status↔hardening-test
+  consistency PIN** (companion to `f_disc_1`) that, for each disclosed
+  Compromise/D-row carrying a cited hardening/enforcement test path, asserts
+  the CONSISTENCY of the row's OPEN/CLOSED marker against the PRESENCE (or
+  ABSENCE) of that cited test: a row marked CLOSED-at-v1-beta MUST have its
+  cited enforcement test present + non-`#[ignore]`, and a row marked OPEN MUST
+  NOT already carry a live enforcement test asserting the very property it
+  claims is unfixed (or, if it does, the marker must be re-tensed). This closes
+  the meta-gap class — a fixed-but-still-OPEN (or OPEN-but-already-enforced)
+  ledger row fails the pin instead of shipping a stale disclosure.
+- **Anchor:** R20 F-01 (Compromise #66 + Row D-75 re-tense) + F-10;
+  `crates/benten-drop/tests/f_disc_1_compromise_disclosure_coherence_catch_net.rs`
+  (the structural-only catch-net being extended);
+  `crates/benten-engine/tests/f_secret_hygiene_roster.rs` (the enforcement test
+  whose PRESENCE the F-01 rows now cite — the anchor the new PIN would check
+  against).
+
+### Row D-86 — F-14: framing-constant central-pin (mirror the `domain_registry` central-pin discipline) → v1-Composing
+
+- **Observation:** the wire-framing constants (band bases, wire-version bytes,
+  format-version bytes, `aad_version`, codepoint values, length-prefix widths)
+  are pinned today by scattered per-surface golden/constant tests. There is no
+  ONE central framing-constant table with a home-crate drift-assert-equality
+  idiom — the pattern `benten_crypto_suite::domain_registry` already uses for
+  domain-separation tags (a single source-of-truth `registered_domain_tags()`
+  corpus + each home const carrying a `domain_registry`-equality drift-assert,
+  `crates/benten-crypto-suite/src/domain_registry.rs`). A framing constant can
+  drift in one surface without a single gate catching the divergence from the
+  canonical value.
+- **Deferred (destination + shape):** add a **framing-constant central-pin**
+  mirroring the `domain_registry` central-pin discipline — a single
+  source-of-truth table enumerating the v1-frozen framing constants + a
+  home-crate drift-assert-equality test per constant (each home const
+  drift-asserts against the central table), so a silent divergence in any one
+  framing constant fails a single gate. Lands with the v1-Composing freeze
+  build-out.
+- **Anchor:** R20 F-14; `crates/benten-crypto-suite/src/domain_registry.rs`
+  (the central-pin discipline to mirror); the framing constants enumerated
+  across `docs/V1-WIRE-FORMAT-INVENTORY.md` + `docs/CRYPTO-CODEPOINTS.md`.
 
 ---
 

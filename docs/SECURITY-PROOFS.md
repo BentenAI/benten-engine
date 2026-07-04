@@ -262,6 +262,28 @@ payload (a legitimate co-recipient / CEK holder), so they leak nothing across th
 are diagnostic distinctions available only to a party already entitled to the plaintext, NOT a decryption oracle to
 an outside adversary. This is low-materiality and distinct from the §4.2 plaintext-guessing axis.
 
+**F-07 (R20) — the pre-decrypt `StanzaCountMismatch` check is secret-INDEPENDENT / non-oracular; narrow any absolute
+"before any decrypt" wording accordingly.** The `0x6520`/`0x6610` group open path fails closed with
+`StanzaCountMismatch` when `stanzas.len()` (the DELIVERED stanza count) does not equal the per-stanza-bound
+`stanza_count`, BEFORE any AEAD-open (`benten_drop::layer_c` — the truncation/censorship defense comment there).
+This check is a comparison of two PUBLIC, wire-visible integers (the delivered count vs the count bound in the
+relay-visible AAD) — it does NOT branch on any secret, key, or plaintext, and it is reachable by any party
+including the relay. So the "fail closed BEFORE any decrypt" wording is a truncation-detection statement, NOT an
+oracle: the pre-decrypt check leaks nothing that the plaintext AAD does not already expose, and a relay that also
+rewrites the per-stanza `stanza_count` makes the AEAD-open fail (counts are bound under the tag). Narrow any
+absolute reading of "before any decrypt" to "this is a public-integer structural check, secret-independent and
+non-oracular — it detects relay truncation, it is not a decryption oracle."
+
+**F-11 (R20) — the `0x6610` group AAD length-prefix framing (the "coarsening") is secret-independent / non-oracular.**
+The `0x6610` MembershipSet group per-stanza AAD binds its variable-length fields under u32-BE length prefixes
+(the `audience_set_commitment` is `BLAKE3(0x01 ‖ lp(did_0) ‖ lp(did_1) ‖ …)` over the canonical SORTED recipient-DID
+list, lp = u32-BE; §3.3). This length-prefix framing is a length-INJECTIVITY / domain-separation device over
+PUBLIC roster material (recipient DIDs + counts already relay-visible in the plaintext AAD), computed with no
+secret input — it neither derives from nor discloses any key or plaintext. It is secret-independent and
+non-oracular: it exists to make the AAD parse unambiguous (U3 length-injectivity), not to hide or reveal
+anything secret. Any wording implying the length-prefix width carries confidentiality significance should read
+"length-injectivity framing over public roster material — secret-independent, non-oracular."
+
 ---
 
 ## Cross-references

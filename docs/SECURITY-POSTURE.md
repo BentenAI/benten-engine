@@ -33,7 +33,7 @@
 | Compromise #55 | `SGD` | Compromise #56 | `SGD` | Compromise #57 | `SGD` |
 | Compromise #58 | `CHD` | Compromise #59 | `SGD` | Compromise #60 | `SGD` |
 | Compromise #61 | `CHD` | Compromise #62 | `SGD` (revocation-reach; Drops forever-valid) | Compromise #63 | `ATO` |
-| Compromise #64 | `SGD` (cross-device best-effort nonce / jti replay window) | Compromise #65 | `SGD` (wave-3e per-Node AEAD publicly-derivable-`K_principal` confidentiality limit at v1-beta) | Compromise #66 | `SGD` (`UnwrappedKey` `#[derive(Debug)]` renders key bytes + no `ZeroizeOnDrop`; zero v1-beta sinks) |
+| Compromise #64 | `SGD` (cross-device best-effort nonce / jti replay window) | Compromise #65 | `SGD` (wave-3e per-Node AEAD publicly-derivable-`K_principal` confidentiality limit at v1-beta) | Compromise #66 | `SGD` (recovered-secret `Debug`/heap hygiene; CLOSED at v1-beta — redact+zeroize on all secret types, enforced by `f_secret_hygiene_roster`) |
 
 This document records the security claims Benten makes through Phase
 4-Foundation close and the known compromises those claims rest on. This
@@ -68,10 +68,20 @@ table narrative.
 > - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-1** — `WriteBoundaryChainValidator`
 >   runtime consumption at the WRITE admission boundary (Layer-1
 >   user-as-root NOT live at WRITE admission at v1-beta).
-> - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-3** — the 3 §8-E
->   CapabilityPolicy hooks have zero production call sites at v1-beta;
->   custom impls of any hook are silently ignored (trait signatures +
->   sealed-discipline locked, so future wire-up is non-breaking).
+> - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-3** — all three §8-E
+>   CapabilityPolicy hooks are WIRED at v1-beta (per the Compromise #26
+>   R6 R1 FP-F4 retense below): `check_install_consent` at
+>   `plugin_lifecycle::install_plugin` step 3c (typed
+>   `PluginInstallConsentDenied` reject), `check_per_delegation` at
+>   `EngineCapsHandle::delegate_capability` (typed
+>   `PluginPerDelegationDenied` reject), and `check_write_with_audience`
+>   routed at all four production write sites. D-3-c is PARTIAL: the
+>   `audience_did` stays `None` at the sweep write sites (per Δv3-2) and
+>   is populated at `delegate_capability` only as the G-COMP-1
+>   deliverable, so audience-aware `check_write` is not yet exercised
+>   with a concrete audience end-to-end. (Trait signatures +
+>   sealed-discipline are locked, so the remaining wire-up is
+>   non-breaking.)
 > - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-5** — `accept_atrium_share`
 >   cross-peer install seam not live; plugins consume through user-DID-
 >   signed install records ONLY at v1-beta.
@@ -158,7 +168,7 @@ table narrative.
 | 63 | Sealed-Sender abuse-control trade-off (no plaintext sender ⇒ abuse-control rides recipient-issued delivery tokens) | 4-Meta-Core | **NEW (BR-1; §3.11).** The DEFAULT Sealed-Sender path (`0x6510`) carries no plaintext sender identity, so abuse/spam control cannot use per-sender filtering; it rides recipient-issued short-lived rate-limited UCAN-backed delivery tokens (refused at the receive boundary BEFORE decrypt). Residual: a recipient who over-issues tokens re-admits spam (mitigated by default-conservative token rate-limits + per-token `nbf`/`exp` + revocation). See body section. |
 | 64 | Cross-device best-effort-eventual nonce-rejection window (NQ-T4) | 4-Meta-Core | **NEW (NQ-T4; Ben-ratified 2026-06-02; minted this cascade). `SGD` substrate-guarantee disclosure.** The `jti`-keyed nonce-cache is per-device-durable-GUARANTEED **via the durable-CAS-marker + `from_durable` hydration seam** (`JtiNonceCache`; the engine honors a caller-contract to persist `durable_snapshot()` + re-hydrate on restart — the full disk-persistence wiring is deferred with the remote-permission wiring, Row D-64-adjacent) but user-global only best-effort-eventual-via-sync (NOT synchronous): a nonce consumed on device B is rejected on device C only after the consumed-`jti` set propagates via sync. The pre-sync cross-device window admits a one-time replay of a remote-permission / DeviceLink token across the user's own devices. Mitigated by: durable per-device rejection via the seam (no same-device replay once persisted+hydrated), tight `valid_until` (full-second granularity, strict, no skew window — NQ-T2), and short delivery-token `exp`. **Stays OPEN at v1-beta + v1-GM** — synchronous user-global rejection would require a consensus/online-coordinator the P2P model deliberately avoids. See body section. |
 | 65 | Wave-3e per-Node AEAD publicly-derivable-`K_principal` confidentiality limit at v1-beta (untrusted host CAN read partition plaintext) | 4-Meta-Core | **NEW (R13 F-07; `SGD` substrate-guarantee disclosure; minted to match the THREAT-MODEL untrusted-host honesty retense, R13 F-06).** At v1-beta the per-Node AEAD wrap does NOT provide confidentiality against a malicious *storage host*: the wave-3e `K_principal = blake3::keyed_hash(K_PRINCIPAL_DOMAIN_KEY, namespace_did)` is derived from a **publicly-known** 32-byte domain-tag constant (`K_PRINCIPAL_DOMAIN_KEY`, `crates/benten-graph/src/redb_backend.rs:181`) + the **publicly-known** `namespace_did`, so `K_principal` — and thus `K(N)` + the per-Node AEAD key — is **publicly derivable**: any party holding `(namespace_did, ciphertext_blob)` can derive the key and decrypt. Per CLAUDE.md baked-in #18 the **confidentiality half** of the Principal primitive (per-principal encryption of the storage partition; the #1301 / D-64 substrate) is **DEFERRED — NOT built at v1-beta**; the LIVE protection is the **AUTHORITY half** (capability / namespace isolation) which binds only a **cooperating** engine. So per-Node AEAD is a publicly-derivable-`K_principal` **STAND-IN** keeping the substrate shape stable for the production `K_principal`-store swap-in, NOT real untrusted-host confidentiality. Mitigated in the interim by namespace-isolation at the storage backend (the AUTHORITY half) + the local device's Layer-A vault (Argon2id-DAK-sealed, protecting the *local* vault at rest). **Stays OPEN at v1-beta; CLOSES when the #1301 / D-64 per-DID secret-material `K_principal` backend lands** (the swap-in replaces only the `K_principal` synthesis step — the function signature + AEAD-wrap layer + per-chunk size are all stable). Full narration: the "⚠️ Confidentiality limit at this wave" disclosure in the **Per-Node AEAD wrap layer** section below (`derive_test_seam_key_from_cid_with_namespace`). Cross-linked from `docs/THREAT-MODEL.md` §1 (the untrusted-host row + honesty note). Named carry: `docs/future/phase-4-backlog.md §3.10`. |
-| 66 | `UnwrappedKey` `#[derive(Debug)]` renders recovered key bytes + no `ZeroizeOnDrop` (latent secret-in-`Debug` footgun; zero v1-beta sinks) | 4-Meta-Core | **NEW (R14 GAP-1; `SGD` substrate-guarantee disclosure).** The `UnwrappedKey` type (`crates/benten-crypto-suite/src/cipher_suite.rs`; the recovered `k_root` from `unwrap_key_material`) carries `#[derive(Debug)]` — a `{:?}` render would print recovered KEY BYTES — and has NO `ZeroizeOnDrop`, so bytes linger on the freed heap. Its sibling `RecipientSecret` in the same module already does both (redacting `impl Debug` + zeroizing `Drop`); `UnwrappedKey` is the asymmetric outlier. Accepted at v1-beta because there are **ZERO** production `{:?}`/`tracing`/`format!` sinks of `UnwrappedKey` at HEAD (grep-verified) — the footgun is LATENT, not live. **Stays OPEN at v1-beta; CLOSES at v1-GM** via `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-75 (redacting `impl Debug` + `ZeroizeOnDrop` + a secret-`Debug` meta-test); the sibling `derive_member_key` raw-`Vec<u8>` hardening rides Row D-76. Also swept in D-75: `VaultPayload`. See body section. |
+| 66 | Recovered-secret `Debug`-render + freed-heap hygiene across the crypto-suite secret roster | 4-Meta-Core | **MINTED R14 GAP-1; CLOSED-at-v1-beta (hardened in the R19/#3 secret-hygiene sweep; `SGD` substrate-guarantee disclosure — now a positive guarantee, not an open gap).** History: R14 disclosed that `UnwrappedKey` (`crates/benten-crypto-suite/src/cipher_suite.rs`; the recovered `k_root` from `unwrap_key_material`) then carried `#[derive(Debug)]` (a `{:?}` render would print recovered KEY BYTES) with no zeroize-on-drop. The R19/#3 sweep HARDENED the whole recovered-secret roster: `UnwrappedKey` (redacting `impl Debug` → `<redacted>` + zeroizing `impl Drop`, `cipher_suite.rs:1072-1086`), `DecryptedPlaintext` (`cipher_suite.rs:1109-1124`), `VaultPayload` (`k_principal` + `user_did_signing_key` redacted + zeroized, `vault.rs:273-292`), `ProvisioningInnerPayload` (`device_link.rs:120-149`), and `PurePqMlKemKeypair` (zeroize-on-drop landed R18 C3). Enforced by the LIVE meta-test `crates/benten-engine/tests/f_secret_hygiene_roster.rs` (447 LOC, zero `#[ignore]`) — a runtime Debug-does-not-leak assertion over the full roster + a source-anchored zeroize-coverage grep-defense — plus an in-crate `<redacted>`-render assertion at `cipher_suite.rs:1439`. So the recovered-secret `Debug`/heap hygiene is a positive v1-beta guarantee; a revert (e.g. re-deriving `Debug`) re-fires the meta-test. The residual v1-GM nicety is narrower: the still-bare-`Vec<u8>` copy sites (`unwrap_key_from_recipient` return, the `device_link.rs` `recovered` binding, `swap_matrix.rs:563`) — tracked at `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-75. The separate `derive_member_key` raw-`Vec<u8>` hardening rides Row D-76. See body section. |
 
 **Refinement-audit-2026-05 delta:** Compromise #29 (engine-extension trust model, narrative-only at HEAD; now registry-tracked) + reserved rows #27 / #28 added post-tag to anchor META #669 + META #629 closure mints. The v1-platform-shippable BLOCKER cluster framing lives in the local-only campaign-summary `refinement-audit-2026-05.md §15` (gitignored under `docs/future/*` — internal methodology artifact, not publicly shipped; see `docs/future/phase-4-backlog.md §15.5`).
 
@@ -2724,30 +2734,50 @@ confidentiality substrate); `docs/future/phase-4-backlog.md §3.10` (K_principal
 Contrast the Tier-1 network-observer "sees plaintext = NO" (Layer-C encrypt-to-recipient — a DIFFERENT, live
 mechanism, NOT this stand-in).
 
-### Compromise #66 — `UnwrappedKey` `#[derive(Debug)]` renders recovered key bytes + no `ZeroizeOnDrop` (latent secret-in-`Debug` footgun)
+### Compromise #66 — Recovered-secret `Debug`-render + freed-heap hygiene across the crypto-suite secret roster (CLOSED-at-v1-beta)
 
-**Status.** OPEN; SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** NEW — minted at R14 (GAP-1). **Class.** `SGD`
-— a latent secret-hygiene footgun that is NOT exploited at v1-beta (zero production sinks), disclosed honestly so a
-future `{:?}`/tracing sink can't slip a key into a log.
+**Status.** CLOSED at v1-beta (hardened in the R19/#3 secret-hygiene sweep); SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`)
+— now a POSITIVE guarantee (redact-on-`Debug` + zeroize-on-drop for the recovered-secret roster), no longer an open
+footgun. **Source.** MINTED at R14 (GAP-1); CLOSED at R19/#3.
 
-The `UnwrappedKey` type (`crates/benten-crypto-suite/src/cipher_suite.rs`) — the recovered `k_root` returned by
-`unwrap_key_material` — carries `#[derive(Debug)]`, so a `{:?}` render would print the recovered KEY BYTES in the
-clear, and it has **NO** `ZeroizeOnDrop`, so its bytes linger on the freed heap after drop. Its sibling
-`RecipientSecret` in the SAME module already does BOTH: a redacting hand-written `impl Debug` (fields rendered as
-`<redacted>`) + an `impl Drop` that `zeroize()`s the secret. `UnwrappedKey` is the asymmetric outlier.
+**History (R14 mint).** R14 disclosed that `UnwrappedKey` (`crates/benten-crypto-suite/src/cipher_suite.rs`) — the
+recovered `k_root` returned by `unwrap_key_material` — then carried `#[derive(Debug)]`, so a `{:?}` render would
+have printed the recovered KEY BYTES in the clear, and had **NO** zeroize-on-drop, so its bytes lingered on the
+freed heap. At mint-time it was the asymmetric outlier vs its sibling `RecipientSecret` (which already did both).
+That gap is now CLOSED.
 
-**Why this is accepted at v1-beta.** There are **ZERO** production `{:?}` / `tracing` / `format!` sinks of
-`UnwrappedKey` at HEAD (grep-verified) — no code path renders one — so no key material reaches a log or format
-sink at the v1-beta binary. The footgun is LATENT (a future careless `debug!("{unwrapped:?}")` would expose it),
-not live.
+**What landed (R19/#3 secret-hygiene sweep).** The whole recovered-secret roster now has a redacting hand-written
+`impl Debug` (rendering `<redacted>` / `[REDACTED]`, never the raw bytes) + an explicit zeroizing `impl Drop`:
 
-**Stays OPEN at v1-beta; CLOSES at v1-GM** via the hardening in
-`docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-75: (1) a redacting hand-written `impl Debug` on `UnwrappedKey`
-(mirroring `RecipientSecret`), (2) `ZeroizeOnDrop` (or an explicit zeroizing `Drop`), and (3) a secret-`Debug`
-meta-test asserting no key-bearing crypto-suite type derives a rendering `Debug`. The sibling
-`derive_member_key` raw-`Vec<u8>`-not-`Zeroizing` hardening rides Row D-76.
-**Cross-ref:** `crates/benten-crypto-suite/src/cipher_suite.rs` (`UnwrappedKey` vs the `RecipientSecret`
-redact+zeroize precedent); `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-75 + Row D-76 (v1-GM hardening).
+- **`UnwrappedKey`** — redacting `impl Debug` (`cipher_suite.rs:1072-1078`) + zeroizing `impl Drop`
+  (`cipher_suite.rs:1082-1086`). `UnwrappedKey` now MATCHES `RecipientSecret` — no longer an outlier.
+- **`DecryptedPlaintext`** (recovered Node plaintext) — redacting `impl Debug` (`cipher_suite.rs:1109-1115`) +
+  zeroizing `impl Drop` (`cipher_suite.rs:1120-1124`).
+- **`VaultPayload`** — redacting `impl Debug` (`k_principal` + `user_did_signing_key` → `<redacted>`,
+  `vault.rs:273-281`) + zeroizing `impl Drop` (`vault.rs:287-292`); also protects the derived-`Debug` cascade
+  through `DecodedVault`.
+- **`ProvisioningInnerPayload`** (Layer-D device-link recovered payload) — redacting `impl Debug`
+  (`device_link.rs:120-134`) + zeroizing `impl Drop` (`device_link.rs:143-149`).
+- **`PurePqMlKemKeypair`** — zeroize-on-drop landed earlier at R18 C3.
+
+**Enforcement.** `crates/benten-crypto-suite`'s hygiene is held by the LIVE meta-test
+`crates/benten-engine/tests/f_secret_hygiene_roster.rs` (447 LOC, ZERO `#[ignore]`): a runtime
+Debug-does-not-leak assertion (constructs each secret type with a distinctive `0xDEADBEEF` marker, `format!`s it,
+asserts the decimal-array rendering a leaking derived `Debug` would emit is ABSENT) + a source-anchored
+zeroize-coverage grep-defense (asserts a `Drop`/`zeroize()`/`ZeroizeOnDrop`/`zeroize`-feature wiring is present in
+source for every roster type). An in-crate assertion at `cipher_suite.rs:1439` additionally asserts the `Debug`
+render contains `<redacted>`. A revert (e.g. re-deriving `Debug` on any roster type) re-fires the meta-test.
+
+**Residual (v1-GM nicety, narrower).** The `Debug`-render + freed-heap hygiene is CLOSED. What remains is a
+smaller heap-hygiene tidy for the still-bare-`Vec<u8>` copy sites that transiently hold recovered key material
+before it is wrapped into a redacting/zeroizing type: `unwrap_key_from_recipient`'s return
+(`crates/benten-crypto-suite/src/hpke.rs`), the `recovered` binding in
+`crates/benten-engine/src/layer_d/device_link.rs`, and the `k_root` copy in
+`crates/benten-crypto-suite/src/swap_matrix.rs`. Tracked at `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-75. The
+separate `derive_member_key` raw-`Vec<u8>` hardening rides Row D-76.
+**Cross-ref:** `crates/benten-crypto-suite/src/cipher_suite.rs` (the redact+zeroize roster);
+`crates/benten-engine/tests/f_secret_hygiene_roster.rs` (enforcing meta-test);
+`docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-75 + Row D-76 (remaining bare-`Vec<u8>` tidy).
 
 > **Compromise #62 detail (revocation reach)** lives at the renumbered in-tree section
 > "Revocation reach (§R6) — Compromise #62 detail (RE-POINTED from in-tree #31 per BR-2)" below +
@@ -2980,6 +3010,16 @@ sender's own choice, bounded by the typed cap. Not a network-edge DoS (no relay/
 per-Kind cardinality caps (Atrium ≤32 / DeviceMesh ≤5) keep production rosters far below the ceiling. Accepted at
 v1-beta. **Cross-ref:** row 46 above; Compromise index row 46 (O(N) wire-cost); R12 F-11 / R18 C2
 (`validate_group_roster_len` typed ceiling); `docs/V1-WIRE-FORMAT-INVENTORY.md §26` (F-11 by-band width note).
+
+**F-33 seal-band-vs-construction-ceiling decoupling note (R20).** The seal-band `u16::MAX` roster ceiling
+(`MAX_LAYER_C_GROUP_RECIPIENTS`, enforced by `validate_group_roster_len`) is **decoupled BY DESIGN** from any
+MembershipSet-construction ceiling (the `wire_cost_ceiling` / per-Kind cardinality bounds in `benten-membership-set`).
+The seal-band cap bounds a **sender-only CPU cost** (the O(N²) per-stanza roster work a sender pays when it *chooses*
+a large roster) — it is NOT a construction-time bound on how large a `MembershipSet` may be built, nor a
+recipient-/relay-inflictable limit. The two ceilings are independent knobs: the construction-side per-Kind
+cardinality caps (Atrium ≤32 / DeviceMesh ≤5 / SingleDevice =1) govern what a well-formed MembershipSet may hold; the
+`u16::MAX` seal-band cap is only the hard upper bound on the sender's own choke-point cost. Neither is derived from
+the other.
 
 ### Compromise #47 — Collaborative-edit-via-re-drop accepted v1-beta trade-off
 

@@ -137,10 +137,13 @@ HPKE reference points (RFC 9180 §7 + the HPKE-PQ WG-stream additions) are:
 | `0x0010..0x0020` | KEM IDs — DHKEM (RFC 9180 §7.1) |
 | `0x0021` | KEM ID — DHKEM(X448, HKDF-SHA512) (RFC 9180 §7.1) |
 | `0x0040..0x0042` | KEM IDs — ML-KEM-512/768/1024 |
-| `0x11EC` | KEM ID — X25519MLKEM768 (the concrete hybrid KEM) |
+| `0x11EC` | IANA **TLS Supported Groups** code point for X25519MLKEM768 — a REFERENCED component-algorithm identifier from the IANA TLS registry (NOT an HPKE KEM ID, and NOT a Benten-minted number); avoided for envelope-codepoint disjointness |
 | `0xFFFF` | AEAD ID — Export-only (RFC 9180 §7.3) |
 
-`0x0021` (DHKEM-X448) and `0xFFFF` (AEAD Export-only) are listed here for
+`0x11EC` is the one row above that is NOT an IANA HPKE allocation: it is the
+IANA TLS Supported Groups code point for X25519MLKEM768, referenced (and
+avoided) here for envelope-codepoint disjointness only. `0x0021` (DHKEM-X448)
+and `0xFFFF` (AEAD Export-only) are listed here for
 reference completeness; the Benten `0x6100+` band floor sits above every IANA
 allocation, so disjointness holds regardless of whether these specific points
 are inside the scanner's coalesced ranges. Note `0xFFFF` is ALSO Benten's own
