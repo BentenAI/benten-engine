@@ -26,4 +26,13 @@ The self-contradictory variant (docstring said "NOT a forgery"). Options: rename
 ### D-3 (2026-07-04) — Held for Ben: #1382 merge + tag creation
 Per standing law + night-shift-surfaces-milestones: the phase-close merge-to-main + the permanent tag are held for Ben's morning explicit go, even as everything else proceeds autonomously. Rationale: both are hard-to-reverse / outward-facing milestone actions; the tag has been Ben-gated throughout the phase.
 
+### D-4 (2026-07-04, ~01:50 EDT) — R15 fix landed → r9-base advanced → ROUND 16 launched (autonomous, within scope)
+Post-compact resume. Ground-truthed the live state first (§3.5n / session-start context pass): disk 79% (healthy, well clear of OOM band), worktrees clean, SHAs matched the resume contract (r9-base @ 5d31406c, r15-fix @ e57c9a29). Actions taken autonomously (all internal/reversible — NOT the two held-for-Ben milestones):
+- **Confirmed the full re-gate `b1h763goq` on e57c9a29 GREEN:** fmt/clippy/ws-check PASS · nextest-crates 2048/2049 (sole failure = the known `in_memory_observationally_equivalent_to_redb` slow-under-parallel-load proptest) · nextest-engine 954/954 · cargo-doc -D warnings PASS · cite-drift clean · §3.5g PASS.
+- **Ground-truthed the redb flake:** ran it isolated (`--test-threads 1`) → **PASS at 88.9s** (< the 180s timeout that only trips under parallel load). Confirmed it is the harness-parallelism flake, not a code defect.
+- **FF-merged r9-base → e57c9a29** (clean fast-forward; r15-fix was exactly one commit ahead) + **pushed origin/phase-4-meta-core/r9-base** (refreshes #1382 CI = the independent full verifier). r9-base now backs the R15-fixed freeze base.
+- **Launched ROUND 16** (task `w3plnshpc` / run `wf_096a90b8-185`): fresh convergence attempt on e57c9a29, all 20 standing lenses (incl `secret-lifetime-and-memory-hygiene` + `capability-authority-ucan-layerd`) + the benten-id/benten-graph enumeration that surfaced F-01. R16 framing adds a **prefix-confusion-class sweep mandate** to the capability-authority lens (hunt EVERY raw `starts_with`/substring authority comparison, not just the fixed site).
+
+**Two-consecutive counter = 0.** R16 is attempt 1 of the required 2. R16 CONVERGED → count=1 → R17; R17 CONVERGED → count=2 → TAG-READY (hold for Ben). Any NOT-CONVERGED resets to 0. Every round closes the FULL minor/obs tail.
+
 <!-- append D-N entries as autonomous decisions arise in R16/R17/fixes -->
