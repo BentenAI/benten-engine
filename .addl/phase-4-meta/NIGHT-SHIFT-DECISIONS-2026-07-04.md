@@ -45,4 +45,15 @@ Council ROUND 16 (Task `w3plnshpc`, 19/19 panel) on e57c9a29 → **CONVERGED: 0 
 
 **Rule-2 action:** dispatched ONE consolidated doc/comment/CI fix-pass agent (branch `phase-4-meta-core/r16-doc-fixpass` off e57c9a29) to close the FULL minor/obs tail — ~11 fix-nows (F-01/F-02/F-03/F-04/F-05/F-06/F-07/F-08/F-13/F-14 + GAP-A..E carve-out sentences) + name the 7 carries (F-09/F-10/F-11/F-12/F-15/F-16/F-17) + my D-5 row. ALL prose/comment/CI/doc — zero code-behavior/wire/public-API-signature change. ON RETURN: orch ground-truth every edit → re-gate → FF-merge r9-base → push → **ROUND 17** (the 2nd consecutive-CONVERGED attempt) with the 2 council-recommended added missed-lenses (`availability-dos-resource-exhaustion` + `authorization-enforcement-semantics`, both verify-the-deferral-boundary lenses).
 
+### D-6 (2026-07-04, ~03:20 EDT) — R16 doc-fix-pass VERIFIED + ACCEPTED (commit 84352032)
+Doc-fix-pass agent `a8273c926f487fac8` returned all 19 items DONE (commit `84352032` on `phase-4-meta-core/r16-doc-fixpass` off e57c9a29). ORCH-GROUND-TRUTHED before accepting (§3.5n):
+- **Scope:** 17 files, +270/-36, all doc/comment/CI/markdown. **VERIFIED zero non-comment `.rs` lines changed** (`git diff … -- '*.rs'` filtered for non-`///|//!|//` lines → empty). So NO executable logic / const / match-arm / assert / API-signature change — confirmed the whole pass is prose.
+- **F-06 (the risky one):** `K(V)`→`K(N)` is in a `///` doc-comment (role.rs:135), and the LIVE const is `KN_DERIVE_CONTEXT = "benten-membership-set:K(N):v1"` (keying.rs:27) — the doc was wrong, now matches reality; NOT a crypto/derive change.
+- **F-14:** pseudocode comment corrected to `blake3::keyed_hash` (matches live :182); correctly LEFT the real `structural_kdf` HKDF-SHA256 refs intact.
+- **Extra fix (out-of-list but sanctioned):** cipher_suite.rs:313 — a PRE-EXISTING broken intra-doc link (`[`Self::…_deterministic_for_test`]`, target is `#[cfg(test)]`-gated → unreachable from the per-crate doc build) that blocked the agent's `cargo doc -p benten-crypto-suite -D warnings` gate. Fixed per memory `rustdoc_path_style_cite_brackets` = bracket→backtick (doc-only, strictly loosens the link requirement, cannot break CI). ACCEPTED. (Note: the earlier full re-gate's cargo-doc passed because CI docs the workspace with `testing` feature, making the target reachable; the per-crate default-feature build is stricter — both are fine.)
+- **Named-carry rows landed:** D-77 (F-09 schema-read ordering) / D-78 (F-10 Composing forward-guard) / D-79 (F-15 absolute-byte pins) / D-80 (F-16 bundle-size gate) / D-81 (D-5 pub(crate) tighten at #1301 swap-in) + F-11 extended D-75/D-76+#66 + F-12 → backlog §15.6 + F-17 → C-GM-AUDIT scope. Verified present.
+- **Agent gates:** cargo-doc (4 crates, -D warnings) CLEAN · cite-drift EXIT 0 · git-status doc-only. ACCEPTED.
+
+Launched full re-gate `bh1md5dqu` on 84352032 (all crates + engine; doc-only change but full discipline). ON GREEN: FF-merge r9-base e57c9a29→84352032 → push → **ROUND 17** (2nd consecutive-CONVERGED attempt, +2 deferral-boundary lenses).
+
 <!-- append D-N entries as autonomous decisions arise in R16/R17/fixes -->
