@@ -33,6 +33,7 @@
 #![allow(clippy::doc_markdown)]
 
 use benten_id::keypair::{PublicKey, Signature};
+use zeroize::Zeroize as _;
 
 /// AAD-prefix / cross-version-replay-defense version byte (R0.7 §4.1:
 /// `aad_version: u8` prefix — DISTINCT from the wire/format version). Mirrors
@@ -156,7 +157,14 @@ impl PermissionOperation {
 /// e2r §6.4 — `PermissionRequest`, signed by requesting device B. FULL field
 /// set (F4-015: `requesting_device_did`, `reason`, `ephemeral_signing_key`
 /// RESTORED).
-#[derive(Clone, Debug)]
+///
+/// Secret-hygiene (D-74/75/76): `ephemeral_signing_key` is a per-request
+/// PRIVATE signing key. `Debug` is a MANUAL impl that renders it as
+/// `<redacted>` (the `#[derive(Debug)]` was replaced — it dumped the raw
+/// key bytes via `{:?}`), and the key is zeroized on drop. Field types are
+/// unchanged, so there is NO wire / serialization / public-API-shape change —
+/// redacted-Debug + zeroize are non-wire additions only.
+#[derive(Clone)]
 pub struct PermissionRequest {
     /// AAD-prefix version (F4-004/005-LD2). MUST equal [`AAD_VERSION`].
     pub aad_version: u8,
@@ -207,6 +215,37 @@ impl PermissionRequest {
         b.extend_from_slice(&self.ephemeral_signing_key);
         b.extend_from_slice(&self.nonce);
         b
+    }
+}
+
+/// Debug-redacting: the per-request PRIVATE `ephemeral_signing_key` MUST NOT
+/// leak into logs / panics / tracing. All other (non-secret) fields render
+/// normally; only the ephemeral signing key is a `<redacted>` marker. Replaces
+/// the former `#[derive(Debug)]`, which dumped the raw key bytes.
+impl core::fmt::Debug for PermissionRequest {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("PermissionRequest")
+            .field("aad_version", &self.aad_version)
+            .field("version", &self.version)
+            .field("request_id", &self.request_id)
+            .field("requesting_device_did", &self.requesting_device_did)
+            .field("requesting_device_pubkey", &self.requesting_device_pubkey)
+            .field("operation", &self.operation)
+            .field("reason", &self.reason)
+            .field("timestamp_bucket", &self.timestamp_bucket)
+            .field("ephemeral_signing_key", &"<redacted>")
+            .field("nonce", &self.nonce)
+            .field("signature", &self.signature)
+            .finish()
+    }
+}
+
+/// Zeroize-on-drop: wipe the per-request PRIVATE ephemeral signing key so it
+/// does not linger in freed heap / coredump. Non-secret fields are left to
+/// their normal drop. Field types are unchanged (no wire impact).
+impl Drop for PermissionRequest {
+    fn drop(&mut self) {
+        self.ephemeral_signing_key.zeroize();
     }
 }
 

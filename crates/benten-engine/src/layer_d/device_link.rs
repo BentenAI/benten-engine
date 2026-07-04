@@ -133,6 +133,21 @@ impl core::fmt::Debug for ProvisioningInnerPayload {
     }
 }
 
+/// Zeroize-on-drop (D-74/75/76): this HPKE-recovered secret payload (returned
+/// by-value from `open_provisioning_payload` -> `parse_inner_be`) carries the
+/// identity-equivalent `k_principal` + the `user_did_signing_key`. Wipe both
+/// on drop so the raw secrets do not linger in freed heap / coredump after
+/// use. Non-secret fields (pubkey / membership CIDs / session id / time
+/// bucket) are left to their normal drop. Field types are unchanged — zeroize
+/// is a drop-behavior addition only (no wire / serialization impact).
+impl Drop for ProvisioningInnerPayload {
+    fn drop(&mut self) {
+        use zeroize::Zeroize as _;
+        self.k_principal.zeroize();
+        self.user_did_signing_key.zeroize();
+    }
+}
+
 impl ProvisioningInnerPayload {
     /// Canonical BE bytes for HPKE sealing (M-20; length-injective).
     #[must_use]

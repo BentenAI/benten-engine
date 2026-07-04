@@ -154,6 +154,10 @@ impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::codepoint::Ci
 pub struct benten_crypto_suite::cipher_suite::DecryptedPlaintext
 impl benten_crypto_suite::cipher_suite::DecryptedPlaintext
 pub fn benten_crypto_suite::cipher_suite::DecryptedPlaintext::as_slice(&self) -> &[u8]
+impl core::fmt::Debug for benten_crypto_suite::cipher_suite::DecryptedPlaintext
+pub fn benten_crypto_suite::cipher_suite::DecryptedPlaintext::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::ops::drop::Drop for benten_crypto_suite::cipher_suite::DecryptedPlaintext
+pub fn benten_crypto_suite::cipher_suite::DecryptedPlaintext::drop(&mut self)
 impl core::marker::Freeze for benten_crypto_suite::cipher_suite::DecryptedPlaintext
 impl core::marker::Send for benten_crypto_suite::cipher_suite::DecryptedPlaintext
 impl core::marker::Sync for benten_crypto_suite::cipher_suite::DecryptedPlaintext
@@ -972,16 +976,6 @@ impl<'a> core::marker::Unpin for benten_crypto_suite::swap_matrix::CipherRecipie
 impl<'a> core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::CipherRecipientSecretRef<'a>
 impl<'a> core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::CipherRecipientSecretRef<'a>
 impl<'a> core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::CipherRecipientSecretRef<'a>
-pub struct benten_crypto_suite::swap_matrix::PureKemDec
-impl benten_crypto_suite::swap_matrix::PureKemDec
-pub fn benten_crypto_suite::swap_matrix::PureKemDec::shared_secret_bytes(&self) -> &[u8]
-impl core::marker::Freeze for benten_crypto_suite::swap_matrix::PureKemDec
-impl core::marker::Send for benten_crypto_suite::swap_matrix::PureKemDec
-impl core::marker::Sync for benten_crypto_suite::swap_matrix::PureKemDec
-impl core::marker::Unpin for benten_crypto_suite::swap_matrix::PureKemDec
-impl core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::PureKemDec
-impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::PureKemDec
-impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::PureKemDec
 pub struct benten_crypto_suite::swap_matrix::PureKemEnc
 impl benten_crypto_suite::swap_matrix::PureKemEnc
 pub fn benten_crypto_suite::swap_matrix::PureKemEnc::ciphertext_bytes(&self) -> &[u8]
@@ -1184,6 +1178,10 @@ impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::varsig::UcanV
 pub mod benten_crypto_suite::vault
 #[non_exhaustive] pub enum benten_crypto_suite::vault::VaultError
 pub benten_crypto_suite::vault::VaultError::AeadFailed
+pub benten_crypto_suite::vault::VaultError::Argon2ParamsOutOfBounds
+pub benten_crypto_suite::vault::VaultError::Argon2ParamsOutOfBounds::m_cost: u32
+pub benten_crypto_suite::vault::VaultError::Argon2ParamsOutOfBounds::p_cost: u32
+pub benten_crypto_suite::vault::VaultError::Argon2ParamsOutOfBounds::t_cost: u32
 pub benten_crypto_suite::vault::VaultError::EngineLocked
 pub benten_crypto_suite::vault::VaultError::MalformedCbor
 pub benten_crypto_suite::vault::VaultError::NonceWidthMismatch
@@ -1303,6 +1301,8 @@ pub fn benten_crypto_suite::vault::VaultPayload::eq(&self, &benten_crypto_suite:
 impl core::fmt::Debug for benten_crypto_suite::vault::VaultPayload
 pub fn benten_crypto_suite::vault::VaultPayload::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_crypto_suite::vault::VaultPayload
+impl core::ops::drop::Drop for benten_crypto_suite::vault::VaultPayload
+pub fn benten_crypto_suite::vault::VaultPayload::drop(&mut self)
 impl serde_core::ser::Serialize for benten_crypto_suite::vault::VaultPayload
 pub fn benten_crypto_suite::vault::VaultPayload::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_crypto_suite::vault::VaultPayload
@@ -1318,6 +1318,9 @@ pub const benten_crypto_suite::vault::DAK_HKDF_INFO_TAG: &[u8]
 pub const benten_crypto_suite::vault::OWASP_DEFAULT: benten_crypto_suite::vault::Argon2idParams
 pub const benten_crypto_suite::vault::SYMMETRIC_AEAD_12B_CODEPOINT: u16
 pub const benten_crypto_suite::vault::VAULT_AAD_DOMAIN: &[u8]
+pub const benten_crypto_suite::vault::VAULT_ARGON2_MAX_M_COST: u32
+pub const benten_crypto_suite::vault::VAULT_ARGON2_MAX_P_COST: u32
+pub const benten_crypto_suite::vault::VAULT_ARGON2_MAX_T_COST: u32
 pub const benten_crypto_suite::vault::VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT: u16
 pub const benten_crypto_suite::vault::VAULT_XNONCE_LEN: usize
 pub fn benten_crypto_suite::vault::decode_vault(&[u8], &[u8; 32]) -> core::result::Result<benten_crypto_suite::vault::DecodedVault, benten_crypto_suite::vault::VaultError>
@@ -1588,6 +1591,10 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::varsig::Va
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::varsig::VarsigError
 #[non_exhaustive] pub enum benten_crypto_suite::VaultError
 pub benten_crypto_suite::VaultError::AeadFailed
+pub benten_crypto_suite::VaultError::Argon2ParamsOutOfBounds
+pub benten_crypto_suite::VaultError::Argon2ParamsOutOfBounds::m_cost: u32
+pub benten_crypto_suite::VaultError::Argon2ParamsOutOfBounds::p_cost: u32
+pub benten_crypto_suite::VaultError::Argon2ParamsOutOfBounds::t_cost: u32
 pub benten_crypto_suite::VaultError::EngineLocked
 pub benten_crypto_suite::VaultError::MalformedCbor
 pub benten_crypto_suite::VaultError::NonceWidthMismatch
@@ -1808,16 +1815,6 @@ impl core::marker::Unpin for benten_crypto_suite::sig::HybridSignature
 impl core::marker::UnsafeUnpin for benten_crypto_suite::sig::HybridSignature
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::sig::HybridSignature
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::sig::HybridSignature
-pub struct benten_crypto_suite::PureKemDec
-impl benten_crypto_suite::swap_matrix::PureKemDec
-pub fn benten_crypto_suite::swap_matrix::PureKemDec::shared_secret_bytes(&self) -> &[u8]
-impl core::marker::Freeze for benten_crypto_suite::swap_matrix::PureKemDec
-impl core::marker::Send for benten_crypto_suite::swap_matrix::PureKemDec
-impl core::marker::Sync for benten_crypto_suite::swap_matrix::PureKemDec
-impl core::marker::Unpin for benten_crypto_suite::swap_matrix::PureKemDec
-impl core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::PureKemDec
-impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::PureKemDec
-impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::PureKemDec
 pub struct benten_crypto_suite::PureKemEnc
 impl benten_crypto_suite::swap_matrix::PureKemEnc
 pub fn benten_crypto_suite::swap_matrix::PureKemEnc::ciphertext_bytes(&self) -> &[u8]
@@ -2071,6 +2068,8 @@ pub fn benten_crypto_suite::vault::VaultPayload::eq(&self, &benten_crypto_suite:
 impl core::fmt::Debug for benten_crypto_suite::vault::VaultPayload
 pub fn benten_crypto_suite::vault::VaultPayload::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_crypto_suite::vault::VaultPayload
+impl core::ops::drop::Drop for benten_crypto_suite::vault::VaultPayload
+pub fn benten_crypto_suite::vault::VaultPayload::drop(&mut self)
 impl serde_core::ser::Serialize for benten_crypto_suite::vault::VaultPayload
 pub fn benten_crypto_suite::vault::VaultPayload::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for benten_crypto_suite::vault::VaultPayload

@@ -169,16 +169,18 @@ pub use crate::hash::HashSeam;
 pub use crate::sig::{HybridSignature, SignatureSuite, SuiteConfig};
 pub use crate::structural_kdf::{StructuralKdfKey, derive_root, derive_step};
 pub use crate::swap_matrix::{
-    AUDIT_LANDED_PURE_PQ_FLAG, PureKemDec, PureKemEnc, PureKemKeypair, PurePqNf1SignatureArm,
-    PureSigPubkey, PureSigVec, SwapDecrypted, SwapEnvelope, SwapKeypair, SwapMatrix,
-    SwapMatrixError, SwapPublicKey, SwapRecipientKeypair, SwapRecipientPublic, SwapRecipientSecret,
+    AUDIT_LANDED_PURE_PQ_FLAG, PureKemEnc, PureKemKeypair, PurePqNf1SignatureArm, PureSigPubkey,
+    PureSigVec, SwapDecrypted, SwapEnvelope, SwapKeypair, SwapMatrix, SwapMatrixError,
+    SwapPublicKey, SwapRecipientKeypair, SwapRecipientPublic, SwapRecipientSecret,
     audit_landed_pure_pq_flag,
 };
-// R18 C4: the KAT-fixture structs are TEST-ONLY conformance fixtures — gated
-// off the frozen default-feature public-api surface (their loaders are already
+// R18 C4 + D-74/75/76: the KAT-fixture structs + the `PureKemDec` recovered-
+// shared-secret handle are TEST-ONLY conformance surfaces — gated off the
+// frozen default-feature public-api surface (their loaders /
+// `ml_kem_768_decapsulate_for_test` are already
 // `#[cfg(any(test, feature = "testing"))]`).
 #[cfg(any(test, feature = "testing"))]
-pub use crate::swap_matrix::{KemKatVector, SignatureKatVector};
+pub use crate::swap_matrix::{KemKatVector, PureKemDec, SignatureKatVector};
 pub use crate::varsig::{UcanVarsigV1Header, VarsigError};
 pub use crate::vault::{
     Argon2idParams, DAK_HKDF_INFO_TAG, OWASP_DEFAULT, UnlockedKeyMaterial, VaultEngine, VaultError,

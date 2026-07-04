@@ -173,10 +173,20 @@ impl HeadlessDeviceAuth {
         // wrong-width, …) collapses to the single typed rejection — no
         // salt/params/tag error-variant side-channel (F-VA-3).
         match open_vault(&self.vault_bytes, password, DAK_HKDF_INFO_TAG) {
-            Ok(decoded) => Ok(UnlockedKeyMaterial::new(
-                decoded.payload.k_principal,
-                decoded.payload.user_did_signing_key,
-            )),
+            Ok(mut decoded) => {
+                // `VaultPayload` is zeroize-on-drop (D-74/75/76), so its secret
+                // fields cannot be moved out (E0509). Take ownership of the
+                // hybrid signing key via `mem::take` (leaves an empty Vec the
+                // dropped payload harmlessly re-zeroizes) and copy the
+                // `[u8; 32]` `k_principal`; both flow straight into the
+                // zeroizing `UnlockedKeyMaterial`. No secret is cloned onto an
+                // un-wiped stack copy, and the residual `k_principal` copy left
+                // in `decoded.payload` is wiped by the payload's `Drop`.
+                let k_principal = decoded.payload.k_principal;
+                let user_did_signing_key =
+                    core::mem::take(&mut decoded.payload.user_did_signing_key);
+                Ok(UnlockedKeyMaterial::new(k_principal, user_did_signing_key))
+            }
             Err(_) => Err(DeviceAuthError::VaultDecryptFailed),
         }
     }
@@ -229,8 +239,19 @@ impl DeviceAuthBackend for HeadlessDeviceAuth {
 
 /// Expose the 32 bytes of `K_principal` from an [`UnlockedKey`] (greppable
 /// access; routes through the crypto-suite's sole `expose_k_principal`
-/// surface). Used by the F-LD-1 round-trip pins.
+/// surface). Used ONLY by the F-LD-1 round-trip pins.
+///
+/// D-74/75/76 secret-hygiene (R19 mini-review follow-up): this hands the raw
+/// `K_principal` back as a bare `[u8; 32]` copied OUT of the
+/// `secrecy::SecretBox` onto the caller's un-zeroized stack. It is test-
+/// support (no production callers — only the F-LD-1 pins) yet was on the
+/// FROZEN `benten-engine` public surface, so it is now
+/// `#[cfg(any(test, feature = "test-helpers"))]`-gated to leave the default-
+/// feature public-api baseline (a raw-`K_principal` accessor must not sit on
+/// the production surface). Production code must keep `K_principal` inside
+/// the `SecretBox` and never copy it onto the stack.
 #[must_use]
+#[cfg(any(test, feature = "test-helpers"))]
 pub fn expose_unlocked_key(key: &UnlockedKey) -> [u8; 32] {
     *key.expose_k_principal()
 }

@@ -83,7 +83,20 @@ ed25519-dalek = { workspace = true }
 # sidesteps the version-skew). `pkcs8` feature NOT enabled — the
 # Benten wire format uses raw `Encoded` bytes (`encode()` /
 # `decode()`) NOT PKCS#8 envelopes.
-ml-dsa = { version = "0.1", default-features = false, features = ["alloc", "rand_core", "getrandom"] }
+#
+# `zeroize` feature ENABLED (D-74/75/76 secret-hygiene sweep): `ml-dsa`
+# gates its `impl ZeroizeOnDrop for SigningKey<P>` (signing.rs:230-231)
+# behind `#[cfg(feature = "zeroize")]` — it is NOT unconditional (an
+# earlier comment on the slh-dsa dep below wrongly claimed it was). With
+# the feature OFF the raw ML-DSA-65 signing-key material (`seed` + the
+# expanded `s1`/`s2`/`t0`/`K`/`tr` polynomials) lingered in freed heap on
+# drop. Enabling `zeroize` turns on the upstream `ZeroizeOnDrop` so every
+# holder of `ml_dsa::SigningKey<MlDsa65>` — `sig::Keypair.pq` and
+# `swap_matrix::PurePqKeypairInner.pq_sk` — wipes on drop, reaching R18-C3
+# parity with the `slh-dsa` `slh_sk` sibling. This is a pure drop-behavior
+# addition: NO wire / serialization / public-API-shape change (the
+# `zeroize 1.8.2` in the lockfile already satisfies ml-dsa's `^1.8.1`).
+ml-dsa = { version = "0.1", default-features = false, features = ["alloc", "rand_core", "getrandom", "zeroize"] }
 
 # NF-1 PQ⊕PQ end-state non-default arm (ML-DSA-65 ⊕ SLH-DSA): G-CORE-3c
 # wires the live arm. `slh-dsa 0.2.0-rc.5` pulls `sha2 ^0.11` + `sha3
@@ -106,10 +119,11 @@ ml-dsa = { version = "0.1", default-features = false, features = ["alloc", "rand
 # format can pin Sha2_192s at G-CORE-9 without re-spending the
 # codepoint).
 # `zeroize` feature enables `SlhDsaSigningKey`'s `ZeroizeOnDrop` (it is
-# `#[cfg(feature = "zeroize")]`-gated in slh-dsa, unlike `ml-dsa` whose
-# `ZeroizeOnDrop` is unconditional) so the pure-PQ NF-1 arm's `slh_sk`
-# secret is wiped on drop, matching the `ml-dsa` `pq_sk` sibling
-# (R18 C3-A memory-hygiene parity; the `zeroize` crate is already vendored).
+# `#[cfg(feature = "zeroize")]`-gated in slh-dsa — as it likewise is in
+# `ml-dsa`, whose `zeroize` feature we now also enable above) so the
+# pure-PQ NF-1 arm's `slh_sk` secret is wiped on drop, matching the
+# `ml-dsa` `pq_sk` sibling (R18 C3-A memory-hygiene parity; the `zeroize`
+# crate is already vendored).
 slh-dsa = { version = "0.2.0-rc.5", features = ["zeroize"] }
 
 # `getrandom 0.4` brings the `SysRng` adapter that adapts the OS entropy

@@ -44,6 +44,16 @@ bench = false
 name = "plugin_did_store_insert_duplicate_rejected"
 required-features = ["testing"]
 
+# D-74/75/76 secret-hygiene: `secret_bytes_for_test` / `bytes_for_test` moved
+# behind `#[cfg(any(test, feature = "testing"))]` (raw-`[u8; 32]` accessors
+# must not sit on the default-feature surface). `tests/keypair.rs` exercises
+# those accessors + the redacted-Debug pin, so it now `required-features`
+# `testing` — `cargo test --workspace` silently skips it (rather than failing
+# the import) when the feature isn't enabled.
+[[test]]
+name = "keypair"
+required-features = ["testing"]
+
 # Per arch-r1-10: benten-id MUST NOT depend on benten-graph / benten-engine /
 # benten-eval / benten-caps. The `tests/dependency_edges.rs` pin enforces this
 # (rejects the forbidden set). The allowed set below covers crypto-blocker-1 /

@@ -194,18 +194,18 @@ impl CipherSuite {
                 // Hybrid: BOTH X25519 + ML-KEM-768 halves.
                 let x_sec = StaticSecret::random_from_rng(&mut RandOsRng);
                 let x_pub = X25519PublicKey::from(&x_sec);
-                let mlkem_kp = mlkem::generate();
+                let (mlkem_ek, mlkem_dk) = mlkem::generate().into_parts();
                 RecipientKeypair {
                     codepoint: suite.codepoint,
                     public: RecipientPublic {
                         codepoint: suite.codepoint,
                         x25519: Some(x_pub),
-                        mlkem768_ek: Some(mlkem_kp.ek),
+                        mlkem768_ek: Some(mlkem_ek),
                     },
                     secret: RecipientSecret {
                         codepoint: suite.codepoint,
                         x25519: Some(x_sec),
-                        mlkem768_dk: Some(mlkem_kp.dk),
+                        mlkem768_dk: Some(mlkem_dk),
                     },
                 }
             }
@@ -284,18 +284,18 @@ impl CipherSuite {
                 let mut dz = [0u8; mlkem::KEYGEN_SEED_LEN];
                 dz[..32].copy_from_slice(&block(0x02));
                 dz[32..].copy_from_slice(&block(0x03));
-                let mlkem_kp = mlkem::generate_deterministic(&dz);
+                let (mlkem_ek, mlkem_dk) = mlkem::generate_deterministic(&dz).into_parts();
                 RecipientKeypair {
                     codepoint: self.codepoint,
                     public: RecipientPublic {
                         codepoint: self.codepoint,
                         x25519: Some(x_pub),
-                        mlkem768_ek: Some(mlkem_kp.ek),
+                        mlkem768_ek: Some(mlkem_ek),
                     },
                     secret: RecipientSecret {
                         codepoint: self.codepoint,
                         x25519: Some(x_sec),
-                        mlkem768_dk: Some(mlkem_kp.dk),
+                        mlkem768_dk: Some(mlkem_dk),
                     },
                 }
             }
@@ -344,18 +344,18 @@ impl CipherSuite {
             0x647a => {
                 // Hybrid: real ML-KEM-768 keygen (libcrux fills its 64-byte
                 // `d‖z` seed from the same OS RNG per `mlkem::generate`).
-                let mlkem_kp = mlkem::generate();
+                let (mlkem_ek, mlkem_dk) = mlkem::generate().into_parts();
                 RecipientKeypair {
                     codepoint: self.codepoint,
                     public: RecipientPublic {
                         codepoint: self.codepoint,
                         x25519: Some(x_pub),
-                        mlkem768_ek: Some(mlkem_kp.ek),
+                        mlkem768_ek: Some(mlkem_ek),
                     },
                     secret: RecipientSecret {
                         codepoint: self.codepoint,
                         x25519: Some(x_sec),
-                        mlkem768_dk: Some(mlkem_kp.dk),
+                        mlkem768_dk: Some(mlkem_dk),
                     },
                 }
             }
@@ -1086,6 +1086,12 @@ impl Drop for UnwrappedKey {
 }
 
 /// Recovered plaintext from `open_aead`.
+///
+/// The `bytes` are recovered SECRET content (the decrypted Node body). R19
+/// secret-hygiene: the raw bytes are zeroized on drop and NEVER rendered by
+/// `Debug` (redaction marker only) — mirrors the sibling [`UnwrappedKey`] /
+/// `RecipientSecret` / `AeadKeyMaterial` / `StructuralKdfKey` hygiene in this
+/// crate.
 pub struct DecryptedPlaintext {
     bytes: Vec<u8>,
 }
@@ -1095,6 +1101,25 @@ impl DecryptedPlaintext {
     #[must_use]
     pub fn as_slice(&self) -> &[u8] {
         &self.bytes
+    }
+}
+
+/// Debug-redacting: recovered plaintext MUST NOT leak into logs / panics.
+/// Prints only a redaction marker.
+impl core::fmt::Debug for DecryptedPlaintext {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("DecryptedPlaintext")
+            .field("bytes", &"<redacted>")
+            .finish()
+    }
+}
+
+/// Zeroize-on-drop: the recovered plaintext `Vec<u8>` is recovered secret
+/// content; wipe it explicitly so freed-heap / coredump exposure does not
+/// leak it.
+impl Drop for DecryptedPlaintext {
+    fn drop(&mut self) {
+        self.bytes.zeroize();
     }
 }
 

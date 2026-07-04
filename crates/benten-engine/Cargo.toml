@@ -374,6 +374,26 @@ required-features = ["test-helpers"]
 name = "r6_r2_batch_a_path_g_capability_grant_cid_substantive_at_apply_atrium_merge"
 required-features = ["test-helpers"]
 
+# D-74/75/76 secret-hygiene: `expose_unlocked_key` (raw-`K_principal`
+# `[u8; 32]` accessor) moved behind `#[cfg(any(test, feature =
+# "test-helpers"))]` (a raw-secret accessor must not sit on the frozen
+# `benten-engine` public-api surface). This F-LD-1 round-trip pin imports
+# `expose_unlocked_key`, so it now `required-features` `test-helpers` —
+# `cargo test --workspace` silently skips it (rather than failing the
+# import) when the feature isn't enabled.
+[[test]]
+name = "f_ld_1_device_auth_backend_sealed_headless"
+required-features = ["test-helpers"]
+
+# D-74/75/76 ENFORCING roster meta-test: constructs the publicly-buildable
+# secret types (VaultPayload / PermissionRequest / ProvisioningInnerPayload)
+# for the Debug-does-not-leak half + source-anchors the full zeroize/redact
+# roster. Reaches `benten-crypto-suite/testing` (PureKemDec cfg-gate anchor)
+# via `test-helpers`, so it `required-features` `test-helpers`.
+[[test]]
+name = "f_secret_hygiene_roster"
+required-features = ["test-helpers"]
+
 [[bench]]
 name = "roundtrip"
 harness = false

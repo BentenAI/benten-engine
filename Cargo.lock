@@ -4321,6 +4321,7 @@ dependencies = [
  "pkcs8 0.11.0",
  "shake",
  "signature 3.0.0",
+ "zeroize",
 ]
 
 [[package]]
@@ -4344,6 +4345,7 @@ dependencies = [
  "ctutils",
  "hybrid-array 0.4.12",
  "num-traits",
+ "zeroize",
 ]
 
 [[package]]

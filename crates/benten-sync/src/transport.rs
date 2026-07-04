@@ -256,7 +256,10 @@ impl Endpoint {
         // crypto-minor-4. iroh::SecretKey::from_bytes consumes 32-byte
         // Ed25519 form; we pass the same bytes the benten-id Keypair
         // wraps so the resulting iroh EndpointId == benten-id PublicKey.
-        let secret_bytes = keypair.secret_bytes_for_test();
+        // Production accessor is `secret_bytes_unprotected` (D-74/75/76 moved
+        // the `secret_bytes_for_test` alias behind a `#[cfg(...)]` gate — a
+        // `_for_test`-named accessor must not be a production call site).
+        let secret_bytes = keypair.secret_bytes_unprotected();
         let secret = SecretKey::from_bytes(&secret_bytes);
         let peer_id = PeerId::from_public_key(keypair.public_key());
 

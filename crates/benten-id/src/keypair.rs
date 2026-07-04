@@ -101,12 +101,27 @@ impl SecretKey {
 
     /// Test-only accessor for hex-comparison in
     /// `crates/benten-id/tests/keypair.rs::keypair_secret_redacted_from_debug_display`.
-    /// (Caller is responsible for not leaking the returned slice; this
-    /// is gated by the `pub(crate)` visibility on the underlying
-    /// bytes accessor at the impl level; the function is exposed
-    /// `#[doc(hidden)]` for test access only.)
+    /// (Caller is responsible for not leaking the returned slice; the
+    /// function is exposed `#[doc(hidden)]` for test access only.)
+    ///
+    /// D-74/75/76 secret-hygiene: `#[cfg(any(test, feature = "testing"))]`-
+    /// gated so this raw-`[u8; 32]` accessor leaves the default-feature
+    /// callable surface entirely (a `_for_test`-named raw-secret accessor
+    /// must not be reachable in a production build). The crate-internal
+    /// production path uses [`Self::bytes_unprotected`].
     #[doc(hidden)]
+    #[cfg(any(test, feature = "testing"))]
     pub fn bytes_for_test(&self) -> [u8; 32] {
+        self.bytes
+    }
+
+    /// Crate-internal raw-seed accessor for the sanctioned production
+    /// escape hatch [`Keypair::secret_bytes_unprotected`]. `pub(crate)` (NOT
+    /// on the public surface) + NOT `_for_test`-named, so it stays reachable
+    /// in a production build without living on the frozen public API. The
+    /// returned `[u8; 32]` is unprotected — the caller owns wrapping it in
+    /// [`zeroize::Zeroizing`] if it outlives the immediate use.
+    pub(crate) fn bytes_unprotected(&self) -> [u8; 32] {
         self.bytes
     }
 }
@@ -253,7 +268,14 @@ impl Keypair {
 
     /// Test-only accessor mirroring [`SecretKey::bytes_for_test`] for
     /// `crates/benten-id/tests/keypair.rs::keypair_secret_redacted_from_debug_display`.
+    ///
+    /// D-74/75/76 secret-hygiene: `#[cfg(any(test, feature = "testing"))]`-
+    /// gated so this raw-`[u8; 32]` accessor leaves the default-feature
+    /// callable surface. The two former production callers
+    /// (`benten-sync` transport + peer-discovery) were migrated to the
+    /// sanctioned production alias [`Self::secret_bytes_unprotected`].
     #[doc(hidden)]
+    #[cfg(any(test, feature = "testing"))]
     pub fn secret_bytes_for_test(&self) -> [u8; 32] {
         self.secret.bytes_for_test()
     }
@@ -282,7 +304,7 @@ impl Keypair {
     ///     keypair material for the peer-discovery handshake.
     #[must_use]
     pub fn secret_bytes_unprotected(&self) -> [u8; 32] {
-        self.secret.bytes_for_test()
+        self.secret.bytes_unprotected()
     }
 
     /// Export this keypair as a canonical DAG-CBOR envelope per

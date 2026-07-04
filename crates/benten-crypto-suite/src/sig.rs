@@ -193,6 +193,13 @@ impl SuiteConfig {
 
 /// Hybrid keypair — carries the classical half (always) + the PQ half
 /// when the suite is hybrid (LIVE end-to-end).
+///
+/// Secret-hygiene (D-74/75/76): BOTH signing-key halves zeroize on drop.
+/// The `classical` half wipes via `ed25519-dalek`'s `zeroize` default
+/// feature; the `pq` half wipes via `ml-dsa`'s `ZeroizeOnDrop for
+/// SigningKey<P>`, enabled by the `ml-dsa = { features = [..., "zeroize"] }`
+/// entry in this crate's `Cargo.toml`. Deliberately NOT `#[derive(Debug)]`
+/// so the raw signing keys never reach a `Debug` sink.
 pub struct Keypair {
     classical: ed25519_dalek::SigningKey,
     pq: Option<MlDsaSigningKey<MlDsa65>>,

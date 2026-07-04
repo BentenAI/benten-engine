@@ -398,10 +398,10 @@ impl SwapMatrix {
             }
             EncryptionArm::None => SwapRecipientKeypair::None,
             EncryptionArm::PurePqMlKem768Only => {
-                let mlkem_kp = mlkem::generate();
+                let (mlkem_ek, mlkem_dk) = mlkem::generate().into_parts();
                 SwapRecipientKeypair::PurePqMlKem(Box::new(PurePqMlKemKeypair {
-                    public_bytes: mlkem_kp.ek,
-                    secret_bytes: mlkem_kp.dk,
+                    public_bytes: mlkem_ek,
+                    secret_bytes: mlkem_dk,
                 }))
             }
         }
@@ -866,6 +866,14 @@ pub enum SwapKeypair {
 
 /// Pure-PQ NF-1 keypair internals (boxed so the [`SwapKeypair`]
 /// discriminant size stays small).
+///
+/// Secret-hygiene (D-74/75/76): BOTH raw signing keys zeroize on drop.
+/// `slh_sk` wipes via `slh-dsa`'s `zeroize` feature; `pq_sk` wipes via
+/// `ml-dsa`'s `ZeroizeOnDrop for SigningKey<P>`, enabled by the
+/// `ml-dsa = { features = [..., "zeroize"] }` entry in this crate's
+/// `Cargo.toml` (previously `pq_sk` lingered in freed heap because the
+/// feature was off). Deliberately NOT `#[derive(Debug)]` so the raw
+/// signing keys never reach a `Debug` sink.
 pub struct PurePqKeypairInner {
     pq_sk: MlDsaSigningKey<MlDsa65>,
     slh_sk: SlhDsaSigningKey<Sha2_128s>,
@@ -1199,16 +1207,37 @@ impl PureKemEnc {
     }
 }
 
-/// Pure-KEM decapsulation output.
+/// Pure-KEM decapsulation output — carries a recovered ML-KEM-768 shared
+/// SECRET.
+///
+/// Secret-hygiene (D-74/75/76): this handle is produced ONLY by the
+/// `#[cfg(any(test, feature = "testing"))]` conformance loader
+/// [`SwapMatrix::ml_kem_768_decapsulate_for_test`] (no production
+/// constructor), so it is itself cfg-gated OFF the default-feature frozen
+/// public-api baseline — a raw recovered shared secret must not sit on the
+/// production public surface (matches the R18 C4 `KatVector` precedent). The
+/// `shared_secret` bytes are additionally zeroized on drop so the recovered
+/// KEM secret does not linger in freed heap.
+#[cfg(any(test, feature = "testing"))]
 pub struct PureKemDec {
     shared_secret: Vec<u8>,
 }
 
+#[cfg(any(test, feature = "testing"))]
 impl PureKemDec {
     /// Encoded shared-secret bytes.
     #[must_use]
     pub fn shared_secret_bytes(&self) -> &[u8] {
         &self.shared_secret
+    }
+}
+
+/// Zeroize-on-drop: the recovered ML-KEM-768 shared secret must not linger
+/// in freed heap / coredump.
+#[cfg(any(test, feature = "testing"))]
+impl Drop for PureKemDec {
+    fn drop(&mut self) {
+        self.shared_secret.zeroize();
     }
 }
 
@@ -1379,9 +1408,7 @@ impl SwapMatrix {
             };
         }
         let seed = derive_named_seed(b"fips-203-ml-kem-768", name);
-        let mlkem_kp = mlkem::generate();
-        let pubkey_bytes = mlkem_kp.ek.clone();
-        let secret_bytes = mlkem_kp.dk;
+        let (pubkey_bytes, secret_bytes) = mlkem::generate().into_parts();
         let encap_randomness = derive_named_seed(b"fips-203-ml-kem-768-encap", name);
         let (ct, ss) = mlkem::encapsulate(&pubkey_bytes).expect("ML-KEM-768 encap against own ek");
         let vector = KemKatVector {
@@ -1502,9 +1529,7 @@ impl SwapMatrix {
                 public: entry.vector.pubkey.clone(),
             };
         }
-        let mlkem_kp = mlkem::generate();
-        let pubkey_bytes = mlkem_kp.ek;
-        let secret_bytes = mlkem_kp.dk;
+        let (pubkey_bytes, secret_bytes) = mlkem::generate().into_parts();
         let vector = KemKatVector {
             seed: seed.to_vec(),
             pubkey: pubkey_bytes.clone(),

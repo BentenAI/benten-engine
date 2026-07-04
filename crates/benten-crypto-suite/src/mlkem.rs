@@ -38,6 +38,7 @@
 
 use libcrux_ml_kem::mlkem768;
 use rand_core::{OsRng, RngCore};
+use zeroize::Zeroizing;
 
 /// FIPS-203 ML-KEM-768 serialized sizes (exact; never hardcoded at a
 /// call site — referenced from here per CLAUDE.md #5 no-hardcoded-sizes).
@@ -57,11 +58,38 @@ pub const ENCAPS_RANDOMNESS_LEN: usize = 32;
 /// (`ek`, 1184 B) + decapsulation key (`dk`, 2400 B). Byte-identical to
 /// RustCrypto's `EncodedSizeUser::as_bytes()` forms (the on-wire bytes
 /// the Benten format stores).
+///
+/// Secret-hygiene (D-74/75/76): the SECRET decapsulation key `dk` is held
+/// in [`zeroize::Zeroizing`], so any `dk` bytes still owned by this
+/// transient carrier are wiped when it drops (defense-in-depth: production
+/// consumers `mem::take` `dk` into the long-lived zeroizing owners
+/// [`crate::cipher_suite::RecipientSecret`] /
+/// [`crate::swap_matrix::PurePqMlKemKeypair`], but a future consumer that
+/// drops the carrier with `dk` still inside is now safe too). `ek` is the
+/// non-secret public encapsulation key — plain `Vec<u8>`. `mlkem` is a
+/// `pub(crate)` internal seam, so this is NOT a frozen-public-API change.
 pub struct MlKemKeypairBytes {
     /// Encapsulation key bytes (1184).
     pub ek: Vec<u8>,
     /// Decapsulation key bytes (2400, the full expanded FIPS-203 form).
-    pub dk: Vec<u8>,
+    /// Zeroized on drop (secret decapsulation key).
+    pub dk: Zeroizing<Vec<u8>>,
+}
+
+impl MlKemKeypairBytes {
+    /// Consume the carrier, returning `(ek, dk)` as owned plain `Vec`s.
+    ///
+    /// The secret `dk` moves out of the [`Zeroizing`] wrapper WITHOUT a copy
+    /// (`mem::take` swaps in an empty `Vec` that the dropped wrapper harmlessly
+    /// re-zeroizes) and into whatever long-lived zeroizing owner the caller
+    /// builds. This is the blessed way for a consumer to take the secret half
+    /// so the raw `dk` bytes are never duplicated onto an un-wiped stack copy.
+    #[must_use]
+    pub fn into_parts(mut self) -> (Vec<u8>, Vec<u8>) {
+        let dk = core::mem::take(&mut *self.dk);
+        let ek = core::mem::take(&mut self.ek);
+        (ek, dk)
+    }
 }
 
 /// Generate an ML-KEM-768 keypair using the system RNG (the production
@@ -82,7 +110,7 @@ pub fn generate_deterministic(dz_seed: &[u8; KEYGEN_SEED_LEN]) -> MlKemKeypairBy
     let kp = mlkem768::generate_key_pair(*dz_seed);
     MlKemKeypairBytes {
         ek: kp.pk().to_vec(),
-        dk: kp.sk().to_vec(),
+        dk: Zeroizing::new(kp.sk().to_vec()),
     }
 }
 

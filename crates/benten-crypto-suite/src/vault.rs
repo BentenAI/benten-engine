@@ -216,7 +216,16 @@ pub fn derive_dak(
 ///
 /// The canonical DAG-CBOR map-key order (length-first, then bytewise) for
 /// these three keys coincides with this declaration order (11 < 20 < 22).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// Secret-hygiene (D-74/75/76): `k_principal` (at-rest content-encryption root
+/// key) + `user_did_signing_key` (hybrid Ed25519⊕ML-DSA-65 signing key) are
+/// SECRET. `Debug` is a MANUAL impl that renders both as `<redacted>` (the
+/// former `#[derive(Debug)]` dumped the raw bytes and cascaded through
+/// [`DecodedVault`]'s derived `Debug`), and both are zeroized on drop.
+/// `Serialize`/`Deserialize` are the INTENTIONAL on-disk DAG-CBOR format and
+/// are UNCHANGED — redacted-Debug + zeroize are non-wire additions only (the
+/// frozen field order + `serde_bytes` byte-string encoding are untouched).
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VaultPayload {
     /// The principal's at-rest content-encryption root key.
     ///
@@ -254,6 +263,31 @@ impl VaultPayload {
     /// Returns [`VaultError::MalformedCbor`] on a decode failure.
     pub fn from_canonical_cbor(bytes: &[u8]) -> Result<Self, VaultError> {
         serde_ipld_dagcbor::from_slice(bytes).map_err(|_| VaultError::MalformedCbor)
+    }
+}
+
+/// Debug-redacting: the SECRET `k_principal` + `user_did_signing_key` MUST NOT
+/// leak into logs / panics / tracing (this also protects the cascade through
+/// [`DecodedVault`]'s derived `Debug`, which holds a `VaultPayload`). Only the
+/// non-secret `user_did_creation_time` renders normally.
+impl core::fmt::Debug for VaultPayload {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("VaultPayload")
+            .field("k_principal", &"<redacted>")
+            .field("user_did_signing_key", &"<redacted>")
+            .field("user_did_creation_time", &self.user_did_creation_time)
+            .finish()
+    }
+}
+
+/// Zeroize-on-drop: wipe the SECRET `k_principal` + `user_did_signing_key` on
+/// drop so the recovered at-rest root key + user-DID signing key do not linger
+/// in freed heap / coredump. `user_did_creation_time` is non-secret. Field
+/// types + the frozen serialization are unchanged (drop-behavior only).
+impl Drop for VaultPayload {
+    fn drop(&mut self) {
+        self.k_principal.zeroize();
+        self.user_did_signing_key.zeroize();
     }
 }
 

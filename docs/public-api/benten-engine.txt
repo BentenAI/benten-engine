@@ -1176,7 +1176,6 @@ pub fn benten_engine::layer_d::device_auth::HeadlessDeviceAuth::lock(&mut self)
 pub fn benten_engine::layer_d::device_auth::HeadlessDeviceAuth::supports_biometric(&self) -> bool
 pub fn benten_engine::layer_d::device_auth::HeadlessDeviceAuth::supports_remote_unlock(&self) -> bool
 pub fn benten_engine::layer_d::device_auth::HeadlessDeviceAuth::unlock(&self, core::option::Option<&str>) -> core::result::Result<benten_engine::layer_d::device_auth::UnlockedKey, benten_engine::layer_d::device_auth::DeviceAuthError>
-pub fn benten_engine::layer_d::device_auth::expose_unlocked_key(&benten_engine::layer_d::device_auth::UnlockedKey) -> [u8; 32]
 pub type benten_engine::layer_d::device_auth::UnlockedKey = benten_crypto_suite::vault::UnlockedKeyMaterial
 pub mod benten_engine::layer_d::device_link
 #[non_exhaustive] pub enum benten_engine::layer_d::device_link::DeviceLinkError
@@ -1216,6 +1215,8 @@ pub fn benten_engine::layer_d::device_link::ProvisioningInnerPayload::eq(&self, 
 impl core::fmt::Debug for benten_engine::layer_d::device_link::ProvisioningInnerPayload
 pub fn benten_engine::layer_d::device_link::ProvisioningInnerPayload::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for benten_engine::layer_d::device_link::ProvisioningInnerPayload
+impl core::ops::drop::Drop for benten_engine::layer_d::device_link::ProvisioningInnerPayload
+pub fn benten_engine::layer_d::device_link::ProvisioningInnerPayload::drop(&mut self)
 impl core::marker::Freeze for benten_engine::layer_d::device_link::ProvisioningInnerPayload
 impl core::marker::Send for benten_engine::layer_d::device_link::ProvisioningInnerPayload
 impl core::marker::Sync for benten_engine::layer_d::device_link::ProvisioningInnerPayload
@@ -1432,6 +1433,8 @@ impl core::clone::Clone for benten_engine::layer_d::remote_permission::Permissio
 pub fn benten_engine::layer_d::remote_permission::PermissionRequest::clone(&self) -> benten_engine::layer_d::remote_permission::PermissionRequest
 impl core::fmt::Debug for benten_engine::layer_d::remote_permission::PermissionRequest
 pub fn benten_engine::layer_d::remote_permission::PermissionRequest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::ops::drop::Drop for benten_engine::layer_d::remote_permission::PermissionRequest
+pub fn benten_engine::layer_d::remote_permission::PermissionRequest::drop(&mut self)
 impl core::marker::Freeze for benten_engine::layer_d::remote_permission::PermissionRequest
 impl core::marker::Send for benten_engine::layer_d::remote_permission::PermissionRequest
 impl core::marker::Sync for benten_engine::layer_d::remote_permission::PermissionRequest
@@ -1493,6 +1496,8 @@ pub fn benten_engine::layer_d::secret_store::FileVaultStore::retrieve(&self, &st
 pub fn benten_engine::layer_d::secret_store::FileVaultStore::store(&mut self, &str, &[u8]) -> core::result::Result<(), benten_engine::layer_d::secret_store::SecretStoreError>
 impl core::default::Default for benten_engine::layer_d::secret_store::FileVaultStore
 pub fn benten_engine::layer_d::secret_store::FileVaultStore::default() -> benten_engine::layer_d::secret_store::FileVaultStore
+impl core::ops::drop::Drop for benten_engine::layer_d::secret_store::FileVaultStore
+pub fn benten_engine::layer_d::secret_store::FileVaultStore::drop(&mut self)
 impl core::marker::Freeze for benten_engine::layer_d::secret_store::FileVaultStore
 impl core::marker::Send for benten_engine::layer_d::secret_store::FileVaultStore
 impl core::marker::Sync for benten_engine::layer_d::secret_store::FileVaultStore
@@ -1508,6 +1513,8 @@ impl benten_engine::layer_d::secret_store::SecretStore for benten_engine::layer_
 pub fn benten_engine::layer_d::secret_store::KeyringCoreStore::backend_name(&self) -> &'static str
 pub fn benten_engine::layer_d::secret_store::KeyringCoreStore::retrieve(&self, &str) -> core::result::Result<alloc::vec::Vec<u8>, benten_engine::layer_d::secret_store::SecretStoreError>
 pub fn benten_engine::layer_d::secret_store::KeyringCoreStore::store(&mut self, &str, &[u8]) -> core::result::Result<(), benten_engine::layer_d::secret_store::SecretStoreError>
+impl core::ops::drop::Drop for benten_engine::layer_d::secret_store::KeyringCoreStore
+pub fn benten_engine::layer_d::secret_store::KeyringCoreStore::drop(&mut self)
 impl core::marker::Freeze for benten_engine::layer_d::secret_store::KeyringCoreStore
 impl core::marker::Send for benten_engine::layer_d::secret_store::KeyringCoreStore
 impl core::marker::Sync for benten_engine::layer_d::secret_store::KeyringCoreStore
