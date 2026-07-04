@@ -30,7 +30,7 @@ fn oversized_did_string(len: usize) -> String {
     // the LENGTH gate fires before decode, not the alphabet).
     let mut s = String::with_capacity(len + 16);
     s.push_str("did:key:z");
-    s.extend(std::iter::repeat('1').take(len));
+    s.extend(std::iter::repeat_n('1', len));
     s
 }
 
