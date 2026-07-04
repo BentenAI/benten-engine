@@ -19,14 +19,15 @@
 //!    codepoints; no Garden/Grove sub-codepoints; `MembershipSetPolicy`
 //!    no `economic_policy` field (grep-defense); compute surfaces absent."
 //!
-//! **RED-PHASE (pim-12 §3.6e):** the F-full freeze surface (the
-//! MembershipSet structs, the AuditAccessGradation type, the
-//! GovernanceConfig tiers) does NOT exist at baseline. The end-state
-//! tally / ZERO-hook arms are `#[ignore = "RED-PHASE: F-FREEZE-1 ..."]`;
-//! R5 un-ignores them once the membership-set crate + the V1-FROZEN
-//! D-28/D-29 rows + the codepoint doc land.
+//! **SHIPPED (R17 retense; formerly RED-PHASE pim-12 §3.6e):** the F-full
+//! freeze surface (the MembershipSet structs, the AuditAccessGradation type,
+//! the GovernanceConfig tiers) now EXISTS at HEAD and every arm is a live
+//! `#[test]` (NO `#[ignore]`). The prior RED-PHASE staging — where the
+//! end-state tally / ZERO-hook arms were `#[ignore = "RED-PHASE: F-FREEZE-1
+//! ..."]` pending the membership-set crate + the V1-FROZEN D-28/D-29 rows +
+//! the codepoint doc — is fully discharged; the end-state arms below run green.
 //!
-//! The NON-ignored baseline arms drive REAL source scans (the absence of
+//! The baseline arms drive REAL source scans (the absence of
 //! the named tokens at HEAD is the would-FAIL-if-no-op'd property: a stub
 //! that smuggles in `economic_policy` or a `MembershipEvent` wire-enum
 //! fails the baseline absence pin). NEVER `assert_eq!(CONST, CONST_VAL)`.
@@ -140,7 +141,8 @@ fn f_freeze_1_scanner_is_live_and_economic_policy_absent_baseline() {
 }
 
 // ===========================================================================
-// RED-PHASE ARMS (ignored until R5) — assert the F-full freeze end-state.
+// FREEZE END-STATE ARMS (SHIPPED; formerly RED-PHASE, un-ignored) — assert
+// the F-full freeze end-state. All live `#[test]` at HEAD.
 // ===========================================================================
 
 /// PIN 1 — `MembershipSetPolicy` carries NO `economic_policy` field.

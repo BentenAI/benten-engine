@@ -18,8 +18,13 @@
 //!      check itself compares `requested_audience` vs `grant_audience` — there
 //!      is NO operation/scope field on this path; operation-binding rides the
 //!      signed `signing_bytes` at the wire layer;
-//!   5. **UI-deception** — the signed grant binds the displayed
-//!      operation-summary hash; a displayed-vs-bound mismatch is rejected;
+//!   5. **UI-deception** — the operation-summary hash the operator was shown
+//!      is compared against the summary the caller derives from the signed
+//!      `PermissionRequest` (whose signature covers the `operation`); a
+//!      displayed-vs-derived mismatch is rejected. NOTE: the summary hash is
+//!      NOT carried in `PermissionGrant::signing_bytes` — it is bound only
+//!      transitively via `request_id` → the separately-signed request (see the
+//!      `accept_grant` caller-contract);
 //!   6. **audit-Node-binding** — the grant is REJECTED if `audit_node_cid` is
 //!      absent OR unresolvable (un-replicated). So a "grant without audit
 //!      trail" is non-constructible; a malicious device can't grant-and-hide
@@ -53,8 +58,10 @@ pub enum GrantRejection {
     /// Class 4 — audience mismatch (checked BEFORE the time-window; operation
     /// binds at the wire layer via `signing_bytes`, not on this path).
     ConfusedDeputy,
-    /// Class 5 — displayed operation-summary hash ≠ bound summary
-    /// (UI-deception).
+    /// Class 5 — displayed operation-summary hash ≠ the summary the caller
+    /// derives from the signed `PermissionRequest` (UI-deception). The summary
+    /// is bound transitively via `request_id`, NOT carried in
+    /// `PermissionGrant::signing_bytes`.
     UiSummaryMismatch,
     /// Class 6 — `audit_node_cid` absent or unresolvable.
     AuditNodeMissing,
@@ -131,7 +138,14 @@ pub struct GrantAcceptanceContext<'a> {
     pub now_secs: u64,
     /// The operation-summary hash the operator was shown.
     pub displayed_summary_hash: [u8; 32],
-    /// The operation-summary hash bound into the signed grant.
+    /// The operation-summary hash the caller derives from the signed
+    /// `PermissionRequest` (whose signature covers the `operation`) per the
+    /// `accept_grant` caller-contract — NOT a field carried in
+    /// `PermissionGrant::signing_bytes` (the grant signature binds
+    /// `request_id`/operation_result/valid_until/audit_node_cid; the summary is
+    /// bound only transitively via `request_id` → the separately-signed
+    /// request). The class-5 check compares this against
+    /// `displayed_summary_hash`.
     pub bound_summary_hash: [u8; 32],
     /// The grant's audit-Node CID (absent ⇒ non-constructible).
     pub audit_node_cid: Option<[u8; 32]>,

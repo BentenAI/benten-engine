@@ -748,11 +748,16 @@ fn seal_inner(
     body: &[u8],
 ) -> (Vec<u8>, Vec<u8>) {
     let suite = hybrid_suite();
-    // The CEK is a fresh per-send symmetric key. Derived from a hash of the
-    // recipient public key + sender + AAD so it is deterministic per (recipient,
-    // send) while still HPKE-wrapped (the relay never sees it; the open side
-    // recovers it by HPKE-unwrap, NEVER by re-hashing — so the CEK derivation
-    // is a seal-local freshness source, not a round-trip contract).
+    // The single-recipient (0x6510) CEK is DETERMINISTICALLY derived — a BLAKE3
+    // hash of (recipient public key ‖ sender ‖ AAD ‖ body) under
+    // LAYER_C_CEK_CONTEXT — NOT a fresh-random value (that is the 0x6520 group
+    // band; see SECURITY-PROOFS §4.2 for the per-band CEK constructions and the
+    // deterministic-CEK confirmation-oracle disclosure it carries). It is still
+    // HPKE-wrapped (the relay never sees it; the open side recovers it by
+    // HPKE-unwrap, NEVER by re-hashing — the CEK derivation is a seal-local
+    // source, not a round-trip contract). Being deterministic per (recipient,
+    // send, body), it gives a confirmation oracle only to a party that ALREADY
+    // holds the CEK — documented, not a confidentiality break.
     let mut cek_h = blake3::Hasher::new();
     cek_h.update(LAYER_C_CEK_CONTEXT);
     cek_h.update(&recipient_pub.to_bytes());
@@ -806,7 +811,9 @@ fn seal_inner(
 }
 
 /// Recover `(body, inner_sender_did)` from `(enc, ciphertext)` under the
-/// recipient secret fingerprint + the plaintext AAD, then VERIFY the B2
+/// recipient's REAL hybrid secret key (R9 GAP-1 — NOT a `[u8; 32]`
+/// fingerprint; the deleted placeholder derived the "secret" from the public
+/// via `pk + 0x80`) + the plaintext AAD, then VERIFY the B2
 /// ORIGIN-AUTH signature. `recipient_audience_did` is the recipient's OWN
 /// audience DID — the recipient re-derives the audience commitment from it,
 /// NEVER the wire `audience_did` (F-2). `recipient_key_generation` is the

@@ -14,16 +14,15 @@
 //!     decidable-contains) + grep-defense shape from
 //!     `crates/benten-caps/tests/cap_r1_1_audience_binding_grep_defense.rs`.
 //!
-//! # RED-PHASE STATUS (pim-12 §3.6e) + STUB-SHIM DISCIPLINE
+//! # SHIPPED STATUS (R17 retense; formerly RED-PHASE pim-12 §3.6e)
 //!
 //! The W6 `AuditAccessGradation` + the `audit:<set_id>:*` RestrictedScope
-//! parse path do not exist at this SHA. Self-contained stub-shim compiles
-//! green; bodies `unimplemented!()`. W6 R5 implementer:
-//!   1. DELETE `mset_w6_audit_gradation_stub`,
-//!   2. INSERT `use benten_membership_set::audit::{AuditAccessGradation,
-//!      parse_audit_scope};` + `use benten_caps::RestrictedScope;`,
-//!   3. UN-IGNORE,
-//!   4. Verify green.
+//! parse path EXIST at HEAD. This file `use`s the REAL
+//! `benten_membership_set::audit` surface (see the `use` below); every arm
+//! is a live `#[test]` (NO `#[ignore]`). The prior RED-PHASE staging — a
+//! self-contained `mset_w6_audit_gradation_stub` shim with
+//! `unimplemented!()` bodies, un-ignored + wired to the real `use` at the W6
+//! closing wave — is fully discharged.
 //!
 //! # Production-arm shape (pim-2 sub-rule-4 + pim-18 + §3.6f-ext)
 //!
@@ -151,10 +150,10 @@ fn no_gradation_variant_is_backed_by_a_wire_codepoint() {
 /// F-AUDIT-3 (d'): GREP-DEFENSE — the W6 membership-set source MUST NOT
 /// declare an `AUDIT_GRADATION`-named codepoint constant. Clone of the
 /// `cap_r1_1_audience_binding_grep_defense` source-scan shape. This arm is
-/// `#[test]` (green now): at baseline the membership-set crate does not yet
-/// exist so the scan trivially finds zero — it becomes load-bearing once
-/// the crate lands (it would FAIL if a future edit mints a gradation
-/// codepoint const). Kept un-ignored so the grep-defense is always live.
+/// a live `#[test]`: the membership-set crate exists at HEAD and the scan
+/// finds zero gradation codepoint constants — load-bearing, since it would
+/// FAIL if a future edit mints a gradation codepoint const. Always un-ignored
+/// so the grep-defense stays live.
 #[test]
 fn grep_defense_no_audit_gradation_codepoint_constant_in_membership_set_src() {
     let candidate_src_dir = Path::new(env!("CARGO_MANIFEST_DIR"))

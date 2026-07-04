@@ -27,15 +27,21 @@
 //!   3. wrong recipient secret key → unwrap FAILS → body NOT recoverable (the
 //!      recipient binding is real).
 //!
-//! # RED-PHASE STATUS (pim-12 §3.6e) + SELF-CONTAINED STUB-SHIM
+//! # SHIPPED STATUS (R17 retense; formerly RED-PHASE pim-12 §3.6e)
 //!
-//! The Layer-C HPKE wrap/unwrap (`HpkeBase[MLKEM768-X25519]` key-encryption
-//! mode) is NOT yet in-tree (`grep hpke crates/benten-crypto-suite/Cargo.toml`
-//! → ZERO; gated on F-KAT-3/NQ-C1). Per wave-independence this file commits a
-//! LOCAL `f_lb_3_stub` modelling the HPKE key-wrap + body AEAD. The `K(N)`
-//! derivation uses the LIVE `structural_kdf` API directly. R5 DELETEs the stub,
-//! wires the LIVE `benten_crypto_suite::{hpke key-wrap, aead body open}`,
-//! un-ignores, verifies green.
+//! This file is a live `#[test]` (NO `#[ignore]`). It exercises the KEM-DEM
+//! composition over a SELF-CONTAINED **real-crypto** module (`f_lb_3_real`)
+//! that does a genuine X25519 ephemeral-static ECDH + HKDF-SHA256 key-wrap of
+//! the small `K(N)` + a real ChaCha20-Poly1305 body DEM (NOT an XOR / stub
+//! stand-in). The `K(N)` derivation uses the LIVE
+//! `benten_crypto_suite::structural_kdf` API directly.
+//!
+//! The production `benten_crypto_suite` `HpkeBase[MLKEM768-X25519]`
+//! key-encryption surface is NOT yet a crate dependency (`grep hpke
+//! crates/benten-crypto-suite/Cargo.toml` → ZERO; gated on F-KAT-3/NQ-C1) —
+//! so this test owns the composition property over its own faithful KEM-DEM
+//! module until that production surface lands, at which point the module is
+//! swapped for `benten_crypto_suite::{hpke key-wrap, aead body open}`.
 //!
 //! # Would-FAIL-if-no-op'd (pim-2 sub-rule-4 + pim-18 + §3.6f-ext)
 //!

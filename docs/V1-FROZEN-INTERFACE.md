@@ -298,6 +298,19 @@ Bundle F2):**
   `crates/benten-engine/tests/g_core_9_engine_no_direct_cap_mutation.rs`
   will use `cargo-public-api` output to assert ZERO cap-mutation
   methods on `Engine` (other than `caps()`).
+- **`backend.get_edge` — frozen `pub` + ungated read surface (R17 F-12).**
+  `GraphBackend::get_edge` (`crates/benten-graph/src/store.rs:408` trait +
+  `redb_backend.rs:1231`/`:2909` `pub fn`) is an un-attributed backend read
+  path with NO principal/cap gating, symmetric to the un-attributed node-read
+  path. At v1-beta this is a frozen backend-internal read (the engine's
+  attributed read boundary is `read_node_as`; edges are read via the same
+  internal pathway node-content is). The **META #593 read-path attribution
+  scan-set** — the audit that verifies every non-internal read routes through
+  `read_node_as` — MUST include `backend.get_edge(` alongside the node-read
+  call sites, so a future edge-read at a non-internal principal boundary is
+  caught. Named for the #593 read-path scan extension (V1-FROZEN §1 + the #593
+  tracking scan-set); no visibility change at v1-beta (edges are content-half,
+  read via the internal pathway, not a public attributed surface).
 
 **Composing-phase escape valve:**
 A Composing-time discovery that genuinely needs un-attributed

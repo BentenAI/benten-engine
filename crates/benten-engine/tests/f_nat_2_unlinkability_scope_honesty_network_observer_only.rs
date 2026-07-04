@@ -54,6 +54,16 @@ use benten_membership_set::privacy::{
 /// blinded stanzas are unlinkable AND the negative-control arm proves the
 /// predicate is NOT a constant-false (a stanza that LEAKED a recipient id in
 /// the clear WOULD be linkable — the regression the blinding forbids).
+///
+/// SCOPE NOTE (R17 F-07): this arm exercises the SCOPE-HONESTY predicate over
+/// synthetic wire bytes (blinded-vs-leaked), i.e. it pins the *disclosure*
+/// property that a correctly-blinded wire form carries no cleartext recipient
+/// marker. It is NOT the owner of the real blinding CONSTRUCTION. The
+/// cryptographic blinding itself — the HMAC/keyed-hash-blinded gossip topic
+/// (`blake3::keyed_hash(K_Set, membership_set_id ‖ BE(generation))`) that
+/// makes the on-wire form actually unlinkable — is owned + byte-pinned by
+/// `crates/benten-membership-set/tests/f_gossip_transport_placement_and_blinded_topic.rs`.
+/// This arm is the disclosure-coherence companion to that owner test.
 #[test]
 fn network_observer_cannot_link_per_recipient_stanzas() {
     // Two distinct correctly-BLINDED on-wire stanzas addressed to the same

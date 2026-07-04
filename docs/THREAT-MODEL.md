@@ -52,10 +52,17 @@ encrypt-to-recipient** (`0x6610` / HPKE-wrapped CEK), which genuinely seals the 
 relay-vs-untrusted-host distinction is the whole point: sealing bytes *in transit to a chosen recipient* is live;
 sealing a per-principal partition *at rest on a hostile host* is the deferred confidentiality half.)
 
-**Deterministic-CEK confirmation-oracle (additive disclosure; GAP-2).** The Layer-C content-encryption key is
+**Deterministic-CEK confirmation-oracle (additive disclosure; GAP-2).** On the **single-recipient** Layer-C bands
+(`0x6500` / `0x6510`, `benten_drop::layer_c::seal_inner`) ONLY, the content-encryption key is
 deterministically derived from the plaintext, so a party that **already holds the CEK** (the sealer, or a
 co-recipient that recovers it) can **confirm a guessed plaintext** — a confirmation oracle for low-entropy bodies.
-The **ciphertext** does not extend this to the **Tier-1 network observer / untrusted relay**: the bulk AEAD uses a
+This does NOT apply to the group bands: the **`0x6520`** group CEK is a **fresh-random per-message value** (OS
+CSPRNG, delivered only via each stanza's HPKE-wrap; no wire-derived CEK, so no CEK confirmation-oracle at all), and
+the **`0x6610`** MembershipSet group CEK is `K_Set`-keyed (recoverable only by a member holding `K_Set`). The three
+CEK constructions are enumerated in full at `docs/SECURITY-PROOFS.md` §4.1 (`0x6610` K_Set-keyed / `0x6520`
+fresh-random) + §4.2 (`0x6510` deterministic single-recipient). Separately, the `body_cid` low-entropy disclosure
+below is a property of the wire `body_cid` (not the CEK) and DOES apply across all bands.
+The **ciphertext** does not extend the CEK confirmation-oracle to the **Tier-1 network observer / untrusted relay**: the bulk AEAD uses a
 **fresh random nonce per send** and the CEK is HPKE-wrapped to the recipient, so the relay sees neither the CEK nor
 a plaintext-equality test **in the ciphertext bytes**. **However**, the wire `body_cid` — an **unsalted**
 `self_describing_cid(BLAKE3(plaintext))` emitted **plaintext** in every Layer-C AAD — DOES give the Tier-1 observer,

@@ -162,6 +162,18 @@ impl CodepointLifecycle {
     /// Dispatch by lifecycle state. `Live`/`Deprecated` are `Ok`;
     /// `Quarantined`/`Burned` are typed-rejected.
     ///
+    /// **Reserved-unconsulted at v1-beta (R17 F-19).** This gate is AS-BUILT +
+    /// pinned (`f_cp_codepoint_registry_dispatch::codepoint_lifecycle_burned_and_quarantined_reject`)
+    /// but has ZERO production callers at v1-beta: no codepoint is Quarantined
+    /// or Burned yet, so the live `SigCodepoint::resolve` /
+    /// `CipherSuiteCodepoint::resolve` dispatchers reject unknown/reserved
+    /// codepoints directly without consulting a lifecycle table. The
+    /// state-machine is the reserved seam for WHEN a codepoint must be
+    /// deprecated/quarantined/burned post-v1 (added via the crypto-agility
+    /// framework); its wiring into the resolve path is a Composing/post-v1
+    /// item. No behavior change at v1-beta — documented so the zero-caller
+    /// status is intentional, not an oversight.
+    ///
     /// # Errors
     ///
     /// Returns [`UnsupportedAlgorithm::CipherSuite`] (codepoint `0`) for a

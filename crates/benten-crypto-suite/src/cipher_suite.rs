@@ -122,6 +122,20 @@ pub const X_WING_LABEL: [u8; 6] = [0x5c, 0x2e, 0x2f, 0x2f, 0x5e, 0x5c];
 
 /// Classical-only `0x6400` combiner domain-separation info string. ASCII;
 /// NOT an integer wire/AAD field (m-1: not flagged by the BE scanner).
+///
+/// NAMED CARVE-OUT (R17 F-09): this is the sole keying-surface domain tag that
+/// applies the domain-separation idiom over key material WITHOUT a
+/// `domain_registry` corpus entry / prefix-free enrollment (unlike the hybrid
+/// [`X_WING_LABEL`] and the recipient-seed label, both enrolled). Because it
+/// folds only into the `0x6400` classical combiner preimage (a single
+/// self-contained keying surface, not a cross-surface separator), it is left
+/// UN-enrolled at v1-beta. The hardening — enroll it in
+/// `domain_registry::registered_domain_tags()` OR record a documented exemption
+/// in the module's "Scope carve-out" section — is NAMED at
+/// `crates/benten-crypto-suite/src/domain_registry.rs` (the carve-out note) +
+/// `docs/V1-FROZEN-INTERFACE-DEFERRED.md`. Doc-only; no enrollment this round
+/// (enrolling now would add a corpus entry the frozen surface does not yet
+/// carry).
 const X25519_CLASSICAL_INFO_V1: &[u8] = b"x25519-classical-v1-benten-0x6400";
 
 /// Deterministic-recipient-seed BLAKE3 expansion domain-separation label —
@@ -674,6 +688,21 @@ pub fn combine_x_wing(
 /// (matching the hybrid arm's hash family) so the two arms share the same
 /// hash primitive but derive distinct keys (distinct input set + distinct
 /// trailing domain-separation string).
+///
+/// **Preimage length-injectivity (R17 F-26; mirrors the Row D-13
+/// concatenation-injectivity criterion).** The un-length-prefixed
+/// concatenation `ss_X ‖ ek_X ‖ pub_X ‖ INFO` is injective — i.e. two
+/// distinct input tuples cannot produce the same preimage bytes — ONLY
+/// because every field is FIXED-LENGTH at this call: `ss_x` / `ek_x` /
+/// `pub_x` are each the 32-byte X25519 output/pubkey and `X25519_CLASSICAL_INFO_V1`
+/// is a fixed constant. The carve-out criterion (same as Row D-13's
+/// info-tag folding): a bare concatenation is a sound domain separator IFF
+/// every component has a fixed, statically-known length OR is length-prefixed.
+/// If a future edit ever feeds a VARIABLE-length component into this
+/// combiner, it MUST length-prefix that component (or the concat stops being
+/// injective and opens a preimage-collision confusion path). The trailing
+/// constant `INFO` string additionally domain-separates this arm from the
+/// hybrid X-Wing combiner (which uses the appended [`X_WING_LABEL`]).
 #[must_use]
 pub fn classical_combine(ss_x: &[u8], ek_x: &[u8], pub_x: &[u8]) -> [u8; 32] {
     let mut pre =

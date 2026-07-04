@@ -1199,8 +1199,11 @@ The v1-beta-shipped binary structurally enforces:
   commitment-recompute (F-1 defense)
 - AAD-binds-plaintext-CID rebinding-attack defense (cipher-suite
   layer)
-- X-Wing combiner binding both KEM halves + both encapsulated keys
-  + both public keys for strip-resistance (#5 hybrid encryption)
+- X-Wing combiner binding both KEM shared secrets (`ss_M ‖ ss_X`)
+  directly plus `ct_X` (the X25519 ephemeral encapsulation pubkey) +
+  `pk_X` (the recipient X25519 public key) for strip-resistance; the
+  ML-KEM ciphertext is bound transitively via `ss_M` (decapsulation),
+  not as a separate combiner input (#5 hybrid encryption)
 
 The v1-beta-shipped binary does NOT structurally enforce:
 - All deferred rows above (D-1 through D-16)
@@ -2550,6 +2553,53 @@ Row D-15's audit-readiness concern.
   + `crates/benten-crypto-suite/src/structural_kdf.rs`
   (`StructuralKdfKey::from_bytes_for_test`); `docs/SECURITY-POSTURE.md`
   Compromise #65; Row D-64 (#1301).
+
+---
+
+## R17 (post-F-full phase-close, round 17) NAMED-CARRY rows
+
+> The rows below land at the R17 phase-close convergence council fix wave. Each is
+> a HARD-RULE clause-(b) deferral whose ENTRY lands NOW with a NAMED destination.
+
+### Row D-82 — F-04: `PermissionGrant::signing_bytes` binds NEITHER operation NOR audience NOR summary directly → Phase-4-Meta-Composing acceptance-wiring (sharpens the R10 F-15 caller-contract note)
+
+- **Signed-scope disclosure (v1-beta):** at the frozen wire format,
+  `benten_engine::layer_d::remote_permission::PermissionGrant::signing_bytes`
+  (`crates/benten-engine/src/layer_d/remote_permission.rs:242-254`) binds
+  exactly `GRANT_DOMAIN` + `aad_version` + `version` + `request_id` +
+  `granted_at_bucket` + `valid_until` + `audit_node_cid` + `operation_result`.
+  It does **NOT** bind `operation`, does **NOT** bind `audience`, and does
+  **NOT** bind any operation-summary hash *directly*.
+- **Transitive binding (how operation/audience/summary ARE bound):** those
+  fields are bound **transitively** via `request_id` → the separately-signed
+  `PermissionRequest`, whose `signing_bytes` (`remote_permission.rs:194-210`)
+  covers `operation.to_wire_be()` (and `operation` embeds `audience` +
+  `expires_at`). So a valid grant is cryptographically tied to a valid request
+  only through the `request_id` linkage — NOT through the grant signature alone.
+- **Consequence for the Composing-wave acceptance wiring (MUST):** the
+  production acceptance path (the first + only production caller of
+  `accept_grant`, which is zero-production-caller at v1-beta) MUST verify
+  **BOTH** the `PermissionRequest` signature AND the `PermissionGrant`
+  signature AND the `request_id` linkage BEFORE trusting the caller-supplied
+  `operation` / `requested_audience` / `bound_summary_hash` fields that
+  `accept_grant`'s class-4 (audience) and class-5 (UI-summary) checks compare.
+  The pipeline itself verifies NEITHER signature — that is the documented
+  caller-contract at `grant_acceptance.rs:146-150`.
+- **RECOMMENDED production-wiring shape (defense-in-depth):** have the grant
+  signature ALSO directly cover `(operation, audience, summary_hash,
+  requesting_device_pubkey)`. This is addable as a NEW grant version /
+  codepoint per the crypto-agility framework — **additive, never a wire-break**
+  (the current frozen grant format is intentionally NOT changed at the tag;
+  this is a Composing-wave additive upgrade, not a v1-beta freeze mutation).
+- **Deferred (destination):** with Row D-64 (engine encrypt-to-recipient /
+  remote-permission acceptance wiring → Phase-4-Meta-Composing) + the R10
+  F-15 caller-contract note (Row D-1/D-64-adjacent).
+- **Anchor:** R17-council F-04;
+  `crates/benten-engine/src/layer_d/remote_permission.rs:242-254`
+  (`PermissionGrant::signing_bytes`) + `:194-210`
+  (`PermissionRequest::signing_bytes`) +
+  `crates/benten-engine/src/layer_d/grant_acceptance.rs:146-150`
+  (caller-contract).
 
 ---
 

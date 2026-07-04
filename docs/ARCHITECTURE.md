@@ -169,11 +169,12 @@ crates/
                         # `UnsupportedAlgorithm` — NEVER a silent
                         # fallback (CLAUDE.md baked-in #5 +
                         # `RATIFIED-pq-default-reframe-2026-05-19.md`
-                        # §4 P2P-interop invariant). The live ML-DSA-65
-                        # primitive instantiation is deferred to the
-                        # coordinated workspace dep-bump wave alongside
-                        # G-CORE-3 #1301 (see the Cargo.toml record);
-                        # the hybrid arm typed-rejects until then. The
+                        # §4 P2P-interop invariant). The ML-DSA-65
+                        # primitive is LIVE-instantiated and byte-faithful
+                        # (both halves verify against the pinned IETF
+                        # LAMPS test vectors) as the shipped v1-beta
+                        # signature default — it is NOT deferred and the
+                        # hybrid arm does NOT typed-reject. The
                         # safety invariant is preserved: unaudited PQC
                         # is never the SOLE trust path; the classical
                         # half is the audited security floor.

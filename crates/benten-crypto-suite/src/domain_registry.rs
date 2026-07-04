@@ -64,6 +64,19 @@
 //!   is no tag to register (mirrors the content-hash carve-out — a preimage /
 //!   framing acts as the separator, not a registered label).
 //!
+//! # NAMED UN-ENROLLED tag — `X25519_CLASSICAL_INFO_V1` (R17 F-09)
+//!
+//! `cipher_suite::X25519_CLASSICAL_INFO_V1`
+//! (`b"x25519-classical-v1-benten-0x6400"`) is a keying domain-separation
+//! info string folded into the `0x6400` classical combiner preimage. UNLIKE
+//! the two carve-outs above, it DOES key material — but it is a single
+//! self-contained combiner surface (not a cross-surface separator), so it is
+//! left OUT of the registered corpus at v1-beta rather than being enrolled or
+//! given a permanent exemption. This is a NAMED hardening item (enroll it in
+//! [`registered_domain_tags`] with a `domain_registry`-equality drift-assert
+//! at its home, OR promote this paragraph to a permanent documented exemption)
+//! carried at `docs/V1-FROZEN-INTERFACE-DEFERRED.md`; NOT resolved this round.
+//!
 //! # The single source of truth vs. the home-crate mirrors
 //!
 //! [`PROVISIONING_DOMAIN`] is NEW (minted here at C-01) and is defined

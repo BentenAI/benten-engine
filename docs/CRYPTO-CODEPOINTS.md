@@ -402,7 +402,7 @@ is ORTHOGONAL to both of these set-id constructions.
   `0x6520`) + the per-stanza-LIVE decomposition.
 - `docs/THREAT-MODEL.md` — the trust-tier × operation matrix + the O-6
   blast-radius ladder + the network-observer-only unlinkability scoping.
-- `docs/SECURITY-POSTURE.md` — the named Compromise table (#30–#64) +
+- `docs/SECURITY-POSTURE.md` — the named Compromise table (#30–#66) +
   disposition-class index.
 - `docs/V1-FROZEN-INTERFACE-DEFERRED.md` — Rows D-28 / D-29 (compute / economic
   PHASE-LATER-DEFER).

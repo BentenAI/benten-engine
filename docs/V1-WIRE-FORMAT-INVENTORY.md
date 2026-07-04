@@ -610,4 +610,46 @@ A "yes, complete" answer locks the inventory; a "no, add X" answer adds the miss
 
 ---
 
+## G-COMP-1 sweep notes (named-carry; R17 council)
+
+- **GCS-16 (R17 F-16) — `ENVELOPE_MAGIC` / `ENVELOPE_FORMAT_VERSION`
+  dual-homed with NO cross-home byte-equality pin.** `ENVELOPE_MAGIC = 0xae`
+  is defined in BOTH `crates/benten-crypto-suite/src/envelope.rs:50` AND
+  `crates/benten-crypto-suite/src/aead.rs:64`; `ENVELOPE_FORMAT_VERSION` is
+  likewise multi-homed (`benten-drop/src/layer_c.rs:301` `= 2`,
+  `benten-crypto-suite/src/envelope.rs:43` `_V2 = 0x02`,
+  `benten-crypto-suite/src/aead.rs:60`). Each home is independently
+  byte-correct at HEAD, but there is NO single cross-home byte-equality
+  regression pin asserting the copies stay equal — a future edit to one home
+  could silently diverge the magic/version byte across the envelope vs aead
+  layers. **G-COMP-1 sweep item:** add a cross-home equality assertion (mirror
+  the `domain_registry` home-crate drift-assert idiom) OR consolidate to one
+  canonical const re-exported at each home. No wire change at v1-beta (the
+  bytes agree today); this pins that they STAY agreeing.
+
+- **GCS-24 (R17 F-24; extends Row D-9) — item 27/§Row-D-9 missing
+  bytes→struct decoder + u16 `sender_len` width-pin.** The Layer-C
+  plaintext-sender wire trailer `sender_len u16 BE | sender_did`
+  (`benten-drop/src/layer_c.rs:59`/`:452`/`:543`) is byte-pinned on the ENCODE
+  side (`f_lc_09_plaintext_sender_len_is_u16_be_not_u32_frozen_golden`), but
+  there is no round-tripping **bytes→struct DECODER** pinned for the trailer,
+  and the u16 (not u32) `sender_len` width is asserted only via the encode
+  golden. **G-COMP-1 sweep item:** add a decode-side pin that parses the wire
+  trailer back to `(sender_len, sender_did)` and asserts the u16-BE width
+  round-trips (a decoder that read u32 would mis-frame). Bundled with the
+  Row D-9 hex-byte-pin sweep.
+
+- **GCS-17 (R17 F-17) — `VaultError::WrongPassword` dead variant on the
+  frozen enum.** `crates/benten-crypto-suite/src/vault.rs:637` declares
+  `VaultError::WrongPassword`, but at v1-beta the vault open path surfaces a
+  wrong password as an AEAD-open failure (the AEAD tag check), not via this
+  named variant — so the variant is currently unconstructed (dead). It is on
+  the frozen `VaultError` enum, so it stays (removing it would be a
+  surface-breaking change; the enum is additive-frozen). **G-COMP-1 sweep
+  item:** either wire `WrongPassword` at the open-path AEAD-failure site (a
+  more specific typed error) OR document it as an intentionally-reserved
+  variant. Doc note only at v1-beta; no enum change.
+
+---
+
 **End of inventory.**
