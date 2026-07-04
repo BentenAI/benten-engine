@@ -56,4 +56,9 @@ Doc-fix-pass agent `a8273c926f487fac8` returned all 19 items DONE (commit `84352
 
 Launched full re-gate `bh1md5dqu` on 84352032 (all crates + engine; doc-only change but full discipline). ON GREEN: FF-merge r9-base e57c9a29→84352032 → push → **ROUND 17** (2nd consecutive-CONVERGED attempt, +2 deferral-boundary lenses).
 
+### D-7 (2026-07-04, ~03:45 EDT) — R16 fix-pass FF-merged (r9-base→84352032); ROUND 17 launched (2nd consecutive attempt, +2 lenses)
+Full re-gate `bh1md5dqu` on 84352032 GREEN (fmt/clippy/ws-check/cargo-doc/cite-drift/§3.5g all PASS; nextest-crates 2048/2049 with only the redb parallel-load flake; nextest-engine 954/954). FF ancestry clean (84352032 = one doc-only commit over e57c9a29). **FF-merged r9-base e57c9a29→84352032 + pushed** (#1382 CI re-running). Launched isolated redb confirm `bp2enoaku` (belt-and-suspenders; the doc-only delta cannot change the test binary's behavior, and e57c9a29's identical test passed isolated 88.9s an hour earlier). **Launched ROUND 17 = Task `w69okmdm0`** — the 2nd consecutive-CONVERGED attempt, 22 lenses (20 standing + `availability-dos-resource-exhaustion` + `authorization-enforcement-semantics`, both council-recommended deferral-boundary lenses that own the GAP-A/GAP-B seam). Note: the `edit-council-r17.py` self-check falsely printed "lens not added"/exit-3 — a cosmetic bug (it split on the header-comment's `mustInclude:` placeholder, not the real array); the file write happens BEFORE the check, so the re-point is correct — VERIFIED the real `mustInclude` array has all 22 lenses incl both new ones, no dupes, 0 stale SHA, node-check parsed the framing.
+
+**Two-consecutive counter = 1.** R17 CONVERGED → count=2 → TAG-READY (STOP, hold #1382-merge + tag for Ben). R17 finds a confirmed BLK/MAJ → count resets to 0, fix + re-council.
+
 <!-- append D-N entries as autonomous decisions arise in R16/R17/fixes -->
