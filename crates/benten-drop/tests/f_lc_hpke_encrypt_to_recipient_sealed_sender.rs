@@ -2170,7 +2170,7 @@ fn f_lc_3_stale_generation_replay_rejected() {
     let (a_kp, a_did) = hybrid_sender();
     let stale =
         seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &old_params, b"old-gen body")
-        .expect("valid roster must seal (R18 C2)");
+            .expect("valid roster must seal (R18 C2)");
 
     let members: Vec<String> = group_roster_for_test(&pks)
         .iter()

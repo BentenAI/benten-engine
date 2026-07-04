@@ -105,7 +105,12 @@ ml-dsa = { version = "0.1", default-features = false, features = ["alloc", "rand
 # `0x0003` reserves the *suite* not a specific parameter set; the wire
 # format can pin Sha2_192s at G-CORE-9 without re-spending the
 # codepoint).
-slh-dsa = { version = "0.2.0-rc.5" }
+# `zeroize` feature enables `SlhDsaSigningKey`'s `ZeroizeOnDrop` (it is
+# `#[cfg(feature = "zeroize")]`-gated in slh-dsa, unlike `ml-dsa` whose
+# `ZeroizeOnDrop` is unconditional) so the pure-PQ NF-1 arm's `slh_sk`
+# secret is wiped on drop, matching the `ml-dsa` `pq_sk` sibling
+# (R18 C3-A memory-hygiene parity; the `zeroize` crate is already vendored).
+slh-dsa = { version = "0.2.0-rc.5", features = ["zeroize"] }
 
 # `getrandom 0.4` brings the `SysRng` adapter that adapts the OS entropy
 # source to `rand_core 0.10`'s `TryCryptoRng` trait. `slh-dsa 0.2.0-rc.5`
