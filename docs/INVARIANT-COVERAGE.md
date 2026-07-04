@@ -425,7 +425,12 @@ asymmetry + archival-half), but it has **zero production callers at HEAD** — t
 benten-sync LWW (`crdt.rs:535`, LARGER-HLC-wins) and the test-local `resolve_fork`
 (`f_inv21_fork_tie_break_totality_version_node_cid.rs`) is the PRODUCTION-stand-in. Wiring the comparator into the
 live concurrent same-anchor set-creation fork merge path is deferred to Phase-4-Meta-Composing (Row D-52); the
-comparator + proptest are frozen at Core. The R2 test-landscape
+comparator + proptest are frozen at Core. **RBAC admin-op authorization-enforcement carve-out:** membership /
+governance *admin-op authorization enforcement* (admit / kick / promote actually gated on a live role check) is
+Phase-4-Meta-**Composing**-wired; at this freeze `crates/benten-membership-set/src/set.rs` ships only the LWW /
+fork comparators and NO live mutation method that could skip a role check — so there is no bypassable
+admin-op-authorization surface to enforce at Core (the same register-then-enforce deferral pattern as Inv-19 /
+Inv-21). The R2 test-landscape
 (`.addl/phase-4-meta/f-full-r2-test-landscape.md` §2.1) mapped every one of Inv-16..22 to a covering red-phase
 test family; the red-phase corpus landed in R3 and impl-to-green landed in R5. The one v1-beta floor honestly
 disclosed: Inv-21's `F-INV21-3` kani convergence proof is `#[cfg(kani)]`-gated with a proptest surrogate

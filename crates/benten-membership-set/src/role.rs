@@ -132,7 +132,7 @@ pub fn admin_exclusive_abilities() -> BTreeSet<&'static str> {
 /// **What this actually computes (v1-beta — honest scope).** For a
 /// content-bearing role this returns the membership `K(N)` computed by the
 /// IN-CRATE BLAKE3 KDF [`crate::keying::derive_member_key`] —
-/// `blake3::derive_key("benten-membership-set:K(V):v1", node_cid)` over the
+/// `blake3::derive_key("benten-membership-set:K(N):v1", node_cid)` over the
 /// **PUBLIC** `node_cid`. It is NOT a delegation to `benten-crypto-suite`, and
 /// it is NOT the secret-keyed at-rest confidentiality key: the derivation is
 /// keyed only by a public domain-context string + the public CID, so the

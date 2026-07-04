@@ -110,6 +110,31 @@ decrypt (not advisory).
 > typed-reject-on-unknown discipline above. Additive follow-up (no wire change) —
 > Phase-4-Meta-Composing federation-wiring wave.
 
+## IANA HPKE referenced ranges (the disjointness reference — NOT Benten-minted)
+
+Benten never mints algorithm numbers; component algorithm IDs reference the
+IANA HPKE registries, and the Benten envelope band (`0x6100..`) is disjoint
+from every IANA HPKE allocation by construction. The IANA-disjoint scanner
+(`benten_crypto_suite::registry::in_iana_hpke_range`) enumerates the reference
+ranges a Benten envelope codepoint MUST avoid. For completeness, the full IANA
+HPKE reference points (RFC 9180 §7 + the HPKE-PQ WG-stream additions) are:
+
+| IANA HPKE range | Meaning |
+|-----------------|---------|
+| `0x0001..0x0003` | KDF IDs (HKDF-SHA256/384/512) + AEAD IDs (overlapping low band) |
+| `0x0010..0x0020` | KEM IDs — DHKEM (RFC 9180 §7.1) |
+| `0x0021` | KEM ID — DHKEM(X448, HKDF-SHA512) (RFC 9180 §7.1) |
+| `0x0040..0x0042` | KEM IDs — ML-KEM-512/768/1024 |
+| `0x11EC` | KEM ID — X25519MLKEM768 (the concrete hybrid KEM) |
+| `0xFFFF` | AEAD ID — Export-only (RFC 9180 §7.3) |
+
+`0x0021` (DHKEM-X448) and `0xFFFF` (AEAD Export-only) are listed here for
+reference completeness; the Benten `0x6100+` band floor sits above every IANA
+allocation, so disjointness holds regardless of whether these specific points
+are inside the scanner's coalesced ranges. Note `0xFFFF` is ALSO Benten's own
+`EXTENDED_CODEPOINT_ESCAPE` (an out-of-band escape, not a suite selector) —
+that reuse is intentional and does not collide with the suite-selector band.
+
 ## did:key hybrid-pubkey multicodec (NQ-C4 / U15) — RESOLVED
 
 The PQ-**hybrid** public keys carried in `did:key` must reference REGISTERED
@@ -301,6 +326,7 @@ minimum. The single canonical tally is **`net -8`**:
 - **−1** audit structure (graph-native version-Node content, not a frozen wire structure),
 - **−1** `MembershipEvent` wire-enum (version-Node content, not a frozen codepoint-tagged wire enum),
 - **−4** AuditAccessGradation codepoints (a `RestrictedScope` arm + UCAN-caveat compositions, NOT codepoints),
+  — note: the 4 RESERVED gradations (`MemberOnly` / `Threshold` / `TimeLocked` / `Anonymized`) are unwired at v1-beta, so `AuditAccessGradation::decide` fails **CLOSED to reserved-Admin-only** (the most-restrictive default) for each until its caveat/IVM composition is wired at Composing; `AdminOnly` and `PublicAllMembers` are the two LIVE gradations.
 - **−2** Garden / Grove sub-codepoints (GovernanceConfig signed-Node content, NOT crypto-wire sub-codepoints),
 
 = **`net -8`**. **The R0.1 `-6` figure double-counted** — this `net -8` is the

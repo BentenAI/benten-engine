@@ -84,9 +84,18 @@ pub fn derive_member_key(node_cid: &[u8]) -> Vec<u8> {
 /// code matches those frozen docs.)
 ///
 /// Byte-order is freeze-gating: the generation counter is encoded
-/// **big-endian** (F4-024 M-20). An observer without `K_Set` cannot link or
-/// recover `membership_set_id` from the topic (it is a keyed hash). A fork that
+/// **big-endian** (F4-024 M-20). A fork that
 /// rotates the generation rotates the topic (#61 fingerprint defense).
+///
+/// **Compromise #61 scope (honest).** The property this delivers is
+/// identity-**HIDING**: an observer *without* `K_Set` (a non-member) cannot
+/// learn the `membership_set_id` / set membership from the topic (it is a keyed
+/// hash). This is NOT per-send unlinkability — for a static current-generation
+/// group the topic RECURS (every send within a generation carries the same
+/// blinded topic), so a network observer can still correlate a group's traffic
+/// across sends; only the *identity* of the group is hidden. Full per-send
+/// unlinkability (salt/nonce-rotated commitments) is DEFERRED (see the
+/// `f_aad_2` boundary pin + `docs/THREAT-MODEL.md`).
 ///
 /// `gossip = liveness-only`: this topic is the rendezvous label for the
 /// notification channel. Convergence is backed by the MST anti-entropy backstop

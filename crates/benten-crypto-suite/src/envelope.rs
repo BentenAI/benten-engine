@@ -155,6 +155,17 @@ pub fn canonical_tlv_encode(codepoint: u16, ctx: &BindingContext) -> Vec<u8> {
 /// primitive (one-HPKE-path-reused; Inv-16 / C-2). TRUE — both layers go
 /// through [`crate::hpke`]'s single `hpke_seal_to_recipient` /
 /// `hpke_open` KEM-DEM path.
+///
+/// **This is a NAMING / intent helper, not a structural check.** It
+/// returns a compile-time constant `true` to assert-in-code the design
+/// invariant that both Layer-C and Layer-D are wired through the single
+/// `benten_crypto_suite::hpke` primitive — it does not *inspect* the two
+/// layers at runtime to confirm they share a primitive. Its test pin
+/// therefore asserts a constant; that pin exists to make the invariant a
+/// named, greppable anchor (matching the Inv-22 F-12 naming-helper
+/// precedent), so a future refactor that split the HPKE path would have to
+/// consciously flip this to `false` and break the pin. The real structural
+/// guarantee is enforced by the code in [`crate::hpke`] itself.
 #[must_use]
 pub const fn layer_c_and_d_share_one_hpke_primitive() -> bool {
     true

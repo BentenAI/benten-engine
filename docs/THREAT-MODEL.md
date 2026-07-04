@@ -273,6 +273,12 @@ engine + transport layers) is **NAMED-DEFERRED to a later phase** — it is not 
 concern. This note exists so a reader does NOT mistake the absence of a DoS section for a claim that DoS is
 out-of-scope for the *project*; it is out-of-scope for *this crypto threat model* specifically.
 
+**Allocation-ceiling exhaustiveness audit (scheduled — G-COMP-1).** The individual allocation-ceiling defenses
+disclosed above (the `decode_encrypted_node` chunk-`count` cap et al.) are pinned at their own sites, but a
+systematic *exhaustiveness* audit — sweeping EVERY wire-decoded `count`/length path to confirm each caps the
+attacker-declared value before pre-allocating — is scheduled at the **G-COMP-1** wave, alongside that wave's
+hex-pin sweep. Until it runs, the disclosed ceilings are the known-covered set, not a proven-complete one.
+
 ---
 
 ## Cross-references

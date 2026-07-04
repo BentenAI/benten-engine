@@ -501,6 +501,8 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 
 **FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level; the `0x6310`/`0x6320` bands + the drop timestamp-exclusion invariant are wire-locked (V2 + BE + canonical-TLV from first commit, M-20).
 
+**Wiring carve-out (Composing).** The Layer-D grant/peer *signature* is classical-only Ed25519 at this wave (same path-(b) defer as §25 `peer_signature`; see `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-15e), and the six-class acceptance pipeline `benten_engine::layer_d::grant_acceptance::accept_grant` has **zero live (non-test) callers at HEAD** — it gains its first production caller at Phase-4-Meta-**Composing** engine-wiring (grant-signature verify + `request_id` binding are wire-layer caller preconditions per Row D-1/D-64-adjacent `accept_grant` caller-contract note). The wire bytes above are frozen; only the live call path is Composing-wired.
+
 ---
 
 ## 28. Layer-A vault on-disk AEAD frame (`${BENTEN_DATA_DIR}/vault.cbor`)

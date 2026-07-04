@@ -98,9 +98,16 @@ const EXEMPT_PUB_ITEMS: &[(&str, &str)] = &[
         "classical_half_for_test",
     ),
     ("crates/benten-crypto-suite/src/sig.rs", "pq_half_for_test"),
-    // benten-crypto-suite — StructuralKdfKey byte-construction used
-    // by benten-drop's bundle-build pipeline + future benten-graph
-    // structural-encryption seam.
+    // benten-crypto-suite — StructuralKdfKey byte-construction. Live
+    // production caller is `benten_graph::redb_backend::put_node_with_context`
+    // (the namespaced wave-3e AEAD-wrap seal path at
+    // `crates/benten-graph/src/redb_backend.rs:1692` →
+    // `derive_test_seam_key_from_cid_with_namespace` :183), the
+    // publicly-derivable-`K_principal` stand-in tracked as Compromise #65
+    // in `docs/SECURITY-POSTURE.md`. (NOTE: benten-drop's bundle-build
+    // pipeline does NOT use this type — it uses
+    // `benten_caps::authorization_grant::GrantKeyMaterial::from_bytes_for_test`;
+    // `StructuralKdfKey::from_bytes_for_test` has zero benten-drop refs.)
     (
         "crates/benten-crypto-suite/src/structural_kdf.rs",
         "from_bytes_for_test",

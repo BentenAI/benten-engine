@@ -2493,6 +2493,16 @@ exemption entries carried over). They are
 under the same audit-gated window: the v1-GM independent audit must cover
 the `libcrux-ml-kem` trust path alongside `ml-dsa`/`ml-kem`.
 
+**C-GM-AUDIT conformance-corpus addition (R16 F-17).** The v1-GM ML-KEM /
+ML-DSA conformance scope must add the official **NIST `.rsp` KAT response-file
+corpus** (the FIPS-203 / FIPS-204 known-answer-test response files) to the
+conformance test set. At v1-beta the cross-impl KAT (`f_kat_1` — libcrux ↔
+RustCrypto FIPS-203 deterministic-constructor byte-equality) proves the two
+production impls agree, but it does NOT check either impl against the
+authoritative NIST-published `.rsp` vectors. Adding the official `.rsp` corpus
+(vs the current cross-impl-agreement witness) is a v1-GM conformance-scope
+deliverable, co-scheduled with the independent PQ audit (NF-2 / C-GM-AUDIT).
+
 **Rejected alternative (named, per the reframe).** "PQ-TLS as a
 quantum-resistant transport envelope buys time" (Matrix's public
 position) does NOT transfer to Benten: Benten's vision (baked-in #18 —
@@ -2907,7 +2917,7 @@ hybrid (post-quantum) signing key. This is an enforced strength, not a residual.
 defense arms: second-sealer-spoof / second-member-spoof / re-target / stale-generation / strip-PQ-half);
 `docs/THREAT-MODEL.md` §1 (the positive-property tier note).
 
-**Generation-staleness / anti-re-target defense of record (R9 F-07).** The cross-generation-replay / stale-generation / anti-re-target defense IS the B2 `M_auth` recompute-on-open described above: each recipient re-derives the key-epoch generation words (`recipient_key_generation` for `0x6510`/`0x6520`; `member_key_generation` ‖ `membership_set_generation` ‖ `role_assignments_generation` for the `0x6610` group path) from its OWN independently-held set-state (NEVER the wire) and fail-closes the hybrid LAMPS verify (`crates/benten-drop/src/layer_c.rs`, `open_group_stanza` / `open_membership_set_group`). The earlier `benten_sync::two_cid_store::verify_stanza_generation` — a plaintext, unsigned, monotonic `<` compare with NO seal-side producer — was a strictly-weaker parallel model with no live call site and was **DROPPED (R9 F-07)**; its `DualCidStore` / `reseal` / `blind_set_cid` siblings were byte-for-byte redundant with the live `body_cid` recompute + `membership_set_id_commitment` and were dropped with it. The `k_principal_generation` (U20) axis it modeled is subsumed **by construction**: `K_principal` is the at-rest / vault (encrypt-to-**self**) key and is ABSENT from the recipient Layer-C path, so no per-stanza `k_principal_generation` rides the live wire; K_principal rotation is reseal-heavy (a rotated principal yields a fresh envelope that an old-generation body cannot verify under), and sender signing-key rotation is enforced live by `benten-id` RotationLog at DID→key resolution inside `verify_m_auth`. No standalone counter-compare is needed.
+**Generation-staleness / anti-re-target defense of record (R9 F-07).** The cross-generation-replay / stale-generation / anti-re-target defense IS the B2 `M_auth` recompute-on-open described above: each recipient re-derives the key-epoch generation words (`recipient_key_generation` for `0x6510`/`0x6520`; `member_key_generation` ‖ `membership_set_generation` ‖ `role_assignments_generation` for the `0x6610` group path) from its OWN independently-held set-state (NEVER the wire) and fail-closes the hybrid LAMPS verify (`crates/benten-drop/src/layer_c.rs`, `open_group_stanza` / `open_membership_set_group`). The earlier `benten_sync::two_cid_store::verify_stanza_generation` — a plaintext, unsigned, monotonic `<` compare with NO seal-side producer — was a strictly-weaker parallel model with no live call site and was **DROPPED (R9 F-07)**; its `DualCidStore` / `reseal` / `blind_set_cid` siblings were byte-for-byte redundant with the live `body_cid` recompute + `membership_set_id_commitment` and were dropped with it. The `k_principal_generation` (U20) axis it modeled is subsumed **by construction**: `K_principal` is the at-rest / vault (encrypt-to-**self**) key and is ABSENT from the recipient Layer-C path, so no per-stanza `k_principal_generation` rides the live wire; K_principal rotation is reseal-heavy (a rotated principal yields a fresh envelope that an old-generation body cannot verify under), and sender signing-key rotation needs no live counter-compare inside `verify_m_auth` (`crates/benten-drop/src/layer_c.rs:265`): the v1-beta identity method is self-certifying **did:key**, where the DID *is* the verifying key, so there is no DID→key indirection to consult and no `RotationLog` reference exists anywhere in `benten-drop`. `RotationLog` applies only to *rotatable* DID methods and is an out-of-band identity-resolution concern (resolved before the sender key reaches `verify_m_auth`), not a live consult inside it. No standalone counter-compare is needed.
 
 ### Compromise #44 — Long-term-confidentiality posture (BSI TR-02102-1; acceptable-migration-window)
 
@@ -3284,6 +3294,10 @@ crypto-primitive call site (crypto-agility-contract:6). Never
 hardcoded key/nonce/tag sizes outside the cipher-suite dispatch arm
 (the nonce length of 12 B is algorithm-parameter-fixed for
 ChaCha20-Poly1305, not a CLAUDE.md #5 "no-hardcoded-sizes" violation).
+Note: the secret-size scanner intentionally EXEMPTS ephemeral `[u8; 32]`
+values (e.g. random ephemeral / nonce-seed material) — these are
+fixed-width ephemeral bytes, not agility-bearing algorithm key/sig sizes,
+so a literal `32` there is not a "no-hardcoded-sizes" violation either.
 
 ### Cross-refs
 

@@ -111,6 +111,16 @@ pub fn registered_envelope_codepoints() -> Vec<u16> {
 /// The Benten band `0x6100..` is disjoint from ALL of these by construction
 /// (the `0x6100+` band floor sits above every IANA allocation above), so
 /// disjointness holds regardless — but the ranges are now accurate.
+///
+/// Two further IANA HPKE reference points exist for completeness but are
+/// intentionally NOT coalesced into the scanner ranges below (disjointness with
+/// the `0x6100+` band holds for them anyway): `0x0021` DHKEM(X448, HKDF-SHA512)
+/// (RFC 9180 §7.1 — one above the DHKEM `0x0010..0x0020` block scanned here) and
+/// `0xFFFF` AEAD Export-only (RFC 9180 §7.3). `0xFFFF` is also Benten's own
+/// `EXTENDED_CODEPOINT_ESCAPE` (an out-of-band escape, deliberately outside the
+/// suite-selector band), which is why it is not treated as an IANA-avoid range.
+/// See `docs/CRYPTO-CODEPOINTS.md` "IANA HPKE referenced ranges" for the full
+/// reference table.
 #[must_use]
 pub fn iana_hpke_reserved_ranges() -> Vec<RangeInclusive<u16>> {
     vec![

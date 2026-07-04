@@ -70,8 +70,8 @@ jobs:
             echo '```'
             echo
             echo 'Onboarding policy (sec-r1-5): exemption-budget = 18 max (raised 5 -> 18 on'
-            echo '2026-06-05 for the libcrux-ml-kem unaudited-transitive cluster -- a FLAG-FOR-BEN'
-            echo 'policy decision PENDING Ben ratification; authoritative flag site = docs/SECURITY-POSTURE.md'
+            echo '2026-06-05 for the libcrux-ml-kem unaudited-transitive cluster -- a policy decision'
+            echo 'now Ben-RATIFIED; ratified cap = 18; authoritative site = docs/SECURITY-POSTURE.md'
             echo 'exemption-budget row, pinned by cargo_vet_policy_self_test.rs::cargo_vet_exemption_budget_within_ratified_cap);'
             echo 'criteria-set = `safe-to-deploy` (default) + `crypto-reviewed` (manual);'
             echo 'periodic-policy-review cadence quarterly.'

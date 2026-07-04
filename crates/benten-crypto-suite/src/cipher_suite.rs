@@ -310,7 +310,7 @@ impl CipherSuite {
     /// the SAME source the seal path uses for ephemerals + the SAME source
     /// `crate::mlkem::generate` fills its `d‖z` seed from). This is
     /// **NON-deterministic**: two calls yield distinct public AND secret
-    /// bytes. Contrast [`Self::generate_recipient_keypair_deterministic_for_test`]
+    /// bytes. Contrast `Self::generate_recipient_keypair_deterministic_for_test`
     /// (seeded from a public fingerprint → forgeable; test-only) and
     /// `generate_recipient_keypair_for_test` (test-fixture entropy).
     ///

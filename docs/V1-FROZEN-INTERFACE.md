@@ -99,9 +99,14 @@ merge). The release cadence beyond is `phase-4-meta-close` → `v1-beta` →
 The freeze is enforceable, not merely declarative. Five structural backstops
 fail CI on a frozen-surface mutation:
 
-1. **`cargo-public-api` baseline regeneration + drift test** at
-   `crates/benten-engine/tests/cargo_public_api_drift.rs` against
-   `docs/public-api/benten-*.{txt,json}`.
+1. **`cargo-public-api` baseline regeneration + drift gate.** The
+   **authoritative diff gate is the CI workflow**
+   `.github/workflows/cargo-public-api.yml`, which regenerates the public
+   surface at PR-time and diffs it against the committed baselines at
+   `docs/public-api/benten-*.{txt,json}` (a diff fails CI). The Rust-side
+   test `crates/benten-engine/tests/cargo_public_api_drift.rs` is the
+   **presence-pin** — it asserts the workflow file exists and references the
+   `cargo-public-api` extension (non-vacuity), NOT the drift diff itself.
    **LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 1 (commit `fb7c212d`);
    extended to the 15th crate `benten-membership-set` at F-full R5
    (2026-06-05).** All 15 lib crate baselines regenerated with
@@ -227,6 +232,13 @@ RATIFIED-prework-forks-2026-05-18.md §8-A option (a)):**
   closure means the v1-beta cargo-public-api baselines no longer carry
   the bulk of the `_for_test*` surfaces; renaming the 14 exempts is a
   v1-GM-target cleanup tracked separately.
+  **Scanner-completeness follow-up (R16 F-12):** the `is_for_test_pattern`
+  matcher in the same test file catches the `_for_test*` / `test_` / `_test_`
+  / `mock_` / `inject_` name families but NOT the `from_raw*` / `_unchecked`
+  degenerate-constructor family; widening it to also catch those (with
+  allowlist entries for any legitimately-public raw/unchecked constructors)
+  is NAMED for v1-GM backstop-completeness at `docs/future/phase-3-backlog.md`
+  §15.6 (with the bare-`for_test` widening Row D-74).
 - `crates/benten-engine/src/engine.rs::Engine::caps` (`fn caps(&self) ->
   &EngineCapsHandle`) stays `pub`; this is the canonical cap-mutation
   surface per the §4.69-ALREADY-SHIPPED ground-truth. No `Engine`-direct
@@ -995,8 +1007,11 @@ crates. See build-backlog row 1 for the regeneration procedure.
   the baseline.
 
 **Verification mechanism:**
-- `crates/benten-engine/tests/cargo_public_api_drift.rs` runs the drift
-  detection on every CI lane.
+- The CI workflow `.github/workflows/cargo-public-api.yml` is the
+  authoritative diff gate (regenerate-and-diff against the committed
+  baselines at PR-time). `crates/benten-engine/tests/cargo_public_api_drift.rs`
+  is the presence-pin that asserts the workflow is wired + non-vacuous, not
+  the drift diff itself.
 - `cargo +stable clippy --workspace --all-targets -- -D warnings`
   orthogonal catch on missing-docs / unused-pub.
 

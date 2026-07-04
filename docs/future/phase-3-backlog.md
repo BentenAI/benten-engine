@@ -2626,4 +2626,10 @@ Couples to CLAUDE.md baked-in #15 (v1-milestone-gate). v1-assessment-window open
 
 **Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Companion to §15.4; the over-broad "getrandom absent from the wasm tree entirely" Cargo.toml comment was corrected at R15 GAP-1 (the "absent" scope is the libcrux-ml-kem subtree ONLY; the crate as a whole DOES pull `getrandom` at the top level). The unproven part: on `wasm32-unknown-unknown` a `getrandom` backend must be explicitly selected (there is no default OS entropy source on that target) — whether the current dep set links + how entropy is sourced there is untested. Freeze-additive, no wire change; scoped with §15.4 when thin-compute crypto lands.
 
+### 15.6 widen `is_for_test_pattern` degenerate-constructor scanner to catch `from_raw*` / `_unchecked` name patterns (R16 F-12)
+
+**Disposition:** BELONGS-NAMED-NOW per HARD RULE rule-12 clause-(b). Backstop-completeness hardening; no wire change.
+
+The workspace guard `is_for_test_pattern` in `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs` (:337) currently catches only the `_for_test` / `_for_testing` / `test_` / `_test_` / `mock_` / `inject_` degenerate-constructor / test-seam name patterns. It does NOT catch the `from_raw*` / `_unchecked` constructor-name family — a `pub fn from_raw_bytes` / `from_raw` / `*_unchecked` degenerate constructor that bypasses an invariant would slip past the scanner. Widen the pattern set to also match `from_raw` / `_unchecked` (word-boundary aware so it does not over-match unrelated identifiers), and add explicit `EXEMPT_PUB_ITEMS` allowlist entries for any legitimately-public `from_raw*` / `_unchecked` constructors already on the frozen surface so the widened scanner stays green. Distinct from Row D-74 (which widens for the bare `for_test` form); this row widens for the raw/unchecked constructor family. Cross-ref: `docs/V1-FROZEN-INTERFACE.md` verify-item-1 (backstop roster). Destination: v1-GM backstop-completeness hardening (with Row D-74).
+
 ---

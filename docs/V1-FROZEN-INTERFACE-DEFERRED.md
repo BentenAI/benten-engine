@@ -2408,12 +2408,30 @@ Row D-15's audit-readiness concern.
     belongs in `crates/benten-engine/tests/f_ld_4_multi_device_key_wrap_provisioning.rs`
     (mirror `f_va_4::secret_wrapper_debug_does_not_leak_key`) asserting a
     `{:?}` render does not leak the wrapped key bytes.
-- **Anchor:** R14-council GAP-1; R15 F-03/F-05/F-08 extension;
-  `crates/benten-crypto-suite/src/cipher_suite.rs` (`UnwrappedKey` vs the
-  `RecipientSecret` redact+zeroize precedent) +
+- **Additional zeroize SIBLINGS enumerated under this umbrella (R16 F-11):**
+  three more secret-bearing surfaces that likewise warrant `Zeroizing` /
+  `ZeroizeOnDrop` when this hardening lands (awareness/enumeration only; the
+  work stays deferred with the Compromise #66 ledger):
+  - **`DecryptedPlaintext`** (`crates/benten-crypto-suite/src/cipher_suite.rs:1035`)
+    — holds `bytes: Vec<u8>` (recovered AEAD plaintext) with no `ZeroizeOnDrop`
+    and no redacting `Debug`; give it the same redact+zeroize treatment.
+  - **The `unwrap_key_from_recipient` return**
+    (`crates/benten-crypto-suite/src/hpke.rs:55` → `Result<Vec<u8>, _>`) — the
+    HPKE-recovered key material is returned as a bare `Vec<u8>`; wrap in
+    `Zeroizing<Vec<u8>>` (mirrors Row D-76 `derive_member_key`).
+  - **The device_link "recovered" secret**
+    (`crates/benten-engine/src/layer_d/device_link.rs:301` — the local
+    `recovered` binding holding the `unwrap_key_from_recipient` return before
+    `parse_inner_be`) — a bare `Vec<u8>` of unwrapped key bytes on the stack;
+    it inherits the `Zeroizing` return above once that lands.
+- **Anchor:** R14-council GAP-1; R15 F-03/F-05/F-08 extension; R16 F-11 sibling
+  enumeration; `crates/benten-crypto-suite/src/cipher_suite.rs` (`UnwrappedKey`
+  vs the `RecipientSecret` redact+zeroize precedent; `DecryptedPlaintext`) +
   `crates/benten-crypto-suite/src/vault.rs` (`VaultPayload`) +
-  `crates/benten-engine/src/layer_d/device_link.rs` (`ProvisioningInnerPayload`);
-  `docs/SECURITY-POSTURE.md` Compromise #66 (the R14 SGD mint).
+  `crates/benten-crypto-suite/src/hpke.rs` (`unwrap_key_from_recipient`) +
+  `crates/benten-engine/src/layer_d/device_link.rs` (`ProvisioningInnerPayload`
+  + the `recovered` binding); `docs/SECURITY-POSTURE.md` Compromise #66 (the R14
+  SGD mint).
 
 ### Row D-76 — GAP-1: `derive_member_key` returns a raw `Vec<u8>` (not `Zeroizing`) → v1-GM secret-hygiene hardening
 
@@ -2433,6 +2451,105 @@ Row D-15's audit-readiness concern.
   `crates/benten-membership-set/src/keying.rs` (`derive_member_key`); the
   `RecipientSecret::to_bytes` → `Zeroizing` precedent in
   `crates/benten-crypto-suite/src/cipher_suite.rs`.
+
+---
+
+## R16 (post-F-full phase-close, round 16) NAMED-CARRY rows
+
+> The rows below land as HARD-RULE clause-(b) deferrals whose ENTRY lands NOW
+> with a NAMED destination; the substantive change ships in the named downstream
+> wave. Cites verified live at HEAD at author-time (branch
+> `phase-4-meta-core/r16-doc-fixpass`).
+
+### Row D-77 — F-09: `check_schema_version` → `ensure_tables` read-only-ordering hardening → v1-Composing
+
+- **Observation (NAMED, not fixed this round):** in `RedbBackend` open
+  (`crates/benten-graph/src/redb_backend.rs:612-613`) `ensure_tables()` runs
+  BEFORE `check_schema_version(write_if_absent)`. A defensive ordering tweak
+  would perform the schema-version READ (and its compatibility check) before any
+  table-creating write side-effect, so an incompatible-version store is rejected
+  without first mutating the file. This is a defensive read-before-write ordering
+  hardening, not a v1-beta correctness bug (the current order is safe on a
+  single-owner store).
+- **Deferred (destination):** v1-Composing — reorder so the schema-version read
+  gates the `ensure_tables` write (or split the read out of the current sequence)
+  on the schema-version read path.
+- **Anchor:** R16-council F-09;
+  `crates/benten-graph/src/redb_backend.rs::open` (`ensure_tables` /
+  `check_schema_version`, :612-613 / :734 / :765).
+
+### Row D-78 — F-10: Composing-side forward-guard must compare equality-against-independently-held-state → v1-Composing
+
+- **Observation (NAMED, not fixed this round):** the drop-side generation /
+  forward-guard is ALREADY correct — each recipient re-derives the key-epoch
+  generation from its OWN independently-held set-state and never trusts the wire
+  (`crates/benten-drop/src/layer_c.rs` B2 `M_auth` recompute-on-open, e.g.
+  :1440-1573). The complementary **Composing-side** wiring guard (when the
+  engine wires the live send/receive path) MUST likewise compare equality against
+  independently-held state, NOT against a wire-supplied generation — this is a
+  Composing-wiring guard, named so it is not lost when that path is built.
+- **Deferred (destination):** Phase-4-Meta-Composing engine encrypt-to-recipient
+  wiring (Row D-64) — carry the independently-held-state equality-compare
+  discipline into the Composing-side forward-guard.
+- **Anchor:** R16-council F-10; `crates/benten-drop/src/layer_c.rs` (the
+  already-correct drop-side recompute-on-open precedent) + Row D-64 (Composing
+  wiring destination).
+
+### Row D-79 — F-15: G-COMP-1 golden-hex sweep must add ABSOLUTE literal first-byte pins → G-COMP-1 (extends Row D-9)
+
+- **Observation (NAMED, not fixed this round):** the deferred golden-hex sweep
+  (Row D-9 cohort) should add **ABSOLUTE literal first-byte pins** alongside the
+  relative/structural pins — e.g. for the Layer-A vault V2 on-disk frame
+  (`magic 0xae | format-version V2 | codepoint(BE u16) | salt…`, per
+  `crates/benten-crypto-suite/src/vault.rs`), pin `bytes[0] == 0xae` and
+  `bytes[1] == 0x02` as literal-byte asserts so a magic/version drift fails on an
+  exact byte, not only on a relative-offset comparison.
+- **Deferred (destination):** **G-COMP-1, Row D-9** (the deferred hex-pin
+  cohort) — add absolute literal first-byte asserts to each frozen frame's
+  golden pin.
+- **Anchor:** R16-council F-15; Row D-9 (hex-pin cohort);
+  `crates/benten-crypto-suite/tests/f_va_1_vault_ondisk_format_freeze.rs` +
+  `crates/benten-crypto-suite/src/vault.rs` (the `0xae`/`0x02` frame header).
+
+### Row D-80 — F-16: Drop-bundle CBOR ingest `len <= cap` engine-boundary gate → Phase-4-Meta-Composing (with Row D-67)
+
+- **Observation (NAMED, not fixed this round):** the Drop-bundle CBOR ingest is
+  input-proportional and `benten_drop::DROP_BUNDLE_MAX_SIZE_BYTES` (4 KiB,
+  `crates/benten-drop/src/bundle.rs:32`) is **advisory-not-enforced** at this
+  wave — it is only asserted in the `tf3f_*` offline-consume tests, not enforced
+  before decode on a live path. Name the `len <= DROP_BUNDLE_MAX_SIZE_BYTES` gate
+  to add at the engine-wiring boundary (the Composing send/receive path that
+  first exposes Drop ingest to untrusted input). Complements Row D-67 (the
+  `parse_cbor_bytes` decode-cap) — D-67 caps inside the parser; F-16 gates
+  `len <= cap` at the engine boundary before the parser is reached. Also
+  disclosed in `docs/THREAT-MODEL.md §6`.
+- **Deferred (destination):** Phase-4-Meta-Composing engine-wiring boundary
+  (co-scheduled with Row D-67 / Row D-64).
+- **Anchor:** R16-council F-16; `crates/benten-drop/src/bundle.rs`
+  (`DROP_BUNDLE_MAX_SIZE_BYTES` :32; `parse_cbor_bytes`); Row D-67; `docs/THREAT-MODEL.md §6`.
+
+### Row D-81 — D-5 (orchestrator-added): tighten `derive_test_seam_key_from_cid_with_namespace` visibility + drop the `_for_test` `StructuralKdfKey` constructor at the K_principal-store swap-in → with Row D-64 / #1301
+
+- **Observation (NAMED, not fixed this round):** WHEN the K_principal-store
+  backend (#1301 / #989) lands and replaces the wave-3e test-seam, tighten
+  `benten_graph::redb_backend::derive_test_seam_key_from_cid_with_namespace`
+  from `pub` to `pub(crate)` — it is benten-graph-internal (only the in-crate
+  integration test reaches it via the public path) — AND drop the
+  `_for_test`-named `StructuralKdfKey` constructor
+  (`StructuralKdfKey::from_bytes_for_test`) from the frozen crypto-suite surface.
+- **Rationale (record):** the `_for_test` / `_test_seam_` naming is a
+  load-bearing HONESTY signal for the transitional publicly-derivable-`K_principal`
+  stand-in (Compromise #65). The smell therefore resolves NATURALLY at the
+  K_principal-store swap-in rather than via a pre-tag visibility churn — tightening
+  the visibility or renaming the constructor before the swap-in would erase the
+  honesty signal while the stand-in is still live.
+- **Deferred (destination):** with Row D-64 (#1301 / #989 confidentiality-half
+  K_principal-store landing).
+- **Anchor:** R16-council orchestrator-added D-5;
+  `crates/benten-graph/src/redb_backend.rs` (`derive_test_seam_key_from_cid_with_namespace`)
+  + `crates/benten-crypto-suite/src/structural_kdf.rs`
+  (`StructuralKdfKey::from_bytes_for_test`); `docs/SECURITY-POSTURE.md`
+  Compromise #65; Row D-64 (#1301).
 
 ---
 
