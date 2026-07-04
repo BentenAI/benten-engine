@@ -124,14 +124,14 @@ fn tf5_424_materializer_recursively_resolves_field_ref_target_via_read_node_as()
     let alice = materializer_fixtures::actor_principal_alice_cid();
 
     let out = HtmlJsonMaterializer
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: article_cid,
-            walk_principal: alice,
-            cap_recheck: allow_all(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            article_cid,
+            alice,
+            allow_all(),
+            Vec::new(),
+        ))
         .expect("materialize_with_gate over nested schema");
 
     let html = std::str::from_utf8(out.html_bytes()).expect("html is UTF-8");
@@ -176,14 +176,14 @@ fn tf5_424_materializer_recursive_walk_iterates_list_map_and_dispatches_variant(
     let alice = materializer_fixtures::actor_principal_alice_cid();
 
     let out = HtmlJsonMaterializer
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: article_cid,
-            walk_principal: alice,
-            cap_recheck: allow_all(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            article_cid,
+            alice,
+            allow_all(),
+            Vec::new(),
+        ))
         .expect("materialize_with_gate over nested schema");
 
     let html = std::str::from_utf8(out.html_bytes()).expect("html is UTF-8");
@@ -214,14 +214,14 @@ fn tf5_424_materializer_recursive_walk_iterates_list_map_and_dispatches_variant(
     // markers (distinct from the HTML container shape) — same SUBSTANCE
     // (each vocabulary edge is observably consumed), different syntax.
     let pt = PlaintextMaterializer
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: article_cid,
-            walk_principal: alice,
-            cap_recheck: allow_all(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            article_cid,
+            alice,
+            allow_all(),
+            Vec::new(),
+        ))
         .expect("plaintext materialize_with_gate over nested schema");
     let pt_text = std::str::from_utf8(pt.html_bytes()).expect("plaintext is UTF-8");
     assert!(

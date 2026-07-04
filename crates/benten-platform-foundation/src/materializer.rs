@@ -206,6 +206,8 @@ pub fn deny_all_cap_recheck() -> MaterializerCapRecheck {
 /// `code: ErrorCode` field that is structurally constant per variant is
 /// duplicate state).
 #[derive(Debug, Error)]
+// §11 SemVer-readiness (F-22 pre-tag): a future materializer-error variant lands additively; cross-crate consumers add a `_` wildcard arm.
+#[non_exhaustive]
 pub enum MaterializerError {
     /// Materializer's entry validation refused the spec.
     /// Surfaces [`ErrorCode::MaterializerSchemaMismatch`].
@@ -254,6 +256,8 @@ impl MaterializerError {
 /// bytes; this frame carries the typed code so the consumer (admin UI) can
 /// render an explanation.
 #[derive(Debug, Clone)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate construction uses the crate's constructors (field READS unaffected).
+#[non_exhaustive]
 pub struct MaterializerDenialFrame {
     /// The CID that was denied.
     pub node_cid: Cid,
@@ -287,6 +291,8 @@ impl MaterializerDenialFrame {
 /// views over the same content tile should pass distinct
 /// `SchemaSubgraphSpec` values; consumers that want multiple views
 /// over the same shape should pass distinct content CIDs.
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate construction uses the crate's constructor (field READS unaffected).
+#[non_exhaustive]
 pub struct MaterializerWalkInputs<'a, E: MaterializerEngine> {
     /// Engine seam used for content reads (`read_node_as`).
     pub engine: &'a E,
@@ -311,6 +317,33 @@ pub struct MaterializerWalkInputs<'a, E: MaterializerEngine> {
     pub declared_requires: Vec<String>,
 }
 
+impl<'a, E: MaterializerEngine> MaterializerWalkInputs<'a, E> {
+    /// Construct a `MaterializerWalkInputs` from its parts.
+    ///
+    /// This is the cross-crate construction entry point — `#[non_exhaustive]`
+    /// (F-22 pre-tag §11 SemVer-readiness) blocks the equivalent struct-literal
+    /// from outside `benten-platform-foundation`. A future additive field lands
+    /// here without breaking external callers.
+    #[must_use]
+    pub fn new(
+        engine: &'a E,
+        spec: &'a SchemaSubgraphSpec,
+        content_cid: Cid,
+        walk_principal: Cid,
+        cap_recheck: MaterializerCapRecheck,
+        declared_requires: Vec<String>,
+    ) -> Self {
+        Self {
+            engine,
+            spec,
+            content_cid,
+            walk_principal,
+            cap_recheck,
+            declared_requires,
+        }
+    }
+}
+
 impl<'a, E: MaterializerEngine> Clone for MaterializerWalkInputs<'a, E> {
     fn clone(&self) -> Self {
         Self {
@@ -330,6 +363,8 @@ impl<'a, E: MaterializerEngine> Clone for MaterializerWalkInputs<'a, E> {
 
 /// Output bytes from a single materializer walk.
 #[derive(Debug, Clone)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct MaterializerOutput {
     /// Primary-format bytes (HTML for HtmlJson; plaintext for Plaintext).
     primary: Vec<u8>,
@@ -564,6 +599,8 @@ pub trait Renderer: Send + Sync {
 /// Renderer error type — opaque to keep transport concerns inside
 /// concrete impls.
 #[derive(Debug, Error)]
+// §11 SemVer-readiness (F-22 pre-tag): a future render-error variant lands additively; cross-crate consumers add a `_` wildcard arm.
+#[non_exhaustive]
 pub enum RenderError {
     /// Renderer transport failure.
     #[error("renderer transport failure: {0}")]
@@ -610,6 +647,8 @@ enum FormatBackend {
 /// using this token's pattern; the materializer-side seam is the trait
 /// surface lock.
 #[derive(Debug, Clone)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate construction uses the crate's constructor (field READS unaffected).
+#[non_exhaustive]
 pub struct SubscribeAttachToken {
     /// Pattern to be subscribed against; consumer passes this to
     /// `Engine::on_change_as_with_cursor(pattern, cursor, callback, actor)`.

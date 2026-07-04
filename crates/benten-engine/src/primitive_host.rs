@@ -1557,12 +1557,12 @@ pub(crate) fn resolve_list_via_view_or_backend(engine: &Engine, label: &str) -> 
             "content_listing".to_string(),
         ];
         for view_id in &view_id_candidates {
-            let query = benten_ivm::ViewQuery {
-                label: Some(label.to_string()),
-                limit: None,
-                offset: None,
-                ..Default::default()
-            };
+            // `#[non_exhaustive]` (F-22): construct via default + field
+            // mutation from outside `benten-ivm`.
+            let mut query = benten_ivm::ViewQuery::default();
+            query.label = Some(label.to_string());
+            query.limit = None;
+            query.offset = None;
             match subscriber.read_view(view_id, &query) {
                 Some(Ok(benten_ivm::ViewResult::Cids(cids))) if !cids.is_empty() => {
                     let mut out = Vec::new();

@@ -190,8 +190,8 @@ pub fn validate_subgraph(
             let fi = sg.nodes.iter().position(|n| n.id == *f)?;
             let ti = sg.nodes.iter().position(|n| n.id == *t)?;
             Some((
-                NodeHandle(u32::try_from(fi).ok()?),
-                NodeHandle(u32::try_from(ti).ok()?),
+                NodeHandle::new(u32::try_from(fi).ok()?),
+                NodeHandle::new(u32::try_from(ti).ok()?),
                 l.clone(),
             ))
         })
@@ -537,12 +537,12 @@ pub(crate) fn validate_builder(
     // We project the snapshot onto a transient Subgraph view because
     // `validate_registration` takes a `&Subgraph`; the node contents
     // (id + kind + properties) are what Inv-14 inspects.
-    let transient = Subgraph {
-        handler_id: sn.handler_id.to_string(),
-        nodes: sn.nodes.to_vec(),
-        edges: Vec::new(),
-        deterministic: sn.deterministic,
-    };
+    let transient = Subgraph::from_parts(
+        sn.handler_id.to_string(),
+        sn.nodes.to_vec(),
+        Vec::new(),
+        sn.deterministic,
+    );
     if crate::invariants::attribution::validate_registration(&transient).is_err() {
         violations.push(InvariantViolation::Attribution);
         if !aggregate {
@@ -859,19 +859,19 @@ mod tests {
     fn cid_order_independent_over_edges() {
         let n1 = OperationNode::new("a", PrimitiveKind::Read);
         let n2 = OperationNode::new("b", PrimitiveKind::Transform);
-        let sg1 = Subgraph {
-            handler_id: "h".into(),
-            nodes: vec![n1.clone(), n2.clone()],
-            edges: vec![("a".into(), "b".into(), "next".into())],
-            deterministic: false,
-        };
-        let sg2 = Subgraph {
-            handler_id: "h".into(),
-            // Same edges + nodes but the nodes vec is reversed.
-            nodes: vec![n2, n1],
-            edges: vec![("a".into(), "b".into(), "next".into())],
-            deterministic: false,
-        };
+        let sg1 = Subgraph::from_parts(
+            "h",
+            vec![n1.clone(), n2.clone()],
+            vec![("a".into(), "b".into(), "next".into())],
+            false,
+        );
+        // Same edges + nodes but the nodes vec is reversed.
+        let sg2 = Subgraph::from_parts(
+            "h",
+            vec![n2, n1],
+            vec![("a".into(), "b".into(), "next".into())],
+            false,
+        );
         assert_eq!(
             canonical_subgraph_bytes(&sg1).expect("encode"),
             canonical_subgraph_bytes(&sg2).expect("encode")
@@ -881,7 +881,7 @@ mod tests {
     #[test]
     fn handle_constructor_unused_in_checker() {
         // Smoke: NodeHandle is small and Copy — invariants never consume it.
-        let h = NodeHandle(0);
+        let h = NodeHandle::new(0);
         let _ = h;
     }
 }

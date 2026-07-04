@@ -667,7 +667,7 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 
 > **STATUS (2026-05-25):** the 3 NAMED types in the row title — `CapWriteContext`, `ReadContext`, `SuspensionOutcome` — **CLOSED at R6-R2 FP Item 6**. The attribute is applied at the type sites (`crates/benten-caps/src/policy.rs::CapWriteContext` + `crates/benten-caps/src/policy.rs::ReadContext` + `crates/benten-engine/src/engine_wait.rs::SuspensionOutcome`). The cross-crate cascade migrated all `~6` production sites in `benten-engine` to the `default()` + field-mutation pattern; all `~13` benten-caps integration-test sites mechanically converted; `bindings/napi/src/wait.rs` + `crates/benten-eval/benches/wait_suspend_resume_latency.rs` gained wildcard arms. `ReadContext::by_label_and_cid(label, cid, device_cid)` constructor minted at `crates/benten-caps/src/policy.rs` to handle the typed dual-shape case from `primitive_host::check_read_capability`. Audit-test deferral comments at `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs` lifted; the SuspensionOutcome arm-coverage pin now exercises the `_` wildcard guard. cargo-public-api baselines `docs/public-api/benten-caps.txt` + `docs/public-api/benten-engine.txt` regenerated.
 >
-> **REMAINING (G-COMP-1 destination):** the R2 EXTENSION lens-scoped pub-type set (~40+ types across `benten-engine` outcome.rs + `benten-ivm` view + `benten-platform-foundation` materializer + `benten-core` Subgraph cluster) — these were NOT closed at Item 6 (item scope was the 3 NAMED types per the title; lifting the EXTENSION set would balloon cascade ~10×). The R2 EXTENSION set carries its own per-class carve-outs documented inline below (e.g., `benten-ivm` view-instance + kernel-internal surface = "no `#[non_exhaustive]` cascade at v1-beta to preserve cargo-public-api baseline shape").
+> **~~REMAINING (G-COMP-1 destination)~~ → CLOSED at F-22 (pre-tag sweep, Ben-ratified apply-pre-tag):** the R2 EXTENSION lens-scoped pub-type set (~55 types across `benten-engine` outcome.rs/engine_views.rs/atrium_api.rs + `benten-ivm` view/subgraph_spec/algorithm_b/views + `benten-platform-foundation` materializer/vocab + `benten-core` version/version_dag/version_chain/subgraph cluster) — **`#[non_exhaustive]` is APPLIED at HEAD** (each type carries a `// §11 SemVer-readiness (F-22 pre-tag)` doc-block above the attribute). The pre-existing per-class carve-out note ("no `#[non_exhaustive]` cascade at v1-beta to preserve cargo-public-api baseline shape") is **SUPERSEDED** — the F-22 pre-tag sweep regenerates the cargo-public-api baselines (`docs/public-api/{benten-core,benten-ivm,benten-platform-foundation,benten-engine}.txt`) as part of the change, so the baseline-shape-preservation rationale no longer holds and the full EXTENSION set is applied. **Cross-crate cascade closed:** enum match-sites gained `_` wildcard arms (in-crate exhaustive matches UNAFFECTED, e.g. `algorithm_b.rs` in-crate matches stay exhaustive); struct literal/FRU sites migrated to minted constructors — **`benten_core::Subgraph::from_parts` + `benten_core::NodeHandle::new` + `benten_ivm::ViewDefinition::new` + `benten_platform_foundation::materializer::MaterializerWalkInputs::new`** (existing constructors reused for `ViewQuery`=`default()`+field-mutation, `KernelInput::new`, `SubgraphSpec::user_view/for_canonical_view/new`). The `benten_ivm::SubgraphSpec` field-set drift-defense test (`tests/subgraph_spec_field_set_drift_defense.rs`) was RELOCATED IN-CRATE (to a `#[cfg(test)]` module in `src/subgraph_spec.rs`) so its exhaustive struct-literal + `..`-free destructure — the drift-defense mechanism — still compiles under `#[non_exhaustive]` (which blocks that only from OUTSIDE the crate); the two mechanisms are complementary, not in conflict. Audit pins for the F-22 set added at `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs` (12 new `f22_*` tests). **Carve-outs at F-22: NONE** — every enumerated EXTENSION type took the attribute cleanly. (No type in this set is wire-keying-cardinality-frozen the way `MembershipSetKind`/`RoleId`/`BindingContext`/`Strategy`/`GrantRejection` are; `Subgraph` is wire-bytes-bearing but `#[non_exhaustive]` gates construction syntax only, NOT `canonical_subgraph_bytes` field VALUES, so the wire contract is preserved.)
 
 - **Frozen surface (v1-beta):** spec V1-FROZEN-INTERFACE.md item 11
   table row enumerates `CapWriteContext` + `ReadContext` +
@@ -680,8 +680,10 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   sites. Total cascade ~80+ files in the benten-caps + benten-engine
   test families.
 
-  **G-CORE-9 R2 EXTENSION (L8-R2-MAJOR-CARRY-2 closure):** the R1-enumerated
-  remaining pub types not yet covered by any DEFERRED row are added here:
+  **G-CORE-9 R2 EXTENSION (L8-R2-MAJOR-CARRY-2 closure) — `#[non_exhaustive]`
+  APPLIED to the ENTIRE set below at F-22 (pre-tag sweep):** the R1-enumerated
+  remaining pub types not yet covered by any DEFERRED row are enumerated here
+  (all now carry the attribute at HEAD; see the STATUS block above):
   - `benten-engine`: `UserViewInputPattern` (outcome.rs), `TraceStep`
     (outcome.rs), `StreamCursor` (engine_stream.rs),
     `SubscribeCursor` (engine_subscribe.rs), `EngineViewsHandle`
@@ -707,20 +709,26 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
     materializer-public-struct cluster; in-crate exhaustive matches preserved
     when `#[non_exhaustive]` is added since out-of-crate consumers add
     wildcard arm]
-  - `benten-core`: `Mode` (version_dag.rs:75), `VersionError`
-    (version.rs:105), `VersionDagError` (version_chain.rs:52), `Anchor`,
+  - `benten-core`: `Mode` (version_dag.rs), `VersionError`
+    (version.rs), `VersionDagError` (version_chain.rs), `Anchor`,
     `DagVersionChain`, `VersionDag`, `Subgraph` (wire-bytes-bearing per
-    `canonical_subgraph_bytes`; apply per Path-b R2.8 wire-bytes precedent
-    at the next D-17-targeted fix-pass — pim-N candidate per
-    L8-r4-OBS-1 same-file/same-namespace-sweep recurrence), `SubgraphBuilder`,
-    `NodeHandle` [L8-r3-MIN-2 + L8-r4-MIN-1 + L8-r4-MIN-3 closure: Version
-    DAG container types + Subgraph public surface]
+    `canonical_subgraph_bytes`; APPLIED at F-22 — `#[non_exhaustive]` gates
+    construction SYNTAX only, NOT the canonical field VALUES, so the wire
+    contract is preserved; cross-crate literal sites migrated to the minted
+    `Subgraph::from_parts` constructor), `SubgraphBuilder`,
+    `NodeHandle` (tuple-literal `NodeHandle(x)` cross-crate sites migrated to
+    the minted `NodeHandle::new`) [L8-r3-MIN-2 + L8-r4-MIN-1 + L8-r4-MIN-3
+    closure: Version DAG container types + Subgraph public surface]
   - `benten-ivm` view-instance + kernel-internal surface: `Subscriber`,
     `CanonicalViewEntry`, `AlgorithmBView`, `Projection`, `EffectiveRules`,
-    plus 5 view-instance structs [L8-r4-MIN-4 closure: per-file pub-item
-    sweep of benten-ivm; D-17 enumeration extension only — Path-a per
-    spec; no `#[non_exhaustive]` cascade at v1-beta to preserve cargo-public-api
-    baseline shape]
+    plus the 5 view-instance structs (`CapabilityGrantsView`,
+    `VersionCurrentView`, `GovernanceInheritanceView`, `EventDispatchView`,
+    `ContentListingView`) [L8-r4-MIN-4 closure: per-file pub-item sweep of
+    benten-ivm; **APPLIED at F-22** — the prior "no `#[non_exhaustive]`
+    cascade at v1-beta to preserve cargo-public-api baseline shape" carve-out
+    is SUPERSEDED since F-22 regenerates the baselines anyway; all these types
+    have all-private fields so the attribute is a zero-cascade freeze pin
+    (`Projection` cross-crate use is via `Projection::all_props()`)]
 
   **R6-R2 EXTENSION (F-04 / F-05 closure — §11 ↔ §16 reconciliation):** the
   15th crate `benten-membership-set` shipped at F-full with a §16 freeze

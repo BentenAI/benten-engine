@@ -554,3 +554,191 @@ fn manifest_envelope_recheck_outcome_audit_arm_coverage_non_exhaustive() {
     assert_eq!(audit(&Outcome::NotApplicable), "NotApplicable");
     assert_eq!(audit(&Outcome::Admitted), "Admitted");
 }
+
+// =========================================================================
+// F-22 (pre-tag sweep) — Row D-17 EXTENSION set `#[non_exhaustive]` pins.
+// =========================================================================
+//
+// The R2 EXTENSION lens-scoped pub-type set (V1-FROZEN-INTERFACE-DEFERRED.md
+// Row D-17) carries `#[non_exhaustive]` as of the F-22 pre-tag SemVer
+// future-proofing wave. This audit crate is SEPARATE from every defining
+// crate (`benten-core`, `benten-ivm`, `benten-platform-foundation`), so the
+// `_` catch-all arms below are reachable ONLY while the attribute is present
+// — removing it turns each catch-all into an `unreachable_patterns` build
+// break (§11 HALT-AND-SURFACE). The struct constructors (`Subgraph::from_parts`
+// / `NodeHandle::new` / `ViewDefinition::new` / `MaterializerWalkInputs::new`)
+// are the cross-crate construction entry points minted for the non_exhaustive
+// structs whose literals were blocked at v1-beta.
+
+#[test]
+fn f22_core_mode_audit_arm_coverage_non_exhaustive() {
+    use benten_core::version_dag::Mode;
+    fn audit(m: Mode) -> &'static str {
+        match m {
+            Mode::Strict => "Strict",
+            Mode::Dag => "Dag",
+            _ => "Unknown(non_exhaustive guard)",
+        }
+    }
+    assert_eq!(audit(Mode::Strict), "Strict");
+    assert_eq!(audit(Mode::Dag), "Dag");
+}
+
+#[test]
+fn f22_core_version_error_audit_arm_coverage_non_exhaustive() {
+    use benten_core::version::VersionError;
+    fn audit(e: &VersionError) -> &'static str {
+        match e {
+            VersionError::Branched { .. } => "Branched",
+            VersionError::UnknownPrior { .. } => "UnknownPrior",
+            _ => "Unknown(non_exhaustive guard)",
+        }
+    }
+    let _: fn(&VersionError) -> &'static str = audit;
+}
+
+#[test]
+fn f22_core_version_dag_error_audit_arm_coverage_non_exhaustive() {
+    use benten_core::version_chain::VersionDagError;
+    fn audit(e: &VersionDagError) -> &'static str {
+        match e {
+            VersionDagError::UnknownParent { .. } => "UnknownParent",
+            VersionDagError::Cycle { .. } => "Cycle",
+            VersionDagError::UnknownCurrent { .. } => "UnknownCurrent",
+            _ => "Unknown(non_exhaustive guard)",
+        }
+    }
+    let _: fn(&VersionDagError) -> &'static str = audit;
+}
+
+/// The `benten-core` structs blocked from cross-crate literal construction by
+/// F-22 `#[non_exhaustive]` construct via their minted constructors.
+#[test]
+fn f22_core_struct_constructors_present() {
+    use benten_core::{NodeHandle, OperationNode, PrimitiveKind, Subgraph};
+    let h = NodeHandle::new(3);
+    assert_eq!(h.0, 3);
+    let sg = Subgraph::from_parts(
+        "f22_audit",
+        vec![OperationNode::new("r", PrimitiveKind::Read)],
+        Vec::new(),
+        false,
+    );
+    assert_eq!(sg.handler_id(), "f22_audit");
+    assert_eq!(sg.nodes().len(), 1);
+}
+
+#[test]
+fn f22_ivm_view_state_audit_arm_coverage_non_exhaustive() {
+    use benten_ivm::ViewState;
+    fn audit(s: ViewState) -> &'static str {
+        match s {
+            ViewState::Fresh => "Fresh",
+            ViewState::Stale => "Stale",
+            _ => "Unknown(non_exhaustive guard)",
+        }
+    }
+    assert_eq!(audit(ViewState::Fresh), "Fresh");
+    assert_eq!(audit(ViewState::Stale), "Stale");
+}
+
+#[test]
+fn f22_ivm_view_result_audit_arm_coverage_non_exhaustive() {
+    use benten_ivm::ViewResult;
+    fn audit(r: &ViewResult) -> &'static str {
+        match r {
+            ViewResult::Cids(_) => "Cids",
+            ViewResult::Current(_) => "Current",
+            ViewResult::Rules(_) => "Rules",
+            _ => "Unknown(non_exhaustive guard)",
+        }
+    }
+    assert_eq!(audit(&ViewResult::Cids(Vec::new())), "Cids");
+}
+
+#[test]
+fn f22_ivm_label_pattern_audit_arm_coverage_non_exhaustive() {
+    use benten_ivm::LabelPattern;
+    fn audit(p: &LabelPattern) -> &'static str {
+        match p {
+            LabelPattern::Exact(_) => "Exact",
+            LabelPattern::AnchorPrefix(_) => "AnchorPrefix",
+            _ => "Unknown(non_exhaustive guard)",
+        }
+    }
+    assert_eq!(audit(&LabelPattern::exact("post")), "Exact");
+}
+
+/// The `benten-ivm` `ViewDefinition` (blocked from cross-crate literal
+/// construction by F-22) constructs via its minted constructor.
+#[test]
+fn f22_ivm_view_definition_constructor_present() {
+    let def = benten_ivm::ViewDefinition::new(
+        "f22_audit",
+        Some("post".to_string()),
+        "system:IVMView",
+        benten_ivm::Strategy::B,
+    );
+    assert!(!def.as_node().labels.is_empty());
+}
+
+#[test]
+fn f22_pf_render_error_audit_arm_coverage_non_exhaustive() {
+    use benten_platform_foundation::RenderError;
+    fn audit(e: &RenderError) -> &'static str {
+        match e {
+            RenderError::Transport(_) => "Transport",
+            _ => "Unknown(non_exhaustive guard)",
+        }
+    }
+    assert_eq!(audit(&RenderError::Transport("x".into())), "Transport");
+}
+
+#[test]
+fn f22_pf_materializer_error_audit_arm_coverage_non_exhaustive() {
+    use benten_platform_foundation::MaterializerError;
+    fn audit(e: &MaterializerError) -> &'static str {
+        match e {
+            MaterializerError::SchemaMismatch { .. } => "SchemaMismatch",
+            MaterializerError::UcanClockNotInjected => "UcanClockNotInjected",
+            _ => "Unknown(non_exhaustive guard)",
+        }
+    }
+    assert_eq!(
+        audit(&MaterializerError::UcanClockNotInjected),
+        "UcanClockNotInjected"
+    );
+}
+
+#[test]
+fn f22_pf_scalar_audit_arm_coverage_non_exhaustive() {
+    use benten_platform_foundation::Scalar;
+    fn audit(s: Scalar) -> &'static str {
+        match s {
+            Scalar::Text => "Text",
+            Scalar::Int => "Int",
+            Scalar::Float => "Float",
+            Scalar::Bool => "Bool",
+            Scalar::Bytes => "Bytes",
+            Scalar::BytesCid => "BytesCid",
+            Scalar::TimestampHlc => "TimestampHlc",
+            Scalar::Null => "Null",
+            _ => "Unknown(non_exhaustive guard)",
+        }
+    }
+    assert_eq!(audit(Scalar::Text), "Text");
+}
+
+/// The `benten-engine` outcome.rs + atrium_api structs blocked from
+/// cross-crate literal construction by F-22 `#[non_exhaustive]`. These
+/// construct in-crate only (all-private fields), so the audit value here is
+/// the type-name presence pin proving the attributed types resolve.
+#[test]
+fn f22_engine_extension_struct_types_resolve() {
+    fn name<T>() -> &'static str {
+        std::any::type_name::<T>()
+    }
+    assert!(name::<benten_engine::Outcome>().ends_with("Outcome"));
+    assert!(name::<benten_engine::atrium_api::AtriumConfig>().ends_with("AtriumConfig"));
+    assert!(name::<benten_engine::atrium_api::SyncStatus>().ends_with("SyncStatus"));
+}

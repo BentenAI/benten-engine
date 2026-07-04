@@ -87,7 +87,7 @@ pub(crate) fn validate_registration(
     // independently).
     //
     // `SubgraphSnapshot::edges` is `&[(NodeHandle, NodeHandle, String)]`
-    // where each `NodeHandle(u32)` indexes `snapshot.nodes`. Skip any
+    // where each `NodeHandle::new(u32)` indexes `snapshot.nodes`. Skip any
     // edge whose endpoint is out of bounds (defensive — would be caught
     // by Inv-1/Inv-12 already, but we don't want a panic in this
     // walker).
@@ -350,7 +350,7 @@ mod tests {
         // Self-loop fixture: one SANDBOX node, edge back to itself.
         // The walker must not infinitely Visit→Compute oscillate.
         let nodes = vec![OperationNode::new("only", PrimitiveKind::Sandbox)];
-        let edges = vec![(NodeHandle(0), NodeHandle(0), String::from("self"))];
+        let edges = vec![(NodeHandle::new(0), NodeHandle::new(0), String::from("self"))];
         let snapshot = SubgraphSnapshot {
             nodes: nodes.as_slice(),
             parallel_fanout: &[],
@@ -388,9 +388,9 @@ mod tests {
             OperationNode::new("c", PrimitiveKind::Sandbox),
         ];
         let edges = vec![
-            (NodeHandle(0), NodeHandle(1), String::from("ab")),
-            (NodeHandle(1), NodeHandle(2), String::from("bc")),
-            (NodeHandle(2), NodeHandle(0), String::from("ca")),
+            (NodeHandle::new(0), NodeHandle::new(1), String::from("ab")),
+            (NodeHandle::new(1), NodeHandle::new(2), String::from("bc")),
+            (NodeHandle::new(2), NodeHandle::new(0), String::from("ca")),
         ];
         let snapshot = SubgraphSnapshot {
             nodes: nodes.as_slice(),

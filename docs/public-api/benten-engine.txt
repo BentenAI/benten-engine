@@ -102,7 +102,7 @@ impl core::marker::Unpin for benten_engine::atrium_api::AtriumMode
 impl core::marker::UnsafeUnpin for benten_engine::atrium_api::AtriumMode
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::atrium_api::AtriumMode
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::atrium_api::AtriumMode
-pub struct benten_engine::atrium_api::AtriumConfig
+#[non_exhaustive] pub struct benten_engine::atrium_api::AtriumConfig
 pub benten_engine::atrium_api::AtriumConfig::mode: benten_engine::atrium_api::AtriumMode
 impl benten_engine::atrium_api::AtriumConfig
 pub fn benten_engine::atrium_api::AtriumConfig::for_test() -> Self
@@ -162,7 +162,7 @@ impl core::marker::Unpin for benten_engine::engine_sync::AtriumHandle
 impl core::marker::UnsafeUnpin for benten_engine::engine_sync::AtriumHandle
 impl !core::panic::unwind_safe::RefUnwindSafe for benten_engine::engine_sync::AtriumHandle
 impl !core::panic::unwind_safe::UnwindSafe for benten_engine::engine_sync::AtriumHandle
-pub struct benten_engine::atrium_api::SyncStatus
+#[non_exhaustive] pub struct benten_engine::atrium_api::SyncStatus
 pub benten_engine::atrium_api::SyncStatus::is_healthy: bool
 pub benten_engine::atrium_api::SyncStatus::reason: alloc::string::String
 pub benten_engine::atrium_api::SyncStatus::transport_kind: benten_sync::transport::TransportKind
@@ -1926,7 +1926,7 @@ impl core::marker::Unpin for benten_engine::outcome::UserViewInputPattern
 impl core::marker::UnsafeUnpin for benten_engine::outcome::UserViewInputPattern
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::UserViewInputPattern
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::UserViewInputPattern
-pub struct benten_engine::outcome::AnchorHandle
+#[non_exhaustive] pub struct benten_engine::outcome::AnchorHandle
 impl benten_engine::outcome::AnchorHandle
 pub fn benten_engine::outcome::AnchorHandle::name(&self) -> &str
 impl core::clone::Clone for benten_engine::outcome::AnchorHandle
@@ -1944,7 +1944,7 @@ impl core::marker::Unpin for benten_engine::outcome::AnchorHandle
 impl core::marker::UnsafeUnpin for benten_engine::outcome::AnchorHandle
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::AnchorHandle
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::AnchorHandle
-pub struct benten_engine::outcome::BudgetExhaustedView<'a>
+#[non_exhaustive] pub struct benten_engine::outcome::BudgetExhaustedView<'a>
 impl<'a> benten_engine::outcome::BudgetExhaustedView<'a>
 pub fn benten_engine::outcome::BudgetExhaustedView<'a>::budget_type(&self) -> &'static str
 pub fn benten_engine::outcome::BudgetExhaustedView<'a>::consumed(&self) -> u64
@@ -1962,7 +1962,7 @@ impl<'a> core::marker::Unpin for benten_engine::outcome::BudgetExhaustedView<'a>
 impl<'a> core::marker::UnsafeUnpin for benten_engine::outcome::BudgetExhaustedView<'a>
 impl<'a> core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::BudgetExhaustedView<'a>
 impl<'a> core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::BudgetExhaustedView<'a>
-pub struct benten_engine::outcome::DiagnosticInfo
+#[non_exhaustive] pub struct benten_engine::outcome::DiagnosticInfo
 pub benten_engine::outcome::DiagnosticInfo::cid: benten_core::Cid
 pub benten_engine::outcome::DiagnosticInfo::denied_by_policy: core::option::Option<alloc::string::String>
 pub benten_engine::outcome::DiagnosticInfo::exists_in_backend: bool
@@ -1982,7 +1982,7 @@ impl core::marker::Unpin for benten_engine::outcome::DiagnosticInfo
 impl core::marker::UnsafeUnpin for benten_engine::outcome::DiagnosticInfo
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::DiagnosticInfo
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::DiagnosticInfo
-pub struct benten_engine::outcome::HandlerPredecessors
+#[non_exhaustive] pub struct benten_engine::outcome::HandlerPredecessors
 impl benten_engine::outcome::HandlerPredecessors
 pub fn benten_engine::outcome::HandlerPredecessors::from_adjacency(alloc::collections::btree::map::BTreeMap<benten_core::Cid, alloc::vec::Vec<benten_core::Cid>>) -> Self
 pub fn benten_engine::outcome::HandlerPredecessors::predecessors_of(&self, &benten_core::Cid) -> &[benten_core::Cid]
@@ -1998,7 +1998,7 @@ impl core::marker::Unpin for benten_engine::outcome::HandlerPredecessors
 impl core::marker::UnsafeUnpin for benten_engine::outcome::HandlerPredecessors
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::HandlerPredecessors
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::HandlerPredecessors
-pub struct benten_engine::outcome::NestedTx
+#[non_exhaustive] pub struct benten_engine::outcome::NestedTx
 impl core::fmt::Debug for benten_engine::outcome::NestedTx
 pub fn benten_engine::outcome::NestedTx::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_engine::outcome::NestedTx
@@ -2008,7 +2008,7 @@ impl core::marker::Unpin for benten_engine::outcome::NestedTx
 impl core::marker::UnsafeUnpin for benten_engine::outcome::NestedTx
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::NestedTx
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::NestedTx
-pub struct benten_engine::outcome::Outcome
+#[non_exhaustive] pub struct benten_engine::outcome::Outcome
 impl benten_engine::outcome::Outcome
 pub fn benten_engine::outcome::Outcome::as_list(&self) -> core::option::Option<alloc::vec::Vec<benten_core::Node>>
 pub fn benten_engine::outcome::Outcome::assert_success(&self)
@@ -2037,7 +2037,7 @@ impl core::marker::Unpin for benten_engine::outcome::Outcome
 impl core::marker::UnsafeUnpin for benten_engine::outcome::Outcome
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::Outcome
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::Outcome
-pub struct benten_engine::outcome::ReadViewOptions
+#[non_exhaustive] pub struct benten_engine::outcome::ReadViewOptions
 pub benten_engine::outcome::ReadViewOptions::allow_stale: bool
 impl benten_engine::outcome::ReadViewOptions
 pub fn benten_engine::outcome::ReadViewOptions::allow_stale() -> Self
@@ -2058,7 +2058,7 @@ impl core::marker::Unpin for benten_engine::outcome::ReadViewOptions
 impl core::marker::UnsafeUnpin for benten_engine::outcome::ReadViewOptions
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::ReadViewOptions
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::ReadViewOptions
-pub struct benten_engine::outcome::RegisterReplaceOutcome
+#[non_exhaustive] pub struct benten_engine::outcome::RegisterReplaceOutcome
 pub benten_engine::outcome::RegisterReplaceOutcome::chain_depth: usize
 pub benten_engine::outcome::RegisterReplaceOutcome::cid: benten_core::Cid
 pub benten_engine::outcome::RegisterReplaceOutcome::handler_id: alloc::string::String
@@ -2081,7 +2081,7 @@ impl core::marker::Unpin for benten_engine::outcome::RegisterReplaceOutcome
 impl core::marker::UnsafeUnpin for benten_engine::outcome::RegisterReplaceOutcome
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::RegisterReplaceOutcome
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::RegisterReplaceOutcome
-pub struct benten_engine::outcome::TerminalError
+#[non_exhaustive] pub struct benten_engine::outcome::TerminalError
 impl benten_engine::outcome::TerminalError
 pub fn benten_engine::outcome::TerminalError::code(&self) -> benten_errors::ErrorCode
 impl core::clone::Clone for benten_engine::outcome::TerminalError
@@ -2095,7 +2095,7 @@ impl core::marker::Unpin for benten_engine::outcome::TerminalError
 impl core::marker::UnsafeUnpin for benten_engine::outcome::TerminalError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::TerminalError
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::TerminalError
-pub struct benten_engine::outcome::Trace
+#[non_exhaustive] pub struct benten_engine::outcome::Trace
 impl benten_engine::outcome::Trace
 pub fn benten_engine::outcome::Trace::outcome(&self) -> core::option::Option<&benten_engine::outcome::Outcome>
 pub fn benten_engine::outcome::Trace::steps(&self) -> alloc::vec::Vec<benten_engine::outcome::TraceStep>
@@ -2112,7 +2112,7 @@ impl core::marker::Unpin for benten_engine::outcome::Trace
 impl core::marker::UnsafeUnpin for benten_engine::outcome::Trace
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::Trace
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::Trace
-pub struct benten_engine::outcome::UserViewSpec
+#[non_exhaustive] pub struct benten_engine::outcome::UserViewSpec
 impl benten_engine::outcome::UserViewSpec
 pub fn benten_engine::outcome::UserViewSpec::builder() -> benten_engine::outcome::UserViewSpecBuilder
 pub fn benten_engine::outcome::UserViewSpec::id(&self) -> &str
@@ -2133,7 +2133,7 @@ impl core::marker::Unpin for benten_engine::outcome::UserViewSpec
 impl core::marker::UnsafeUnpin for benten_engine::outcome::UserViewSpec
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::UserViewSpec
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::UserViewSpec
-pub struct benten_engine::outcome::UserViewSpecBuilder
+#[non_exhaustive] pub struct benten_engine::outcome::UserViewSpecBuilder
 impl benten_engine::outcome::UserViewSpecBuilder
 pub fn benten_engine::outcome::UserViewSpecBuilder::build(self) -> core::result::Result<benten_engine::outcome::UserViewSpec, alloc::string::String>
 pub fn benten_engine::outcome::UserViewSpecBuilder::id(self, impl core::convert::Into<alloc::string::String>) -> Self
@@ -2986,7 +2986,7 @@ impl core::marker::Unpin for benten_engine::outcome::UserViewInputPattern
 impl core::marker::UnsafeUnpin for benten_engine::outcome::UserViewInputPattern
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::UserViewInputPattern
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::UserViewInputPattern
-pub struct benten_engine::AnchorHandle
+#[non_exhaustive] pub struct benten_engine::AnchorHandle
 impl benten_engine::outcome::AnchorHandle
 pub fn benten_engine::outcome::AnchorHandle::name(&self) -> &str
 impl core::clone::Clone for benten_engine::outcome::AnchorHandle
@@ -3022,7 +3022,7 @@ impl core::marker::Unpin for benten_engine::ast_cache::AstCacheStats
 impl core::marker::UnsafeUnpin for benten_engine::ast_cache::AstCacheStats
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::ast_cache::AstCacheStats
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::ast_cache::AstCacheStats
-pub struct benten_engine::BudgetExhaustedView<'a>
+#[non_exhaustive] pub struct benten_engine::BudgetExhaustedView<'a>
 impl<'a> benten_engine::outcome::BudgetExhaustedView<'a>
 pub fn benten_engine::outcome::BudgetExhaustedView<'a>::budget_type(&self) -> &'static str
 pub fn benten_engine::outcome::BudgetExhaustedView<'a>::consumed(&self) -> u64
@@ -3069,7 +3069,7 @@ impl core::marker::Unpin for benten_engine::change_probe::ChangeProbe
 impl core::marker::UnsafeUnpin for benten_engine::change_probe::ChangeProbe
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::change_probe::ChangeProbe
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::change_probe::ChangeProbe
-pub struct benten_engine::DiagnosticInfo
+#[non_exhaustive] pub struct benten_engine::DiagnosticInfo
 pub benten_engine::DiagnosticInfo::cid: benten_core::Cid
 pub benten_engine::DiagnosticInfo::denied_by_policy: core::option::Option<alloc::string::String>
 pub benten_engine::DiagnosticInfo::exists_in_backend: bool
@@ -3378,7 +3378,7 @@ impl<'tx, 'coll> core::marker::Unpin for benten_engine::engine_transaction::Engi
 impl<'tx, 'coll> core::marker::UnsafeUnpin for benten_engine::engine_transaction::EngineTransaction<'tx, 'coll>
 impl<'tx, 'coll> !core::panic::unwind_safe::RefUnwindSafe for benten_engine::engine_transaction::EngineTransaction<'tx, 'coll>
 impl<'tx, 'coll> !core::panic::unwind_safe::UnwindSafe for benten_engine::engine_transaction::EngineTransaction<'tx, 'coll>
-pub struct benten_engine::EngineViewsHandle<'eng>
+#[non_exhaustive] pub struct benten_engine::EngineViewsHandle<'eng>
 impl<'eng> benten_engine::EngineViewsHandle<'eng>
 pub fn benten_engine::EngineViewsHandle<'eng>::materialize_view_with_gate(&self, &str, &benten_engine::ivm_view_read_gate::IvmViewReadGate) -> core::result::Result<core::option::Option<alloc::vec::Vec<benten_core::Cid>>, benten_engine::error::EngineError>
 pub fn benten_engine::EngineViewsHandle<'eng>::read_view(&self, &str) -> core::result::Result<benten_engine::outcome::Outcome, benten_engine::error::EngineError>
@@ -3398,7 +3398,7 @@ impl<'eng> core::marker::Unpin for benten_engine::EngineViewsHandle<'eng>
 impl<'eng> core::marker::UnsafeUnpin for benten_engine::EngineViewsHandle<'eng>
 impl<'eng> !core::panic::unwind_safe::RefUnwindSafe for benten_engine::EngineViewsHandle<'eng>
 impl<'eng> !core::panic::unwind_safe::UnwindSafe for benten_engine::EngineViewsHandle<'eng>
-pub struct benten_engine::HandlerPredecessors
+#[non_exhaustive] pub struct benten_engine::HandlerPredecessors
 impl benten_engine::outcome::HandlerPredecessors
 pub fn benten_engine::outcome::HandlerPredecessors::from_adjacency(alloc::collections::btree::map::BTreeMap<benten_core::Cid, alloc::vec::Vec<benten_core::Cid>>) -> Self
 pub fn benten_engine::outcome::HandlerPredecessors::predecessors_of(&self, &benten_core::Cid) -> &[benten_core::Cid]
@@ -3543,7 +3543,7 @@ impl core::marker::Unpin for benten_engine::module_manifest::ModuleManifestEntry
 impl core::marker::UnsafeUnpin for benten_engine::module_manifest::ModuleManifestEntry
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::module_manifest::ModuleManifestEntry
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::module_manifest::ModuleManifestEntry
-pub struct benten_engine::NestedTx
+#[non_exhaustive] pub struct benten_engine::NestedTx
 impl core::fmt::Debug for benten_engine::outcome::NestedTx
 pub fn benten_engine::outcome::NestedTx::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Freeze for benten_engine::outcome::NestedTx
@@ -3553,7 +3553,7 @@ impl core::marker::Unpin for benten_engine::outcome::NestedTx
 impl core::marker::UnsafeUnpin for benten_engine::outcome::NestedTx
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::NestedTx
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::NestedTx
-pub struct benten_engine::Outcome
+#[non_exhaustive] pub struct benten_engine::Outcome
 impl benten_engine::outcome::Outcome
 pub fn benten_engine::outcome::Outcome::as_list(&self) -> core::option::Option<alloc::vec::Vec<benten_core::Node>>
 pub fn benten_engine::outcome::Outcome::assert_success(&self)
@@ -3600,7 +3600,7 @@ impl core::marker::Unpin for benten_engine::subgraph_spec::PrimitiveSpec
 impl core::marker::UnsafeUnpin for benten_engine::subgraph_spec::PrimitiveSpec
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::subgraph_spec::PrimitiveSpec
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::subgraph_spec::PrimitiveSpec
-pub struct benten_engine::ReadViewOptions
+#[non_exhaustive] pub struct benten_engine::ReadViewOptions
 pub benten_engine::ReadViewOptions::allow_stale: bool
 impl benten_engine::outcome::ReadViewOptions
 pub fn benten_engine::outcome::ReadViewOptions::allow_stale() -> Self
@@ -3645,7 +3645,7 @@ impl core::marker::Unpin for benten_engine::suspension_store::RedbSuspensionStor
 impl core::marker::UnsafeUnpin for benten_engine::suspension_store::RedbSuspensionStore
 impl !core::panic::unwind_safe::RefUnwindSafe for benten_engine::suspension_store::RedbSuspensionStore
 impl !core::panic::unwind_safe::UnwindSafe for benten_engine::suspension_store::RedbSuspensionStore
-pub struct benten_engine::RegisterReplaceOutcome
+#[non_exhaustive] pub struct benten_engine::RegisterReplaceOutcome
 pub benten_engine::RegisterReplaceOutcome::chain_depth: usize
 pub benten_engine::RegisterReplaceOutcome::cid: benten_core::Cid
 pub benten_engine::RegisterReplaceOutcome::handler_id: alloc::string::String
@@ -3800,7 +3800,7 @@ impl core::marker::Unpin for benten_engine::engine_subscribe::Subscription
 impl core::marker::UnsafeUnpin for benten_engine::engine_subscribe::Subscription
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::engine_subscribe::Subscription
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::engine_subscribe::Subscription
-pub struct benten_engine::TerminalError
+#[non_exhaustive] pub struct benten_engine::TerminalError
 impl benten_engine::outcome::TerminalError
 pub fn benten_engine::outcome::TerminalError::code(&self) -> benten_errors::ErrorCode
 impl core::clone::Clone for benten_engine::outcome::TerminalError
@@ -3814,7 +3814,7 @@ impl core::marker::Unpin for benten_engine::outcome::TerminalError
 impl core::marker::UnsafeUnpin for benten_engine::outcome::TerminalError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::TerminalError
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::TerminalError
-pub struct benten_engine::Trace
+#[non_exhaustive] pub struct benten_engine::Trace
 impl benten_engine::outcome::Trace
 pub fn benten_engine::outcome::Trace::outcome(&self) -> core::option::Option<&benten_engine::outcome::Outcome>
 pub fn benten_engine::outcome::Trace::steps(&self) -> alloc::vec::Vec<benten_engine::outcome::TraceStep>
@@ -3831,7 +3831,7 @@ impl core::marker::Unpin for benten_engine::outcome::Trace
 impl core::marker::UnsafeUnpin for benten_engine::outcome::Trace
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::Trace
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::Trace
-pub struct benten_engine::UserViewSpec
+#[non_exhaustive] pub struct benten_engine::UserViewSpec
 impl benten_engine::outcome::UserViewSpec
 pub fn benten_engine::outcome::UserViewSpec::builder() -> benten_engine::outcome::UserViewSpecBuilder
 pub fn benten_engine::outcome::UserViewSpec::id(&self) -> &str
@@ -3852,7 +3852,7 @@ impl core::marker::Unpin for benten_engine::outcome::UserViewSpec
 impl core::marker::UnsafeUnpin for benten_engine::outcome::UserViewSpec
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::outcome::UserViewSpec
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::UserViewSpec
-pub struct benten_engine::UserViewSpecBuilder
+#[non_exhaustive] pub struct benten_engine::UserViewSpecBuilder
 impl benten_engine::outcome::UserViewSpecBuilder
 pub fn benten_engine::outcome::UserViewSpecBuilder::build(self) -> core::result::Result<benten_engine::outcome::UserViewSpec, alloc::string::String>
 pub fn benten_engine::outcome::UserViewSpecBuilder::id(self, impl core::convert::Into<alloc::string::String>) -> Self

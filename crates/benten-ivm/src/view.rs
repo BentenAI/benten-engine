@@ -154,6 +154,8 @@ impl ViewError {
 ///   view is terminal until an explicit [`View::rebuild`]; async
 ///   background recompute is a later-phase enhancement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// §11 SemVer-readiness (F-22 pre-tag): a future view-state variant lands additively; cross-crate consumers add a `_` wildcard arm.
+#[non_exhaustive]
 pub enum ViewState {
     /// Incremental maintenance is caught up; live reads succeed.
     Fresh,
@@ -177,6 +179,8 @@ pub enum ViewState {
 /// rejects a zero budget rather than silently producing a view that is stale
 /// before any data arrives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate construction uses `ViewBudget`'s constructors.
+#[non_exhaustive]
 pub struct ViewBudget {
     /// Maximum number of work units the view may consume per update before
     /// tripping.
@@ -220,6 +224,8 @@ impl ViewBudget {
 /// field any view needs; a typed-per-view variant is a later-phase
 /// enhancement once the views themselves stabilize.
 #[derive(Debug, Clone, Default)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate callers use `ViewQuery::default()` + field-mutation.
+#[non_exhaustive]
 pub struct ViewQuery {
     /// Label filter (used by [`crate::views::ContentListingView`]).
     pub label: Option<String>,
@@ -239,6 +245,8 @@ pub struct ViewQuery {
 /// Polymorphic read result. Each view picks the variant whose shape matches
 /// its answer.
 #[derive(Debug, Clone)]
+// §11 SemVer-readiness (F-22 pre-tag): a future view-result variant lands additively; cross-crate consumers add a `_` wildcard arm.
+#[non_exhaustive]
 pub enum ViewResult {
     /// Ordered list of Node CIDs (views 1, 2, 3).
     Cids(Vec<Cid>),
@@ -384,6 +392,8 @@ pub trait View: Send + Sync + core::fmt::Debug {
 /// `system:IVMView` so the definition itself is content-addressed and can
 /// be stably referenced by CID.
 #[derive(Debug, Clone, PartialEq, Eq)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate construction uses the crate's constructors.
+#[non_exhaustive]
 pub struct ViewDefinition {
     /// Stable view id (`"content_listing"`, etc.).
     pub view_id: String,
@@ -403,6 +413,27 @@ pub struct ViewDefinition {
 }
 
 impl ViewDefinition {
+    /// Construct a `ViewDefinition` from its parts.
+    ///
+    /// This is the cross-crate construction entry point — `#[non_exhaustive]`
+    /// (F-22 pre-tag §11 SemVer-readiness) blocks the equivalent struct-literal
+    /// from outside `benten-ivm`. Field VALUES are identical to the literal, so
+    /// the content-addressed `as_node()` CID is unchanged.
+    #[must_use]
+    pub fn new(
+        view_id: impl Into<String>,
+        input_pattern_label: Option<String>,
+        output_label: impl Into<String>,
+        strategy: crate::Strategy,
+    ) -> Self {
+        Self {
+            view_id: view_id.into(),
+            input_pattern_label,
+            output_label: output_label.into(),
+            strategy,
+        }
+    }
+
     /// Serialize the definition as a Node suitable for storage.
     ///
     /// The Node carries the `output_label` (`system:IVMView`) as its sole

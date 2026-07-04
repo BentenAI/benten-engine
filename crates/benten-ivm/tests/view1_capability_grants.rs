@@ -54,10 +54,9 @@ fn view1_populated_read_returns_specific_cid_set() {
     let mut v = CapabilityGrantsView::new();
     v.update(&grant_event(ChangeKind::Created)).unwrap();
 
-    let q = ViewQuery {
-        entity_cid: Some(expected_cid),
-        ..ViewQuery::default()
-    };
+    // `#[non_exhaustive]` (F-22): default + field mutation.
+    let mut q = ViewQuery::default();
+    q.entity_cid = Some(expected_cid);
     match v.read(&q).unwrap() {
         ViewResult::Cids(cids) => {
             assert_eq!(cids.len(), 1, "exactly one grant in the set");
@@ -87,10 +86,9 @@ fn view1_rebuild_matches_incremental_state() {
     let mut rebuilt = CapabilityGrantsView::new();
     rebuilt.rebuild().unwrap();
 
-    let q = ViewQuery {
-        entity_cid: Some(canonical_test_node().cid().unwrap()),
-        ..ViewQuery::default()
-    };
+    // `#[non_exhaustive]` (F-22): default + field mutation.
+    let mut q = ViewQuery::default();
+    q.entity_cid = Some(canonical_test_node().cid().unwrap());
     let r_inc = incremental.read(&q).unwrap();
     let r_reb = rebuilt.read(&q).unwrap();
     match (r_inc, r_reb) {
@@ -109,10 +107,9 @@ fn view1_revocation_removes_grant() {
     v.update(&grant_event(ChangeKind::Created)).unwrap();
     v.update(&grant_event(ChangeKind::Deleted)).unwrap();
 
-    let q = ViewQuery {
-        entity_cid: Some(canonical_test_node().cid().unwrap()),
-        ..ViewQuery::default()
-    };
+    // `#[non_exhaustive]` (F-22): default + field mutation.
+    let mut q = ViewQuery::default();
+    q.entity_cid = Some(canonical_test_node().cid().unwrap());
     match v.read(&q).unwrap() {
         ViewResult::Cids(cids) => assert!(cids.is_empty(), "revocation must empty the set"),
         other => panic!("expected Cids, got {other:?}"),
@@ -147,10 +144,9 @@ fn view1_routes_system_labeled_grant_events_correctly() {
     let mut v = CapabilityGrantsView::new();
     v.update(&event).unwrap();
 
-    let q = ViewQuery {
-        entity_cid: Some(expected_cid),
-        ..ViewQuery::default()
-    };
+    // `#[non_exhaustive]` (F-22): default + field mutation.
+    let mut q = ViewQuery::default();
+    q.entity_cid = Some(expected_cid);
     match v.read(&q).unwrap() {
         ViewResult::Cids(cids) => {
             assert_eq!(
@@ -184,10 +180,9 @@ fn view1_ignores_unqualified_capability_grant_label() {
     let mut v = CapabilityGrantsView::new();
     v.update(&event).unwrap();
 
-    let q = ViewQuery {
-        entity_cid: Some(cid),
-        ..ViewQuery::default()
-    };
+    // `#[non_exhaustive]` (F-22): default + field mutation.
+    let mut q = ViewQuery::default();
+    q.entity_cid = Some(cid);
     match v.read(&q).unwrap() {
         ViewResult::Cids(cids) => assert!(
             cids.is_empty(),

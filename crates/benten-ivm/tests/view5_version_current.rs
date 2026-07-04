@@ -47,10 +47,9 @@ fn view5_populated_read_returns_specific_current_cid() {
     v.update(&version_append_event(ChangeKind::Created))
         .unwrap();
 
-    let q = ViewQuery {
-        anchor_id: Some(1),
-        ..ViewQuery::default()
-    };
+    // `#[non_exhaustive]` (F-22): default + field mutation.
+    let mut q = ViewQuery::default();
+    q.anchor_id = Some(1);
     match v.read(&q).unwrap() {
         ViewResult::Current(cid) => {
             assert_eq!(
@@ -80,10 +79,9 @@ fn view5_rebuild_matches_incremental_state() {
     let mut rebuilt = VersionCurrentView::new();
     rebuilt.rebuild().unwrap();
 
-    let q = ViewQuery {
-        anchor_id: Some(1),
-        ..ViewQuery::default()
-    };
+    // `#[non_exhaustive]` (F-22): default + field mutation.
+    let mut q = ViewQuery::default();
+    q.anchor_id = Some(1);
     match (incremental.read(&q).unwrap(), rebuilt.read(&q).unwrap()) {
         (ViewResult::Current(a), ViewResult::Current(b)) => {
             assert_eq!(a, b, "rebuilt CURRENT must match incremental");
@@ -97,10 +95,9 @@ fn view5_rebuild_matches_incremental_state() {
 #[test]
 fn view5_unknown_anchor_returns_none_current() {
     let v = VersionCurrentView::new();
-    let q = ViewQuery {
-        anchor_id: Some(99_999),
-        ..ViewQuery::default()
-    };
+    // `#[non_exhaustive]` (F-22): default + field mutation.
+    let mut q = ViewQuery::default();
+    q.anchor_id = Some(99_999);
     match v.read(&q).unwrap() {
         ViewResult::Current(cid) => assert!(cid.is_none(), "unknown anchor has no CURRENT"),
         other => panic!("expected Current, got {other:?}"),

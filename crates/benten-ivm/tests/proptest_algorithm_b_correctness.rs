@@ -142,12 +142,11 @@ proptest! {
         // — both views must report the same paginated CID set after the
         // event sequence, including identical Err(PatternMismatch) shapes
         // for queries the view can't serve.
-        let q = ViewQuery {
-            label: Some("post".into()),
-            limit: Some(100),
-            offset: Some(0),
-            ..ViewQuery::default()
-        };
+        // `#[non_exhaustive]` (F-22): default + field mutation.
+        let mut q = ViewQuery::default();
+        q.label = Some("post".into());
+        q.limit = Some(100);
+        q.offset = Some(0);
         let inc_result: Result<ViewResult, _> = incremental.read(&q);
         let reb_result: Result<ViewResult, _> = rebuilt.read(&q);
         prop_assert_eq!(format!("{inc_result:?}"), format!("{reb_result:?}"));

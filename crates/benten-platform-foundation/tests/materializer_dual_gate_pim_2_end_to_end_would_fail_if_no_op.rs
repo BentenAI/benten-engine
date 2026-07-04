@@ -56,14 +56,14 @@ fn materializer_dual_gate_pim_2_end_to_end_would_fail_if_no_op() {
 
     // Walk against the admitted CID — succeeds, content present.
     let out_admitted = mat
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: admitted_cid,
-            walk_principal: alice,
-            cap_recheck: Arc::clone(&cap_recheck),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            admitted_cid,
+            alice,
+            Arc::clone(&cap_recheck),
+            Vec::new(),
+        ))
         .unwrap();
     assert_eq!(
         out_admitted.materialized_row_cids().len(),
@@ -76,14 +76,14 @@ fn materializer_dual_gate_pim_2_end_to_end_would_fail_if_no_op() {
 
     // Walk against the denied CID — gate denies, redacted output.
     let out_denied = mat
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: denied_cid,
-            walk_principal: alice,
-            cap_recheck: Arc::clone(&cap_recheck),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            denied_cid,
+            alice,
+            Arc::clone(&cap_recheck),
+            Vec::new(),
+        ))
         .unwrap();
     let html_denied = std::str::from_utf8(out_denied.html_bytes()).unwrap();
     assert!(
@@ -100,24 +100,24 @@ fn materializer_dual_gate_pim_2_end_to_end_would_fail_if_no_op() {
 
     // Smoke-check: allow-all gate sees BOTH rows when iterated.
     let out_admitted_allow = mat
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: admitted_cid,
-            walk_principal: alice,
-            cap_recheck: allow_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            admitted_cid,
+            alice,
+            allow_all_cap_recheck(),
+            Vec::new(),
+        ))
         .unwrap();
     let out_denied_allow = mat
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: denied_cid,
-            walk_principal: alice,
-            cap_recheck: allow_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            denied_cid,
+            alice,
+            allow_all_cap_recheck(),
+            Vec::new(),
+        ))
         .unwrap();
     assert_eq!(
         out_admitted_allow.materialized_row_cids().len(),

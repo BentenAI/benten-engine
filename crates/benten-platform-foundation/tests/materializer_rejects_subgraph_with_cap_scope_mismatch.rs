@@ -44,14 +44,14 @@ fn materializer_rejects_subgraph_whose_runtime_composition_exceeds_declared_cap_
 
     let mat = HtmlJsonMaterializer;
     let err = mat
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: cid,
-            walk_principal: alice,
-            cap_recheck: allow_all_cap_recheck(),
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            cid,
+            alice,
+            allow_all_cap_recheck(),
             declared_requires,
-        })
+        ))
         .expect_err(
             "T1 negative: subgraph whose runtime composition exceeds declared cap-scope \
              MUST be REJECTED at materializer entry",

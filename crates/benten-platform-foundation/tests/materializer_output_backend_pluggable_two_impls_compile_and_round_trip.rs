@@ -38,13 +38,15 @@ fn materializer_output_backend_pluggable_two_impls_compile_and_round_trip() {
     );
     let cid = engine.put_node(Node::new(vec!["Note".into()], props));
 
-    let inputs = || MaterializerWalkInputs {
-        engine: &engine,
-        spec: &spec,
-        content_cid: cid,
-        walk_principal: alice,
-        cap_recheck: allow_all_cap_recheck(),
-        declared_requires: Vec::new(),
+    let inputs = || {
+        MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            cid,
+            alice,
+            allow_all_cap_recheck(),
+            Vec::new(),
+        )
     };
 
     let html_out = html.materialize_with_gate(inputs()).unwrap();

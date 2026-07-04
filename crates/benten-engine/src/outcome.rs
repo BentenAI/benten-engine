@@ -61,6 +61,8 @@ pub enum UserViewInputPattern {
 /// at G23-0a + Row D-19 G-COMP-1 wave Cohort 8 atomic 4-surface rename)
 /// is reserved for Phase 3+.
 #[derive(Debug, Clone, PartialEq, Eq)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break (fields already private; cross-crate callers use `UserViewSpec::builder`).
+#[non_exhaustive]
 pub struct UserViewSpec {
     pub(crate) id: String,
     pub(crate) input_pattern: UserViewInputPattern,
@@ -99,6 +101,8 @@ impl UserViewSpec {
 /// Builder for [`UserViewSpec`]. `id` + `input_pattern` are required;
 /// `strategy` defaults to `Strategy::B` (D8-RESOLVED).
 #[derive(Debug, Default)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break (fields already private; cross-crate callers use `UserViewSpec::builder`).
+#[non_exhaustive]
 pub struct UserViewSpecBuilder {
     id: Option<String>,
     input_pattern: Option<UserViewInputPattern>,
@@ -162,6 +166,8 @@ impl UserViewSpecBuilder {
 
 /// Options passed to `Engine::read_view_with`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate callers use `ReadViewOptions::strict`/`allow_stale`.
+#[non_exhaustive]
 pub struct ReadViewOptions {
     /// When `true`, the read returns the most-recent materialised view
     /// even if the IVM background updater has not yet caught up to the
@@ -197,6 +203,8 @@ pub trait OutcomeExt {
 /// return empty / `None`. Tests exercising the full flow are gated on
 /// Phase-2 evaluator integration (documented in the group report).
 #[derive(Debug, Clone, Default)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break (fields already private; cross-crate readers use the accessor methods).
+#[non_exhaustive]
 pub struct Outcome {
     pub(crate) edge: Option<String>,
     pub(crate) error_code: Option<String>,
@@ -314,6 +322,8 @@ impl Outcome {
 
 /// Minimal terminal-error surface returned from `Outcome::terminal_error`.
 #[derive(Debug, Clone)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct TerminalError {
     code: ErrorCode,
 }
@@ -330,6 +340,8 @@ impl TerminalError {
 /// in the dispatched CRUD op plus the terminal Outcome; Phase 2 replaces
 /// the step synthesis with live evaluator instrumentation.
 #[derive(Debug, Clone, Default)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct Trace {
     pub(crate) steps: Vec<TraceStep>,
     pub(crate) outcome: Option<Outcome>,
@@ -452,6 +464,8 @@ pub enum TraceStep {
 /// by [`TraceStep::as_budget_exhausted`] so shape-pin tests can read the
 /// fields without pattern-matching at every call site.
 #[derive(Debug, Clone, Copy)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct BudgetExhaustedView<'a> {
     budget_type: &'static str,
     consumed: u64,
@@ -602,6 +616,8 @@ impl TraceStep {
 /// in-memory anchor store the handle indexes into is durable-promotable
 /// alongside the §1.1 GraphBackend umbrella trait work.
 #[derive(Debug, Clone, PartialEq, Eq)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct AnchorHandle {
     /// The anchor name the handle was minted under. Engine consumes this
     /// as the key into [`crate::engine::EngineInner::anchor_store`].
@@ -628,6 +644,8 @@ impl AnchorHandle {
 /// replace, …) without forcing the caller to compute it from the
 /// engine's chain accessor.
 #[derive(Debug, Clone, PartialEq, Eq)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate construction uses the crate's constructor (field READS unaffected).
+#[non_exhaustive]
 pub struct RegisterReplaceOutcome {
     /// The handler id whose subgraph was registered or replaced.
     pub handler_id: String,
@@ -675,6 +693,8 @@ impl RegisterReplaceOutcome {
 /// always-empty slice, so trace topological-order assertions degraded to
 /// a no-op partial-order check.
 #[derive(Debug, Default)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct HandlerPredecessors {
     /// `target_cid -> sorted list of predecessor Cids`. Sorted so test
     /// assertions over the edge set are order-stable.
@@ -716,6 +736,8 @@ impl HandlerPredecessors {
 /// gated on a `debug:read` capability grant so ordinary callers never
 /// see the existence signal.
 #[derive(Debug, Clone, PartialEq, Eq)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate construction uses the crate's constructor (field READS unaffected).
+#[non_exhaustive]
 pub struct DiagnosticInfo {
     /// The CID the caller asked about. Echoed for correlation.
     pub cid: Cid,
@@ -741,6 +763,8 @@ pub struct DiagnosticInfo {
 /// intentionally-unimplemented per the DAG-only transaction model
 /// (CLAUDE.md #4/#6). See `docs/future/phase-4-backlog.md §4.65`.
 #[derive(Debug)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct NestedTx {
     #[allow(
         dead_code,

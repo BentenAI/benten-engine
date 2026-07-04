@@ -41,6 +41,8 @@ const VIEW_ID: &str = "version_current";
 
 /// View 5 — `anchor_id → current-version Cid` pointer table.
 #[derive(Debug)]
+// §11 SemVer-readiness (F-22 pre-tag): a hand-written view instance; additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct VersionCurrentView {
     /// Keyed by u64 anchor id. `BTreeMap` (not `HashMap`) for stable
     /// iteration in case rebuild equivalence tests compare traversals.

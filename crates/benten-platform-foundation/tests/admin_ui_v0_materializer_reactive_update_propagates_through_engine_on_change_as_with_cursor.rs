@@ -65,14 +65,14 @@ fn admin_ui_v0_render_routes_through_engine_read_node_as_via_adapter() {
     let alice = materializer_fixtures::actor_principal_alice_cid();
 
     let out = benten_platform_foundation::HtmlJsonMaterializer
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &adapter,
-            spec: &spec,
-            content_cid: cid,
-            walk_principal: alice,
-            cap_recheck: allow_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &adapter,
+            &spec,
+            cid,
+            alice,
+            allow_all_cap_recheck(),
+            Vec::new(),
+        ))
         .expect("admin UI v0 render must walk via the EngineMaterializerAdapter");
     let html = std::str::from_utf8(out.html_bytes()).unwrap();
     assert!(
@@ -106,14 +106,14 @@ fn admin_ui_v0_render_propagates_engine_side_node_update_through_adapter() {
 
     // Render the first revision via the admin UI v0 consumer surface.
     let out_v1 = benten_platform_foundation::HtmlJsonMaterializer
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &adapter,
-            spec: &spec,
-            content_cid: cid_v1,
-            walk_principal: alice,
-            cap_recheck: allow_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &adapter,
+            &spec,
+            cid_v1,
+            alice,
+            allow_all_cap_recheck(),
+            Vec::new(),
+        ))
         .unwrap();
     let html_v1 = std::str::from_utf8(out_v1.html_bytes()).unwrap();
     assert!(html_v1.contains("first revision"));
@@ -122,14 +122,14 @@ fn admin_ui_v0_render_propagates_engine_side_node_update_through_adapter() {
     // Render the second revision — admin UI's adapter re-fetches from
     // the engine, no stale cache:
     let out_v2 = benten_platform_foundation::HtmlJsonMaterializer
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &adapter,
-            spec: &spec,
-            content_cid: cid_v2,
-            walk_principal: alice,
-            cap_recheck: allow_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &adapter,
+            &spec,
+            cid_v2,
+            alice,
+            allow_all_cap_recheck(),
+            Vec::new(),
+        ))
         .unwrap();
     let html_v2 = std::str::from_utf8(out_v2.html_bytes()).unwrap();
     assert!(
@@ -157,14 +157,14 @@ fn admin_ui_v0_render_dual_gate_deny_from_materialization_layer_wins_end_to_end(
     let alice = materializer_fixtures::actor_principal_alice_cid();
 
     let out = benten_platform_foundation::HtmlJsonMaterializer
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &adapter,
-            spec: &spec,
-            content_cid: cid,
-            walk_principal: alice,
-            cap_recheck: deny_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &adapter,
+            &spec,
+            cid,
+            alice,
+            deny_all_cap_recheck(),
+            Vec::new(),
+        ))
         .unwrap();
     let html = std::str::from_utf8(out.html_bytes()).unwrap();
     assert!(
@@ -209,14 +209,14 @@ fn admin_ui_v0_render_dual_gate_authoritative_invocation_consumed() {
     );
 
     let out = benten_platform_foundation::HtmlJsonMaterializer
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &adapter,
-            spec: &spec,
-            content_cid: cid,
-            walk_principal: alice,
-            cap_recheck: gate,
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &adapter,
+            &spec,
+            cid,
+            alice,
+            gate,
+            Vec::new(),
+        ))
         .unwrap();
     let invocations = counter.load(Ordering::SeqCst);
     assert_eq!(

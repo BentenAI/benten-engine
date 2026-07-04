@@ -16,24 +16,24 @@ use benten_ivm::{Strategy, ViewDefinition};
 
 #[test]
 fn view_definition_carries_strategy_field_in_cid() {
-    let def_a = ViewDefinition {
-        view_id: "content_listing".into(),
-        input_pattern_label: Some("post".into()),
-        output_label: "system:IVMView".into(),
-        strategy: Strategy::A,
-    };
-    let def_b = ViewDefinition {
-        view_id: "content_listing".into(),
-        input_pattern_label: Some("post".into()),
-        output_label: "system:IVMView".into(),
-        strategy: Strategy::B,
-    };
-    let def_c = ViewDefinition {
-        view_id: "content_listing".into(),
-        input_pattern_label: Some("post".into()),
-        output_label: "system:IVMView".into(),
-        strategy: Strategy::Reserved,
-    };
+    let def_a = ViewDefinition::new(
+        "content_listing",
+        Some("post".into()),
+        "system:IVMView",
+        Strategy::A,
+    );
+    let def_b = ViewDefinition::new(
+        "content_listing",
+        Some("post".into()),
+        "system:IVMView",
+        Strategy::B,
+    );
+    let def_c = ViewDefinition::new(
+        "content_listing",
+        Some("post".into()),
+        "system:IVMView",
+        Strategy::Reserved,
+    );
 
     let cid_a = def_a.cid().expect("definition cid must be infallible");
     let cid_b = def_b.cid().expect("definition cid must be infallible");
@@ -49,11 +49,11 @@ fn view_definition_carries_strategy_field_in_cid() {
     assert_ne!(cid_a, cid_c);
 
     // Self-equality sanity — same struct, same CID.
-    let def_a_again = ViewDefinition {
-        view_id: "content_listing".into(),
-        input_pattern_label: Some("post".into()),
-        output_label: "system:IVMView".into(),
-        strategy: Strategy::A,
-    };
+    let def_a_again = ViewDefinition::new(
+        "content_listing",
+        Some("post".into()),
+        "system:IVMView",
+        Strategy::A,
+    );
     assert_eq!(cid_a, def_a_again.cid().unwrap());
 }

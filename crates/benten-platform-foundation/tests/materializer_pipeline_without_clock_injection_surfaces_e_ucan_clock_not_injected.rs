@@ -48,14 +48,14 @@ fn materializer_pipeline_without_clock_injection_surfaces_e_ucan_clock_not_injec
     let cid_nc = engine_no_clock.put_node(make_note());
     let mat = HtmlJsonMaterializer;
     let err = mat
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine_no_clock,
-            spec: &spec,
-            content_cid: cid_nc,
-            walk_principal: alice,
-            cap_recheck: allow_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine_no_clock,
+            &spec,
+            cid_nc,
+            alice,
+            allow_all_cap_recheck(),
+            Vec::new(),
+        ))
         .expect_err("materializer MUST fail-closed with no clock injected per sec-3.5-r1-7");
     assert!(
         matches!(err, MaterializerError::UcanClockNotInjected),
@@ -68,13 +68,13 @@ fn materializer_pipeline_without_clock_injection_surfaces_e_ucan_clock_not_injec
     let engine_ok = InMemoryMaterializerEngine::new();
     let cid_ok = engine_ok.put_node(make_note());
     let _ok = mat
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine_ok,
-            spec: &spec,
-            content_cid: cid_ok,
-            walk_principal: alice,
-            cap_recheck: allow_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine_ok,
+            &spec,
+            cid_ok,
+            alice,
+            allow_all_cap_recheck(),
+            Vec::new(),
+        ))
         .expect("with clock injected, walk succeeds");
 }

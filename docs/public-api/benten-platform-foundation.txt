@@ -375,7 +375,7 @@ impl core::marker::UnsafeUnpin for benten_platform_foundation::manifest_store::R
 impl !core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::manifest_store::RedbManifestStore
 impl !core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::manifest_store::RedbManifestStore
 pub mod benten_platform_foundation::materializer
-pub enum benten_platform_foundation::materializer::MaterializerError
+#[non_exhaustive] pub enum benten_platform_foundation::materializer::MaterializerError
 pub benten_platform_foundation::materializer::MaterializerError::SchemaMismatch
 pub benten_platform_foundation::materializer::MaterializerError::SchemaMismatch::reason: alloc::string::String
 pub benten_platform_foundation::materializer::MaterializerError::SubscribeSeamFailure
@@ -396,7 +396,7 @@ impl core::marker::Unpin for benten_platform_foundation::materializer::Materiali
 impl core::marker::UnsafeUnpin for benten_platform_foundation::materializer::MaterializerError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::materializer::MaterializerError
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::materializer::MaterializerError
-pub enum benten_platform_foundation::materializer::RenderError
+#[non_exhaustive] pub enum benten_platform_foundation::materializer::RenderError
 pub benten_platform_foundation::materializer::RenderError::Transport(alloc::string::String)
 impl core::error::Error for benten_platform_foundation::materializer::RenderError
 impl core::fmt::Debug for benten_platform_foundation::materializer::RenderError
@@ -447,7 +447,7 @@ impl core::marker::Unpin for benten_platform_foundation::materializer::HtmlJsonM
 impl core::marker::UnsafeUnpin for benten_platform_foundation::materializer::HtmlJsonMaterializer
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::materializer::HtmlJsonMaterializer
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::materializer::HtmlJsonMaterializer
-pub struct benten_platform_foundation::materializer::MaterializerDenialFrame
+#[non_exhaustive] pub struct benten_platform_foundation::materializer::MaterializerDenialFrame
 pub benten_platform_foundation::materializer::MaterializerDenialFrame::code_value: benten_errors::ErrorCode
 pub benten_platform_foundation::materializer::MaterializerDenialFrame::node_cid: benten_core::Cid
 pub benten_platform_foundation::materializer::MaterializerDenialFrame::principal_cid: benten_core::Cid
@@ -465,7 +465,7 @@ impl core::marker::Unpin for benten_platform_foundation::materializer::Materiali
 impl core::marker::UnsafeUnpin for benten_platform_foundation::materializer::MaterializerDenialFrame
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::materializer::MaterializerDenialFrame
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::materializer::MaterializerDenialFrame
-pub struct benten_platform_foundation::materializer::MaterializerOutput
+#[non_exhaustive] pub struct benten_platform_foundation::materializer::MaterializerOutput
 impl benten_platform_foundation::materializer::MaterializerOutput
 pub fn benten_platform_foundation::materializer::MaterializerOutput::canonical_cid(&self) -> benten_core::Cid
 pub fn benten_platform_foundation::materializer::MaterializerOutput::cap_denials(&self) -> &[benten_platform_foundation::materializer::MaterializerDenialFrame]
@@ -486,13 +486,15 @@ impl core::marker::Unpin for benten_platform_foundation::materializer::Materiali
 impl core::marker::UnsafeUnpin for benten_platform_foundation::materializer::MaterializerOutput
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::materializer::MaterializerOutput
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::materializer::MaterializerOutput
-pub struct benten_platform_foundation::materializer::MaterializerWalkInputs<'a, E: benten_platform_foundation::materializer::MaterializerEngine>
+#[non_exhaustive] pub struct benten_platform_foundation::materializer::MaterializerWalkInputs<'a, E: benten_platform_foundation::materializer::MaterializerEngine>
 pub benten_platform_foundation::materializer::MaterializerWalkInputs::cap_recheck: benten_platform_foundation::materializer::MaterializerCapRecheck
 pub benten_platform_foundation::materializer::MaterializerWalkInputs::content_cid: benten_core::Cid
 pub benten_platform_foundation::materializer::MaterializerWalkInputs::declared_requires: alloc::vec::Vec<alloc::string::String>
 pub benten_platform_foundation::materializer::MaterializerWalkInputs::engine: &'a E
 pub benten_platform_foundation::materializer::MaterializerWalkInputs::spec: &'a benten_platform_foundation::schema_compiler::spec::SchemaSubgraphSpec
 pub benten_platform_foundation::materializer::MaterializerWalkInputs::walk_principal: benten_core::Cid
+impl<'a, E: benten_platform_foundation::materializer::MaterializerEngine> benten_platform_foundation::materializer::MaterializerWalkInputs<'a, E>
+pub fn benten_platform_foundation::materializer::MaterializerWalkInputs<'a, E>::new(&'a E, &'a benten_platform_foundation::schema_compiler::spec::SchemaSubgraphSpec, benten_core::Cid, benten_core::Cid, benten_platform_foundation::materializer::MaterializerCapRecheck, alloc::vec::Vec<alloc::string::String>) -> Self
 impl<'a, E: benten_platform_foundation::materializer::MaterializerEngine> core::clone::Clone for benten_platform_foundation::materializer::MaterializerWalkInputs<'a, E>
 pub fn benten_platform_foundation::materializer::MaterializerWalkInputs<'a, E>::clone(&self) -> Self
 impl<'a, E> core::marker::Freeze for benten_platform_foundation::materializer::MaterializerWalkInputs<'a, E>
@@ -520,7 +522,7 @@ impl core::marker::Unpin for benten_platform_foundation::materializer::Plaintext
 impl core::marker::UnsafeUnpin for benten_platform_foundation::materializer::PlaintextMaterializer
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::materializer::PlaintextMaterializer
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::materializer::PlaintextMaterializer
-pub struct benten_platform_foundation::materializer::SubscribeAttachToken
+#[non_exhaustive] pub struct benten_platform_foundation::materializer::SubscribeAttachToken
 pub benten_platform_foundation::materializer::SubscribeAttachToken::pattern: alloc::string::String
 impl core::clone::Clone for benten_platform_foundation::materializer::SubscribeAttachToken
 pub fn benten_platform_foundation::materializer::SubscribeAttachToken::clone(&self) -> benten_platform_foundation::materializer::SubscribeAttachToken
@@ -1465,7 +1467,7 @@ impl core::marker::UnsafeUnpin for benten_platform_foundation::schema_compiler::
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::schema_compiler::spec::SchemaSubgraphSpec
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::schema_compiler::spec::SchemaSubgraphSpec
 pub mod benten_platform_foundation::schema_compiler::vocab
-pub enum benten_platform_foundation::schema_compiler::vocab::Scalar
+#[non_exhaustive] pub enum benten_platform_foundation::schema_compiler::vocab::Scalar
 pub benten_platform_foundation::schema_compiler::vocab::Scalar::Bool
 pub benten_platform_foundation::schema_compiler::vocab::Scalar::Bytes
 pub benten_platform_foundation::schema_compiler::vocab::Scalar::BytesCid
@@ -1495,7 +1497,7 @@ impl core::marker::Unpin for benten_platform_foundation::schema_compiler::vocab:
 impl core::marker::UnsafeUnpin for benten_platform_foundation::schema_compiler::vocab::Scalar
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::schema_compiler::vocab::Scalar
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::schema_compiler::vocab::Scalar
-pub enum benten_platform_foundation::schema_compiler::vocab::VocabEdge
+#[non_exhaustive] pub enum benten_platform_foundation::schema_compiler::vocab::VocabEdge
 pub benten_platform_foundation::schema_compiler::vocab::VocabEdge::ItemType
 pub benten_platform_foundation::schema_compiler::vocab::VocabEdge::KeyType
 pub benten_platform_foundation::schema_compiler::vocab::VocabEdge::RefTarget
@@ -1522,7 +1524,7 @@ impl core::marker::Unpin for benten_platform_foundation::schema_compiler::vocab:
 impl core::marker::UnsafeUnpin for benten_platform_foundation::schema_compiler::vocab::VocabEdge
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::schema_compiler::vocab::VocabEdge
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::schema_compiler::vocab::VocabEdge
-pub enum benten_platform_foundation::schema_compiler::vocab::VocabLabel
+#[non_exhaustive] pub enum benten_platform_foundation::schema_compiler::vocab::VocabLabel
 pub benten_platform_foundation::schema_compiler::vocab::VocabLabel::FieldEnum
 pub benten_platform_foundation::schema_compiler::vocab::VocabLabel::FieldList
 pub benten_platform_foundation::schema_compiler::vocab::VocabLabel::FieldMap
@@ -1556,7 +1558,7 @@ pub const benten_platform_foundation::schema_compiler::vocab::SCALAR_NAMES: &[&s
 pub const benten_platform_foundation::schema_compiler::vocab::VOCAB_EDGE_NAMES: &[&str]
 pub const benten_platform_foundation::schema_compiler::vocab::VOCAB_LABEL_NAMES: &[&str]
 pub const benten_platform_foundation::schema_compiler::vocab::VOCAB_REQUIRED_FIELD_PROPS: &[&str]
-pub enum benten_platform_foundation::schema_compiler::Scalar
+#[non_exhaustive] pub enum benten_platform_foundation::schema_compiler::Scalar
 pub benten_platform_foundation::schema_compiler::Scalar::Bool
 pub benten_platform_foundation::schema_compiler::Scalar::Bytes
 pub benten_platform_foundation::schema_compiler::Scalar::BytesCid
@@ -1633,7 +1635,7 @@ impl core::marker::Unpin for benten_platform_foundation::schema_compiler::error:
 impl core::marker::UnsafeUnpin for benten_platform_foundation::schema_compiler::error::SchemaCompileError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::schema_compiler::error::SchemaCompileError
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::schema_compiler::error::SchemaCompileError
-pub enum benten_platform_foundation::schema_compiler::VocabEdge
+#[non_exhaustive] pub enum benten_platform_foundation::schema_compiler::VocabEdge
 pub benten_platform_foundation::schema_compiler::VocabEdge::ItemType
 pub benten_platform_foundation::schema_compiler::VocabEdge::KeyType
 pub benten_platform_foundation::schema_compiler::VocabEdge::RefTarget
@@ -1660,7 +1662,7 @@ impl core::marker::Unpin for benten_platform_foundation::schema_compiler::vocab:
 impl core::marker::UnsafeUnpin for benten_platform_foundation::schema_compiler::vocab::VocabEdge
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::schema_compiler::vocab::VocabEdge
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::schema_compiler::vocab::VocabEdge
-pub enum benten_platform_foundation::schema_compiler::VocabLabel
+#[non_exhaustive] pub enum benten_platform_foundation::schema_compiler::VocabLabel
 pub benten_platform_foundation::schema_compiler::VocabLabel::FieldEnum
 pub benten_platform_foundation::schema_compiler::VocabLabel::FieldList
 pub benten_platform_foundation::schema_compiler::VocabLabel::FieldMap
@@ -1789,7 +1791,7 @@ impl core::marker::Unpin for benten_platform_foundation::admin_ui_v0::Category
 impl core::marker::UnsafeUnpin for benten_platform_foundation::admin_ui_v0::Category
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::admin_ui_v0::Category
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::admin_ui_v0::Category
-pub enum benten_platform_foundation::MaterializerError
+#[non_exhaustive] pub enum benten_platform_foundation::MaterializerError
 pub benten_platform_foundation::MaterializerError::SchemaMismatch
 pub benten_platform_foundation::MaterializerError::SchemaMismatch::reason: alloc::string::String
 pub benten_platform_foundation::MaterializerError::SubscribeSeamFailure
@@ -1829,7 +1831,7 @@ impl core::marker::Unpin for benten_platform_foundation::plugin_manifest::Proven
 impl core::marker::UnsafeUnpin for benten_platform_foundation::plugin_manifest::ProvenanceOutcome
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::plugin_manifest::ProvenanceOutcome
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::plugin_manifest::ProvenanceOutcome
-pub enum benten_platform_foundation::RenderError
+#[non_exhaustive] pub enum benten_platform_foundation::RenderError
 pub benten_platform_foundation::RenderError::Transport(alloc::string::String)
 impl core::error::Error for benten_platform_foundation::materializer::RenderError
 impl core::fmt::Debug for benten_platform_foundation::materializer::RenderError
@@ -1866,7 +1868,7 @@ impl core::marker::Unpin for benten_platform_foundation::plugin_manifest::Render
 impl core::marker::UnsafeUnpin for benten_platform_foundation::plugin_manifest::RendererBackend
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::plugin_manifest::RendererBackend
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::plugin_manifest::RendererBackend
-pub enum benten_platform_foundation::Scalar
+#[non_exhaustive] pub enum benten_platform_foundation::Scalar
 pub benten_platform_foundation::Scalar::Bool
 pub benten_platform_foundation::Scalar::Bytes
 pub benten_platform_foundation::Scalar::BytesCid
@@ -2008,7 +2010,7 @@ impl core::marker::Unpin for benten_platform_foundation::plugin_manifest::Valida
 impl core::marker::UnsafeUnpin for benten_platform_foundation::plugin_manifest::ValidationOutcome
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::plugin_manifest::ValidationOutcome
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::plugin_manifest::ValidationOutcome
-pub enum benten_platform_foundation::VocabEdge
+#[non_exhaustive] pub enum benten_platform_foundation::VocabEdge
 pub benten_platform_foundation::VocabEdge::ItemType
 pub benten_platform_foundation::VocabEdge::KeyType
 pub benten_platform_foundation::VocabEdge::RefTarget
@@ -2035,7 +2037,7 @@ impl core::marker::Unpin for benten_platform_foundation::schema_compiler::vocab:
 impl core::marker::UnsafeUnpin for benten_platform_foundation::schema_compiler::vocab::VocabEdge
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::schema_compiler::vocab::VocabEdge
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::schema_compiler::vocab::VocabEdge
-pub enum benten_platform_foundation::VocabLabel
+#[non_exhaustive] pub enum benten_platform_foundation::VocabLabel
 pub benten_platform_foundation::VocabLabel::FieldEnum
 pub benten_platform_foundation::VocabLabel::FieldList
 pub benten_platform_foundation::VocabLabel::FieldMap
@@ -2178,7 +2180,7 @@ impl core::marker::Unpin for benten_platform_foundation::plugin_manifest::Instal
 impl core::marker::UnsafeUnpin for benten_platform_foundation::plugin_manifest::InstallRecord
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::plugin_manifest::InstallRecord
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::plugin_manifest::InstallRecord
-pub struct benten_platform_foundation::MaterializerDenialFrame
+#[non_exhaustive] pub struct benten_platform_foundation::MaterializerDenialFrame
 pub benten_platform_foundation::MaterializerDenialFrame::code_value: benten_errors::ErrorCode
 pub benten_platform_foundation::MaterializerDenialFrame::node_cid: benten_core::Cid
 pub benten_platform_foundation::MaterializerDenialFrame::principal_cid: benten_core::Cid
@@ -2196,7 +2198,7 @@ impl core::marker::Unpin for benten_platform_foundation::materializer::Materiali
 impl core::marker::UnsafeUnpin for benten_platform_foundation::materializer::MaterializerDenialFrame
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::materializer::MaterializerDenialFrame
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::materializer::MaterializerDenialFrame
-pub struct benten_platform_foundation::MaterializerOutput
+#[non_exhaustive] pub struct benten_platform_foundation::MaterializerOutput
 impl benten_platform_foundation::materializer::MaterializerOutput
 pub fn benten_platform_foundation::materializer::MaterializerOutput::canonical_cid(&self) -> benten_core::Cid
 pub fn benten_platform_foundation::materializer::MaterializerOutput::cap_denials(&self) -> &[benten_platform_foundation::materializer::MaterializerDenialFrame]
@@ -2217,13 +2219,15 @@ impl core::marker::Unpin for benten_platform_foundation::materializer::Materiali
 impl core::marker::UnsafeUnpin for benten_platform_foundation::materializer::MaterializerOutput
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::materializer::MaterializerOutput
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::materializer::MaterializerOutput
-pub struct benten_platform_foundation::MaterializerWalkInputs<'a, E: benten_platform_foundation::materializer::MaterializerEngine>
+#[non_exhaustive] pub struct benten_platform_foundation::MaterializerWalkInputs<'a, E: benten_platform_foundation::materializer::MaterializerEngine>
 pub benten_platform_foundation::MaterializerWalkInputs::cap_recheck: benten_platform_foundation::materializer::MaterializerCapRecheck
 pub benten_platform_foundation::MaterializerWalkInputs::content_cid: benten_core::Cid
 pub benten_platform_foundation::MaterializerWalkInputs::declared_requires: alloc::vec::Vec<alloc::string::String>
 pub benten_platform_foundation::MaterializerWalkInputs::engine: &'a E
 pub benten_platform_foundation::MaterializerWalkInputs::spec: &'a benten_platform_foundation::schema_compiler::spec::SchemaSubgraphSpec
 pub benten_platform_foundation::MaterializerWalkInputs::walk_principal: benten_core::Cid
+impl<'a, E: benten_platform_foundation::materializer::MaterializerEngine> benten_platform_foundation::materializer::MaterializerWalkInputs<'a, E>
+pub fn benten_platform_foundation::materializer::MaterializerWalkInputs<'a, E>::new(&'a E, &'a benten_platform_foundation::schema_compiler::spec::SchemaSubgraphSpec, benten_core::Cid, benten_core::Cid, benten_platform_foundation::materializer::MaterializerCapRecheck, alloc::vec::Vec<alloc::string::String>) -> Self
 impl<'a, E: benten_platform_foundation::materializer::MaterializerEngine> core::clone::Clone for benten_platform_foundation::materializer::MaterializerWalkInputs<'a, E>
 pub fn benten_platform_foundation::materializer::MaterializerWalkInputs<'a, E>::clone(&self) -> Self
 impl<'a, E> core::marker::Freeze for benten_platform_foundation::materializer::MaterializerWalkInputs<'a, E>
@@ -2427,7 +2431,7 @@ impl core::marker::Unpin for benten_platform_foundation::plugin_manifest::Shares
 impl core::marker::UnsafeUnpin for benten_platform_foundation::plugin_manifest::SharesRule
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::plugin_manifest::SharesRule
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::plugin_manifest::SharesRule
-pub struct benten_platform_foundation::SubscribeAttachToken
+#[non_exhaustive] pub struct benten_platform_foundation::SubscribeAttachToken
 pub benten_platform_foundation::SubscribeAttachToken::pattern: alloc::string::String
 impl core::clone::Clone for benten_platform_foundation::materializer::SubscribeAttachToken
 pub fn benten_platform_foundation::materializer::SubscribeAttachToken::clone(&self) -> benten_platform_foundation::materializer::SubscribeAttachToken

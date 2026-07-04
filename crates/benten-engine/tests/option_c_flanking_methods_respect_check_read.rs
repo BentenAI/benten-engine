@@ -173,10 +173,9 @@ fn transform_via_read_view_respects_check_read() {
     let node = Node::new(vec!["post".into()], props);
     let _cid = engine.create_node(&node).expect("privileged write");
 
-    let query = ViewQuery {
-        label: Some("post".to_string()),
-        ..Default::default()
-    };
+    // `#[non_exhaustive]` (F-22): default + field mutation.
+    let mut query = ViewQuery::default();
+    query.label = Some("post".to_string());
     let observed = <Engine as PrimitiveHost>::read_view(&engine, "posts", &query);
 
     // Phase-2a mitigation: read_view under deny-reads returns an empty/Ok

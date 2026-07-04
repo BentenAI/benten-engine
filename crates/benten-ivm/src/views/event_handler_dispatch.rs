@@ -43,6 +43,8 @@ const GLOBAL_BUCKET: &str = "";
 
 /// View 2 — event handler dispatch table.
 #[derive(Debug)]
+// §11 SemVer-readiness (F-22 pre-tag): a hand-written view instance; additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct EventDispatchView {
     /// Per-event-name dispatch set. The `""` key is the global bucket for
     /// identity-only legacy events (see module doc).

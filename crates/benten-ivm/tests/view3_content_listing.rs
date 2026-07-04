@@ -38,12 +38,11 @@ fn content_listing_all_returned_after_three_writes() {
     v.update(&post_created()).unwrap();
     v.update(&post_created()).unwrap();
     v.update(&post_created()).unwrap();
-    let q = ViewQuery {
-        label: Some("Post".to_string()),
-        limit: Some(100),
-        offset: Some(0),
-        ..ViewQuery::default()
-    };
+    // `#[non_exhaustive]` (F-22): default + field mutation.
+    let mut q = ViewQuery::default();
+    q.label = Some("Post".to_string());
+    q.limit = Some(100);
+    q.offset = Some(0);
     let r = v.read(&q).unwrap();
     match r {
         ViewResult::Cids(cids) => {
@@ -62,12 +61,11 @@ fn content_listing_delete_removes_entry() {
     let mut delete_ev = post_created();
     delete_ev.kind = ChangeKind::Deleted;
     v.update(&delete_ev).unwrap();
-    let q = ViewQuery {
-        label: Some("Post".to_string()),
-        limit: Some(100),
-        offset: Some(0),
-        ..ViewQuery::default()
-    };
+    // `#[non_exhaustive]` (F-22): default + field mutation.
+    let mut q = ViewQuery::default();
+    q.label = Some("Post".to_string());
+    q.limit = Some(100);
+    q.offset = Some(0);
     let r = v.read(&q).unwrap();
     assert!(matches!(r, ViewResult::Cids(ref c) if c.is_empty()));
 }
@@ -78,12 +76,11 @@ fn content_listing_pagination_respects_limit_and_offset() {
     for _ in 0..10 {
         v.update(&post_created()).unwrap();
     }
-    let q = ViewQuery {
-        label: Some("Post".to_string()),
-        limit: Some(3),
-        offset: Some(2),
-        ..ViewQuery::default()
-    };
+    // `#[non_exhaustive]` (F-22): default + field mutation.
+    let mut q = ViewQuery::default();
+    q.label = Some("Post".to_string());
+    q.limit = Some(3);
+    q.offset = Some(2);
     let r = v.read(&q).unwrap();
     match r {
         ViewResult::Cids(cids) => assert_eq!(cids.len(), 3),
@@ -160,12 +157,11 @@ fn content_listing_mixed_sort_key_ordering() {
     v.update(&ev_identity).unwrap();
     v.update(&ev_created_later).unwrap();
 
-    let q = ViewQuery {
-        label: Some("Post".to_string()),
-        limit: Some(100),
-        offset: Some(0),
-        ..ViewQuery::default()
-    };
+    // `#[non_exhaustive]` (F-22): default + field mutation.
+    let mut q = ViewQuery::default();
+    q.label = Some("Post".to_string());
+    q.limit = Some(100);
+    q.offset = Some(0);
     let cids = match v.read(&q).unwrap() {
         ViewResult::Cids(c) => c,
         other => panic!("expected Cids, got {other:?}"),
@@ -202,12 +198,11 @@ proptest! {
         let mut rebuilt = ContentListingView::new("Post");
         rebuilt.rebuild().unwrap();
 
-        let q = ViewQuery {
-            label: Some("Post".to_string()),
-            limit: Some(1024),
-            offset: Some(0),
-            ..ViewQuery::default()
-        };
+        // `#[non_exhaustive]` (F-22): default + field mutation.
+        let mut q = ViewQuery::default();
+        q.label = Some("Post".to_string());
+        q.limit = Some(1024);
+        q.offset = Some(0);
         let r_inc = incremental.read(&q).unwrap();
         let r_reb = rebuilt.read(&q).unwrap();
         match (r_inc, r_reb) {

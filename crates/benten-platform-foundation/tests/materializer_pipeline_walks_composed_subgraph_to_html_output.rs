@@ -43,14 +43,14 @@ fn materializer_pipeline_walks_composed_subgraph_to_html_output() {
 
     let mat = HtmlJsonMaterializer;
     let out = mat
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
             content_cid,
-            walk_principal: alice,
-            cap_recheck: allow_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+            alice,
+            allow_all_cap_recheck(),
+            Vec::new(),
+        ))
         .expect("walk succeeds for canonical Note");
 
     // HTML side: contains the article wrapper for the lowercased schema

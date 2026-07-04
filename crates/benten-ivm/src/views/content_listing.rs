@@ -68,6 +68,8 @@ const VIEW_ID: &str = "content_listing";
 
 /// View 3 — paginated sorted-by-`createdAt` content listing per label.
 #[derive(Debug)]
+// §11 SemVer-readiness (F-22 pre-tag): a hand-written view instance; additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct ContentListingView {
     /// The label this view watches. Set at construction.
     label: String,

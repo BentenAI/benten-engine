@@ -61,6 +61,8 @@ pub use crate::engine_sync::{AtriumError, AtriumHandle};
 /// production wires arrive at G16-D wave-6b alongside the handshake
 /// protocol body.
 #[derive(Clone, Debug)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate construction uses the crate's constructor (field READS unaffected).
+#[non_exhaustive]
 pub struct AtriumConfig {
     /// The transport-binding mode. `Loopback` for in-process integration
     /// tests; `Production` for peer-to-peer connections via iroh's
@@ -125,6 +127,8 @@ pub enum AtriumMode {
 /// [`SyncStatus::is_healthy`] discriminators to route observability
 /// alerts.
 #[derive(Clone, Debug, Eq, PartialEq)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate construction uses the crate's constructor (field READS unaffected).
+#[non_exhaustive]
 pub struct SyncStatus {
     /// The active transport-path kind (Direct / Relay / Loopback).
     pub transport_kind: TransportKind,

@@ -111,6 +111,8 @@ pub enum TypedOutputProjection {
 /// post-R1-triage ratification). A future SubgraphSpec → typed-field-
 /// Node lowering pass converts this struct into Node form on persist.
 #[derive(Debug, Clone, PartialEq, Eq)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate literal construction gates to the crate's constructors (field READS unaffected).
+#[non_exhaustive]
 pub struct SubgraphSpec {
     /// Stable view id. Canonical view ids route to fast-path classification
     /// (`Strategy::A` per [`crate::CanonicalViews::dispatch`] — INTERNAL);
@@ -266,6 +268,8 @@ impl SubgraphSpec {
 /// `ChangeEvent` internally before feeding the per-event `View::update`
 /// path.
 #[derive(Debug, Clone, PartialEq, Eq)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate literal construction gates to the crate's constructors (field READS unaffected).
+#[non_exhaustive]
 pub struct KernelInput {
     /// Node label — drives label-pattern matching against the spec's
     /// `label_pattern`.
@@ -312,4 +316,58 @@ pub enum KernelOutput {
     Rules(Vec<u8>),
     /// Current-pointer output (View 5). `None` when no CURRENT pointer.
     Current(Option<Vec<u8>>),
+}
+
+#[cfg(test)]
+mod subgraph_spec_field_set_drift_defense {
+    //! refinement-audit #922 — `SubgraphSpec` field-set drift-defense pin.
+    //!
+    //! `SubgraphSpec` carries a "MUST NOT remove or rename" canary stability
+    //! commitment (its rustdoc: "additive future fields ... but MUST NOT
+    //! remove or rename"). The in-lane enforcement is an EXHAUSTIVE field
+    //! construct + destructure: if any field is removed or renamed this test
+    //! fails to compile (a hard drift signal at `cargo build`); an *additive*
+    //! field also fails to compile until this pin is consciously updated —
+    //! making field-set evolution a deliberate, reviewed act rather than a
+    //! silent drift.
+    //!
+    //! **F-22 relocation:** this test lives IN-CRATE (was
+    //! `tests/subgraph_spec_field_set_drift_defense.rs`) so the exhaustive
+    //! struct-literal + `..`-free destructure it needs still compile after
+    //! `#[non_exhaustive]` (F-22 pre-tag §11) was applied to `SubgraphSpec`.
+    //! `#[non_exhaustive]` blocks the equivalent construct/destructure only
+    //! from OUTSIDE `benten-ivm`, so the drift-defense mechanism and the
+    //! external SemVer forward-compat pin are complementary, not in conflict.
+
+    use super::{SubgraphSpec, TypedOutputProjection};
+    use crate::algorithm_b::{LabelPattern, Projection};
+
+    #[test]
+    fn subgraph_spec_field_set_is_pinned() {
+        let spec = SubgraphSpec {
+            view_id: "content_listing".to_string(),
+            label_pattern: LabelPattern::exact("post"),
+            projection: Projection::all_props(),
+            typed_output_projection: None,
+            self_referential: false,
+            budget: Some(42),
+        };
+
+        // EXHAUSTIVE destructure — the `..`-free pattern is the drift trap.
+        let SubgraphSpec {
+            view_id,
+            label_pattern,
+            projection,
+            typed_output_projection,
+            self_referential,
+            budget,
+        } = spec;
+
+        assert_eq!(view_id, "content_listing");
+        assert_eq!(label_pattern, LabelPattern::exact("post"));
+        assert_eq!(projection, Projection::all_props());
+        assert_eq!(typed_output_projection, None::<TypedOutputProjection>);
+        assert!(!self_referential);
+        assert_eq!(budget, Some(42));
+    }
 }

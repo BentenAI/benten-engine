@@ -173,14 +173,14 @@ pub fn dogfood_path_d_revoke_cap_mid_session_arm() {
     let adapter = DogfoodAdapter(&engine);
     let principal = principal_cid_for("admin-ui-v0-plugin-did");
     let out = HtmlJsonMaterializer
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &adapter,
-            spec: &spec,
-            content_cid: cid,
-            walk_principal: principal,
-            cap_recheck: deny_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &adapter,
+            &spec,
+            cid,
+            principal,
+            deny_all_cap_recheck(),
+            Vec::new(),
+        ))
         .unwrap();
     let html = std::str::from_utf8(out.html_bytes()).unwrap();
     assert!(

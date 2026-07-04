@@ -58,6 +58,8 @@ fn concurrent_append_creates_branched_chain() {
         VersionError::UnknownPrior { supplied } => {
             panic!("expected VersionError::Branched, got UnknownPrior({supplied:?})");
         }
+        // `#[non_exhaustive]` (F-22) forward-compat guard.
+        other => panic!("expected VersionError::Branched, got {other:?}"),
     }
 }
 
@@ -106,5 +108,7 @@ fn append_against_unknown_prior_head_errors() {
                 "expected VersionError::UnknownPrior, got Branched {{ seen: {seen:?}, attempted: {attempted:?} }}"
             );
         }
+        // `#[non_exhaustive]` (F-22) forward-compat guard.
+        other => panic!("expected VersionError::UnknownPrior, got {other:?}"),
     }
 }

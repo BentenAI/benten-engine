@@ -237,12 +237,12 @@ fn algorithm_b_canonical_view_fast_path_preserved_within_20pct_of_strategy_b_bas
     const ITERS: u64 = 1_024;
     const CORPUS: usize = 64;
 
-    let definition = ViewDefinition {
-        view_id: "content_listing".to_string(),
-        input_pattern_label: Some("post".to_string()),
-        output_label: "system:IVMView".to_string(),
-        strategy: Strategy::B,
-    };
+    let definition = ViewDefinition::new(
+        "content_listing".to_string(),
+        Some("post".to_string()),
+        "system:IVMView".to_string(),
+        Strategy::B,
+    );
     let events: Vec<ChangeEvent> = (0..CORPUS as u64)
         .map(|i| make_event(ChangeKind::Created, "post", i))
         .collect();

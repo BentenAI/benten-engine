@@ -10,15 +10,16 @@
 > the pre-tag sweep picks it up; NOT retensed now (banner-retense couples to
 > the SHA + date the tag lands, a pre-tag-sweep concern).
 > >
-> > **⚑ R13 F-16 pre-tag-sweep line — refresh the §11 `#[non_exhaustive]`
-> > tally.** §11 (~L1055) states "**158 total `pub enum` across `crates/`;
-> > 148 of those carry `#[non_exhaustive]`**" as a HEAD-verified count. Enum
-> > types are added/removed across phase-close council rounds, so this tally
-> > can drift. At the (Ben-gated) pre-tag sweep, re-run the count (the
-> > `g_core_9_non_exhaustive_audit` test set enumerates the surface) and
-> > refresh the `158 / 148` numbers to the tag-time reality — so the freeze
-> > contract's stated tally matches the as-frozen surface. Registered here;
-> > NOT refreshed now (couples to the tag-time SHA, same as the banner).
+> > **⚑ R13 F-16 pre-tag-sweep line — §11 `#[non_exhaustive]` tally
+> > REFRESHED at F-22 (2026-07-03).** §11 (~L1055) now states the
+> > HEAD-verified count "**194 total `pub enum` (130 non_exhaustive) + 444
+> > total `pub struct` (53 non_exhaustive) = 183 of 638 pub types carry the
+> > attribute**", replacing the stale `158 / 148` snapshot. The refresh
+> > landed alongside the F-22 Row D-17 EXTENSION `#[non_exhaustive]`
+> > application (the same sweep that added ~55 attributes + regenerated the
+> > cargo-public-api baselines). Should further phase-close rounds mutate the
+> > enum/struct set before the tag lands, re-run the count once more at the
+> > final pre-tag pass.
 >
 > **Status: POST-BUILD-OUT-WAVE.** Round 0.5 triage-synthesis refreshed
 > at the V1-FROZEN-INTERFACE build-out wave (2026-05-23). The 8 cross-
@@ -1061,10 +1062,19 @@ coherent freeze-wave over the FULL enumerated workspace surface."
 **Frozen scope:**
 
 The G-CORE-9 wave enumerates EVERY public enum + struct workspace-wide
-and makes a per-item apply-or-D8-carve-out decision. Verified at HEAD:
-**158 total `pub enum` across `crates/`; 148 of those carry
-`#[non_exhaustive]` already (counting all types, not just enums)**. The
-freeze MUST close the remaining gap.
+and makes a per-item apply-or-D8-carve-out decision. **HEAD-verified count
+refreshed at F-22 pre-tag sweep (2026-07-03, per R13 F-16):** **194 total
+`pub enum` across `crates/`, 130 of which carry `#[non_exhaustive]`; 444
+total `pub struct`, 53 of which carry `#[non_exhaustive]` — 183 of the 638
+total pub enum+struct types carry the attribute at HEAD** (the un-attributed
+remainder is overwhelmingly the documented carve-out set — frozen-cardinality
+wire-keying enums, all-private-field internal structs where the attribute is a
+no-op for external construction, and the `#[cfg]`-gated / builder-pattern
+surfaces — plus the small honestly-deferred set below). The F-22 sweep closed
+the Row D-17 EXTENSION set (~55 types across benten-core / benten-ivm /
+benten-platform-foundation / benten-engine); the remaining honestly-deferred
+gaps are the §4.43-tracked `GraphError::TxAborted` per-variant + `store::ChangeEvent`
+(cross-crate literal-construction cascade, v1-API-stabilization wave).
 
 **Architectural position: APPLY `#[non_exhaustive]` UNIVERSALLY** unless
 a D8-carve-out has a documented structural reason. The cost of NOT
@@ -1119,6 +1129,7 @@ verification at HEAD):
 | `benten-engine` (layer_d) | **`grant_acceptance::GrantRejection`** | NO (deliberate) | **DO NOT APPLY** — explicit carve-out (R6-R3): the frozen M-12 six-pass-class roster; the non-wildcard `roster_index` match IS the structural roster-drift guard (a 7th class HALT-AND-SURFACEs at every consumer). Mirrors `Strategy` / `MembershipSetKind`. |
 | `benten-core` | `WriteAuthority`, `ChangeEvent`, `ChangeKind`, `subgraph_spec::Spec`+`SpecError`, `version_dag::*`, `Subgraph::PrimitiveKind` | YES (except `Spec` which uses private-fields-plus-builder pattern for equivalent SemVer-safety per L17-r2-1) | KEEP |
 | `benten-core` | new `RestrictedSpec` enum variants (`subgraph_spec/spec.rs:126`) | TBD | APPLY |
+| **F-22 Row D-17 EXTENSION set** (pre-tag) | `benten-core`: `Mode` / `VersionError` / `VersionDagError` / `Anchor` / `VersionDag` / `DagVersionChain` / `Subgraph` / `SubgraphBuilder` / `NodeHandle`. `benten-ivm`: `SubgraphSpec` / `KernelInput` / `ViewState` / `ViewBudget` / `ViewQuery` / `ViewResult` / `ViewDefinition` / `LabelPattern` / `Subscriber` / `CanonicalViewEntry` / `AlgorithmBView` / `Projection` / `EffectiveRules` + the 5 view-instance structs. `benten-platform-foundation`: `VocabLabel` / `VocabEdge` / `Scalar` / `RenderError` / `MaterializerError` / `MaterializerDenialFrame` / `MaterializerWalkInputs` / `MaterializerOutput` / `SubscribeAttachToken`. `benten-engine`: `UserViewSpec` / `UserViewSpecBuilder` / `ReadViewOptions` / `Outcome` / `Trace` / `TerminalError` / `BudgetExhaustedView` / `AnchorHandle` / `RegisterReplaceOutcome` / `HandlerPredecessors` / `DiagnosticInfo` / `NestedTx` / `EngineViewsHandle` / `AtriumConfig` / `SyncStatus` | **YES — `#[non_exhaustive]` APPLIED at HEAD (F-22 pre-tag sweep)** (each carries a `// §11 SemVer-readiness (F-22 pre-tag)` doc-block) | **APPLIED (KEEP)** — closes `V1-FROZEN-INTERFACE-DEFERRED.md` Row D-17 EXTENSION set. Cross-crate cascade closed via minted constructors (`Subgraph::from_parts` / `NodeHandle::new` / `ViewDefinition::new` / `MaterializerWalkInputs::new`) + `default()`+field-mutation for FRU structs + `_` wildcard match arms (in-crate exhaustive matches unaffected). NO carve-outs in this set. Audit pins: 12 `f22_*` tests in `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs`. |
 | `benten-ivm` | `AlgorithmError` | per spec item 11 | AUDIT + APPLY |
 | `benten-sync` | §4.71 5-enum cluster | per spec item 11 | AUDIT + APPLY |
 | `benten-caps` | `CapError`, `RestrictedSpec`, `PendingOp` | YES | KEEP |

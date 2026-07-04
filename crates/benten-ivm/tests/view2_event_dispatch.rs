@@ -44,10 +44,9 @@ fn view2_populated_read_returns_specific_cid_set() {
     let expected_cid = canonical_test_node().cid().unwrap();
     let mut v = EventDispatchView::new();
     v.update(&subscribe_event(ChangeKind::Created)).unwrap();
-    let q = ViewQuery {
-        event_name: Some("user:signed_up".to_string()),
-        ..ViewQuery::default()
-    };
+    // `#[non_exhaustive]` (F-22): default + field mutation.
+    let mut q = ViewQuery::default();
+    q.event_name = Some("user:signed_up".to_string());
     match v.read(&q).unwrap() {
         ViewResult::Cids(cids) => {
             assert_eq!(cids.len(), 1, "exactly one handler subscribed");
@@ -74,10 +73,9 @@ fn view2_rebuild_matches_incremental_state() {
     let mut rebuilt = EventDispatchView::new();
     rebuilt.rebuild().unwrap();
 
-    let q = ViewQuery {
-        event_name: Some("user:signed_up".to_string()),
-        ..ViewQuery::default()
-    };
+    // `#[non_exhaustive]` (F-22): default + field mutation.
+    let mut q = ViewQuery::default();
+    q.event_name = Some("user:signed_up".to_string());
     match (incremental.read(&q).unwrap(), rebuilt.read(&q).unwrap()) {
         (ViewResult::Cids(a), ViewResult::Cids(b)) => {
             assert_eq!(a, b, "rebuilt dispatch table must match incremental");
@@ -94,10 +92,9 @@ fn view2_unsubscribe_removes_handler() {
     v.update(&subscribe_event(ChangeKind::Created)).unwrap();
     v.update(&subscribe_event(ChangeKind::Deleted)).unwrap();
 
-    let q = ViewQuery {
-        event_name: Some("user:signed_up".to_string()),
-        ..ViewQuery::default()
-    };
+    // `#[non_exhaustive]` (F-22): default + field mutation.
+    let mut q = ViewQuery::default();
+    q.event_name = Some("user:signed_up".to_string());
     match v.read(&q).unwrap() {
         ViewResult::Cids(cids) => assert!(cids.is_empty(), "unsubscribe must empty the dispatch"),
         other => panic!("expected Cids, got {other:?}"),

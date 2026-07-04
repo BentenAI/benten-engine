@@ -49,6 +49,9 @@ use crate::Cid;
 /// DAG version-chain errors. Mirrors the linear `VersionError` shape
 /// but covers branches + cycles.
 #[derive(Debug, thiserror::Error)]
+// §11 SemVer-readiness (F-22 pre-tag): a future DAG version-error variant
+// lands additively; cross-crate consumers add a `_` wildcard arm.
+#[non_exhaustive]
 pub enum VersionDagError {
     /// Caller supplied a parent CID the DAG has not seen.
     #[error("parent CID not in DAG")]
@@ -111,6 +114,10 @@ impl VersionDagError {
 /// assert_eq!(chain.len(), 2);
 /// ```
 #[derive(Debug, Clone)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a
+// SemVer break. All fields are private, so cross-crate literal construction
+// was never possible; the attribute is the freeze pin.
+#[non_exhaustive]
 pub struct DagVersionChain {
     /// `child -> {parents}`.
     parents: BTreeMap<Cid, BTreeSet<Cid>>,

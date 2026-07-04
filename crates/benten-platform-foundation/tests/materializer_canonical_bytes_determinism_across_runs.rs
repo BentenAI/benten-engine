@@ -31,13 +31,15 @@ fn materializer_canonical_bytes_determinism_across_runs() {
     let cid = engine.put_node(Node::new(vec!["Note".into()], props));
 
     let mat = HtmlJsonMaterializer;
-    let mk = || MaterializerWalkInputs {
-        engine: &engine,
-        spec: &spec,
-        content_cid: cid,
-        walk_principal: alice,
-        cap_recheck: allow_all_cap_recheck(),
-        declared_requires: Vec::new(),
+    let mk = || {
+        MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            cid,
+            alice,
+            allow_all_cap_recheck(),
+            Vec::new(),
+        )
     };
     let out1 = mat.materialize_with_gate(mk()).unwrap();
     let out2 = mat.materialize_with_gate(mk()).unwrap();
