@@ -556,7 +556,6 @@ pub const benten_crypto_suite::envelope::ENVELOPE_MAGIC: u8
 pub const benten_crypto_suite::envelope::MAX_NONCE_LEN: usize
 pub fn benten_crypto_suite::envelope::canonical_tlv_encode(u16, &benten_crypto_suite::envelope::BindingContext) -> alloc::vec::Vec<u8>
 pub const fn benten_crypto_suite::envelope::layer_c_and_d_share_one_hpke_primitive() -> bool
-pub fn benten_crypto_suite::envelope::lift_from_aead_envelope(&benten_crypto_suite::aead::AeadEnvelope, benten_crypto_suite::envelope::BindingContext) -> benten_crypto_suite::envelope::EncryptedEnvelope
 pub mod benten_crypto_suite::error
 #[non_exhaustive] pub enum benten_crypto_suite::error::CryptoError
 pub benten_crypto_suite::error::CryptoError::Unsupported(benten_crypto_suite::error::UnsupportedAlgorithm)

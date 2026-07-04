@@ -32,7 +32,6 @@ pub const benten_membership_set::aad::SETID_COMMITMENT_LABEL: &[u8]
 pub fn benten_membership_set::aad::assemble_group_aad(&benten_membership_set::aad::GroupAadInputs) -> alloc::vec::Vec<u8>
 pub fn benten_membership_set::aad::audience_set_commitment(&[alloc::string::String]) -> [u8; 32]
 pub fn benten_membership_set::aad::canonical_members_table_bytes(&alloc::collections::btree::map::BTreeMap<benten_membership_set::member::Did, benten_membership_set::member::MemberEntry>) -> alloc::vec::Vec<u8>
-pub fn benten_membership_set::aad::default_group_codepoint() -> u16
 pub fn benten_membership_set::aad::membership_set_id_commitment(&[u8; 32], &[u8]) -> [u8; 32]
 pub mod benten_membership_set::audit
 #[non_exhaustive] pub enum benten_membership_set::audit::AdminOp
@@ -814,12 +813,9 @@ impl core::marker::UnsafeUnpin for benten_membership_set::role::RoleId
 impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::role::RoleId
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::role::RoleId
 pub fn benten_membership_set::role::ability_template(benten_membership_set::role::RoleId) -> alloc::collections::btree::set::BTreeSet<&'static str>
-pub fn benten_membership_set::role::admin_exclusive_abilities() -> alloc::collections::btree::set::BTreeSet<&'static str>
 pub fn benten_membership_set::role::derive_member_content_key(benten_membership_set::role::RoleId, &[u8]) -> core::option::Option<alloc::vec::Vec<u8>>
 pub mod benten_membership_set::scaffold
 pub const benten_membership_set::scaffold::CRATE_NAME: &str
-pub const benten_membership_set::scaffold::MEMBERSHIP_SET_BAND_HI: u16
-pub const benten_membership_set::scaffold::MEMBERSHIP_SET_BAND_LO: u16
 pub mod benten_membership_set::set
 pub mod benten_membership_set::set::crdt
 pub fn benten_membership_set::set::crdt::admitted_at_hlc_lww_keeps_a(benten_core::hlc::BentenHlc, benten_core::hlc::BentenHlc) -> bool

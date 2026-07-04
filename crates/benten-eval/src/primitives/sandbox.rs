@@ -28,6 +28,7 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
+use crate::AttributionFrame;
 use crate::sandbox::counted_sink::{CountedSink, OverflowPath, SinkOverflow};
 use crate::sandbox::epoch_ticker::{epoch_ticks_for_ms, spawn_epoch_ticker};
 use crate::sandbox::escape_defenses::{EscDefenseState, EscVector, run_all_checks};
@@ -40,7 +41,6 @@ use crate::sandbox::resource_limiter::SandboxResourceLimiter;
 use crate::sandbox::trap_to_typed::{
     EscapeAttemptMarker, HostFnDenialKind, HostFnDenialMarker, MapCallErrorContext, map_call_error,
 };
-use crate::{AttributionFrame, TraceStep};
 use benten_errors::ErrorCode;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -375,28 +375,6 @@ impl SandboxError {
             _ => None,
         }
     }
-
-    /// Construct the matching [`TraceStep::BudgetExhausted`] row to
-    /// emit BEFORE propagating the typed error (wsa-17, mirrors G12-A's
-    /// `inv_8_iteration` budget-exhaustion arm inside `evaluator.rs::run_inner`). Returns
-    /// `None` for non-budget axes.
-    #[must_use]
-    pub fn to_budget_exhausted_trace(&self, path: Vec<String>) -> Option<TraceStep> {
-        let budget_type = self.budget_type()?;
-        let (consumed, limit) = match self {
-            SandboxError::FuelExhausted { consumed, limit } => (*consumed, *limit),
-            SandboxError::MemoryExhausted { limit } => (*limit, *limit),
-            SandboxError::WallclockExceeded { limit_ms } => (*limit_ms, *limit_ms),
-            SandboxError::OutputOverflow(o) => (o.consumed, o.limit),
-            _ => return None,
-        };
-        Some(TraceStep::BudgetExhausted {
-            budget_type,
-            consumed,
-            limit,
-            path,
-        })
-    }
 }
 
 /// D21 priority resolver — when multiple axes trip in the same trap
@@ -457,9 +435,9 @@ pub type LiveCapCheck = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 /// `execute()` so the surface compiles + the schema is locked.
 ///
 /// `BudgetExhausted` trace-row emission is the caller's responsibility
-/// (the SANDBOX call site that owns the trace buffer). The error's
-/// [`SandboxError::to_budget_exhausted_trace`] method constructs the
-/// row given the active walk-path.
+/// (the SANDBOX call site that owns the trace buffer), constructed from
+/// the returned [`SandboxError`]'s budget axis given the active
+/// walk-path.
 ///
 /// # Errors
 /// Returns [`SandboxError`] on any axis trip / cap-denial / manifest

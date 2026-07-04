@@ -520,7 +520,6 @@ impl core::marker::Unpin for benten_eval::expr::UnaryOp
 impl core::marker::UnsafeUnpin for benten_eval::expr::UnaryOp
 impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::expr::UnaryOp
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::expr::UnaryOp
-pub fn benten_eval::expr::make_map(alloc::vec::Vec<(alloc::string::String, benten_core::value::Value)>) -> benten_core::value::Value
 pub mod benten_eval::host
 pub struct benten_eval::host::NullHost
 impl benten_eval::host::PrimitiveHost for benten_eval::host::NullHost
@@ -791,7 +790,6 @@ pub benten_eval::primitives::sandbox::SandboxError::WallclockExceeded::limit_ms:
 impl benten_eval::primitives::sandbox::SandboxError
 pub fn benten_eval::primitives::sandbox::SandboxError::budget_type(&self) -> core::option::Option<&'static str>
 pub fn benten_eval::primitives::sandbox::SandboxError::code(&self) -> benten_errors::ErrorCode
-pub fn benten_eval::primitives::sandbox::SandboxError::to_budget_exhausted_trace(&self, alloc::vec::Vec<alloc::string::String>) -> core::option::Option<benten_eval::TraceStep>
 impl core::clone::Clone for benten_eval::primitives::sandbox::SandboxError
 pub fn benten_eval::primitives::sandbox::SandboxError::clone(&self) -> benten_eval::primitives::sandbox::SandboxError
 impl core::cmp::Eq for benten_eval::primitives::sandbox::SandboxError
@@ -1730,7 +1728,6 @@ pub benten_eval::sandbox::primitives_sandbox::SandboxError::WallclockExceeded::l
 impl benten_eval::primitives::sandbox::SandboxError
 pub fn benten_eval::primitives::sandbox::SandboxError::budget_type(&self) -> core::option::Option<&'static str>
 pub fn benten_eval::primitives::sandbox::SandboxError::code(&self) -> benten_errors::ErrorCode
-pub fn benten_eval::primitives::sandbox::SandboxError::to_budget_exhausted_trace(&self, alloc::vec::Vec<alloc::string::String>) -> core::option::Option<benten_eval::TraceStep>
 impl core::clone::Clone for benten_eval::primitives::sandbox::SandboxError
 pub fn benten_eval::primitives::sandbox::SandboxError::clone(&self) -> benten_eval::primitives::sandbox::SandboxError
 impl core::cmp::Eq for benten_eval::primitives::sandbox::SandboxError
@@ -2090,7 +2087,6 @@ pub benten_eval::sandbox::SandboxError::WallclockExceeded::limit_ms: u64
 impl benten_eval::primitives::sandbox::SandboxError
 pub fn benten_eval::primitives::sandbox::SandboxError::budget_type(&self) -> core::option::Option<&'static str>
 pub fn benten_eval::primitives::sandbox::SandboxError::code(&self) -> benten_errors::ErrorCode
-pub fn benten_eval::primitives::sandbox::SandboxError::to_budget_exhausted_trace(&self, alloc::vec::Vec<alloc::string::String>) -> core::option::Option<benten_eval::TraceStep>
 impl core::clone::Clone for benten_eval::primitives::sandbox::SandboxError
 pub fn benten_eval::primitives::sandbox::SandboxError::clone(&self) -> benten_eval::primitives::sandbox::SandboxError
 impl core::cmp::Eq for benten_eval::primitives::sandbox::SandboxError

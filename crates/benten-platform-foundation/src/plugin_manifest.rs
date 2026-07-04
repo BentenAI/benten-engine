@@ -393,12 +393,6 @@ impl CapRequirement {
             scope: scope.into(),
         }
     }
-
-    /// Whether this scope is a private-namespace shape.
-    #[must_use]
-    pub fn is_private_namespace(&self) -> bool {
-        self.scope.starts_with("private:")
-    }
 }
 
 // =====================================================================

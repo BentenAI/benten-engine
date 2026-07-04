@@ -493,16 +493,6 @@ impl InMemoryUninstallCascade {
             .filter(|k| k.starts_with(&prefix))
             .collect()
     }
-
-    /// Snapshot subscriptions for a plugin-DID (test observable for
-    /// T10-uninstall (c) defense-in-depth).
-    #[must_use]
-    pub fn active_subscriptions_for(&self, plugin_did: &Did) -> Vec<&InMemorySubscription> {
-        self.subscriptions
-            .iter()
-            .filter(|s| s.subscriber == *plugin_did)
-            .collect()
-    }
 }
 
 impl CapRevoker for InMemoryUninstallCascade {
@@ -1332,13 +1322,6 @@ impl InMemoryInstallCascade {
     #[must_use]
     pub fn minted_grants(&self) -> &[(Did, Did, String, Cid)] {
         &self.minted_grants
-    }
-
-    /// Whether the cascade has provisioned the private namespace for
-    /// `plugin_did`.
-    #[must_use]
-    pub fn has_provisioned(&self, plugin_did: &Did) -> bool {
-        self.provisioned_namespaces.contains(plugin_did)
     }
 
     /// Count of plugin-DIDs whose private namespace has been provisioned.

@@ -344,23 +344,6 @@ pub enum EnvelopeError {
     CrossVariantBinding,
 }
 
-/// Lift a flat [`crate::aead::AeadEnvelope`] to an [`EncryptedEnvelope`]
-/// (M-18 migration helper). The flat envelope's untyped AAD becomes the
-/// supplied typed [`BindingContext`].
-#[must_use]
-pub fn lift_from_aead_envelope(
-    flat: &crate::aead::AeadEnvelope,
-    aad_binding: BindingContext,
-) -> EncryptedEnvelope {
-    EncryptedEnvelope {
-        format_version: ENVELOPE_FORMAT_VERSION_V2,
-        cipher_codepoint: flat.cipher_codepoint.raw(),
-        aad_binding,
-        nonce: flat.nonce.clone(),
-        ciphertext: flat.ciphertext.clone(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

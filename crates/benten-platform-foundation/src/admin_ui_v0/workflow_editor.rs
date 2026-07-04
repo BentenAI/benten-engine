@@ -110,14 +110,6 @@ impl WorkflowForm {
     pub fn field_ids(&self) -> Vec<String> {
         self.fields.iter().map(|f| f.id.clone()).collect()
     }
-
-    /// True if a field with the given id exists. Used by the
-    /// G23-A-amendment test (add field to schema → re-derive form →
-    /// new field present).
-    #[must_use]
-    pub fn has_field(&self, id: &str) -> bool {
-        self.fields.iter().any(|f| f.id == id)
-    }
 }
 
 /// Derive a [`WorkflowForm`] from a [`SchemaSubgraphSpec`].

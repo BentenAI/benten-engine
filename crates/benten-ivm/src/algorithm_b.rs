@@ -1382,23 +1382,12 @@ impl AlgorithmBView {
     }
 }
 
-/// Canonicalise a CID list into deterministic bytes — sort by `to_string`
-/// + join with `\n`. Used by [`AlgorithmBView::materialize`] for
-/// `Rows`/`Current` materialisation.
-#[allow(dead_code)]
-fn canonicalize_cids(cids: &[Cid]) -> Vec<u8> {
-    let mut sorted: Vec<String> = cids.iter().map(|c| c.to_string()).collect();
-    sorted.sort();
-    sorted.join("\n").into_bytes()
-}
-
 /// Canonicalise a CID set (BTreeSet, already sorted by `Cid`'s `Ord`
 /// impl) into deterministic bytes via `to_string` rendering joined with
 /// `\n` separators. Used by [`AlgorithmBView::materialize`] for the
 /// G23-0b walk_observable canary surface — the `BTreeSet` iteration
-/// order is `Ord` order over Cid bytes; we render via `to_string` to
-/// match the existing `canonicalize_cids` shape so consumer bytes are
-/// uniform across the two helpers.
+/// order is `Ord` order over Cid bytes; we render via `to_string` so
+/// consumer bytes are uniform.
 fn canonicalize_cids_set(cids: &BTreeSet<Cid>) -> Vec<u8> {
     let mut sorted: Vec<String> = cids.iter().map(|c| c.to_string()).collect();
     sorted.sort();

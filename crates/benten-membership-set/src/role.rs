@@ -118,13 +118,6 @@ pub fn ability_template(role: RoleId) -> BTreeSet<&'static str> {
     }
 }
 
-/// The five admin-exclusive governance abilities (the ruling-2 set). Exposed
-/// so callers can assert the `Admin = Moderator ∪ exclusive` decomposition.
-#[must_use]
-pub fn admin_exclusive_abilities() -> BTreeSet<&'static str> {
-    ADMIN_EXCLUSIVE_ABILITIES.iter().copied().collect()
-}
-
 /// The role-keyed content key-derivation gate. **Invitee derives NOTHING**
 /// (M-11 zero-content floor); every content-bearing role derives a per-Node
 /// membership key.

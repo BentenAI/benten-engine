@@ -562,27 +562,6 @@ impl TraceStep {
         }
     }
 
-    /// Discriminant accessor for [`TraceStep::SuspendBoundary`].
-    #[must_use]
-    pub fn as_suspend_boundary(&self) -> Option<&Cid> {
-        match self {
-            TraceStep::SuspendBoundary { state_cid } => Some(state_cid),
-            _ => None,
-        }
-    }
-
-    /// Discriminant accessor for [`TraceStep::ResumeBoundary`].
-    #[must_use]
-    pub fn as_resume_boundary(&self) -> Option<(&Cid, &Value)> {
-        match self {
-            TraceStep::ResumeBoundary {
-                state_cid,
-                signal_value,
-            } => Some((state_cid, signal_value)),
-            _ => None,
-        }
-    }
-
     /// Discriminant accessor for [`TraceStep::BudgetExhausted`]. Returns a
     /// view exposing `budget_type`, `consumed`, `limit`, `path`.
     #[must_use]

@@ -71,7 +71,6 @@ pub struct benten_renderer_tauri::InProcessSessionBridge
 impl benten_renderer_tauri::InProcessSessionBridge
 pub fn benten_renderer_tauri::InProcessSessionBridge::new(alloc::sync::Arc<benten_engine::thin_client::DidKeyedSession>) -> Self
 pub fn benten_renderer_tauri::InProcessSessionBridge::resolve(&self, &benten_engine::thin_client::SessionToken, &str) -> core::result::Result<alloc::string::String, benten_engine::thin_client::ThinClientSessionError>
-pub fn benten_renderer_tauri::InProcessSessionBridge::session(&self) -> &alloc::sync::Arc<benten_engine::thin_client::DidKeyedSession>
 pub fn benten_renderer_tauri::InProcessSessionBridge::transport(&self) -> benten_engine::thin_client::Transport
 impl core::fmt::Debug for benten_renderer_tauri::InProcessSessionBridge
 pub fn benten_renderer_tauri::InProcessSessionBridge::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -120,7 +119,6 @@ pub struct benten_renderer_tauri::TauriRenderer
 impl benten_renderer_tauri::TauriRenderer
 pub fn benten_renderer_tauri::TauriRenderer::dispatch_ipc(&self, benten_renderer_tauri::IpcRequest) -> core::result::Result<(), benten_renderer_tauri::IpcError>
 pub fn benten_renderer_tauri::TauriRenderer::ipc_method_allowlist() -> alloc::vec::Vec<alloc::string::String>
-pub fn benten_renderer_tauri::TauriRenderer::manifest(&self) -> &benten_renderer_tauri::AdminUiManifest
 pub fn benten_renderer_tauri::TauriRenderer::new_with_manifest(benten_renderer_tauri::AdminUiManifest) -> Self
 pub fn benten_renderer_tauri::TauriRenderer::webview_csp_header(&self) -> &'static str
 pub fn benten_renderer_tauri::TauriRenderer::with_bridge(self, benten_renderer_tauri::InProcessSessionBridge) -> Self

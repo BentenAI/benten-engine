@@ -209,17 +209,6 @@ pub fn derive_test_seam_key_from_cid_with_namespace(did: Option<&Cid>, cid: &Cid
     k_root.as_bytes().to_vec()
 }
 
-/// G-CORE-3d back-compat shim — the un-namespaced legacy callers
-/// that previously called `derive_test_seam_key_from_cid(&cid)`
-/// route through the new namespace-aware helper with
-/// `namespace = None`. Kept as a thin shim so any in-flight call
-/// site keeps compiling; new callers should prefer the
-/// namespace-aware form directly.
-#[allow(dead_code)]
-fn derive_test_seam_key_from_cid(cid: &Cid) -> Vec<u8> {
-    derive_test_seam_key_from_cid_with_namespace(None, cid)
-}
-
 /// G-CORE-3e: parse the namespace_did `Cid` out of a TWO_CID_MAP_TABLE
 /// key shaped `d:<namespace_did_bytes>:m:<plaintext_cid_bytes>` (per
 /// `crate::two_cid_map::TwoCidMap::partition_table_key`). Returns

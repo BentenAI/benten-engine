@@ -115,18 +115,3 @@ pub fn verify_upgrade_author_continuity(
 pub fn new_version_available_code() -> ErrorCode {
     ErrorCode::PluginNewVersionAvailable
 }
-
-/// Check that a candidate plugin-author DID is in the user's
-/// trust-list. Returns the typed code if not — caller surfaces the
-/// first-install consent prompt.
-///
-/// # Errors
-///
-/// `E_PLUGIN_AUTHOR_NOT_TRUSTED` if `author_did` is not in `trust_list`.
-pub fn check_author_trust(author_did: &Did, trust_list: &[Did]) -> Result<(), ErrorCode> {
-    if trust_list.iter().any(|d| d == author_did) {
-        Ok(())
-    } else {
-        Err(ErrorCode::PluginAuthorNotTrusted)
-    }
-}

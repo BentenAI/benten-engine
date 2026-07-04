@@ -398,15 +398,6 @@ impl InProcessSessionBridge {
     ) -> Result<String, ThinClientSessionError> {
         self.session.resolve(token, presented_origin)
     }
-
-    /// Underlying [`DidKeyedSession`] reference — for callers that want
-    /// to drive the establishment path directly (the Tauri shell at
-    /// boot invokes
-    /// [`DidKeyedSession::emit_challenge`] + `establish_session`).
-    #[must_use]
-    pub fn session(&self) -> &Arc<DidKeyedSession> {
-        &self.session
-    }
 }
 
 // ---------------------------------------------------------------------
@@ -453,12 +444,6 @@ impl TauriRenderer {
     pub fn with_bridge(mut self, bridge: InProcessSessionBridge) -> Self {
         self.bridge = Some(bridge);
         self
-    }
-
-    /// Manifest accessor — used by tests.
-    #[must_use]
-    pub fn manifest(&self) -> &AdminUiManifest {
-        &self.manifest
     }
 
     /// Locked CSP header for the webview-load boundary (T3 defense

@@ -187,10 +187,9 @@ pub struct StreamHandle {
     /// `true` once the producer has indicated end-of-stream.
     closed: bool,
     /// Pre-populated terminal error returned on the next `next()` call.
-    /// Used by the test-factory paths (`with_pending_error` /
-    /// `open_with_pending_error`) to inject a typed error before any
-    /// chunk is drained, so unit tests can exercise the error-edge
-    /// shape without running a producer thread.
+    /// Used by the test-factory path (`with_pending_error`) to inject a
+    /// typed error before any chunk is drained, so unit tests can
+    /// exercise the error-edge shape without running a producer thread.
     pending_error: Option<EngineError>,
     /// Engine-assigned sequence counter; bumped per delivered chunk so
     /// the TS wrapper can expose `chunk.seq` for replay/dedup symmetry
@@ -304,26 +303,6 @@ impl StreamHandle {
             pending_error: Some(err),
             next_seq: 0,
             requires_explicit_close: false,
-            bridge_source: None,
-            producer_thread: None,
-            counter_released: false,
-        }
-    }
-
-    /// Like [`Self::with_pending_error`] but flagged as the
-    /// explicit-close lifecycle (G6-B `open_stream` form). The TS
-    /// wrapper enforces `close()` was called before the handle is
-    /// dropped; the Rust API does not enforce this directly because
-    /// `Drop` cannot return an error and silently swallowing the leak
-    /// would defeat the contract.
-    #[must_use]
-    pub fn open_with_pending_error(err: EngineError) -> Self {
-        Self {
-            chunks: std::collections::VecDeque::new(),
-            closed: true,
-            pending_error: Some(err),
-            next_seq: 0,
-            requires_explicit_close: true,
             bridge_source: None,
             producer_thread: None,
             counter_released: false,

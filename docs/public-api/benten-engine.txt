@@ -669,7 +669,6 @@ pub fn benten_engine::engine_stream::StreamHandle::from_producer_bridge(benten_e
 pub fn benten_engine::engine_stream::StreamHandle::is_drained(&self) -> bool
 pub fn benten_engine::engine_stream::StreamHandle::next_chunk(&mut self) -> core::result::Result<core::option::Option<benten_eval::chunk_sink::Chunk>, benten_engine::error::EngineError>
 pub fn benten_engine::engine_stream::StreamHandle::next_chunk_with_timeout(&mut self, core::time::Duration) -> core::result::Result<benten_engine::engine_stream::NextChunkPoll, benten_engine::error::EngineError>
-pub fn benten_engine::engine_stream::StreamHandle::open_with_pending_error(benten_engine::error::EngineError) -> Self
 pub fn benten_engine::engine_stream::StreamHandle::requires_explicit_close(&self) -> bool
 pub fn benten_engine::engine_stream::StreamHandle::seq_so_far(&self) -> u64
 pub fn benten_engine::engine_stream::StreamHandle::with_pending_error(benten_engine::error::EngineError) -> Self
@@ -1066,7 +1065,6 @@ pub benten_engine::handler_versions::HandlerVersionChain::versions: alloc::vec::
 impl benten_engine::handler_versions::HandlerVersionChain
 pub fn benten_engine::handler_versions::HandlerVersionChain::anchor_cid(&self) -> core::option::Option<benten_core::Cid>
 pub fn benten_engine::handler_versions::HandlerVersionChain::current_version_cid(&self) -> core::option::Option<benten_core::Cid>
-pub fn benten_engine::handler_versions::HandlerVersionChain::fetch_version(&self, &benten_core::Cid) -> core::option::Option<benten_core::Cid>
 pub fn benten_engine::handler_versions::HandlerVersionChain::versions(&self) -> &[benten_core::Cid]
 impl core::clone::Clone for benten_engine::handler_versions::HandlerVersionChain
 pub fn benten_engine::handler_versions::HandlerVersionChain::clone(&self) -> benten_engine::handler_versions::HandlerVersionChain
@@ -1681,7 +1679,6 @@ pub struct benten_engine::manifest_signing::PublisherRegistry<'a>
 impl<'a> benten_engine::manifest_signing::PublisherRegistry<'a>
 pub fn benten_engine::manifest_signing::PublisherRegistry<'a>::add_publisher(&self, &benten_id::did::Did, &benten_id::keypair::PublicKey, core::option::Option<&benten_id::ucan::Ucan>, u64) -> core::result::Result<(), benten_engine::error::EngineError>
 pub fn benten_engine::manifest_signing::PublisherRegistry<'a>::add_publisher_unauthorized(&self, &benten_id::keypair::PublicKey) -> core::result::Result<(), benten_engine::manifest_signing::PublisherRegistryError>
-pub fn benten_engine::manifest_signing::PublisherRegistry<'a>::add_publisher_with_ucan(&self, &benten_id::did::Did, &benten_id::keypair::PublicKey, &benten_id::ucan::Ucan, u64) -> core::result::Result<(), benten_engine::error::EngineError>
 pub fn benten_engine::manifest_signing::PublisherRegistry<'a>::lookup(&self, &benten_id::did::Did) -> core::result::Result<core::option::Option<benten_id::keypair::PublicKey>, benten_engine::error::EngineError>
 pub fn benten_engine::manifest_signing::PublisherRegistry<'a>::new(&'a benten_engine::engine::Engine, benten_id::did::Did, benten_id::did::Did) -> Self
 impl<'a> core::marker::Freeze for benten_engine::manifest_signing::PublisherRegistry<'a>
@@ -1902,8 +1899,6 @@ pub benten_engine::outcome::TraceStep::SuspendBoundary
 pub benten_engine::outcome::TraceStep::SuspendBoundary::state_cid: benten_core::Cid
 impl benten_engine::outcome::TraceStep
 pub fn benten_engine::outcome::TraceStep::as_budget_exhausted(&self) -> core::option::Option<benten_engine::outcome::BudgetExhaustedView<'_>>
-pub fn benten_engine::outcome::TraceStep::as_resume_boundary(&self) -> core::option::Option<(&benten_core::Cid, &benten_core::value::Value)>
-pub fn benten_engine::outcome::TraceStep::as_suspend_boundary(&self) -> core::option::Option<&benten_core::Cid>
 pub fn benten_engine::outcome::TraceStep::attribution(&self) -> core::option::Option<&benten_eval::exec_state::AttributionFrame>
 pub fn benten_engine::outcome::TraceStep::duration_us(&self) -> u64
 pub fn benten_engine::outcome::TraceStep::error(&self) -> core::option::Option<&benten_errors::ErrorCode>
@@ -2962,8 +2957,6 @@ pub benten_engine::TraceStep::SuspendBoundary
 pub benten_engine::TraceStep::SuspendBoundary::state_cid: benten_core::Cid
 impl benten_engine::outcome::TraceStep
 pub fn benten_engine::outcome::TraceStep::as_budget_exhausted(&self) -> core::option::Option<benten_engine::outcome::BudgetExhaustedView<'_>>
-pub fn benten_engine::outcome::TraceStep::as_resume_boundary(&self) -> core::option::Option<(&benten_core::Cid, &benten_core::value::Value)>
-pub fn benten_engine::outcome::TraceStep::as_suspend_boundary(&self) -> core::option::Option<&benten_core::Cid>
 pub fn benten_engine::outcome::TraceStep::attribution(&self) -> core::option::Option<&benten_eval::exec_state::AttributionFrame>
 pub fn benten_engine::outcome::TraceStep::duration_us(&self) -> u64
 pub fn benten_engine::outcome::TraceStep::error(&self) -> core::option::Option<&benten_errors::ErrorCode>
@@ -3737,7 +3730,6 @@ pub fn benten_engine::engine_stream::StreamHandle::from_producer_bridge(benten_e
 pub fn benten_engine::engine_stream::StreamHandle::is_drained(&self) -> bool
 pub fn benten_engine::engine_stream::StreamHandle::next_chunk(&mut self) -> core::result::Result<core::option::Option<benten_eval::chunk_sink::Chunk>, benten_engine::error::EngineError>
 pub fn benten_engine::engine_stream::StreamHandle::next_chunk_with_timeout(&mut self, core::time::Duration) -> core::result::Result<benten_engine::engine_stream::NextChunkPoll, benten_engine::error::EngineError>
-pub fn benten_engine::engine_stream::StreamHandle::open_with_pending_error(benten_engine::error::EngineError) -> Self
 pub fn benten_engine::engine_stream::StreamHandle::requires_explicit_close(&self) -> bool
 pub fn benten_engine::engine_stream::StreamHandle::seq_so_far(&self) -> u64
 pub fn benten_engine::engine_stream::StreamHandle::with_pending_error(benten_engine::error::EngineError) -> Self

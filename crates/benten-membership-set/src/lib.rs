@@ -132,10 +132,4 @@ pub mod scaffold {
     /// The crate's own name, asserted by the F-CRATE-2 boundary pin so the
     /// 15th-crate skeleton is observable.
     pub const CRATE_NAME: &str = "benten-membership-set";
-
-    /// The MembershipSet codepoint band lower bound (`0x6600`).
-    pub const MEMBERSHIP_SET_BAND_LO: u16 = crate::codepoints::MEMBERSHIP_SET_BAND_LO;
-
-    /// The MembershipSet codepoint band upper bound (`0x66FF`).
-    pub const MEMBERSHIP_SET_BAND_HI: u16 = crate::codepoints::MEMBERSHIP_SET_BAND_HI;
 }

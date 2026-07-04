@@ -662,23 +662,6 @@ impl<'a> PublisherRegistry<'a> {
         Err(PublisherRegistryError::UcanRequired)
     }
 
-    /// Add a publisher with a UCAN delegation chain.
-    ///
-    /// # Errors
-    ///
-    /// [`EngineError::Other`] wrapping a [`PublisherRegistryError`] on
-    /// chain verification failure; [`EngineError::Graph`] on backend
-    /// write error.
-    pub fn add_publisher_with_ucan(
-        &self,
-        publisher_did: &Did,
-        publisher_pk: &PublicKey,
-        delegation: &Ucan,
-        now: u64,
-    ) -> Result<(), EngineError> {
-        self.add_publisher(publisher_did, publisher_pk, Some(delegation), now)
-    }
-
     fn require_ucan_delegation(
         &self,
         delegation: Option<&Ucan>,

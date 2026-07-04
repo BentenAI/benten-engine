@@ -506,7 +506,6 @@ pub fn benten_core::subgraph_spec::spec::StructuralPath::as_strings(&self) -> &[
 pub fn benten_core::subgraph_spec::spec::StructuralPath::depth(&self) -> u32
 pub fn benten_core::subgraph_spec::spec::StructuralPath::edge_labels(&self) -> alloc::vec::Vec<&str>
 pub fn benten_core::subgraph_spec::spec::StructuralPath::extended(&self, impl core::convert::Into<alloc::string::String>) -> Self
-pub fn benten_core::subgraph_spec::spec::StructuralPath::from_labels<I, S>(I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = S>, S: core::convert::Into<alloc::string::String>
 pub fn benten_core::subgraph_spec::spec::StructuralPath::root() -> Self
 impl core::clone::Clone for benten_core::subgraph_spec::spec::StructuralPath
 pub fn benten_core::subgraph_spec::spec::StructuralPath::clone(&self) -> benten_core::subgraph_spec::spec::StructuralPath
@@ -667,7 +666,6 @@ pub fn benten_core::subgraph_spec::spec::StructuralPath::as_strings(&self) -> &[
 pub fn benten_core::subgraph_spec::spec::StructuralPath::depth(&self) -> u32
 pub fn benten_core::subgraph_spec::spec::StructuralPath::edge_labels(&self) -> alloc::vec::Vec<&str>
 pub fn benten_core::subgraph_spec::spec::StructuralPath::extended(&self, impl core::convert::Into<alloc::string::String>) -> Self
-pub fn benten_core::subgraph_spec::spec::StructuralPath::from_labels<I, S>(I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = S>, S: core::convert::Into<alloc::string::String>
 pub fn benten_core::subgraph_spec::spec::StructuralPath::root() -> Self
 impl core::clone::Clone for benten_core::subgraph_spec::spec::StructuralPath
 pub fn benten_core::subgraph_spec::spec::StructuralPath::clone(&self) -> benten_core::subgraph_spec::spec::StructuralPath

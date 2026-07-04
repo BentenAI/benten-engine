@@ -280,12 +280,6 @@ fn lp(buf: &mut Vec<u8>, bytes: &[u8]) {
     buf.extend_from_slice(bytes);
 }
 
-/// The default group codepoint the `0x6610` per-stanza AAD assembler binds.
-#[must_use]
-pub fn default_group_codepoint() -> u16 {
-    MEMBERSHIP_SET_GROUP_MULTI_STANZA
-}
-
 #[cfg(test)]
 mod domain_registry_mirror {
     /// C-01/C-02 drift defense: `SETID_COMMITMENT_LABEL` is mirrored in the

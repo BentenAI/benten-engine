@@ -52,7 +52,6 @@ pub benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm::sche
 impl benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm
 pub fn benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm::field_ids(&self) -> alloc::vec::Vec<alloc::string::String>
 pub fn benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm::fields(&self) -> &[benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowFormField]
-pub fn benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm::has_field(&self, &str) -> bool
 impl core::clone::Clone for benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm
 pub fn benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm::clone(&self) -> benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm
 impl core::cmp::Eq for benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm
@@ -206,7 +205,6 @@ pub benten_platform_foundation::admin_ui_v0::WorkflowForm::schema_name: alloc::s
 impl benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm
 pub fn benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm::field_ids(&self) -> alloc::vec::Vec<alloc::string::String>
 pub fn benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm::fields(&self) -> &[benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowFormField]
-pub fn benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm::has_field(&self, &str) -> bool
 impl core::clone::Clone for benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm
 pub fn benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm::clone(&self) -> benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm
 impl core::cmp::Eq for benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm
@@ -583,7 +581,6 @@ impl core::marker::Unpin for benten_platform_foundation::module_ecosystem::Upgra
 impl core::marker::UnsafeUnpin for benten_platform_foundation::module_ecosystem::UpgradeConsentDecision
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::module_ecosystem::UpgradeConsentDecision
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::module_ecosystem::UpgradeConsentDecision
-pub fn benten_platform_foundation::module_ecosystem::check_author_trust(&benten_id::did::Did, &[benten_id::did::Did]) -> core::result::Result<(), benten_errors::ErrorCode>
 pub fn benten_platform_foundation::module_ecosystem::decide_upgrade_consent(&benten_platform_foundation::plugin_manifest::PluginManifest, &benten_platform_foundation::plugin_manifest::PluginManifest) -> benten_platform_foundation::module_ecosystem::UpgradeConsentDecision
 pub fn benten_platform_foundation::module_ecosystem::new_version_available_code() -> benten_errors::ErrorCode
 pub fn benten_platform_foundation::module_ecosystem::verify_install_record(&benten_platform_foundation::plugin_manifest::InstallRecord) -> core::result::Result<(), benten_errors::ErrorCode>
@@ -709,7 +706,6 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::plu
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::plugin_lifecycle::InMemoryGrant
 pub struct benten_platform_foundation::plugin_lifecycle::InMemoryInstallCascade
 impl benten_platform_foundation::plugin_lifecycle::InMemoryInstallCascade
-pub fn benten_platform_foundation::plugin_lifecycle::InMemoryInstallCascade::has_provisioned(&self, &benten_id::did::Did) -> bool
 pub fn benten_platform_foundation::plugin_lifecycle::InMemoryInstallCascade::minted_grants(&self) -> &[(benten_id::did::Did, benten_id::did::Did, alloc::string::String, benten_core::Cid)]
 pub fn benten_platform_foundation::plugin_lifecycle::InMemoryInstallCascade::new() -> Self
 pub fn benten_platform_foundation::plugin_lifecycle::InMemoryInstallCascade::provisioned_count(&self) -> usize
@@ -752,7 +748,6 @@ pub struct benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascad
 impl benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade
 pub fn benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade::active_grants_for_audience(&self, &benten_id::did::Did) -> alloc::vec::Vec<&benten_platform_foundation::plugin_lifecycle::InMemoryGrant>
 pub fn benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade::active_grants_with_issuer(&self, &benten_id::did::Did) -> alloc::vec::Vec<&benten_platform_foundation::plugin_lifecycle::InMemoryGrant>
-pub fn benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade::active_subscriptions_for(&self, &benten_id::did::Did) -> alloc::vec::Vec<&benten_platform_foundation::plugin_lifecycle::InMemorySubscription>
 pub fn benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade::insert_grant(&mut self, benten_platform_foundation::plugin_lifecycle::InMemoryGrant)
 pub fn benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade::insert_private_row(&mut self, alloc::string::String, alloc::vec::Vec<u8>)
 pub fn benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade::insert_subscription(&mut self, benten_platform_foundation::plugin_lifecycle::InMemorySubscription)
@@ -1028,7 +1023,6 @@ impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::plugin
 pub struct benten_platform_foundation::plugin_manifest::CapRequirement
 pub benten_platform_foundation::plugin_manifest::CapRequirement::scope: alloc::string::String
 impl benten_platform_foundation::plugin_manifest::CapRequirement
-pub fn benten_platform_foundation::plugin_manifest::CapRequirement::is_private_namespace(&self) -> bool
 pub fn benten_platform_foundation::plugin_manifest::CapRequirement::new(impl core::convert::Into<alloc::string::String>) -> Self
 impl core::clone::Clone for benten_platform_foundation::plugin_manifest::CapRequirement
 pub fn benten_platform_foundation::plugin_manifest::CapRequirement::clone(&self) -> benten_platform_foundation::plugin_manifest::CapRequirement
@@ -2113,7 +2107,6 @@ impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::materi
 pub struct benten_platform_foundation::CapRequirement
 pub benten_platform_foundation::CapRequirement::scope: alloc::string::String
 impl benten_platform_foundation::plugin_manifest::CapRequirement
-pub fn benten_platform_foundation::plugin_manifest::CapRequirement::is_private_namespace(&self) -> bool
 pub fn benten_platform_foundation::plugin_manifest::CapRequirement::new(impl core::convert::Into<alloc::string::String>) -> Self
 impl core::clone::Clone for benten_platform_foundation::plugin_manifest::CapRequirement
 pub fn benten_platform_foundation::plugin_manifest::CapRequirement::clone(&self) -> benten_platform_foundation::plugin_manifest::CapRequirement
@@ -2493,7 +2486,6 @@ pub benten_platform_foundation::WorkflowForm::schema_name: alloc::string::String
 impl benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm
 pub fn benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm::field_ids(&self) -> alloc::vec::Vec<alloc::string::String>
 pub fn benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm::fields(&self) -> &[benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowFormField]
-pub fn benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm::has_field(&self, &str) -> bool
 impl core::clone::Clone for benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm
 pub fn benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm::clone(&self) -> benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm
 impl core::cmp::Eq for benten_platform_foundation::admin_ui_v0::workflow_editor::WorkflowForm
