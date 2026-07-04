@@ -581,6 +581,7 @@ impl core::marker::Unpin for benten_platform_foundation::module_ecosystem::Upgra
 impl core::marker::UnsafeUnpin for benten_platform_foundation::module_ecosystem::UpgradeConsentDecision
 impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::module_ecosystem::UpgradeConsentDecision
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::module_ecosystem::UpgradeConsentDecision
+pub fn benten_platform_foundation::module_ecosystem::check_author_trust(&benten_id::did::Did, &[benten_id::did::Did]) -> core::result::Result<(), benten_errors::ErrorCode>
 pub fn benten_platform_foundation::module_ecosystem::decide_upgrade_consent(&benten_platform_foundation::plugin_manifest::PluginManifest, &benten_platform_foundation::plugin_manifest::PluginManifest) -> benten_platform_foundation::module_ecosystem::UpgradeConsentDecision
 pub fn benten_platform_foundation::module_ecosystem::new_version_available_code() -> benten_errors::ErrorCode
 pub fn benten_platform_foundation::module_ecosystem::verify_install_record(&benten_platform_foundation::plugin_manifest::InstallRecord) -> core::result::Result<(), benten_errors::ErrorCode>
