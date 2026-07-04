@@ -97,30 +97,28 @@ decrypt (not advisory).
 > `crates/benten-drop/tests/f_nqa1_1_frozen_surface_additive_extensibility.rs`
 > (PIN 4).
 
-> **Federation-reserve-gate inversion follow-up (R10-council F-16).**
-> `benten_membership_set::federation::federation_reserve_gate_at_v1_beta(cp)`
-> (renamed from `dispatch_codepoint_at_v1_beta` at R10 F-16) is a targeted
-> BLOCKLIST: it typed-rejects the reserved federation `0x6620` (`SubsetRef`) and
-> returns `Ok(())` for EVERY other codepoint — a **fail-OPEN** shape (an unknown /
-> future codepoint passes). At v1-beta its only callers are test-only and only
-> feed it the frozen MembershipSet band, so the fail-open shape is contained.
-> **Follow-up:** invert to an **ALLOWLIST** (return `Ok(())` ONLY for the
-> explicitly-enumerated frozen codepoints; typed-reject everything else) so the
-> gate is fail-CLOSED, consistent with the `ReservedCodepoint::resolve()`
-> typed-reject-on-unknown discipline above. Additive follow-up (no wire change) —
-> Phase-4-Meta-Composing federation-wiring wave.
+> **Federation-reserve gate — DROPPED at v1-beta (R10-council F-16 → R18 CP-INT-1 → R20 close).**
+> An earlier dormant helper (a `federation_reserve_gate_at_v1_beta` blocklist,
+> renamed from `dispatch_codepoint_at_v1_beta` at R10 F-16) typed-rejected the
+> reserved federation `0x6620` (`SubsetRef`) and returned `Ok(())` for EVERY other
+> codepoint — a **fail-OPEN** shape. It had ZERO production callers (test-only),
+> and freezing a fail-open shape onto the v1 public surface is undesirable, so at
+> the R20 phase-close the helper was **DELETED outright** (not cfg-gated, not
+> inverted-in-place). The `0x6620` reservation itself is UNAFFECTED — it stays
+> RESERVED (row above) and is enforced by the **LIVE, unconditionally fail-CLOSED**
+> entry point `admit_subset_ref_at_v1_beta`
+> (`crates/benten-membership-set/src/federation.rs`), which returns
+> `Err(FederationError::FederationReserved)` for every call (federation is not
+> admitted at v1-beta at all). So no live federation path admits an unknown
+> codepoint at v1-beta.
 >
-> **CP-INT-1-FED-FAIL-OPEN scope clarification (R18).** The fail-OPEN shape above
-> is confined to the DORMANT `federation_reserve_gate_at_v1_beta` (test-only
-> callers; the inversion-to-allowlist is a Composing-wave follow-up). The **LIVE**
-> federation entry point at v1-beta — `admit_subset_ref_at_v1_beta`
-> (`crates/benten-membership-set/src/federation.rs:176-178`) — is UNCONDITIONALLY
-> **fail-CLOSED**: it returns `Err(FederationError::FederationReserved)` for every
-> call (federation is not admitted at v1-beta at all). So no live federation path
-> admits an unknown codepoint at v1-beta; the fail-open shape is a property of the
-> not-yet-wired reserve-gate helper, and it inverts to a fail-closed allowlist at
-> the same Composing federation-wiring wave that first makes `admit_subset_ref_*`
-> return `Ok(())` for a genuine subset-ref.
+> **Composing deliverable (fail-CLOSED allowlist).** When the
+> Phase-4-Meta-Composing federation-wiring wave first makes `admit_subset_ref_*`
+> return `Ok(())` for a genuine subset-ref, it implements the reserve-gate FRESH
+> as a fail-CLOSED **ALLOWLIST** (return `Ok(())` ONLY for the explicitly-enumerated
+> frozen codepoints; typed-reject everything else), consistent with the
+> `ReservedCodepoint::resolve()` typed-reject-on-unknown discipline above —
+> additive, no wire change.
 
 ## IANA HPKE referenced ranges (the disjointness reference — NOT Benten-minted)
 

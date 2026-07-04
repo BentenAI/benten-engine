@@ -18,8 +18,6 @@
 //! federation model is **Model-B** (independent-`K_Set`-per-set); Model-A is
 //! opt-in post-v1-beta additive (NOT selectable at v1-beta).
 
-use crate::codepoints::MEMBERSHIP_SET_RESERVED_0X6620;
-
 /// `MEMBERSHIP_RECURSION_MAX_DEPTH = 4` (Inv-20 clause-k). Accept a `hop_path`
 /// of length ≤ 4; reject 5.
 pub const MEMBERSHIP_RECURSION_MAX_DEPTH: usize = 4;
@@ -196,29 +194,6 @@ pub enum FederationModel {
 /// Always returns [`FederationError::FederationReserved`] at v1-beta.
 pub fn admit_subset_ref_at_v1_beta() -> Result<(), FederationError> {
     Err(FederationError::FederationReserved)
-}
-
-/// Federation-reserve gate at v1-beta: typed-reject the reserved federation
-/// `0x6620` (`SubsetRef`) codepoint; every OTHER codepoint passes.
-///
-/// **Fail-OPEN shape (R10-council F-16):** this is a targeted BLOCKLIST of one
-/// reserved codepoint, NOT a general codepoint dispatcher — an unknown/future
-/// codepoint returns `Ok(())` (passes). At v1-beta the sole test-only callers
-/// only ever feed it the frozen MembershipSet band, so the fail-open shape is
-/// contained, but the inverted → **ALLOWLIST** follow-up (return `Ok(())` ONLY
-/// for the explicitly-enumerated frozen codepoints, typed-reject everything
-/// else) is the correct fail-CLOSED end-state — tracked in
-/// `docs/CRYPTO-CODEPOINTS.md` (federation-reserve-gate inversion note).
-///
-/// # Errors
-///
-/// Returns [`FederationError::FederationReserved`] iff `cp ==
-/// MEMBERSHIP_SET_RESERVED_0X6620` (`0x6620`).
-pub fn federation_reserve_gate_at_v1_beta(cp: u16) -> Result<(), FederationError> {
-    if cp == MEMBERSHIP_SET_RESERVED_0X6620 {
-        return Err(FederationError::FederationReserved);
-    }
-    Ok(())
 }
 
 /// Select a federation model at v1-beta — only Model-B is selectable.
