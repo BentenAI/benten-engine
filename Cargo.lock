@@ -437,6 +437,7 @@ dependencies = [
  "serde_bytes",
  "serde_ipld_dagcbor",
  "thiserror 2.0.18",
+ "zeroize",
 ]
 
 [[package]]
@@ -587,6 +588,7 @@ dependencies = [
  "serde_bytes",
  "serde_ipld_dagcbor",
  "thiserror 2.0.18",
+ "zeroize",
 ]
 
 [[package]]
@@ -3104,6 +3106,7 @@ checksum = "9155a582abd142abc056962c29e3ce5ff2ad5469f4246b537ed42c5deba857da"
 dependencies = [
  "ctutils",
  "typenum",
+ "zeroize",
 ]
 
 [[package]]
@@ -6761,6 +6764,7 @@ dependencies = [
  "signature 3.0.0",
  "typenum",
  "zerocopy",
+ "zeroize",
 ]
 
 [[package]]

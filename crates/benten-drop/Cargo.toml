@@ -85,6 +85,13 @@ blake3 = { workspace = true }
 # inputs (Sealed-Sender confidentiality fix).
 rand_core = { workspace = true }
 
+# R19 secret-hygiene: zeroize-on-drop for the transient `GroupAadInputs.k_set`
+# group-key copy (layer_c). The prior "benten-drop carries no zeroize
+# dependency" note in layer_c.rs named exactly this as the deferred future
+# hygiene sweep; R19 adopts it. Wire/serialization behavior is unchanged —
+# drop-behavior + Debug redaction only.
+zeroize = { workspace = true }
+
 # Cryptographic surface for the envelope-level signature (the defense-
 # in-depth outer layer per Spike G). Goes through `benten-id` for the
 # `Keypair`/`PublicKey` API (which itself routes to ed25519-dalek via

@@ -34,6 +34,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::bundle::DropBundle
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::bundle::DropBundleError
 #[non_exhaustive] pub enum benten_drop::bundle::DropBundleVersion
 pub benten_drop::bundle::DropBundleVersion::Synthetic(u16)
+pub benten_drop::bundle::DropBundleVersion::UnknownVersion
 pub benten_drop::bundle::DropBundleVersion::V1
 impl core::clone::Clone for benten_drop::bundle::DropBundleVersion
 pub fn benten_drop::bundle::DropBundleVersion::clone(&self) -> benten_drop::bundle::DropBundleVersion
@@ -278,6 +279,8 @@ impl core::clone::Clone for benten_drop::layer_c::group_posture::GroupAadInputs
 pub fn benten_drop::layer_c::group_posture::GroupAadInputs::clone(&self) -> benten_drop::layer_c::group_posture::GroupAadInputs
 impl core::fmt::Debug for benten_drop::layer_c::group_posture::GroupAadInputs
 pub fn benten_drop::layer_c::group_posture::GroupAadInputs::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::ops::drop::Drop for benten_drop::layer_c::group_posture::GroupAadInputs
+pub fn benten_drop::layer_c::group_posture::GroupAadInputs::drop(&mut self)
 impl core::marker::Freeze for benten_drop::layer_c::group_posture::GroupAadInputs
 impl core::marker::Send for benten_drop::layer_c::group_posture::GroupAadInputs
 impl core::marker::Sync for benten_drop::layer_c::group_posture::GroupAadInputs
@@ -552,6 +555,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::bundle::DropBundle
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::bundle::DropBundleError
 #[non_exhaustive] pub enum benten_drop::DropBundleVersion
 pub benten_drop::DropBundleVersion::Synthetic(u16)
+pub benten_drop::DropBundleVersion::UnknownVersion
 pub benten_drop::DropBundleVersion::V1
 impl core::clone::Clone for benten_drop::bundle::DropBundleVersion
 pub fn benten_drop::bundle::DropBundleVersion::clone(&self) -> benten_drop::bundle::DropBundleVersion

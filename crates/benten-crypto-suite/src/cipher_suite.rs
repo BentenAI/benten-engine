@@ -1049,8 +1049,12 @@ impl WrappedKey {
     }
 }
 
-/// Recovered key material from `unwrap_key_material`.
-#[derive(Debug)]
+/// Recovered key material from `unwrap_key_material` (Compromise #66).
+///
+/// The `bytes` are recovered SECRET key material (`k_root`). R19 secret-
+/// hygiene: the raw bytes are zeroized on drop and NEVER rendered by
+/// `Debug` (redaction marker only) — mirrors the `RecipientSecret` /
+/// `AeadKeyMaterial` / `StructuralKdfKey` hygiene in this crate.
 pub struct UnwrappedKey {
     bytes: Vec<u8>,
 }
@@ -1060,6 +1064,24 @@ impl UnwrappedKey {
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes
+    }
+}
+
+/// Debug-redacting: the recovered `k_root` bytes MUST NOT leak into logs /
+/// panics (Compromise #66 memory-hygiene). Prints only a redaction marker.
+impl core::fmt::Debug for UnwrappedKey {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("UnwrappedKey")
+            .field("bytes", &"<redacted>")
+            .finish()
+    }
+}
+
+/// Zeroize-on-drop: the recovered `k_root` `Vec<u8>` is a recovered secret;
+/// wipe it explicitly so freed-heap / coredump exposure does not leak it.
+impl Drop for UnwrappedKey {
+    fn drop(&mut self) {
+        self.bytes.zeroize();
     }
 }
 

@@ -199,11 +199,22 @@ pub mod crdt {
     }
 
     /// The Inv-21 fork tie-break: fork `a` wins iff its total-order key is
-    /// `<=` fork `b`'s — **SMALLER key wins** (oldest-anchor; the DELIBERATE
-    /// opposite of property LWW). Order-independent (antisymmetric): the same
-    /// fork wins regardless of argument order, because distinct fork events have
-    /// distinct CIDs so the keys are never equal. An adversarial larger-HLC
-    /// re-fork can NEVER displace the original.
+    /// **STRICTLY** `<` fork `b`'s — **SMALLER key wins** (oldest-anchor; the
+    /// DELIBERATE opposite of property LWW). Order-independent (antisymmetric):
+    /// the same fork wins regardless of argument order, because distinct fork
+    /// events have distinct CIDs so the keys are never equal. An adversarial
+    /// larger-HLC re-fork can NEVER displace the original.
+    ///
+    /// **R19 (F5): STRICT `<`, not `<=`.** With `<=`, an EQUAL-key pair (which
+    /// the invariant forbids — distinct fork events have distinct
+    /// content-addressed Version-Node CIDs) would make BOTH `fork_a_wins(a, b)`
+    /// AND `fork_a_wins(b, a)` return `true` — an ambiguous/undefined order.
+    /// Strict `<` makes an equal-key comparison return `false` for BOTH
+    /// orderings (neither "wins"), so the equal-CID degenerate case is
+    /// undefined-order-FREE rather than doubly-true. For the distinct keys that
+    /// actually occur, `<` and `<=` pick the identical winner, so no
+    /// legitimate fork resolution changes. A `debug_assert!` documents the
+    /// distinctness invariant.
     #[must_use]
     pub fn fork_a_wins(
         a_created_at_hlc: BentenHlc,
@@ -211,7 +222,17 @@ pub mod crdt {
         b_created_at_hlc: BentenHlc,
         b_fork_event_version_node_cid: &[u8],
     ) -> bool {
-        fork_total_order_key(a_created_at_hlc, a_fork_event_version_node_cid)
-            <= fork_total_order_key(b_created_at_hlc, b_fork_event_version_node_cid)
+        let key_a = fork_total_order_key(a_created_at_hlc, a_fork_event_version_node_cid);
+        let key_b = fork_total_order_key(b_created_at_hlc, b_fork_event_version_node_cid);
+        // Inv-21 totality invariant: distinct fork events carry distinct
+        // content-addressed Version-Node CIDs, so the keys are equal ONLY when
+        // comparing a fork against itself. Equal keys are undefined-order-free
+        // under the strict `<` below (neither wins).
+        debug_assert!(
+            key_a != key_b || a_fork_event_version_node_cid == b_fork_event_version_node_cid,
+            "Inv-21: equal fork total-order keys imply equal Version-Node CIDs \
+             (distinct fork events must have distinct CIDs)"
+        );
+        key_a < key_b
     }
 }

@@ -55,13 +55,33 @@ pub enum DropBundleVersion {
     /// so the future-version-rejection pin can assert the typed
     /// `UnsupportedDropVersion` path.
     Synthetic(u16),
+    /// Catch-all for a genuine FUTURE on-the-wire version tag
+    /// (e.g. `{"tag":"V2"}`) that this reader does not know.
+    /// `#[serde(other)]` maps every unrecognized tag here, so the
+    /// version-check (`is_v1`) routes it to the
+    /// advertised typed [`DropBundleError::UnsupportedDropVersion`]
+    /// (F-DROP-VER-FWD / Row D-83) rather than surfacing a GENERIC serde
+    /// codec error. This is a DESERIALIZE-only catch-all — `#[serde(other)]`
+    /// variants are never serialized, so adding it leaves the `V1` +
+    /// `Synthetic` wire bytes byte-identical (verified: the freeze/golden
+    /// round-trips are unchanged).
+    #[serde(other)]
+    UnknownVersion,
 }
 
 impl DropBundleVersion {
+    /// Sentinel reported by [`DropBundleVersion::as_u16`] for the
+    /// [`DropBundleVersion::UnknownVersion`] catch-all. The real future
+    /// tag string is discarded by `#[serde(other)]`, so the numeric
+    /// `seen` field carries a documented "unreadable future version"
+    /// sentinel rather than a fabricated value.
+    const UNKNOWN_VERSION_SENTINEL: u16 = u16::MAX;
+
     fn as_u16(self) -> u16 {
         match self {
             Self::V1 => DROP_BUNDLE_VERSION_V1,
             Self::Synthetic(n) => n,
+            Self::UnknownVersion => Self::UNKNOWN_VERSION_SENTINEL,
         }
     }
 
@@ -352,6 +372,19 @@ impl DropBundle {
     /// - [`DropBundleError::UnsupportedDropMode`] for Mode-3
     ///   inline-tiny bundles (deferred to post-v1).
     pub fn parse_cbor_bytes(bytes: &[u8]) -> Result<Self, DropBundleError> {
+        // R19 (Row D-80 / D-67): fail-closed bounded-decode guard. Reject
+        // over-cap input BEFORE the CBOR deserialize so an oversized/hostile
+        // blob is a typed reject, not an OOM. `DROP_BUNDLE_MAX_SIZE_BYTES`
+        // (4 KiB) is ~50% over the measured 5-Recipe bundle ceiling, so no
+        // legitimate bundle is rejected here.
+        if bytes.len() > DROP_BUNDLE_MAX_SIZE_BYTES {
+            return Err(DropBundleError::CodecError(format!(
+                "Drop bundle exceeds DROP_BUNDLE_MAX_SIZE_BYTES: got {} bytes, max {}",
+                bytes.len(),
+                DROP_BUNDLE_MAX_SIZE_BYTES
+            )));
+        }
+
         let bundle: Self = serde_ipld_dagcbor::from_slice(bytes)
             .map_err(|e| DropBundleError::CodecError(format!("{e}")))?;
 

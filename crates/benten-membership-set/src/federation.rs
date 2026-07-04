@@ -107,18 +107,39 @@ impl KSetAcquisitionPath {
     }
 
     /// Canonical V2 + big-endian serialization (M-20 — no LE/V1 vector). Layout:
-    /// `format_version(u8=2) || hop_count(u8) || target_set_id || each hop ||
-    /// acquisition_proof_cid`. The set-id / CID byte sequences are emitted
-    /// as-authored (content-addressed bytes); the counts are V2 + BE.
+    /// `format_version(u8=2) || hop_count(u8) || u32-BE-len(target_set_id) ||
+    /// target_set_id || (u32-BE-len(hop) || hop)* || u32-BE-len(cid) || cid`.
+    /// The counts are V2 + BE; every VARIABLE-length field carries a `u32`-BE
+    /// length prefix so the encoding is **injective** (mirrors the `be_u32_len`
+    /// length-prefix precedent in `benten-engine`'s `remote_permission.rs` +
+    /// the Row D-13 `derive_step` length-prefix discipline).
+    ///
+    /// **0x6620 is RESERVED + encode-only at v1-beta** (the `SubsetRef`
+    /// federation shape is reserved-and-REFUSED / typed-rejected —
+    /// [`admit_subset_ref_at_v1_beta`] — with ZERO live decoder and zero
+    /// non-test callers of this encoder), so tightening the encoding to
+    /// injective now does NOT change any live wire format. When a future
+    /// additive wave wires the `0x6620` decoder it MUST parse these
+    /// length prefixes.
     #[must_use]
     pub fn to_wire_v2_be(&self) -> Vec<u8> {
+        // u32-BE length prefix for a variable-length field (lengths are bounded
+        // far below u32::MAX on every federation wire path).
+        #[allow(clippy::cast_possible_truncation)]
+        fn lp(n: usize) -> [u8; 4] {
+            (n as u32).to_be_bytes()
+        }
+
         let mut out = Vec::new();
         out.push(ENVELOPE_FORMAT_VERSION_V2); // V2 from the first commit
         out.push(u8::try_from(self.hop_path.len()).expect("hop_path ≤ 4 fits u8"));
+        out.extend_from_slice(&lp(self.target_set_id.len()));
         out.extend_from_slice(&self.target_set_id);
         for hop in &self.hop_path {
+            out.extend_from_slice(&lp(hop.len()));
             out.extend_from_slice(hop);
         }
+        out.extend_from_slice(&lp(self.acquisition_proof_cid.len()));
         out.extend_from_slice(&self.acquisition_proof_cid);
         out
     }

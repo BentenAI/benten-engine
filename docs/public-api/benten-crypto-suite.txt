@@ -206,6 +206,8 @@ impl benten_crypto_suite::cipher_suite::UnwrappedKey
 pub fn benten_crypto_suite::cipher_suite::UnwrappedKey::as_bytes(&self) -> &[u8]
 impl core::fmt::Debug for benten_crypto_suite::cipher_suite::UnwrappedKey
 pub fn benten_crypto_suite::cipher_suite::UnwrappedKey::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::ops::drop::Drop for benten_crypto_suite::cipher_suite::UnwrappedKey
+pub fn benten_crypto_suite::cipher_suite::UnwrappedKey::drop(&mut self)
 impl core::marker::Freeze for benten_crypto_suite::cipher_suite::UnwrappedKey
 impl core::marker::Send for benten_crypto_suite::cipher_suite::UnwrappedKey
 impl core::marker::Sync for benten_crypto_suite::cipher_suite::UnwrappedKey

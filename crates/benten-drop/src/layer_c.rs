@@ -2073,7 +2073,7 @@ pub mod group_posture {
     /// canonical bytes byte-for-byte. The roster + raw set-id are BLINDED into
     /// the two 32-byte commitments; on the DEFAULT path the inner-sender-DID is
     /// sealed inside the stanza payload (`plaintext_sender_did = None`).
-    #[derive(Clone, Debug)]
+    #[derive(Clone)]
     pub struct GroupAadInputs {
         /// The group per-stanza codepoint (`0x6610` on the DEFAULT path) — BE u16.
         pub codepoint: u16,
@@ -2101,6 +2101,43 @@ pub mod group_posture {
         /// sender-DID is bound into the PLAINTEXT AAD (U4). `None` on the
         /// DEFAULT Sealed-Sender path (the shipped default).
         pub plaintext_sender_did: Option<String>,
+    }
+
+    /// R19 secret-hygiene: `Debug` redacts the group key `k_set` so the raw
+    /// secret never renders into logs / panics (the manual impl replaces the
+    /// derived `Debug`; all other fields still render for diagnostics). Mirrors
+    /// the crypto-suite `RecipientSecret` redacted-Debug convention.
+    impl core::fmt::Debug for GroupAadInputs {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.debug_struct("GroupAadInputs")
+                .field("codepoint", &self.codepoint)
+                .field("body_cid", &self.body_cid)
+                .field("member_dids", &self.member_dids)
+                .field("k_set", &"<redacted>")
+                .field("stanza_index", &self.stanza_index)
+                .field("stanza_count", &self.stanza_count)
+                .field("member_key_generation", &self.member_key_generation)
+                .field("membership_set_id", &self.membership_set_id)
+                .field("membership_set_generation", &self.membership_set_generation)
+                .field(
+                    "role_assignments_generation",
+                    &self.role_assignments_generation,
+                )
+                .field("plaintext_sender_did", &self.plaintext_sender_did)
+                .finish()
+        }
+    }
+
+    /// R19 secret-hygiene: wipe the transient `k_set` group-key copy on drop so
+    /// freed-heap / coredump exposure does not leak it. All field access is
+    /// by-ref (no partial-move), so the manual `Drop` is hazard-free. No wire /
+    /// serialization change (`GroupAadInputs` is never (de)serialized — it is an
+    /// AAD-input holder the assembler reads then drops).
+    impl Drop for GroupAadInputs {
+        fn drop(&mut self) {
+            use zeroize::Zeroize as _;
+            self.k_set.zeroize();
+        }
     }
 
     /// `membership_set_id_commitment = blake3::keyed_hash(K_Set,

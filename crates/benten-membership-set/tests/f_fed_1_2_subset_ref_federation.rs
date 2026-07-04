@@ -34,8 +34,11 @@
 //! `benten_membership_set::codepoints::MEMBERSHIP_SET_RESERVED_0X6620`. The
 //! production `KSetAcquisitionPath` carries `Vec<u8>` ids (content-addressed
 //! bytes); the `[u8; 4]` fixtures below are lifted to `Vec<u8>` by the `mk`
-//! helper. The wire layout (V2 + big-endian) is byte-identical to the frozen
-//! golden vector (the `to_wire_v2_be` serialization is unchanged).
+//! helper. The wire layout is V2 + big-endian + LENGTH-PREFIXED (injective).
+//! **R19 (F4):** `to_wire_v2_be` gained a `u32`-BE length prefix on every
+//! variable-length field so the encoding is injective; the golden vector below
+//! is updated accordingly. This is allowed because `0x6620` is RESERVED /
+//! encode-only / zero-live-decoder at v1-beta (not a live wire format).
 
 #![allow(dead_code)]
 
@@ -173,20 +176,48 @@ fn fed1_wire_is_v2_big_endian() {
         [0xDE, 0xAD, 0xBE, 0xEF],
     );
     let wire = path.to_wire_v2_be();
+    // R19 (F4): each VARIABLE-length field now carries a `u32`-BE length prefix
+    // so the encoding is INJECTIVE. 0x6620 is RESERVED / encode-only / zero live
+    // decoder at v1-beta, so this golden update is allowed (not a live wire
+    // change). Layout: version || hop_count || lp(target) || target ||
+    // (lp(hop) || hop)* || lp(cid) || cid.
     let expected: Vec<u8> = vec![
         0x02, // ENVELOPE_FORMAT_VERSION_V2 (M-20; NOT 0x01)
         0x02, // hop_count = 2
+        0x00, 0x00, 0x00, 0x04, // u32-BE len(target_set_id) = 4
         0xDD, 0xCC, 0xBB, 0xAA, // target_set_id (as-authored byte order)
+        0x00, 0x00, 0x00, 0x04, // u32-BE len(hop[0]) = 4
         0x11, 0x22, 0x33, 0x44, // hop[0]
+        0x00, 0x00, 0x00, 0x04, // u32-BE len(hop[1]) = 4
         0x55, 0x66, 0x77, 0x88, // hop[1]
+        0x00, 0x00, 0x00, 0x04, // u32-BE len(acquisition_proof_cid) = 4
         0xDE, 0xAD, 0xBE, 0xEF, // acquisition_proof_cid
     ];
     assert_eq!(
         wire, expected,
-        "KSetAcquisitionPath serializes V2 + big-endian from the first commit (M-20 — no LE/V1 golden vector)"
+        "KSetAcquisitionPath serializes V2 + big-endian + length-prefixed (injective) from the first commit (M-20 — no LE/V1 golden vector)"
     );
     // Explicit version-byte assertion (the M-20 freeze-gating guarantee).
     assert_eq!(wire[0], 0x02, "format_version is V2");
+    // Injectivity guard (F4): two paths whose flat byte concatenation is
+    // identical but whose field boundaries differ MUST now produce DISTINCT
+    // wire bytes (the non-injective concat could not tell them apart). Both
+    // flatten to target++hop++cid == [0xAA,0xBB,0xCC,0xDD,0xEE].
+    let a = KSetAcquisitionPath {
+        target_set_id: vec![0xAA, 0xBB],
+        hop_path: vec![vec![0xCC, 0xDD]],
+        acquisition_proof_cid: vec![0xEE],
+    };
+    let b = KSetAcquisitionPath {
+        target_set_id: vec![0xAA],
+        hop_path: vec![vec![0xBB, 0xCC]],
+        acquisition_proof_cid: vec![0xDD, 0xEE],
+    };
+    assert_ne!(
+        a.to_wire_v2_be(),
+        b.to_wire_v2_be(),
+        "length-prefixed encoding must distinguish different field partitions of the same flat bytes"
+    );
 }
 
 // ── F-FED-2 pins ──────────────────────────────────────────────────────────────

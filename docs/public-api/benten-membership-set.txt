@@ -17,6 +17,8 @@ impl core::clone::Clone for benten_membership_set::aad::GroupAadInputs
 pub fn benten_membership_set::aad::GroupAadInputs::clone(&self) -> benten_membership_set::aad::GroupAadInputs
 impl core::fmt::Debug for benten_membership_set::aad::GroupAadInputs
 pub fn benten_membership_set::aad::GroupAadInputs::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::ops::drop::Drop for benten_membership_set::aad::GroupAadInputs
+pub fn benten_membership_set::aad::GroupAadInputs::drop(&mut self)
 impl core::marker::Freeze for benten_membership_set::aad::GroupAadInputs
 impl core::marker::Send for benten_membership_set::aad::GroupAadInputs
 impl core::marker::Sync for benten_membership_set::aad::GroupAadInputs

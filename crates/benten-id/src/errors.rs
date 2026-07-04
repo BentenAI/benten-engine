@@ -154,6 +154,20 @@ pub enum DidError {
         /// Minimum bytes for a structurally-valid Ed25519 did:key body.
         min: usize,
     },
+    /// DID string is longer than any structurally-valid `did:key` and
+    /// is rejected BEFORE the O(N²) base58btc decode runs (F2 pre-auth
+    /// DoS defense). Fired by [`crate::did::Did::resolve`] +
+    /// [`crate::did::Did::resolve_hybrid`] via the shared length
+    /// pre-check. The largest valid DID (the PQ-hybrid two-component
+    /// multikey) is well under [`crate::did::MAX_DID_KEY_STRING_LEN`], so
+    /// no well-formed DID is ever rejected here.
+    #[error("did:key string too long: got {got} bytes, expected at most {max}")]
+    BodyTooLong {
+        /// Length of the DID string presented.
+        got: usize,
+        /// Maximum accepted DID-string length ([`crate::did::MAX_DID_KEY_STRING_LEN`]).
+        max: usize,
+    },
     /// Multicodec prefix is not `0xed 0x01` (the Ed25519 varint).
     #[error(
         "did:key multicodec MUST be 0xed01 (Ed25519 varint) per W3C spec; got: {0:#04x} {1:#04x}"

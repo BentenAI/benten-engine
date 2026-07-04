@@ -1153,6 +1153,8 @@ pub fn benten_engine::layer_d::device_auth::HeadlessDeviceAuth::lock(&mut self)
 pub fn benten_engine::layer_d::device_auth::HeadlessDeviceAuth::supports_biometric(&self) -> bool
 pub fn benten_engine::layer_d::device_auth::HeadlessDeviceAuth::supports_remote_unlock(&self) -> bool
 pub fn benten_engine::layer_d::device_auth::HeadlessDeviceAuth::unlock(&self, core::option::Option<&str>) -> core::result::Result<benten_engine::layer_d::device_auth::UnlockedKey, benten_engine::layer_d::device_auth::DeviceAuthError>
+impl core::ops::drop::Drop for benten_engine::layer_d::device_auth::HeadlessDeviceAuth
+pub fn benten_engine::layer_d::device_auth::HeadlessDeviceAuth::drop(&mut self)
 impl core::marker::Freeze for benten_engine::layer_d::device_auth::HeadlessDeviceAuth
 impl core::marker::Send for benten_engine::layer_d::device_auth::HeadlessDeviceAuth
 impl core::marker::Sync for benten_engine::layer_d::device_auth::HeadlessDeviceAuth

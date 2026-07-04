@@ -1800,15 +1800,33 @@ Row D-15's audit-readiness concern.
 > live at HEAD `6d340944` at author-time. The bare `F-NN` labels are the R6-R5
 > council finding IDs.
 
-### Row D-52 — F-03: Inv-21 fork-tie-break production-merge wiring → Phase-4-Meta-Composing
+### Row D-52 — F-03: Inv-21 fork-tie-break production-merge wiring → Phase-4-Meta-Composing (comparator-hardening half **RESOLVED at R19**; live-merge WIRING still deferred)
+
+> **COMPARATOR-HARDENING half RESOLVED (R19, 2026-07-04) — F5.** The
+> `fork_a_wins` comparator
+> (`crates/benten-membership-set/src/set.rs::crdt::fork_a_wins`) now uses a
+> **STRICT `<`** (was `<=`) so an equal total-order key (which the Inv-21
+> totality invariant forbids — distinct fork events carry distinct
+> content-addressed Version-Node CIDs) is undefined-order-FREE: `fork_a_wins`
+> returns `false` in BOTH orderings (neither wins) rather than the old
+> doubly-`true` ambiguity. A `debug_assert!` documents the CID-distinctness
+> invariant; a pin
+> (`f_inv21_fork_tie_break_totality_version_node_cid.rs::f5_equal_key_fork_tie_break_is_strict_not_ambiguous`)
+> asserts equal keys are unambiguous + distinct keys still pick exactly one
+> winner. For the distinct keys that actually occur, `<` and `<=` pick the
+> identical winner, so no legitimate fork resolution changes; zero production
+> callers at HEAD.
+> **STILL DEFERRED:** wiring the comparator into the LIVE distributed merge
+> path stays a Phase-4-Meta-Composing item (below) — the R19 change hardened
+> the comparator itself, not its live-merge consumption.
 
 - **Frozen surface (v1-beta):** the fork-tie-break COMPARATOR
   `crates/benten-membership-set/src/set.rs::crdt::{fork_total_order_key, fork_a_wins}`
-  (`set.rs:194-216`) is AS-BUILT at HEAD and property-pinned (totality /
+  is AS-BUILT at HEAD and property-pinned (totality /
   antisymmetry / transitivity + smaller-`created_at_hlc`-wins asymmetry +
   archival-half) by the `F-INV21-*` proptest family at
   `crates/benten-membership-set/tests/f_inv21_fork_tie_break_totality_version_node_cid.rs`.
-  The comparator + its proptest are FROZEN at Core.
+  The comparator + its proptest are FROZEN at Core (strict-`<` hardened at R19).
 - **Deferred consumption (Phase-4-Meta-Composing destination):** wire the
   comparator into the LIVE distributed merge path. At HEAD the comparator has
   **zero production callers** (verified by §3.5n grep 2026-06-07: the only
@@ -2557,20 +2575,35 @@ Row D-15's audit-readiness concern.
   `crates/benten-crypto-suite/tests/f_va_1_vault_ondisk_format_freeze.rs` +
   `crates/benten-crypto-suite/src/vault.rs` (the `0xae`/`0x02` frame header).
 
-### Row D-80 — F-16: Drop-bundle CBOR ingest `len <= cap` engine-boundary gate → Phase-4-Meta-Composing (with Row D-67)
+### ~~Row D-80~~ — F-16: Drop-bundle CBOR ingest `len <= cap` gate — **RESOLVED at R19** (parser-level enforcement now enforced; also closes Row D-67's parser-level decode-cap)
 
-- **Observation (NAMED, not fixed this round):** the Drop-bundle CBOR ingest is
+> **RESOLVED (R19, 2026-07-04).** `DropBundle::parse_cbor_bytes`
+> (`crates/benten-drop/src/bundle.rs`) now enforces
+> `bytes.len() <= DROP_BUNDLE_MAX_SIZE_BYTES` at the TOP of the fn, BEFORE
+> the `serde_ipld_dagcbor::from_slice` deserialize — a fail-closed
+> bounded-decode guard. An oversized/hostile blob is a typed
+> `DropBundleError::CodecError` naming the cap (not an OOM). 4 KiB is ~50%
+> over the measured 5-Recipe bundle ceiling, so no legitimate bundle is
+> rejected (pinned by
+> `crates/benten-drop/tests/f_drop_version_fwd_typed_reject.rs::parse_cbor_bytes_rejects_oversized_input_before_decode_row_d80`,
+> which also asserts a real 5-recipe bundle stays under the cap + parses).
+> This is the parser-entry cap; it satisfies BOTH the Row D-67 parser-level
+> decode-cap AND the Row D-80 `len <= cap` intent at the `parse_cbor_bytes`
+> ingest. A future Composing engine-wiring boundary MAY still add an
+> earlier `len <= cap` reject before `parse_cbor_bytes` is reached, but the
+> load-bearing parser guard is now in place. Historical deferral detail
+> retained below.
+
+- **Observation (NAMED, ORIGINALLY not fixed):** the Drop-bundle CBOR ingest is
   input-proportional and `benten_drop::DROP_BUNDLE_MAX_SIZE_BYTES` (4 KiB,
-  `crates/benten-drop/src/bundle.rs:32`) is **advisory-not-enforced** at this
-  wave — it is only asserted in the `tf3f_*` offline-consume tests, not enforced
-  before decode on a live path. Name the `len <= DROP_BUNDLE_MAX_SIZE_BYTES` gate
-  to add at the engine-wiring boundary (the Composing send/receive path that
-  first exposes Drop ingest to untrusted input). Complements Row D-67 (the
+  `crates/benten-drop/src/bundle.rs:32`) was **advisory-not-enforced** at the
+  authoring wave — it was only asserted in the `tf3f_*` offline-consume tests, not
+  enforced before decode on a live path. Complements Row D-67 (the
   `parse_cbor_bytes` decode-cap) — D-67 caps inside the parser; F-16 gates
   `len <= cap` at the engine boundary before the parser is reached. Also
   disclosed in `docs/THREAT-MODEL.md §6`.
-- **Deferred (destination):** Phase-4-Meta-Composing engine-wiring boundary
-  (co-scheduled with Row D-67 / Row D-64).
+- **Deferred (destination) — ORIGINAL:** Phase-4-Meta-Composing engine-wiring boundary
+  (co-scheduled with Row D-67 / Row D-64). **[R19: parser-level half now enforced.]**
 - **Anchor:** R16-council F-16; `crates/benten-drop/src/bundle.rs`
   (`DROP_BUNDLE_MAX_SIZE_BYTES` :32; `parse_cbor_bytes`); Row D-67; `docs/THREAT-MODEL.md §6`.
 
@@ -2651,7 +2684,24 @@ Row D-15's audit-readiness concern.
 > The rows below land at the R18 phase-close convergence council fix wave. Each is
 > a HARD-RULE clause-(b) deferral whose ENTRY lands NOW with a NAMED destination.
 
-### Row D-83 — F-DROP-VER-FWD: an unknown future `DropBundleVersion` tag fails CLOSED as a generic CBOR codec error, not the advertised typed `UnsupportedDropVersion` → Phase-4-Meta-Composing (forward-compatible, addable post-tag)
+### ~~Row D-83~~ — F-DROP-VER-FWD: an unknown future `DropBundleVersion` tag fails CLOSED as a generic CBOR codec error, not the advertised typed `UnsupportedDropVersion` — **RESOLVED at R19** (Ben reversed the defer → FIX-NOW)
+
+> **RESOLVED (R19, 2026-07-04).** A `#[serde(other)] UnknownVersion` catch-all
+> variant was added to `DropBundleVersion`
+> (`crates/benten-drop/src/bundle.rs`) so every unrecognized version tag
+> (e.g. `{"tag":"V2"}`) deserializes to the catch-all, and the
+> `is_v1()`-false branch in `DropBundle::parse_cbor_bytes` routes it to the
+> advertised typed `DropBundleError::UnsupportedDropVersion` (`seen = u16::MAX`
+> documented sentinel) instead of a generic serde codec error. **The upgrade
+> is DESERIALIZE-only and additive — `#[serde(other)]` variants are never
+> serialized, so the `V1` (`{"tag":"V1"}`) and `Synthetic` wire bytes are
+> byte-IDENTICAL** (pinned by
+> `crates/benten-drop/tests/f_drop_version_fwd_typed_reject.rs::v1_and_synthetic_wire_bytes_are_byte_identical_after_catch_all`
+> + the `future_version_tag_decodes_to_typed_unsupported_drop_version` +
+> `unknown_version_variant_deserializes_from_future_tag_directly` pins).
+> The F-DROP-VER-ALIAS AS-BUILT dual-encoding sub-note below is UNCHANGED
+> (the `Synthetic(1)==v1` seam stays for the RED-phase pins). Historical
+> deferral detail retained below for context.
 
 - **Frozen shape (v1-beta):** `DropBundleVersion`
   (`crates/benten-drop/src/bundle.rs:48-58`) is

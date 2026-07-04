@@ -29,6 +29,7 @@ use benten_crypto_suite::vault::{
     DAK_HKDF_INFO_TAG, OWASP_DEFAULT, UnlockedKeyMaterial, VaultPayload, derive_dak, open_vault,
     serialize_vault,
 };
+use zeroize::Zeroize as _;
 
 /// The frozen headless password env-var name (e2r §4.4 FREEZE).
 pub const BENTEN_VAULT_PASSWORD: &str = "BENTEN_VAULT_PASSWORD";
@@ -178,6 +179,21 @@ impl HeadlessDeviceAuth {
             )),
             Err(_) => Err(DeviceAuthError::VaultDecryptFailed),
         }
+    }
+}
+
+/// R19 secret-hygiene: zeroize the sensitive `password_source` (the raw
+/// vault password) + the sealed `vault_bytes` on drop so freed-heap /
+/// coredump exposure does not leak them. `HeadlessDeviceAuth` derives no
+/// `Debug`, so there is no Debug leak to redact; this is drop-behavior only
+/// (no wire / serialization change). Every field access above is by-ref, so
+/// the manual `Drop` introduces no partial-move hazard.
+impl Drop for HeadlessDeviceAuth {
+    fn drop(&mut self) {
+        if let Some(pw) = self.password_source.as_mut() {
+            pw.zeroize();
+        }
+        self.vault_bytes.zeroize();
     }
 }
 

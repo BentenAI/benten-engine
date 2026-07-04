@@ -99,6 +99,24 @@ pub const HYBRID_KEM_MULTICODEC: [u8; 2] = [0xf0, 0x01];
 /// `did:key` URI prefix (literal string the W3C spec mandates).
 pub const DID_KEY_PREFIX: &str = "did:key:z";
 
+/// Hard upper bound on the length (bytes) of a `did:key` STRING accepted
+/// by [`Did::resolve`] / [`Did::resolve_hybrid`] before any base58btc
+/// decode runs.
+///
+/// **Pre-auth DoS defense (F2).** `bs58::decode` is O(N²) in the body
+/// length, and the live UCAN chain validators resolve the
+/// attacker-controlled `iss` DID of every chain link BEFORE verifying
+/// its signature (`crate::ucan::validate_chain_inner`). Without a cap, a
+/// multi-MB junk `iss` × up to [`crate::ucan::MAX_UCAN_PROOF_DEPTH`]
+/// links is quadratic-CPU exhaustion reachable pre-signature-check.
+///
+/// A valid PQ-hybrid `did:key` (the largest legitimate shape — the
+/// two-component ML-DSA-65 ‖ Ed25519 multikey) base58btc-encodes a
+/// ~2 KB body to ≈2.7 KB of string; 4096 gives ample headroom, so NO
+/// well-formed DID's resolution outcome changes. The cap only rejects
+/// input that is already far larger than any structurally-valid DID.
+pub const MAX_DID_KEY_STRING_LEN: usize = 4096;
+
 /// `did:agent:` — an OPTIONAL allowlist alias method (NQ-C4 + Inv-22). The
 /// principal's NATURE is DERIVED via method-parse; the `did:agent:` alias is
 /// an OPTIONAL allowlist hint, **never a stored authoritative discriminator**
@@ -148,6 +166,25 @@ impl Did {
         &self.0
     }
 
+    /// Pre-decode length gate shared by [`Did::resolve`] +
+    /// [`Did::resolve_hybrid`] (F2 pre-auth DoS defense).
+    ///
+    /// Rejects an over-long DID string with a typed
+    /// [`DidError::BodyTooLong`] BEFORE the O(N²) `bs58::decode` runs, so
+    /// an attacker-controlled `iss` cannot inflict quadratic-CPU cost on
+    /// the pre-signature-check DID resolve that the UCAN chain walker
+    /// performs per link. Nothing structurally valid exceeds
+    /// [`MAX_DID_KEY_STRING_LEN`], so no valid resolution changes.
+    fn length_pre_check(&self) -> Result<(), DidError> {
+        if self.0.len() > MAX_DID_KEY_STRING_LEN {
+            return Err(DidError::BodyTooLong {
+                got: self.0.len(),
+                max: MAX_DID_KEY_STRING_LEN,
+            });
+        }
+        Ok(())
+    }
+
     /// Resolve a `did:key` string back to its underlying public key.
     ///
     /// Round-trip property (per
@@ -156,6 +193,11 @@ impl Did {
     /// exact bytes — NO bit can be silently dropped or rewritten by
     /// the encode → decode path.
     pub fn resolve(&self) -> Result<PublicKey, DidError> {
+        // F2: bound the input length BEFORE the O(N²) base58btc decode
+        // so an attacker-controlled `iss` cannot inflict quadratic CPU
+        // pre-signature-check.
+        self.length_pre_check()?;
+
         let body = self
             .0
             .strip_prefix(DID_KEY_PREFIX)
@@ -272,6 +314,10 @@ impl Did {
     ///
     /// See the typed-reject list above.
     pub fn resolve_hybrid(&self) -> Result<benten_crypto_suite::sig::PublicKey, DidError> {
+        // F2: bound the input length BEFORE the O(N²) base58btc decode
+        // (same pre-auth DoS defense as [`Did::resolve`]).
+        self.length_pre_check()?;
+
         let body = self
             .0
             .strip_prefix(DID_KEY_PREFIX)

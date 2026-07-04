@@ -188,6 +188,7 @@ pub const benten_id::did::DID_KEY_PREFIX: &str
 pub const benten_id::did::ED25519_MULTICODEC: [u8; 2]
 pub const benten_id::did::HYBRID_KEM_MULTICODEC: [u8; 2]
 pub const benten_id::did::HYBRID_SIG_MULTICODEC: [u8; 2]
+pub const benten_id::did::MAX_DID_KEY_STRING_LEN: usize
 pub const benten_id::did::MLDSA65_PUB_MULTICODEC: [u8; 2]
 pub mod benten_id::did_rotation
 pub enum benten_id::did_rotation::AttestationKind
@@ -303,6 +304,9 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::DeviceAttest
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::DeviceAttestationError
 #[non_exhaustive] pub enum benten_id::errors::DidError
 pub benten_id::errors::DidError::Base58Decode
+pub benten_id::errors::DidError::BodyTooLong
+pub benten_id::errors::DidError::BodyTooLong::got: usize
+pub benten_id::errors::DidError::BodyTooLong::max: usize
 pub benten_id::errors::DidError::BodyTooShort
 pub benten_id::errors::DidError::BodyTooShort::got: usize
 pub benten_id::errors::DidError::BodyTooShort::min: usize
@@ -985,6 +989,9 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::DeviceAttest
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::DeviceAttestationError
 #[non_exhaustive] pub enum benten_id::DidError
 pub benten_id::DidError::Base58Decode
+pub benten_id::DidError::BodyTooLong
+pub benten_id::DidError::BodyTooLong::got: usize
+pub benten_id::DidError::BodyTooLong::max: usize
 pub benten_id::DidError::BodyTooShort
 pub benten_id::DidError::BodyTooShort::got: usize
 pub benten_id::DidError::BodyTooShort::min: usize
