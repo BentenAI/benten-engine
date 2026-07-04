@@ -665,11 +665,13 @@ mod tests {
         // so CodeQL's `rust/hard-coded-cryptographic-value` query does not
         // flag this inline `#[cfg(test)]` fixture — `paths-ignore` in
         // `.github/codeql/codeql-config.yml` excludes `tests/` files but
-        // cannot see inline test modules inside a `src/` file, and the
-        // referenced production items (`derive_dak`, `VaultEngine`, …) stay
-        // `pub(crate)` to preserve the G-CORE-9 frozen surface (moving the
-        // module to `tests/` would require widening visibility). The values
-        // only need to be deterministic across the two `derive_dak` calls;
+        // cannot see inline test modules inside a `src/` file. The referenced
+        // production items (`derive_dak`, `VaultEngine`, …) are `pub` — part of
+        // the G-CORE-9 frozen public surface (see
+        // `docs/public-api/benten-crypto-suite.txt`), which is exactly why this
+        // determinism check lives in an inline `#[cfg(test)]` module (it exercises
+        // the frozen `pub` API in place; no visibility widening is involved). The
+        // values only need to be deterministic across the two `derive_dak` calls;
         // every production DAK input is operator-supplied / CSPRNG-salted.
         let pw: Vec<u8> = (0u8..29)
             .map(|i| i.wrapping_mul(7).wrapping_add(3))

@@ -2111,9 +2111,27 @@ Row D-15's audit-readiness concern.
   surface is safe (real keying, fail-closed open); it is a not-yet-wired
   capability, deferred because the engine wiring co-designs with the
   Composing-phase Principal-identity + vault-storage + DID-resolution flows.
-- **Anchor:** R9 GAP-1 closure; CLAUDE.md baked-in #18 (Principal
+- **GAP-C1 sub-note (R18; parallel to the deferred-consumption posture):**
+  consistent with the above, `benten-membership-set` (the 15th crate — the
+  MembershipSet keying primitive) is an engine **`[dev-dependencies]`-only**
+  dependency at v1-beta, NOT a runtime dependency: it appears under
+  `crates/benten-engine/Cargo.toml`
+  `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]` (`:312-313`),
+  and `git grep` over `crates/benten-engine/src/` shows ZERO
+  `benten_membership_set::*` runtime call sites — the crate is present only so
+  the `0x6610` `benten-drop` group-posture tests can cross-check the canonical
+  MembershipSet AAD assembler byte-for-byte. **Production consumption of
+  `benten-membership-set` (the engine wiring that keys real MembershipSets +
+  RBAC-role-gated group sends) is Phase-4-Meta-Composing** — it co-routes with
+  this row's engine encrypt-to-recipient wiring (the Composing wave promotes it
+  from a `[dev-dependencies]` cross-check to a real `[dependencies]` runtime
+  consumer). Cross-record: `docs/INVARIANT-COVERAGE.md` Inv-19 carve-out (the
+  `derive_kv` keying-glue with zero production callers at HEAD, same Row D-64
+  deferral).
+- **Anchor:** R9 GAP-1 closure + R18 GAP-C1; CLAUDE.md baked-in #18 (Principal
   confidentiality half); `docs/SECURITY-PROOFS.md` §4.1/§4.2 +
-  `docs/THREAT-MODEL.md` §2 rung 4 (the real-keying cross-records).
+  `docs/THREAT-MODEL.md` §2 rung 4 (the real-keying cross-records);
+  `crates/benten-engine/Cargo.toml:312-313` (membership-set dev-dep).
 
 ---
 
@@ -2427,9 +2445,22 @@ Row D-15's audit-readiness concern.
     `recovered` binding holding the `unwrap_key_from_recipient` return before
     `parse_inner_be`) — a bare `Vec<u8>` of unwrapped key bytes on the stack;
     it inherits the `Zeroizing` return above once that lands.
+- **MEM-H-1 sub-note (R18; one sibling ALREADY hardened + a type-level
+  assertion to add):** R18 C3 gave `benten_crypto_suite::swap_matrix::PurePqMlKemKeypair`
+  a zeroize-on-drop (`impl Drop { secret_bytes.zeroize() }`) + confirmed it has
+  no rendering `#[derive(Debug)]` — so the NF-1 pure-PQ ML-KEM secret is now
+  wiped on drop, one member of this umbrella closed early. When the umbrella's
+  v1-GM sweep lands, ALSO add a **type-level zeroize-on-drop meta-assertion**
+  (a compile-or-run test over the roster of key-bearing crypto-suite types —
+  `UnwrappedKey` / `VaultPayload` / `DecryptedPlaintext` / `PurePqMlKemKeypair` /
+  … — asserting each has a zeroizing `Drop` and a non-rendering `Debug`), so a
+  future key-bearing type cannot regress the property silently. Companion to the
+  per-type redact+zeroize items above.
 - **Anchor:** R14-council GAP-1; R15 F-03/F-05/F-08 extension; R16 F-11 sibling
-  enumeration; `crates/benten-crypto-suite/src/cipher_suite.rs` (`UnwrappedKey`
-  vs the `RecipientSecret` redact+zeroize precedent; `DecryptedPlaintext`) +
+  enumeration; R18 C3 + MEM-H-1; `crates/benten-crypto-suite/src/cipher_suite.rs`
+  (`UnwrappedKey` vs the `RecipientSecret` redact+zeroize precedent;
+  `DecryptedPlaintext`) + `crates/benten-crypto-suite/src/swap_matrix.rs`
+  (`PurePqMlKemKeypair` — R18 C3 zeroize-on-drop landed) +
   `crates/benten-crypto-suite/src/vault.rs` (`VaultPayload`) +
   `crates/benten-crypto-suite/src/hpke.rs` (`unwrap_key_from_recipient`) +
   `crates/benten-engine/src/layer_d/device_link.rs` (`ProvisioningInnerPayload`
@@ -2454,6 +2485,18 @@ Row D-15's audit-readiness concern.
   `crates/benten-membership-set/src/keying.rs` (`derive_member_key`); the
   `RecipientSecret::to_bytes` → `Zeroizing` precedent in
   `crates/benten-crypto-suite/src/cipher_suite.rs`.
+- **ENCODE-LEN-OVERFLOW-NONUNIFORM sub-note (R18; one line, benign at v1-beta):**
+  the seal-path length-prefix encoders use a **non-uniform** overflow policy —
+  a mix of `u32::try_from(len).expect(...)` (panic-on-overflow) and `as u32` /
+  `as u16` (silent-truncation) casts across the Layer-C / Layer-D / MembershipSet
+  seal sites. This is **benign at v1-beta**: every such site is **seal-time,
+  SENDER-controlled** input (a sender encoding its own message — no relay /
+  recipient / untrusted-peer path reaches these length prefixes), and the roster
+  cardinality is hard-capped (`validate_group_roster_len`, R18 C2). The v1-Composing
+  hygiene sweep unifies these to `u32::try_from(...)?`-with-typed-error (co-routes
+  with Row D-73's Layer-D `as u32` cast sweep). No wire change (< 4 GiB inputs
+  encode identically). Anchor: R18 ENCODE-LEN-OVERFLOW-NONUNIFORM; Row D-73
+  (Layer-D `as u32` cohort); Row D-76.
 
 ---
 
@@ -2600,6 +2643,67 @@ Row D-15's audit-readiness concern.
   (`PermissionRequest::signing_bytes`) +
   `crates/benten-engine/src/layer_d/grant_acceptance.rs:146-150`
   (caller-contract).
+
+---
+
+## R18 (post-F-full phase-close, round 18) NAMED-CARRY rows
+
+> The rows below land at the R18 phase-close convergence council fix wave. Each is
+> a HARD-RULE clause-(b) deferral whose ENTRY lands NOW with a NAMED destination.
+
+### Row D-83 — F-DROP-VER-FWD: an unknown future `DropBundleVersion` tag fails CLOSED as a generic CBOR codec error, not the advertised typed `UnsupportedDropVersion` → Phase-4-Meta-Composing (forward-compatible, addable post-tag)
+
+- **Frozen shape (v1-beta):** `DropBundleVersion`
+  (`crates/benten-drop/src/bundle.rs:48-58`) is
+  `#[serde(tag = "tag", content = "value")]` + `#[non_exhaustive]`, with two
+  arms — `V1` (encodes as `{"tag":"V1"}`) and the test-only `Synthetic(u16)`
+  (encodes as `{"tag":"Synthetic","value":<u16>}`). The version discriminator
+  IS the serde variant-NAME string, and that shape is FROZEN at the tag.
+- **The honest gap:** a genuine future producer minting a NEW version tag —
+  e.g. `{"tag":"V2"}` — is an **unknown enum variant** to the frozen
+  `Deserialize`, so it fails as a **generic DAG-CBOR codec error** (decode
+  failure) at parse time, NOT the advertised typed
+  `DropBundleError::UnsupportedDropVersion`. The typed
+  `UnsupportedDropVersion` path is only reached in-process (the `Synthetic`
+  arm's `is_v1()`-false branch, which the RED-phase pins construct directly) —
+  it does NOT fire for a foreign wire tag the deserializer never recognizes.
+- **No v1-beta safety gap:** BOTH outcomes **fail closed** — an unknown-version
+  bundle is REJECTED either way (generic codec error OR typed
+  `UnsupportedDropVersion`); neither silently accepts nor mis-parses a
+  future-version bundle as v1. The only difference is the *error taxonomy*
+  (generic decode-failure vs the typed variant), which is an
+  operator-diagnostics nicety, not a security boundary. So this is an honest
+  deferral, not a defect left open.
+- **Composing-wave hardening (FORWARD-COMPATIBLE):** add a custom
+  `Deserialize` (or a catch-all `#[serde(other)]`-style mapping) that maps an
+  unrecognized version tag to the typed `UnsupportedDropVersion` instead of a
+  generic codec error. This is **addable post-tag with ZERO change to v1 wire
+  bytes** — a valid `{"tag":"V1"}` bundle decodes identically before and after;
+  only the *rejection taxonomy* for a foreign tag improves. It is therefore a
+  Composing-wave additive upgrade, NOT a v1-beta freeze mutation.
+- **F-DROP-VER-ALIAS sub-note (AS-BUILT freeze record, INTENTIONAL dual-encoding
+  — recorded, NOT dropped):** `DropBundleVersion::is_v1()`
+  (`bundle.rs:68-71`) treats `Synthetic(1)` as v1 —
+  `matches!(self, Self::V1) || matches!(self, Self::Synthetic(n) if n == DROP_BUNDLE_VERSION_V1)`.
+  So the v1 version is representable TWO ways in-process: the canonical `V1`
+  arm (`{"tag":"V1"}` on the wire) AND `Synthetic(1)` (`{"tag":"Synthetic","value":1}`
+  on the wire). This is **intentional-frozen dual-encoding** — the `Synthetic`
+  arm is the test-only construction seam that RED-phase pins use to synthesize
+  arbitrary version discriminators (incl. the boundary value `1`) to exercise
+  the `is_v1()` accept-path and the non-v1 typed-reject path — NOT a wire alias a
+  production producer emits (production always mints `V1`). It is RECORDED here
+  (not dropped) so a future reader does not "de-duplicate" `is_v1()` and
+  accidentally break the RED-phase pins. The v1-Composing custom-`Deserialize`
+  hardening (above) may collapse the dual-encoding at that wave; at v1-beta it
+  stays AS-BUILT.
+- **Deferred (destination):** Phase-4-Meta-Composing (co-routes with Row D-72's
+  vault/envelope format-version policy uniform-reject hardening — same
+  version-tag error-taxonomy family).
+- **Anchor:** R18-council F-DROP-VER-FWD + F-DROP-VER-ALIAS;
+  `crates/benten-drop/src/bundle.rs:48-58` (`DropBundleVersion` enum + serde
+  attrs) + `:60-72` (`as_u16`/`is_v1` — the `Synthetic(1)==v1` alias) + `:126` /
+  `:362` (`DropBundleError::UnsupportedDropVersion` + the in-process
+  typed-reject site); Row D-72 (version-tag error-taxonomy cohort).
 
 ---
 

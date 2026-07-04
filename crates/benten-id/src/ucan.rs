@@ -80,8 +80,11 @@ use crate::keypair::{Keypair, PublicKey};
 /// worst-case serde recursion bounded well under the 8 MB default
 /// thread stack. Enforced at the byte boundary by
 /// [`Ucan::from_canonical_bytes_bounded`] BEFORE serde runs, so the
-/// recursive deserialize routine is never reached for an
-/// over-deep blob.
+/// recursive deserialize routine is never reached for an over-deep
+/// blob. Both live untrusted-input decode sites route through that
+/// bounded entry point: the typed-CALL `ucan_validate_chain` op
+/// (`benten_engine::typed_call_dispatch`) and the durable UCAN
+/// backend read path (`benten_caps::backends::ucan`).
 pub const MAX_UCAN_PROOF_DEPTH: usize = 32;
 
 /// Capability grant pair: `(resource, ability)`.

@@ -109,7 +109,7 @@ const FIXTURE_K_ROOT: [u8; 32] = [0x11u8; 32];
 /// `(ss_M=[0x01;32], ss_X=[0x02;32], ct_X=[0x03;32], pk_X=[0x04;32])` =
 /// `SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel)` with the 6-byte
 /// `XWingLabel` (`0x5c2e2f2f5e5c`) **APPENDED** as the trailing suffix
-/// (draft-connolly-cfrg-xwing-kem-10 §6). Computed by M-20 throwaway-compute
+/// (draft-connolly-cfrg-xwing-kem-10 §5.3 "Combiner"). Computed by M-20 throwaway-compute
 /// + independently cross-checked against a standalone SHA3-256. This is the
 /// Benten-canonical key-derivation that Branch B's on-wire bytes commit to.
 const BRANCH_B_COMBINER_GOLDEN: [u8; 32] = [

@@ -52,7 +52,7 @@
 //!   BOTH shared secrets into the SHA3-256 combiner means stripping
 //!   either half yields a different key → AEAD authenticated decrypt
 //!   fails closed. (The X-Wing combiner is `SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖
-//!   pk_X ‖ XWingLabel)` per `draft-connolly-cfrg-xwing-kem-10` §6 —
+//!   pk_X ‖ XWingLabel)` per `draft-connolly-cfrg-xwing-kem-10` §5.3 "Combiner" —
 //!   [`crate::cipher_suite::combine_x_wing`] — NOT HKDF.)
 //! - **No-silent-downgrade**: hybrid-signed content handed to a
 //!   `classical_only` decrypt path surfaces [`SwapMatrixError::ConfigMismatch`]
@@ -124,6 +124,7 @@ use crate::sig::{
     VerifyError,
 };
 use crate::sizes::ml_dsa_65_sig_len;
+use zeroize::Zeroize as _;
 
 // =====================================================================
 // AUDIT-LANDED FLAG (the C11b safety invariant)
@@ -920,11 +921,30 @@ pub enum SwapRecipientKeypair {
 }
 
 /// Pure-PQ NF-1 ML-KEM-only keypair.
+///
+/// The secret half ([`Self::secret_bytes`], the ML-KEM-768 decapsulation key)
+/// is zeroized on drop (R18 C3 / F-08 memory-hygiene contract), matching the
+/// live [`crate::cipher_suite::RecipientSecret`] / [`crate::aead::AeadKeyMaterial`]
+/// pattern. Deliberately NOT `#[derive(Debug)]` so the raw decapsulation key
+/// never reaches a `Debug` sink. The `Vec<u8>` field types are unchanged, so
+/// there is NO serialization / wire / public-API-shape change — zeroize is a
+/// drop-behavior addition only.
 pub struct PurePqMlKemKeypair {
     /// Encapsulation key bytes (public).
     pub public_bytes: Vec<u8>,
-    /// Decapsulation key bytes (secret).
+    /// Decapsulation key bytes (secret). Zeroized on drop (R18 C3).
     pub secret_bytes: Vec<u8>,
+}
+
+/// R18 C3: zeroize the ML-KEM-768 decapsulation key on drop so the long-lived
+/// pure-PQ secret does not linger in freed heap (coredump / freed-heap
+/// exposure) — the F-08 memory-hygiene contract, identical in shape to the
+/// [`crate::cipher_suite::RecipientSecret`] `Drop`. `public_bytes` is
+/// non-sensitive but harmless to clear. No wire/serialization impact.
+impl Drop for PurePqMlKemKeypair {
+    fn drop(&mut self) {
+        self.secret_bytes.zeroize();
+    }
 }
 
 impl SwapRecipientKeypair {
@@ -1104,6 +1124,13 @@ enum SwapSignature {
 // them in as a separate test-corpus fixture.
 
 /// ML-DSA-65 / FIPS-204 KAT vector.
+///
+/// R18 C4: a TEST-ONLY conformance fixture (consumed exclusively by the
+/// `#[cfg(any(test, feature = "testing"))]` `load_fips_204_kat_vector_for_test`
+/// loader + the `tf4_gcore3c_*` pins). Gated off the frozen default-feature
+/// public-api surface so a KAT-fixture shape change never touches the frozen
+/// v1 baseline (companion to the `FZ-KAT-LEAK` scanner-widening backlog row).
+#[cfg(any(test, feature = "testing"))]
 pub struct SignatureKatVector {
     /// Deterministic seed used to derive the keypair.
     pub seed: Vec<u8>,
@@ -1122,6 +1149,13 @@ pub struct SignatureKatVector {
 }
 
 /// ML-KEM-768 / FIPS-203 KAT vector.
+///
+/// R18 C4: a TEST-ONLY conformance fixture (consumed exclusively by the
+/// `#[cfg(any(test, feature = "testing"))]` `load_fips_203_kat_vector_for_test`
+/// loader + the `tf4_gcore3c_*` pins). Gated off the frozen default-feature
+/// public-api surface so a KAT-fixture shape change never touches the frozen
+/// v1 baseline (companion to the `FZ-KAT-LEAK` scanner-widening backlog row).
+#[cfg(any(test, feature = "testing"))]
 pub struct KemKatVector {
     /// Deterministic seed used to derive the keypair.
     pub seed: Vec<u8>,
@@ -1233,15 +1267,22 @@ impl PurePqNf1SignatureArm {
 // Process-cache for KAT vectors keyed by name.
 // -----------------------------------------------------------------
 
+// R18 C4: these KAT caches hold the test-only `*KatVector` fixtures and are
+// referenced ONLY from `#[cfg(any(test, feature = "testing"))]` loaders /
+// self-checks, so they carry the same gate (keeps the fixture types off the
+// frozen default-feature surface without an unused-item warning in release).
+#[cfg(any(test, feature = "testing"))]
 struct MlDsaKatCacheEntry {
     sk: MlDsaSigningKey<MlDsa65>,
     vector: SignatureKatVector,
 }
 
+#[cfg(any(test, feature = "testing"))]
 struct MlKemKatCacheEntry {
     vector: KemKatVector,
 }
 
+#[cfg(any(test, feature = "testing"))]
 fn ml_dsa_kat_cache()
 -> &'static std::sync::Mutex<std::collections::HashMap<String, MlDsaKatCacheEntry>> {
     static CACHE: OnceLock<
@@ -1250,6 +1291,7 @@ fn ml_dsa_kat_cache()
     CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
 }
 
+#[cfg(any(test, feature = "testing"))]
 fn ml_kem_kat_cache()
 -> &'static std::sync::Mutex<std::collections::HashMap<String, MlKemKatCacheEntry>> {
     static CACHE: OnceLock<

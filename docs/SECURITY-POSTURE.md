@@ -2503,6 +2503,21 @@ authoritative NIST-published `.rsp` vectors. Adding the official `.rsp` corpus
 (vs the current cross-impl-agreement witness) is a v1-GM conformance-scope
 deliverable, co-scheduled with the independent PQ audit (NF-2 / C-GM-AUDIT).
 
+**XW-NO-EXTERNAL-KAT conformance-corpus addition (R18; extends the R16 F-17 item).**
+The `0x647a` **X-Wing combiner** (`SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel)`,
+`crates/benten-crypto-suite/src/cipher_suite.rs`) has **no external KAT witness**
+at v1-beta: it is exercised only by internal round-trip + strip-resistance +
+construction-order pins (`tf2_*` / the `x_wing_combiner_preimage` witness), NOT
+against an authoritative `draft-connolly-cfrg-xwing-kem-10` published test
+vector. The combiner is the vendored ~30-LOC hybrid glue whose byte-exactness
+against the IETF construction is load-bearing (a divergence at the reserved
+codepoint is a silent interop break). Add an **X-Wing external-KAT witness**
+(the draft-connolly published combiner test vectors — SharedSecret KAT over the
+draft's fixed `(ss_M, ss_X, ct_X, pk_X)` inputs) to the `f_kat_*` conformance
+family, co-scheduled with the independent PQ audit (NF-2 / C-GM-AUDIT).
+**Cross-ref:** Compromise #30 (unaudited PQ window; the audit-gated close) +
+Compromise #32 (ML-KEM Decap CT); the `f_kat_1`/`f_kat_2` conformance family.
+
 **Rejected alternative (named, per the reframe).** "PQ-TLS as a
 quantum-resistant transport envelope buys time" (Matrix's public
 position) does NOT transfer to Benten: Benten's vision (baked-in #18 —
@@ -2951,6 +2966,21 @@ those caps the linear cost is the accepted trade-off of the per-recipient-stanza
 mutable group object — is the deferred CGKA class). Accepted at v1-beta. **Cross-ref:** Compromise #42 (FS-gap, same
 no-shared-mutable-object posture); R0.7 §3.3 (`HpkeMultiBase`).
 
+**DOS-6520-QUADRATIC-SEAL sub-note (R18; SGD resource-bound disclosure — SENDER-side, typed cap at the hard limit).**
+Beyond the O(N) *wire* cost, the `0x6520` / `0x6610` group **seal** has an O(N²) *compute* cost at the extreme:
+each stanza's per-stanza AAD assembly re-derives the roster / `audience_set_commitment` over the full N-member
+member-DID list (`group_roster` + `audience_set_commitment` per stanza, `crates/benten-drop/src/layer_c.rs`), so
+sealing an N-recipient group is O(N) stanzas × O(N) per-stanza roster work = **O(N²)**. This is **SENDER-driven**
+(only a sender who chooses a large roster pays it — a relay / recipient cannot inflict it), and it is HARD-CAPPED:
+the roster ceiling `MAX_LAYER_C_GROUP_RECIPIENTS` (65 535, `u16::MAX`) is enforced with a typed
+`LayerCError::RecipientCountExceedsBandWidth` at the single seal-entry choke point `validate_group_roster_len`
+(applied to BOTH `seal_group_impl` (`0x6520`) AND `seal_membership_set_group` (`0x6610`) as of R18 C2) — an
+over-cap roster typed-rejects; it never panics or unbounded-loops inside the seal. So the worst-case compute is a
+sender's own choice, bounded by the typed cap. Not a network-edge DoS (no relay/recipient amplification); the
+per-Kind cardinality caps (Atrium ≤32 / DeviceMesh ≤5) keep production rosters far below the ceiling. Accepted at
+v1-beta. **Cross-ref:** row 46 above; Compromise index row 46 (O(N) wire-cost); R12 F-11 / R18 C2
+(`validate_group_roster_len` typed ceiling); `docs/V1-WIRE-FORMAT-INVENTORY.md §26` (F-11 by-band width note).
+
 ### Compromise #47 — Collaborative-edit-via-re-drop accepted v1-beta trade-off
 
 **Status.** ACCEPTED TRADE-OFF (`ATO`). **Source.** MembershipSet panel (R0.7 §5.2).
@@ -3069,6 +3099,42 @@ deployments that adopt it. This row is the load-bearing #58 the `THREAT-MODEL.md
 cross-links — the boundary that keeps the unlinkability claim honest, not over-claimed. **Cross-ref:**
 `THREAT-MODEL.md` (network-observer-only unlinkability scoping); Compromise #43 (envelope-metadata leakage);
 Compromise #61 (gossip-topic blinding); R0.7 §3.8 (m-7).
+
+### Compromise #59 — Delivery-token / KEM-key-confirmation abuse-control residual
+
+**Status.** SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** MembershipSet / Layer-C abuse-control panel (R0.7
+§3.11 / §5.2). Detail section added at R18 (F-DISC-1 ledger-coherence — the index row + cross-refs pre-existed; the
+body is authored here from R0.7 §5.2 to match the F-DISC-1 disclosure-coherence contract).
+
+The Sealed-Sender delivery-token admit path provides **KEM-key-confirmation** (a recipient's delivery token binds
+the recipient's own KEM key, so a non-recipient cannot mint an admittable token), but it does **NOT** by itself
+bound the RATE at which a *legitimate* recipient over-issues delivery tokens. A recipient who over-issues delivery
+tokens can re-admit spam through its own admit gate — the KEM-key-confirmation property is re-scoped to this abuse
+surface: it confirms *who* may issue, not *how many*. **Residual (the compromise):** recipient-side
+over-issuance re-admits spam. Mitigated by default-conservative per-token rate-limits + the delivery token's own
+UCAN `nbf`/`exp` + revocation substrate (the token-binding AAD carries NO `coarse_epoch` — freshness rides the
+UCAN window + the `jti`-keyed nonce-cache, §3.10, never a time-bucket). Accepted at v1-beta; the bounded
+abuse-surface is the residual. **Cross-ref:** Compromise #63 (Sealed-Sender abuse-control trade-off); Compromise
+#30 (audit-gated PQ window); §3.10 (nonce-cache spec); R0.7 §3.11 / §5.2.
+
+### Compromise #60 — Role/generation transitions do not invalidate prior-issued UCANs (tight-`exp` bound)
+
+**Status.** SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** MembershipSet RBAC / Layer-D grant panel (R0.7
+§3.4 / §5.2). Detail section added at R18 (F-DISC-1 ledger-coherence — the index row + cross-refs pre-existed; the
+body is authored here from R0.7 §5.2 to match the F-DISC-1 disclosure-coherence contract).
+
+A MembershipSet role-transition (a role downgrade / re-assignment) or a generation bump does **NOT** synchronously
+invalidate UCANs already issued under the prior role/generation: a UCAN is valid until its own `exp` (or explicit
+revocation), so a member downgraded at time T can still exercise a grant minted before T until that grant expires.
+This is the grant-axis analogue of the #52 fork-on-kick property (a removed/downgraded member retains
+prior-derived keys until the next fork) and the #64/O-4 revocation-propagation-lag (a stale grant is exercisable
+during a partition). **Residual (the compromise):** a window — bounded by the grant's `exp` — in which a prior-role
+grant remains exercisable after the role/generation transition. Mitigated by the **tight-`exp` default mandate**
+(§3.4): short delivery-token / grant `exp` bounds how long any single prior-role grant is exercisable at all, plus
+explicit revocation for the immediate case. Accepted at v1-beta; closing it synchronously (cross-device
+grant-invalidation on every role change) is out of scope for the P2P model. **Cross-ref:** Compromise #52
+(fork-on-kick — the keying-axis analogue); Compromise #64 (cross-device nonce-window) + its O-4
+revocation-propagation-lag sub-clause; §3.4 (tight-`exp` default mandate); R0.7 §3.4 / §5.2.
 
 ### Compromise #61 — MembershipSet-fingerprint-leak via iroh-gossip topic (CLOSED by HMAC-blinded topic)
 

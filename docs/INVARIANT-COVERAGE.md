@@ -1,4 +1,4 @@
-# Invariant Coverage — Phase 4-Foundation Close + Phase-4-Meta-Core Inv-15 Mint + F-full Inv-16..22 Design-Mints
+# Invariant Coverage — Phase 4-Foundation Close + Phase-4-Meta-Core Inv-15 Mint + F-full Inv-16..22 (AS-BUILT)
 
 CLAUDE.md commits to **22 invariants** governing the Benten engine
 (14 from Phase 4-Foundation + Inv-15 minted at Phase-4-Meta-Core per
@@ -380,7 +380,8 @@ Each layer changes orthogonally; you can upgrade authentication (e.g. add Bird-o
 1. **Cross-surface audit** of every signature-touching surface to verify payload-CID discipline:
    - ✓ `Engine::revoke_capability_by_grant_cid` (Q1 verified 2026-05-26: Node-content-addressed; sig sidecar)
    - ✓ Plugin `manifest_cid` (Q2 verified 2026-05-26: computed-then-signed; consent record signs over `(manifest_cid || ...)`)
-   - ⏳ UCAN backend `revoke(ucan_cid)` — depends on call sites; expected payload-CID per UCAN spec but unverified
+   - ⏳ UCAN backend `revoke(ucan_cid)` — depends on call sites; expected payload-CID per UCAN spec but unverified. **INV15-UCAN-CID note (R18):** the `ucan_cid` (`benten_caps::backends::ucan::ucan_cid`) is BLAKE3 over the DAG-CBOR of the FULL `Ucan` value — which INCLUDES the `signature` field — so it is a **sig-INCLUSIVE** CID, NOT a payload-CID. Per Inv-15 this is only safe if revocation keys off a **semantic tuple** (issuer/subject/cap/audience/validity) or the payload-CID, NOT off `ucan_cid`. The G-CORE-PQ-WIRE-1 audit MUST confirm the UCAN revocation path does not treat `ucan_cid` as the load-bearing revocation key; if a future change instead wants `ucan_cid` uniqueness to be load-bearing under the Ed25519≈SUF-CMA folklore assumption, it MUST ALSO switch the verify path (next bullet + NON-STRICT-ED25519-VERIFY) to `verify_strict` — but keying revocation off the payload-CID / semantic tuple is the preferred fix (it needs neither assumption).
+   - ⏳ **NON-STRICT-ED25519-VERIFY (R18; verify-path canonical-S hardening note).** The UCAN chain-walk verify at `crates/benten-id/src/ucan.rs:678` uses `ed25519-dalek`'s non-strict `VerifyingKey::verify` (accepts a non-canonical / malleable `S` scalar — the classic Ed25519 batch-vs-strict malleability gap). At v1-beta this is BENIGN because Inv-15 keeps sig-bundle-CIDs off the load-bearing path (a malleated signature over the same payload yields a DIFFERENT `ucan_cid` but the SAME payload-CID / semantic revocation tuple, so it changes no identifier that matters). The hardening — switching the verify site to `verify_strict` (rejects non-canonical `S`) — is REQUIRED-BEFORE any future design that relies on Ed25519 signature-uniqueness (≈SUF-CMA) being load-bearing; folded into this Inv-15 ledger as a coupled precondition. Until then it stays a documented, Inv-15-mitigated non-issue (no v1-beta gate).
    - ⏳ Device attestation envelope V2 — expected payload-bound but unverified
    - ⏳ Sync merge proofs (CRDT log entries) — expected content-keyed but unverified
    - ⏳ Atrium Drop bundles (multi-sig CBOR envelopes) — expected content-keyed but unverified

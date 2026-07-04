@@ -61,11 +61,23 @@
 //!   sender on the wire). The `u16` matches the plaintext-sender band's wire
 //!   header convention.
 //!
-//! Sealed-Sender (`0x6510`, the DEFAULT) and group (`0x6520`/`0x6610`) bands
-//! carry the sender ONLY inside the ciphertext / M_auth binding (u32-BE), never
-//! as a wire header. The widths are independent by design: the M_auth `u32`
-//! bounds the signed binding; the plaintext-sender `u16` bounds the
-//! non-default wire header. Freeze-record: Row D-42 (C-07).
+//! Sealed-Sender (`0x6510`, the DEFAULT) carries the sender ONLY inside the
+//! ciphertext / M_auth binding (u32-BE), never as a wire header. The group
+//! bands (`0x6520`/`0x6610`) are Sealed-Sender-by-DEFAULT too; their
+//! **non-default plaintext-sender variants** additionally append the sender-DID
+//! into the per-stanza AAD trailer, with **band-specific widths**:
+//!   - `0x6520` group multi-recipient plaintext-sender AAD trailer:
+//!     `sender_len u16 BE | sender_did` (`plaintext_aad_bytes`,
+//!     `layer_c.rs:559-562`) — **u16-BE**.
+//!   - `0x6610` MembershipSet group plaintext-sender AAD trailer:
+//!     `sender_len u32 BE | sender_did` (`assemble_group_aad_local` path,
+//!     `layer_c.rs:2192-2195`) — **u32-BE** (matches the `0x6610` per-DID
+//!     `u32-BE` roster framing).
+//! The widths are independent by design: the M_auth `u32` bounds the signed
+//! binding; the `0x6500` / `0x6520` plaintext-sender `u16` and the `0x6610`
+//! plaintext-sender `u32` each bound their band's non-default AAD/wire trailer.
+//! Mirrored in `docs/V1-WIRE-FORMAT-INVENTORY.md §26`. Freeze-record: Row D-42
+//! (C-07).
 //!
 //! Per CLAUDE.md baked-in #5, all crypto routes through
 //! [`benten_crypto_suite`] — this module is concat / framing glue only.
@@ -2273,7 +2285,17 @@ pub mod group_posture {
     /// TEST-ONLY cross-check pins zero drift). `params` supplies the
     /// MembershipSet-specific keying generations + raw set-id that the 11-field
     /// set blinds.
-    #[must_use]
+    ///
+    /// # Errors
+    ///
+    /// Returns [`super::LayerCError::RecipientCountExceedsBandWidth`] when the
+    /// roster cardinality exceeds the band's wire-frozen `u16` limit
+    /// ([`super::MAX_LAYER_C_GROUP_RECIPIENTS`]). The ceiling is enforced BEFORE
+    /// any keying work (the same choke point the sibling `seal_group_impl`
+    /// uses), so a public crypto seal returns a typed error — never the
+    /// infallible `u16::try_from` panic path in the group-AAD assembly — on
+    /// adversarial caller input. The valid-roster envelope bytes are unaffected
+    /// by this gate (R12 F-11 / R18 C2).
     pub fn seal_membership_set_group(
         recipient_pubs: &[RecipientPublic],
         sender_did: &SenderDid,
@@ -2281,7 +2303,10 @@ pub mod group_posture {
         k_set: &[u8; 32],
         params: &GroupSealParams,
         plaintext: &[u8],
-    ) -> GroupSealedEnvelope {
+    ) -> Result<GroupSealedEnvelope, super::LayerCError> {
+        // R18 C2: roster ceiling FIRST — mirror the sibling `seal_group_impl`
+        // choke point so an over-band roster is a typed reject, not a panic.
+        super::validate_group_roster_len(recipient_pubs.len())?;
         let suite = hybrid_suite();
         let roster = group_roster(recipient_pubs);
         let stanza_count = u32::try_from(recipient_pubs.len()).expect("count fits u32");
@@ -2400,14 +2425,14 @@ pub mod group_posture {
             });
         }
 
-        GroupSealedEnvelope {
+        Ok(GroupSealedEnvelope {
             codepoint: MEMBERSHIP_SET_GROUP_MULTI_STANZA,
             wire,
             body_cid: cid,
             body_wire,
             stanza_count,
             stanzas,
-        }
+        })
     }
 
     /// The recipient's INDEPENDENTLY-held `0x6610` verification context — the
@@ -2875,6 +2900,73 @@ mod group_roster_cardinality_guard {
                 max: 65_535,
             }),
             "a roster over MAX_LAYER_C_GROUP_RECIPIENTS must typed-reject, never panic"
+        );
+    }
+
+    /// R18 C2: the `0x6610` `seal_membership_set_group` MembershipSet seal
+    /// MUST route its roster through the same ceiling — an over-band roster
+    /// returns [`LayerCError::RecipientCountExceedsBandWidth`] at the seal
+    /// boundary rather than reaching the infallible `u16::try_from` inside the
+    /// group-AAD assembly (which would PANIC on a 65_536-wide roster).
+    ///
+    /// would-FAIL-on-revert: before R18 C2, `seal_membership_set_group` was
+    /// infallible (`-> GroupSealedEnvelope`) with NO roster gate, unlike its
+    /// sibling `seal_group_impl`. A roster of `MAX_LAYER_C_GROUP_RECIPIENTS + 1`
+    /// flowed into `group_aad_inputs` → `assemble_group_aad_local`'s
+    /// `u16::try_from(recipient_count)` and panicked. Reverting the ceiling
+    /// line restores that panic; this test then aborts instead of asserting a
+    /// typed `Err`.
+    ///
+    /// The roster is built from cheap classical (`0x6400`, 32-byte)
+    /// `RecipientPublic` placeholders replicated to the over-band length: the
+    /// ceiling is the FIRST action in the seal, so it returns BEFORE any
+    /// suite/keying work touches the (unused) recipient publics — the codepoint
+    /// of the placeholders is irrelevant, only the roster length matters.
+    #[test]
+    fn seal_membership_set_group_rejects_over_band_roster_with_typed_error() {
+        use super::group_posture::{GroupSealParams, seal_membership_set_group};
+        use benten_crypto_suite::cipher_suite::{CipherSuiteCodepoint, RecipientPublic};
+
+        // One cheap classical recipient-public byte template (32 bytes), then
+        // replicate to exactly `MAX_LAYER_C_GROUP_RECIPIENTS + 1` (65_536).
+        let template_bytes = [7u8; 32];
+        let over_band = MAX_LAYER_C_GROUP_RECIPIENTS + 1;
+        let mut roster: Vec<RecipientPublic> = Vec::with_capacity(over_band);
+        for _ in 0..over_band {
+            roster.push(
+                RecipientPublic::from_bytes(
+                    CipherSuiteCodepoint::CLASSICAL_X25519,
+                    &template_bytes,
+                )
+                .expect("classical recipient public re-parse must succeed"),
+            );
+        }
+
+        let sender_did: super::SenderDid = b"did:key:zR18C2SealCeilingTest".to_vec();
+        let sender_kp = benten_crypto_suite::sig::SignatureSuite::v1_default().generate_keypair();
+        let k_set = [0x11u8; 32];
+        let params = GroupSealParams {
+            membership_set_id: b"benten:set:r18-c2-ceiling".to_vec(),
+            member_key_generation: 1,
+            membership_set_generation: 1,
+            role_assignments_generation: 1,
+        };
+
+        let result = seal_membership_set_group(
+            &roster,
+            &sender_did,
+            &sender_kp,
+            &k_set,
+            &params,
+            b"over-band body",
+        );
+        assert_eq!(
+            result.err(),
+            Some(LayerCError::RecipientCountExceedsBandWidth {
+                count: over_band,
+                max: MAX_LAYER_C_GROUP_RECIPIENTS,
+            }),
+            "an over-band 0x6610 roster MUST typed-reject at the seal boundary, never panic"
         );
     }
 }

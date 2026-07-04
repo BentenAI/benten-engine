@@ -256,7 +256,8 @@ fn f_lc_gap1_membership_set_group_0x6610_real_recipient_keying() {
     };
     let plaintext = b"gap-1 membership-set confidential payload".to_vec();
 
-    let env = seal_membership_set_group(&pks, &sender, &sender_kp, &k_set, &params, &plaintext);
+    let env = seal_membership_set_group(&pks, &sender, &sender_kp, &k_set, &params, &plaintext)
+        .expect("valid roster must seal (R18 C2)");
 
     // Positive — each member opens their OWN stanza with their real secret.
     let (pt_a, _) = open_membership_set_group(&sec_of(&kp_a), 0, &ctx, &env)

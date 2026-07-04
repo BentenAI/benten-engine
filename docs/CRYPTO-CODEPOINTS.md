@@ -109,6 +109,18 @@ decrypt (not advisory).
 > gate is fail-CLOSED, consistent with the `ReservedCodepoint::resolve()`
 > typed-reject-on-unknown discipline above. Additive follow-up (no wire change) —
 > Phase-4-Meta-Composing federation-wiring wave.
+>
+> **CP-INT-1-FED-FAIL-OPEN scope clarification (R18).** The fail-OPEN shape above
+> is confined to the DORMANT `federation_reserve_gate_at_v1_beta` (test-only
+> callers; the inversion-to-allowlist is a Composing-wave follow-up). The **LIVE**
+> federation entry point at v1-beta — `admit_subset_ref_at_v1_beta`
+> (`crates/benten-membership-set/src/federation.rs:176-178`) — is UNCONDITIONALLY
+> **fail-CLOSED**: it returns `Err(FederationError::FederationReserved)` for every
+> call (federation is not admitted at v1-beta at all). So no live federation path
+> admits an unknown codepoint at v1-beta; the fail-open shape is a property of the
+> not-yet-wired reserve-gate helper, and it inverts to a fail-closed allowlist at
+> the same Composing federation-wiring wave that first makes `admit_subset_ref_*`
+> return `Ok(())` for a genuine subset-ref.
 
 ## IANA HPKE referenced ranges (the disjointness reference — NOT Benten-minted)
 
@@ -364,7 +376,20 @@ KEM-DEM** over vetted upstream primitives (`libcrux-ml-kem` (via
 `x25519-dalek` + `sha3` for the X-Wing SHA3-256 combiner, which directly derives
 the wrap key — there is **no separate HKDF key-schedule and no `hpke` crate** on
 this path; `chacha20poly1305` for the DEM) — the **"Benten-supplies-the-KEM"**
-branch. The `rozbb/rust-hpke` crate's KEM roster is effectively closed to the
+branch.
+
+> **XW-SEC-CITE freeze-record note (R18; DOC-ONLY spec-section cite correction, zero wire/byte change).**
+> The X-Wing combiner + `XWingLabel` (`0x5c2e2f2f5e5c`, ASCII `\.//^\`, APPENDED)
+> are defined in `draft-connolly-cfrg-xwing-kem-10` **§5.3 "Combiner"** — NOT §6
+> (§6 is "Security Considerations"). Prior code/test cites said "§6"; R18 corrected
+> them to "§5.3" (verified against the published draft). This is a **citation-only**
+> correction: the label bytes, the APPEND order, the combiner preimage
+> `SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel)`, the `0x647a` codepoint, and
+> every golden vector are byte-UNCHANGED (still R4.2-verified 2026-06-03). The
+> XWingLabel byte-value "verified 2026-06-03" record stands; only the spec-section
+> NUMBER was wrong. Note: CLAUDE.md baked-in #5 still cites "§6" for the XWingLabel
+> — flag to Ben to align that ratified reference to §5.3 (the label bytes it names
+> remain correct; a same-class citation-only fix, out-of-scope for this worktree). The `rozbb/rust-hpke` crate's KEM roster is effectively closed to the
 RFC-9180-registered KEMs (a custom X-Wing KEM is not a first-class extension
 point there), so X25519MLKEM768 does **not** plug into that crate's KEM trait
 as a first-class registered KEM. The dependency-pinning **posture** (McMillion

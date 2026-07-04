@@ -362,10 +362,28 @@ fn ucan_validate_chain(input: &Value) -> Result<Value, EvalError> {
                 });
             }
         };
-        let ucan: benten_id::ucan::Ucan = serde_ipld_dagcbor::from_slice(bytes).map_err(|e| {
+        // safe-2 #549: bound the CBOR proof-chain nesting BEFORE serde's
+        // derived recursive `Ucan` deserialize runs. `prf: Vec<Ucan>` is a
+        // directly-recursive field; an adversarial token blob can nest it
+        // arbitrarily deep and stack-overflow the process. The bounded
+        // decoder pre-walks the CBOR header stream iteratively and rejects
+        // over-deep blobs, then delegates to the same
+        // `serde_ipld_dagcbor::from_slice`, so a VALID token decodes to a
+        // byte-identical `Ucan`.
+        let ucan: benten_id::ucan::Ucan = benten_id::ucan::Ucan::from_canonical_bytes_bounded(
+            bytes,
+            benten_id::ucan::MAX_UCAN_PROOF_DEPTH,
+        )
+        .map_err(|e| {
+            let reason = match e {
+                benten_id::errors::UcanError::ProofChainTooDeep { depth, max } => format!(
+                    "tokens[{i}] DAG-CBOR decode: proof chain too deep (depth={depth} exceeds max={max})"
+                ),
+                other => format!("tokens[{i}] DAG-CBOR decode: {other}"),
+            };
             EvalError::TypedCallDispatchError {
                 op_name: TypedCallOp::UcanValidateChain.name(),
-                reason: format!("tokens[{i}] DAG-CBOR decode: {e}"),
+                reason,
             }
         })?;
         chain.push(ucan);

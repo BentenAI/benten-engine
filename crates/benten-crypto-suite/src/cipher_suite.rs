@@ -36,7 +36,7 @@
 //!          ct_X       = X25519 ciphertext (the ephemeral encapsulation pubkey)
 //!          pk_X       = recipient X25519 public key
 //!          XWingLabel = 0x5c2e2f2f5e5c  (ASCII `\.//^\`, the 6-byte
-//!                       draft-connolly §6 label — APPENDED, not prepended)
+//!                       draft-connolly §5.3 label — APPENDED, not prepended)
 //!
 //! WRAP(recipient_pub):
 //!     (ct_x, ss_x)     = X25519.encapsulate(recipient_pub.x25519)
@@ -114,10 +114,12 @@ pub use crate::mlkem::{
 
 /// The real draft-connolly X-Wing `XWingLabel` — the 6 bytes
 /// `0x5c2e2f2f5e5c` (ASCII `\.//^\`). **APPENDED** as the trailing suffix
-/// of the combiner pre-image per `draft-connolly-cfrg-xwing-kem-10` §6
-/// (R4.2-corrected 2026-06-03 — the prepended form is the superseded
-/// v01-v02 ordering and would freeze a non-interoperable KEM at the
-/// IETF-reserved `0x647A`).
+/// of the combiner pre-image per `draft-connolly-cfrg-xwing-kem-10` §5.3
+/// ("Combiner"; §6 is "Security Considerations" — the section-number cite
+/// was R18-corrected §6→§5.3, DOC-ONLY, zero wire/byte change: the label
+/// bytes + APPEND order are unchanged and stay R4.2-verified 2026-06-03 —
+/// the prepended form is the superseded v01-v02 ordering and would freeze
+/// a non-interoperable KEM at the IETF-reserved `0x647A`).
 pub const X_WING_LABEL: [u8; 6] = [0x5c, 0x2e, 0x2f, 0x2f, 0x5e, 0x5c];
 
 /// Classical-only `0x6400` combiner domain-separation info string. ASCII;
@@ -629,7 +631,8 @@ impl CipherSuite {
 /// sequence fed to `SHA3-256`):
 /// `ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel` — the 6-byte `XWingLabel` is
 /// **APPENDED** as the trailing suffix per `draft-connolly-cfrg-xwing-kem-10`
-/// §6 (R4.2-corrected). `ss_M` = ML-KEM-768 shared secret, `ss_X` = X25519
+/// §5.3 "Combiner" (R4.2-corrected; §6→§5.3 section-cite R18-corrected, DOC-ONLY).
+/// `ss_M` = ML-KEM-768 shared secret, `ss_X` = X25519
 /// shared secret, `ct_X` = the X25519 ephemeral public key (the X25519
 /// "ciphertext"), `pk_X` = the recipient X25519 public key.
 ///
@@ -640,7 +643,7 @@ impl CipherSuite {
 /// (freeze-record; R9-council GAP-3; DO NOT "fix" by adding `ct_mlkem`).** The
 /// combiner binds `ct_X` (the X25519 ciphertext) but NOT `ct_mlkem` (the
 /// ML-KEM-768 ciphertext) directly, EXACTLY as `draft-connolly-cfrg-xwing-kem-10`
-/// §6 specifies. This is not an omission: ML-KEM-768 is IND-CCA2, so its shared
+/// §5.3 "Combiner" specifies. This is not an omission: ML-KEM-768 is IND-CCA2, so its shared
 /// secret `ss_M` **transitively binds** `ct_mlkem` (the FO-transform ties the
 /// ML-KEM shared secret to its own ciphertext), giving X-Wing its LEAK-freeness
 /// / binding property without re-hashing `ct_mlkem`. Adding `ct_mlkem` to the
@@ -654,7 +657,7 @@ pub fn x_wing_combiner_preimage(ss_m: &[u8], ss_x: &[u8], ct_x: &[u8], pk_x: &[u
     pre.extend_from_slice(ss_x);
     pre.extend_from_slice(ct_x);
     pre.extend_from_slice(pk_x);
-    // APPENDED suffix (draft-connolly §6; NOT prepended).
+    // APPENDED suffix (draft-connolly §5.3 "Combiner"; NOT prepended).
     pre.extend_from_slice(&X_WING_LABEL);
     pre
 }

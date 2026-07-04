@@ -543,7 +543,8 @@ fn f_lc_9_group_send_honors_sealed_sender_no_plaintext_sender_did() {
         &k_set,
         &group_seal_params(),
         b"group payload",
-    );
+    )
+    .expect("valid roster must seal (R18 C2)");
     assert_eq!(
         env.codepoint, MEMBERSHIP_SET_GROUP_MULTI_STANZA,
         "F-LC-9: a MembershipSet K_Set group send MUST carry the 0x6610 \
@@ -584,7 +585,8 @@ fn f_lc_9_group_recipient_recovers_inner_sender_did() {
         &k_set,
         &group_seal_params(),
         b"hello group",
-    );
+    )
+    .expect("valid roster must seal (R18 C2)");
     let (pt, recovered_sender) = open_membership_set_group(&sks[1], 1, &verify_ctx(&pks), &env)
         .expect("group recipient MUST open + origin-verify their stanza");
 
@@ -622,7 +624,8 @@ fn f_lc_9_group_codepoints_distinct_and_dispatch_strict_reject() {
         &[0x55u8; 32],
         &group_seal_params(),
         b"x",
-    );
+    )
+    .expect("valid roster must seal (R18 C2)");
     let outcome = dispatch_group(
         &env.wire,
         MEMBERSHIP_SET_GROUP_MULTI_STANZA,

@@ -338,7 +338,7 @@ pub const benten_drop::layer_c::group_posture::SELF_DESCRIBING_CID_LEN: usize
 pub fn benten_drop::layer_c::group_posture::assemble_group_aad_local(&benten_drop::layer_c::group_posture::GroupAadInputs) -> alloc::vec::Vec<u8>
 pub fn benten_drop::layer_c::group_posture::dispatch_group(&[u8], u16, u16) -> core::result::Result<(), benten_drop::layer_c::group_posture::GroupError>
 pub fn benten_drop::layer_c::group_posture::open_membership_set_group(&benten_crypto_suite::cipher_suite::RecipientSecret, usize, &benten_drop::layer_c::group_posture::GroupVerifyContext, &benten_drop::layer_c::group_posture::GroupSealedEnvelope) -> core::result::Result<(alloc::vec::Vec<u8>, benten_drop::layer_c::group_posture::SenderDid), benten_drop::layer_c::group_posture::GroupError>
-pub fn benten_drop::layer_c::group_posture::seal_membership_set_group(&[benten_crypto_suite::cipher_suite::RecipientPublic], &benten_drop::layer_c::group_posture::SenderDid, &benten_crypto_suite::sig::Keypair, &[u8; 32], &benten_drop::layer_c::group_posture::GroupSealParams, &[u8]) -> benten_drop::layer_c::group_posture::GroupSealedEnvelope
+pub fn benten_drop::layer_c::group_posture::seal_membership_set_group(&[benten_crypto_suite::cipher_suite::RecipientPublic], &benten_drop::layer_c::group_posture::SenderDid, &benten_crypto_suite::sig::Keypair, &[u8; 32], &benten_drop::layer_c::group_posture::GroupSealParams, &[u8]) -> core::result::Result<benten_drop::layer_c::group_posture::GroupSealedEnvelope, benten_drop::layer_c::LayerCError>
 pub type benten_drop::layer_c::group_posture::SenderDid = alloc::vec::Vec<u8>
 pub mod benten_drop::layer_c::sealed_aad
 pub struct benten_drop::layer_c::sealed_aad::SealedSenderAad

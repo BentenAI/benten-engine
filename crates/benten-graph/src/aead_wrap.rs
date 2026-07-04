@@ -559,17 +559,19 @@ pub fn decrypt_recipe_encrypted_node(
 ///   for each chunk: u32 LE length || AeadEnvelope::to_wire_bytes()
 /// ```
 ///
-/// The format is internal to G-CORE-3d's storage layer and is NOT a
-/// frozen public surface (the v1 wire-freeze happens at G-CORE-9).
-/// Any drift here is caught by the round-trip pins +
+/// The format is internal to G-CORE-3d's storage layer; it was FROZEN
+/// at the G-CORE-9 v1-beta wire-freeze (it is not a `pub`-API surface,
+/// but its bytes are now part of the frozen v1 wire contract). Any
+/// drift here is caught by the round-trip pins +
 /// `tf3d_two_cid_mapping_durable_across_reopen`.
 //
 // See also crates/benten-drop/src/bundle.rs DropBundle docstring for the
 // parallel wire-format coupling callout — the Drop bundle's
 // `EncryptedContent.bytes` wraps this storage encoding, so both layers
-// are atomically frozen at G-CORE-9. Any pre-freeze mutation here MUST
-// also retense benten-drop's DropBundle wire shape + the tf3f
-// offline-consume pins.
+// were atomically frozen at G-CORE-9. Any post-freeze change here is a
+// wire-break and MUST route through the crypto-agility framework
+// (additive codepoint, never an in-place mutation) — mirrored in
+// benten-drop's DropBundle wire shape + the tf3f offline-consume pins.
 pub fn encode_encrypted_node(encrypted: &EncryptedNode) -> Result<Vec<u8>, AeadError> {
     const STORAGE_MAGIC: u8 = 0x3d;
     let mut out = Vec::new();

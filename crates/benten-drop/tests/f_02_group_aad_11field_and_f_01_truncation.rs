@@ -270,7 +270,8 @@ fn f_02_live_0x6610_seal_binds_canonical_11_field_aad_golden() {
         &FIXTURE_K_SET,
         &fixture_params(),
         FIXTURE_PLAINTEXT,
-    );
+    )
+    .expect("valid roster must seal (R18 C2)");
     let live_aad = env.stanza_aad_for_test(0);
 
     // (a) single-source-of-truth: live seal == benten-drop-LOCAL assembler.
@@ -436,7 +437,8 @@ fn f_02_seal_open_round_trip_under_11_field_aad() {
         &FIXTURE_K_SET,
         &fixture_params(),
         FIXTURE_PLAINTEXT,
-    );
+    )
+    .expect("valid roster must seal (R18 C2)");
     let (pt, recovered_sender) = open_membership_set_group(&sks[1], 1, &fixture_verify_ctx(), &env)
         .expect("F-02: the 0x6610 group stanza MUST open + origin-verify under the 11-field AAD");
     assert_eq!(
@@ -474,7 +476,8 @@ fn f_01_0x6610_dropped_stanza_fails_closed() {
         &FIXTURE_K_SET,
         &fixture_params(),
         FIXTURE_PLAINTEXT,
-    );
+    )
+    .expect("valid roster must seal (R18 C2)");
 
     // Sanity: untruncated, the survivor at index 1 opens fine (so the FAIL below
     // is the count check firing, not an unrelated decrypt failure — this is the

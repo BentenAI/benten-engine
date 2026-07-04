@@ -970,21 +970,6 @@ impl<'a> core::marker::Unpin for benten_crypto_suite::swap_matrix::CipherRecipie
 impl<'a> core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::CipherRecipientSecretRef<'a>
 impl<'a> core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::CipherRecipientSecretRef<'a>
 impl<'a> core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::CipherRecipientSecretRef<'a>
-pub struct benten_crypto_suite::swap_matrix::KemKatVector
-pub benten_crypto_suite::swap_matrix::KemKatVector::encap_randomness: alloc::vec::Vec<u8>
-pub benten_crypto_suite::swap_matrix::KemKatVector::expected_ciphertext: alloc::vec::Vec<u8>
-pub benten_crypto_suite::swap_matrix::KemKatVector::expected_pubkey: alloc::vec::Vec<u8>
-pub benten_crypto_suite::swap_matrix::KemKatVector::expected_shared_secret: alloc::vec::Vec<u8>
-pub benten_crypto_suite::swap_matrix::KemKatVector::pubkey: alloc::vec::Vec<u8>
-pub benten_crypto_suite::swap_matrix::KemKatVector::secret_key: alloc::vec::Vec<u8>
-pub benten_crypto_suite::swap_matrix::KemKatVector::seed: alloc::vec::Vec<u8>
-impl core::marker::Freeze for benten_crypto_suite::swap_matrix::KemKatVector
-impl core::marker::Send for benten_crypto_suite::swap_matrix::KemKatVector
-impl core::marker::Sync for benten_crypto_suite::swap_matrix::KemKatVector
-impl core::marker::Unpin for benten_crypto_suite::swap_matrix::KemKatVector
-impl core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::KemKatVector
-impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::KemKatVector
-impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::KemKatVector
 pub struct benten_crypto_suite::swap_matrix::PureKemDec
 impl benten_crypto_suite::swap_matrix::PureKemDec
 pub fn benten_crypto_suite::swap_matrix::PureKemDec::shared_secret_bytes(&self) -> &[u8]
@@ -1026,6 +1011,8 @@ impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::
 pub struct benten_crypto_suite::swap_matrix::PurePqMlKemKeypair
 pub benten_crypto_suite::swap_matrix::PurePqMlKemKeypair::public_bytes: alloc::vec::Vec<u8>
 pub benten_crypto_suite::swap_matrix::PurePqMlKemKeypair::secret_bytes: alloc::vec::Vec<u8>
+impl core::ops::drop::Drop for benten_crypto_suite::swap_matrix::PurePqMlKemKeypair
+pub fn benten_crypto_suite::swap_matrix::PurePqMlKemKeypair::drop(&mut self)
 impl core::marker::Freeze for benten_crypto_suite::swap_matrix::PurePqMlKemKeypair
 impl core::marker::Send for benten_crypto_suite::swap_matrix::PurePqMlKemKeypair
 impl core::marker::Sync for benten_crypto_suite::swap_matrix::PurePqMlKemKeypair
@@ -1083,19 +1070,6 @@ impl core::marker::Unpin for benten_crypto_suite::swap_matrix::SealedEnvelope
 impl core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::SealedEnvelope
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::SealedEnvelope
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::SealedEnvelope
-pub struct benten_crypto_suite::swap_matrix::SignatureKatVector
-pub benten_crypto_suite::swap_matrix::SignatureKatVector::expected_pubkey: alloc::vec::Vec<u8>
-pub benten_crypto_suite::swap_matrix::SignatureKatVector::expected_signature: alloc::vec::Vec<u8>
-pub benten_crypto_suite::swap_matrix::SignatureKatVector::message: alloc::vec::Vec<u8>
-pub benten_crypto_suite::swap_matrix::SignatureKatVector::seed: alloc::vec::Vec<u8>
-pub benten_crypto_suite::swap_matrix::SignatureKatVector::signing_key: alloc::vec::Vec<u8>
-impl core::marker::Freeze for benten_crypto_suite::swap_matrix::SignatureKatVector
-impl core::marker::Send for benten_crypto_suite::swap_matrix::SignatureKatVector
-impl core::marker::Sync for benten_crypto_suite::swap_matrix::SignatureKatVector
-impl core::marker::Unpin for benten_crypto_suite::swap_matrix::SignatureKatVector
-impl core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::SignatureKatVector
-impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::SignatureKatVector
-impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::SignatureKatVector
 pub struct benten_crypto_suite::swap_matrix::SwapDecrypted
 impl benten_crypto_suite::swap_matrix::SwapDecrypted
 pub fn benten_crypto_suite::swap_matrix::SwapDecrypted::as_slice(&self) -> &[u8]
@@ -1832,21 +1806,6 @@ impl core::marker::Unpin for benten_crypto_suite::sig::HybridSignature
 impl core::marker::UnsafeUnpin for benten_crypto_suite::sig::HybridSignature
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::sig::HybridSignature
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::sig::HybridSignature
-pub struct benten_crypto_suite::KemKatVector
-pub benten_crypto_suite::KemKatVector::encap_randomness: alloc::vec::Vec<u8>
-pub benten_crypto_suite::KemKatVector::expected_ciphertext: alloc::vec::Vec<u8>
-pub benten_crypto_suite::KemKatVector::expected_pubkey: alloc::vec::Vec<u8>
-pub benten_crypto_suite::KemKatVector::expected_shared_secret: alloc::vec::Vec<u8>
-pub benten_crypto_suite::KemKatVector::pubkey: alloc::vec::Vec<u8>
-pub benten_crypto_suite::KemKatVector::secret_key: alloc::vec::Vec<u8>
-pub benten_crypto_suite::KemKatVector::seed: alloc::vec::Vec<u8>
-impl core::marker::Freeze for benten_crypto_suite::swap_matrix::KemKatVector
-impl core::marker::Send for benten_crypto_suite::swap_matrix::KemKatVector
-impl core::marker::Sync for benten_crypto_suite::swap_matrix::KemKatVector
-impl core::marker::Unpin for benten_crypto_suite::swap_matrix::KemKatVector
-impl core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::KemKatVector
-impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::KemKatVector
-impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::KemKatVector
 pub struct benten_crypto_suite::PureKemDec
 impl benten_crypto_suite::swap_matrix::PureKemDec
 pub fn benten_crypto_suite::swap_matrix::PureKemDec::shared_secret_bytes(&self) -> &[u8]
@@ -1936,19 +1895,6 @@ impl core::marker::Unpin for benten_crypto_suite::codepoint::SigCodepoint
 impl core::marker::UnsafeUnpin for benten_crypto_suite::codepoint::SigCodepoint
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::codepoint::SigCodepoint
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::codepoint::SigCodepoint
-pub struct benten_crypto_suite::SignatureKatVector
-pub benten_crypto_suite::SignatureKatVector::expected_pubkey: alloc::vec::Vec<u8>
-pub benten_crypto_suite::SignatureKatVector::expected_signature: alloc::vec::Vec<u8>
-pub benten_crypto_suite::SignatureKatVector::message: alloc::vec::Vec<u8>
-pub benten_crypto_suite::SignatureKatVector::seed: alloc::vec::Vec<u8>
-pub benten_crypto_suite::SignatureKatVector::signing_key: alloc::vec::Vec<u8>
-impl core::marker::Freeze for benten_crypto_suite::swap_matrix::SignatureKatVector
-impl core::marker::Send for benten_crypto_suite::swap_matrix::SignatureKatVector
-impl core::marker::Sync for benten_crypto_suite::swap_matrix::SignatureKatVector
-impl core::marker::Unpin for benten_crypto_suite::swap_matrix::SignatureKatVector
-impl core::marker::UnsafeUnpin for benten_crypto_suite::swap_matrix::SignatureKatVector
-impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::swap_matrix::SignatureKatVector
-impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::swap_matrix::SignatureKatVector
 pub struct benten_crypto_suite::SignatureSuite
 impl benten_crypto_suite::sig::SignatureSuite
 pub const fn benten_crypto_suite::sig::SignatureSuite::default_codepoint(&self) -> benten_crypto_suite::codepoint::SigCodepoint

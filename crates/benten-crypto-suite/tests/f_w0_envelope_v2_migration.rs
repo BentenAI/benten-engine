@@ -98,7 +98,7 @@ fn x_wing_label_is_appended_suffix_not_prepended() {
     assert_eq!(
         XWING_LABEL,
         benten_crypto_suite::cipher_suite::X_WING_LABEL,
-        "XWingLabel must be the 6 bytes 0x5c2e2f2f5e5c per draft-connolly-cfrg-xwing-kem-10 §6"
+        "XWingLabel must be the 6 bytes 0x5c2e2f2f5e5c per draft-connolly-cfrg-xwing-kem-10 §5.3"
     );
 
     let pre = x_wing_combiner_preimage(&SS_MLKEM, &SS_X25519, &CT_X25519, &PK_X25519);

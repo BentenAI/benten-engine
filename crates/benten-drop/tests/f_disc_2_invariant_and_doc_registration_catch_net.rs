@@ -544,7 +544,8 @@ fn f_disc_2_inv20_clause_c_group_aad_field_set_enforced_blinded() {
         &k_set,
         &params,
         b"inv20 enforced group body",
-    );
+    )
+    .expect("valid roster must seal (R18 C2)");
     let aad = env.stanza_aad_for_test(0);
 
     assert_eq!(
@@ -598,7 +599,8 @@ fn f_disc_2_inv19_inv20_truncation_defense_enforced_fail_closed() {
         &[0x77u8; 32],
         &params,
         b"inv19 body",
-    );
+    )
+    .expect("valid roster must seal (R18 C2)");
     let ctx = verify_ctx_gen1(&pks);
     // Pre-condition (would-FAIL-on-revert witness): the FULL envelope opens.
     assert!(

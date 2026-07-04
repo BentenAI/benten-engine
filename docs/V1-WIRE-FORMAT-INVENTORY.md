@@ -146,10 +146,10 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 **Surface:** `benten_drop::bundle::DropBundle`.
 
 **Wire format:**
-- DAG-CBOR encoded: `{format_version: DropBundleVersion, content_mode: DropContentMode, restricted_spec: RestrictedScope, spec_cid: Cid, authorization_grant: AuthorizationGrant, ...}`.
+- DAG-CBOR encoded: `{version: DropBundleVersion, mode: DropContentMode, spec_cid: Cid, audience: Cid, auth_grant: AuthorizationGrant, content: Vec<EncryptedContent>, restricted_spec: RestrictedScope, ...}`. The struct carries no `#[serde(rename)]`, so for DAG-CBOR the field name IS the wire key (`version` / `mode` / `auth_grant`, NOT `format_version` / `content_mode` / `authorization_grant`).
 - Full S&C composition in CBOR-on-disk per RATIFIED-S&C 8 spike-derived refinements item 8.
 
-**Format version:** `DropBundleVersion` enum at `crates/benten-drop/src/lib.rs` — explicit-version discriminator.
+**Format version:** `DropBundleVersion` enum at `crates/benten-drop/src/bundle.rs` — explicit-version discriminator.
 
 **Byte-pin test coverage:**
 - `crates/benten-drop/tests/tf3f_drop_bundle_offline_consume.rs` + `crates/benten-drop/src/bundle.rs` (DropBundleVersion roundtrip + version-mismatch arms).
@@ -466,6 +466,7 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 **Wire format:**
 - The Layer-C drop band is `0x6500..=0x65FF`. Three values assigned at v1-beta: `0x6500` (plaintext-sender, NON-default), `0x6510` (Sealed-Sender, the v1-beta DEFAULT, BR-1), `0x6520` (`HpkeMultiBase` group multi-stanza).
 - **Plaintext AAD field-set (relay-visible) — UNCHANGED by B2.** `0x6500`/`0x6510` single-recipient AAD = `{aad_version(u8), codepoint(u16 BE), audience(u32-BE-lp), body_cid(self-describing CIDv1 36B), recipient_key_generation(u32 BE)}` (`0x6500` additionally appends `lp(sender_did)`, U4). `0x6520` per-stanza AAD = the BLINDED `{aad_version, codepoint, body_cid, recipient_count(u16 BE), audience_set_commitment(32B), stanza_index(u32 BE), stanza_count(u32 BE), recipient_key_generation(u32 BE)}` (+ optional `lp(sender_did)` on the non-default plaintext-sender variant). The KEM is HPKE `mode_base[MLKEM768-X25519]` (`0x647A`); bulk AEAD is ChaCha20-Poly1305.
+- **LC-DOC-BYBAND-1 — BY-BAND plaintext-sender-DID length-prefix width (AS-BUILT freeze note).** The optional non-default plaintext-sender-DID trailer's length-prefix width is **BY-BAND**: `0x6500` single-recipient (`sender_len u16 BE ‖ sender_did`, `layer_c.rs:559-562`) and `0x6520` group (`sender_len u16 BE ‖ sender_did`, same `plaintext_aad_bytes`) both use **`u16` BE**, while the MembershipSet `0x6610` group plaintext-sender AAD trailer (§25) uses **`u32` BE** (`sender_len u32 BE ‖ sender_did`, `layer_c.rs:2192-2195` — matches the `0x6610` per-DID `u32-BE` roster framing). The DEFAULT (Sealed-Sender) path carries NO plaintext sender on any band. Mirrored in `crates/benten-drop/src/layer_c.rs` module-doc "BY BAND" callout. AS-BUILT + golden-pinned (`f_lc_09_plaintext_sender_len_is_u16_be_not_u32_frozen_golden`); not a change request.
 - **B2 sender ORIGIN-AUTH (always-on; BD-2) — inside the once-sealed body region, NOT on the plaintext wire.** `0x6510` (single): `inner_v2 = lp_u32(sender_did) ‖ sig_codepoint(u16 BE) ‖ sender_sig_len(u32 BE) ‖ sender_sig ‖ body`, sealed under the CEK. `0x6520` (group): `body_v2 = sig_codepoint(u16 BE) ‖ sender_sig_len(u32 BE) ‖ sender_sig ‖ body`, PREPENDED into the once-bulk-sealed body (the per-stanza `sealed_inner = lp_u32(sender_did)` is unchanged). `sender_sig` is one per-MESSAGE LAMPS-hybrid `id-MLDSA65-Ed25519-SHA512` (`0x0001`) signature over `M_auth` (`SENDER_AUTH_DOMAIN` ‖ codepoints ‖ sender-DID ‖ body_cid ‖ audience commitment ‖ generation words ‖ stanza_count ‖ body-AAD digest). The sender-DID + signature are BOTH inside the ciphertext (sender-confidential); the on-wire plaintext AAD field-set is byte-identical to pre-B2.
 - **F-11 (R12) — BY-BAND recipient-cardinality width (AS-BUILT freeze note; Ben-CONFIRMED intentional).** The recipient/member-cardinality integer in the group AADs is **BY-BAND asymmetric**: the Layer-C `0x6520` group per-stanza AAD encodes `recipient_count` as **`u16` BE** (this section, line above), while the MembershipSet `0x6610` group per-stanza AAD (§25) encodes `member_count` as **`u32` BE** (the BLINDED 11-field set; verified against `crates/benten-drop/tests/f_02_group_aad_11field_and_f_01_truncation.rs` golden — "4 (member_count)" u32 segment). This is AS-BUILT and both widths are golden-pinned + round-trip-tested; it is **NOT a blocker** (each band's width is internally consistent, and `0x6520`'s `stanza_index`/`stanza_count` are `u32` so the `u16` is only the roster-cardinality field). **RESOLVED (R12):** the `0x6520` u16 vs `0x6610` u32 by-band asymmetry is confirmed **intentional per Ben** — a >65535-recipient single `0x6520` send is out of scope by design (split into multiple sends). The u16 saturation is now enforced with a typed `LayerCError::RecipientCountExceedsBandWidth` at the seal entry (`validate_group_roster_len`, the single choke point) + a named `benten_drop::layer_c::MAX_LAYER_C_GROUP_RECIPIENTS` const (65535) — an over-limit roster typed-rejects, it never panics inside the seal. Unifying the widths to `u32` is a **REJECTED** freeze record (do NOT touch the `0x6610` band). This is a registration + AS-BUILT record, not a change request.
 - Verified post-decrypt against the hybrid verifying key resolved from the recovered sender-DID (`benten_id::did::Did::resolve_hybrid`), recomputing the audience commitment + key-generation from the recipient's INDEPENDENTLY-held audience/roster (F-2). The unauthenticated sealed-sender variant is DELETED (an unauthenticated-but-claimed sender = indistinguishable from forgery).
@@ -627,17 +628,28 @@ A "yes, complete" answer locks the inventory; a "no, add X" answer adds the miss
   canonical const re-exported at each home. No wire change at v1-beta (the
   bytes agree today); this pins that they STAY agreeing.
 
-- **GCS-24 (R17 F-24; extends Row D-9) — item 27/§Row-D-9 missing
-  bytes→struct decoder + u16 `sender_len` width-pin.** The Layer-C
-  plaintext-sender wire trailer `sender_len u16 BE | sender_did`
-  (`benten-drop/src/layer_c.rs:59`/`:452`/`:543`) is byte-pinned on the ENCODE
-  side (`f_lc_09_plaintext_sender_len_is_u16_be_not_u32_frozen_golden`), but
-  there is no round-tripping **bytes→struct DECODER** pinned for the trailer,
-  and the u16 (not u32) `sender_len` width is asserted only via the encode
-  golden. **G-COMP-1 sweep item:** add a decode-side pin that parses the wire
-  trailer back to `(sender_len, sender_did)` and asserts the u16-BE width
-  round-trips (a decoder that read u32 would mis-frame). Bundled with the
-  Row D-9 hex-byte-pin sweep.
+- **GCS-24 (R17 F-24; extends Row D-9; LC-COV-SENDERTRAILER-1 R18 extension) —
+  item 27/§Row-D-9 missing bytes→struct decoder + by-band `sender_len`
+  width-pins.** The Layer-C single-recipient plaintext-sender wire trailer
+  `sender_len u16 BE | sender_did` (`benten-drop/src/layer_c.rs:59`/`:452`/`:543`)
+  is byte-pinned on the ENCODE side
+  (`f_lc_09_plaintext_sender_len_is_u16_be_not_u32_frozen_golden`), but there
+  is no round-tripping **bytes→struct DECODER** pinned for the trailer, and the
+  u16 (not u32) `sender_len` width is asserted only via the encode golden.
+  **The GROUP plaintext-sender AAD trailers are ALSO under-pinned by band:** the
+  `0x6520` group trailer (`sender_len u16 BE | sender_did`,
+  `layer_c.rs:559-562`) and the `0x6610` MembershipSet group trailer
+  (`sender_len u32 BE | sender_did`, `layer_c.rs:2192-2195`) each need an
+  explicit golden byte-pin on their *plaintext-sender variant's* `sender_len`
+  width (the DEFAULT Sealed-Sender path pins already exist; the non-default
+  plaintext-sender trailer widths are only exercised structurally). **G-COMP-1
+  sweep item:** add (a) a decode-side pin parsing the single-recipient trailer
+  back to `(sender_len, sender_did)` asserting u16-BE round-trips (a decoder
+  reading u32 would mis-frame); (b) an explicit **`0x6520` plaintext-sender
+  `sender_len` u16-BE golden byte-pin**; (c) an explicit **`0x6610`
+  plaintext-sender `sender_len` u32-BE golden byte-pin** (a mixed-width regression
+  where either band drifted to the other's width would surface). Bundled with
+  the Row D-9 hex-byte-pin sweep.
 
 - **GCS-17 (R17 F-17) — `VaultError::WrongPassword` dead variant on the
   frozen enum.** `crates/benten-crypto-suite/src/vault.rs:637` declares

@@ -39,6 +39,16 @@
 > > the freeze-lens + Ben §1.A.FROZEN-inclusion sign-off on the 15th crate's
 > > surface, a tag-gate decision that legitimately waits for the tag SHA.
 > > Registered here so the pre-tag-sweep pass surfaces it to Ben.
+> > **⚑ FZ-MS16-SCOPE (R18).** The Ben §1.A.FROZEN-inclusion sign-off above MUST
+> > cover the **full 15-`pub mod` set** of `benten-membership-set` (the complete
+> > `lib.rs` public module surface — `audit` / `governance` / `privacy` / `keying`
+> > / `member` / `aad` / `codepoints` / `federation` / … — every `pub mod` +
+> > re-export the cargo-public-api baseline pins), NOT only the abstract
+> > "MembershipSet surface." Fold the enumerated 15-pub-mod set into the Ben
+> > sign-off checklist so the freeze decision is against the concrete module
+> > roster the baseline (`docs/public-api/benten-membership-set.txt`) freezes —
+> > preventing an accidental scope gap between "the surface" and the actual
+> > pub-module set at the tag.
 >
 > **Status: POST-BUILD-OUT-WAVE.** Round 0.5 triage-synthesis refreshed
 > at the V1-FROZEN-INTERFACE build-out wave (2026-05-23). The 8 cross-
@@ -470,7 +480,7 @@ freeze wave SURFACES the decision; Ben makes it.
    envelope; SnapshotBlob; TwoCidStore mapping format).
 2. The current **explicit format-version discriminator** for each (e.g.
    `SNAPSHOT_BLOB_SCHEMA_VERSION: u32 = 2`; `DropBundleVersion` enum at
-   `crates/benten-drop/src/lib.rs`).
+   `crates/benten-drop/src/bundle.rs`).
 3. The list of surfaces that **DO NOT YET HAVE** a byte-pin test in CI
    (the wire-format pre-flight gap to close — added before tag).
 4. **The Ben sign-off path** — `docs/V1-WIRE-FORMAT-INVENTORY.md` IS the

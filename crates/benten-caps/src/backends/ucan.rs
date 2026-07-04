@@ -110,7 +110,7 @@ use benten_graph::GraphBackend;
 use benten_graph::backend::KVBackend;
 use benten_id::did::Did;
 use benten_id::errors::UcanError;
-use benten_id::ucan::{Ucan, validate_chain_at, validate_chain_for_audience};
+use benten_id::ucan::{MAX_UCAN_PROOF_DEPTH, Ucan, validate_chain_at, validate_chain_for_audience};
 use serde_ipld_dagcbor as cbor;
 
 use crate::error::CapError;
@@ -382,7 +382,12 @@ impl<B: GraphBackend> UCANBackend<B> {
             // that an installed proof failed to decode. The skip
             // behavior is preserved (non-fatal by design); the
             // `tracing::warn!` makes it forensically auditable.
-            match cbor::from_slice::<Ucan>(value) {
+            // safe-2 #549: decode through the depth-bounded entry point so a
+            // stored proof with a pathologically-deep `prf` chain is rejected
+            // (skipped) at the byte boundary rather than stack-overflowing the
+            // recursive serde deserialize. A well-formed proof decodes to a
+            // byte-identical `Ucan` (same underlying `from_slice`).
+            match Ucan::from_canonical_bytes_bounded(value, MAX_UCAN_PROOF_DEPTH) {
                 Ok(token) => proofs.push(token),
                 Err(decode_err) => {
                     tracing::warn!(
@@ -391,8 +396,8 @@ impl<B: GraphBackend> UCANBackend<B> {
                         key = %String::from_utf8_lossy(key),
                         error = %decode_err,
                         "skipping un-decodable installed UCAN proof \
-                         (corrupt or forward-compat envelope); proof \
-                         excluded from the cap-check chain set (#492)"
+                         (corrupt / forward-compat / over-deep envelope); proof \
+                         excluded from the cap-check chain set (#492, #549)"
                     );
                 }
             }

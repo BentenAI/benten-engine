@@ -1640,7 +1640,8 @@ fn f_lc_3_second_member_spoof_rejected_membership_group() {
     // Positive control: A (a real member) seals; every honest member opens +
     // origin-verifies.
     let (a_kp, a_did) = hybrid_sender();
-    let honest = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, b"group hi");
+    let honest = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, b"group hi")
+        .expect("valid roster must seal (R18 C2)");
     for (i, sk) in sks.iter().enumerate() {
         let (_pt, rec) = open_membership_set_group(sk, i, &ctx, &honest)
             .unwrap_or_else(|e| panic!("member {i} MUST open A's honest group send: {e:?}"));
@@ -1649,7 +1650,8 @@ fn f_lc_3_second_member_spoof_rejected_membership_group() {
 
     // ATTACK: member B (holds K_Set) claims sender_did = A, signs with B's key.
     let (b_kp, _b_did) = hybrid_sender();
-    let spoof = seal_membership_set_group(&pks, &a_did, &b_kp, &k_set, &params, b"forged-as-A");
+    let spoof = seal_membership_set_group(&pks, &a_did, &b_kp, &k_set, &params, b"forged-as-A")
+        .expect("valid roster must seal (R18 C2)");
     for (i, sk) in sks.iter().enumerate() {
         let outcome = open_membership_set_group(sk, i, &ctx, &spoof);
         assert_eq!(
@@ -1716,8 +1718,10 @@ fn f_conf_1_membership_group_cek_is_per_message_unique() {
     let (a_kp, a_did) = hybrid_sender();
     let body_1 = b"membership group message ONE";
     let body_2 = b"membership group message TWO (a different body)";
-    let env_1 = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, body_1);
-    let env_2 = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, body_2);
+    let env_1 = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, body_1)
+        .expect("valid roster must seal (R18 C2)");
+    let env_2 = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, body_2)
+        .expect("valid roster must seal (R18 C2)");
 
     // Re-derive each per-message CEK via the SAME live `derive_group_cek` the
     // seal used (the seam binds `self.body_cid` — i.e. the WIRE cid — proving
@@ -1739,7 +1743,8 @@ fn f_conf_1_membership_group_cek_is_per_message_unique() {
     // CONTROL: re-sealing the SAME body (→ same cid) re-derives the SAME CEK —
     // confirming the CEK is a deterministic function of (K_Set, sender, cid)
     // and that it is the BODY (via cid) driving the difference above, nothing else.
-    let env_1b = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, body_1);
+    let env_1b = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, body_1)
+        .expect("valid roster must seal (R18 C2)");
     assert_eq!(
         cek_1,
         env_1b.derive_cek_for_test(&k_set, &a_did),
@@ -1863,7 +1868,8 @@ fn f_lc_3_content_splice_rejected_membership_group() {
     // recovers A's EXACT body (the F-01 guard does NOT reject honest sends —
     // the honest body's recomputed cid == its wire body_cid).
     let (a_kp, a_did) = hybrid_sender();
-    let honest = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, b"honest body");
+    let honest = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, b"honest body")
+        .expect("valid roster must seal (R18 C2)");
     for (i, sk) in sks.iter().enumerate() {
         let (pt, rec) = open_membership_set_group(sk, i, &ctx, &honest)
             .unwrap_or_else(|e| panic!("member {i} MUST open A's honest group send: {e:?}"));
@@ -2098,7 +2104,8 @@ fn f_lc_3_retarget_to_new_audience_rejected() {
         role_assignments_generation: 1,
     };
     let (ga_kp, ga_did) = hybrid_sender();
-    let genv = seal_membership_set_group(&pks, &ga_did, &ga_kp, &k_set, &params, b"to set-beta");
+    let genv = seal_membership_set_group(&pks, &ga_did, &ga_kp, &k_set, &params, b"to set-beta")
+        .expect("valid roster must seal (R18 C2)");
 
     let true_members: Vec<String> = group_roster_for_test(&pks)
         .iter()
@@ -2162,7 +2169,8 @@ fn f_lc_3_stale_generation_replay_rejected() {
     };
     let (a_kp, a_did) = hybrid_sender();
     let stale =
-        seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &old_params, b"old-gen body");
+        seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &old_params, b"old-gen body")
+        .expect("valid roster must seal (R18 C2)");
 
     let members: Vec<String> = group_roster_for_test(&pks)
         .iter()
