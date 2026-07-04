@@ -2757,6 +2757,35 @@ Row D-15's audit-readiness concern.
 
 ---
 
+## Pull-forward #2 (DoS decode-cap sweep) NAMED-CARRY rows
+
+### Row D-84 — `InstallRecord::signing_payload()` `nonce`↔`plugin_did` adjacency is not length-delimited → robust-injectivity hardening at the G-CORE-8.2 install-wiring
+
+- **Frozen surface (v1-beta):** `InstallRecord::signing_payload()`
+  (`crates/benten-platform-foundation/src/plugin_manifest.rs`) concatenates
+  `manifest_cid(36, fixed) ‖ ts(8, fixed) ‖ nonce(var) ‖ plugin_did(var) ‖
+  granted_caps(BE-u32-count + per-cap BE-u32-len‖bytes)`. The M-2b
+  granted-caps section (pull-forward #2) IS canonically length-prefixed +
+  injective. The `nonce`↔`plugin_did` boundary is NOT length-delimited.
+- **Currently SAFE (why this is a hardening, not a live defect):** every
+  construction site uses a fixed-16-byte `nonce` + a `plugin_did` with the
+  fixed 9-byte ASCII `did:key:z` prefix, so the boundary is unambiguous for
+  the real threat (post-signing tamper of an honestly-signed record, whose
+  fields are short + unsaturated — injectivity holds). Confirmed non-gating
+  by the M-2b security mini-review (2026-07-04).
+- **Deferred consumption (destination):** when the install path goes LIVE
+  at the **G-CORE-8.2** install-wiring (Phase-4-Meta-Composing — no
+  `Engine::install_plugin` exists at v1-beta; only tests call
+  `plugin_lifecycle::install_plugin`), harden `signing_payload()` to be
+  robustly injective regardless of field widths — either length-prefix
+  `nonce` + `plugin_did` (the future-proof form, matching the M-2b caps
+  pattern) OR add a fail-closed `nonce.len() == <fixed-width>` assertion at
+  the signing/verify boundary (the cheaper, non-encoding-changing form).
+  Required only if a variable-length `nonce` is ever admitted.
+- **Anchor:** #2 M-2b security mini-review (2026-07-04); `plugin_manifest.rs::InstallRecord::signing_payload`.
+
+---
+
 ## Update discipline
 
 This document updates via PR:

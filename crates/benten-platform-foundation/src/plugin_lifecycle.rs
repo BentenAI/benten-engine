@@ -67,7 +67,7 @@ use std::collections::{HashMap, HashSet};
 /// inside [`install_plugin`] (Compromise #28 / META #629 DoS-sweep).
 ///
 /// `received_bytes` is an attacker-authored content-addressed shared plugin
-/// manifest — same threat class as [`benten_engine::module_manifest::MAX_MODULE_MANIFEST_BYTES`]
+/// manifest — same threat class as `benten_engine::module_manifest::MAX_MODULE_MANIFEST_BYTES`
 /// (256 KiB), which the sweep capped. A manifest whose body (name + requires
 /// list + shares policy + optional renderer/composition refs) exceeds 256 KiB
 /// is adversarial; the cap bounds a hostile blob BEFORE `serde` allocates.
@@ -76,7 +76,7 @@ pub const MAX_PLUGIN_MANIFEST_BYTES: usize = 256 * 1024;
 /// Fail-closed ceiling on the decoded [`PluginManifest::requires`] count
 /// (Compromise #28 / META #629). A count-prefixed array amplification guard
 /// sitting alongside the byte cap — mirrors
-/// [`benten_engine::module_manifest::MAX_MODULE_MANIFEST_MODULES`] (4096).
+/// `benten_engine::module_manifest::MAX_MODULE_MANIFEST_MODULES` (4096).
 /// A legitimate plugin declares a handful of capability requirements; 4096
 /// clears any realistic manifest while bounding an amplification vector.
 pub const MAX_PLUGIN_MANIFEST_REQUIRES: usize = 4096;
@@ -85,7 +85,7 @@ pub const MAX_PLUGIN_MANIFEST_REQUIRES: usize = 4096;
 /// [`InstallRecord::granted_caps_bytes`](crate::plugin_manifest::InstallRecord::granted_caps_bytes)
 /// element count (Compromise #28 / META #629). `granted_caps_bytes` is an
 /// attacker-appendable `Vec<Vec<u8>>` decoded per-element in
-/// [`install_record_covers_required_caps`]; a hostile record can append
+/// `install_record_covers_required_caps`; a hostile record can append
 /// unbounded tiny CBOR blobs to blow up `HashSet::with_capacity` + the
 /// per-element decode loop. 4096 clears any realistic consent record (one
 /// entry per granted cap) while bounding the amplification vector.
