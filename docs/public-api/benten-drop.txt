@@ -3,6 +3,8 @@ pub mod benten_drop::bundle
 #[non_exhaustive] pub enum benten_drop::bundle::DropBundleError
 pub benten_drop::bundle::DropBundleError::AuthorizationGrantFailed(benten_caps::authorization_grant::AuthorizationGrantError)
 pub benten_drop::bundle::DropBundleError::CodecError(alloc::string::String)
+pub benten_drop::bundle::DropBundleError::EnvelopeIssuerMismatch
+pub benten_drop::bundle::DropBundleError::EnvelopeIssuerMismatch::detail: alloc::string::String
 pub benten_drop::bundle::DropBundleError::EnvelopeSignatureInvalid
 pub benten_drop::bundle::DropBundleError::EnvelopeSignatureInvalid::detail: alloc::string::String
 pub benten_drop::bundle::DropBundleError::PerNodeAeadAuthenticationFailed
@@ -15,6 +17,8 @@ pub benten_drop::bundle::DropBundleError::UnsupportedDropMode
 pub benten_drop::bundle::DropBundleError::UnsupportedDropMode::detail: alloc::string::String
 pub benten_drop::bundle::DropBundleError::UnsupportedDropVersion
 pub benten_drop::bundle::DropBundleError::UnsupportedDropVersion::seen: u16
+impl benten_drop::bundle::DropBundleError
+pub fn benten_drop::bundle::DropBundleError::code(&self) -> benten_errors::ErrorCode
 impl core::convert::From<benten_caps::authorization_grant::AuthorizationGrantError> for benten_drop::bundle::DropBundleError
 pub fn benten_drop::bundle::DropBundleError::from(benten_caps::authorization_grant::AuthorizationGrantError) -> Self
 impl core::convert::From<benten_drop::envelope_sig::EnvelopeSigError> for benten_drop::bundle::DropBundleError
@@ -524,6 +528,8 @@ pub type benten_drop::layer_c::SenderDid = alloc::vec::Vec<u8>
 #[non_exhaustive] pub enum benten_drop::DropBundleError
 pub benten_drop::DropBundleError::AuthorizationGrantFailed(benten_caps::authorization_grant::AuthorizationGrantError)
 pub benten_drop::DropBundleError::CodecError(alloc::string::String)
+pub benten_drop::DropBundleError::EnvelopeIssuerMismatch
+pub benten_drop::DropBundleError::EnvelopeIssuerMismatch::detail: alloc::string::String
 pub benten_drop::DropBundleError::EnvelopeSignatureInvalid
 pub benten_drop::DropBundleError::EnvelopeSignatureInvalid::detail: alloc::string::String
 pub benten_drop::DropBundleError::PerNodeAeadAuthenticationFailed
@@ -536,6 +542,8 @@ pub benten_drop::DropBundleError::UnsupportedDropMode
 pub benten_drop::DropBundleError::UnsupportedDropMode::detail: alloc::string::String
 pub benten_drop::DropBundleError::UnsupportedDropVersion
 pub benten_drop::DropBundleError::UnsupportedDropVersion::seen: u16
+impl benten_drop::bundle::DropBundleError
+pub fn benten_drop::bundle::DropBundleError::code(&self) -> benten_errors::ErrorCode
 impl core::convert::From<benten_caps::authorization_grant::AuthorizationGrantError> for benten_drop::bundle::DropBundleError
 pub fn benten_drop::bundle::DropBundleError::from(benten_caps::authorization_grant::AuthorizationGrantError) -> Self
 impl core::convert::From<benten_drop::envelope_sig::EnvelopeSigError> for benten_drop::bundle::DropBundleError

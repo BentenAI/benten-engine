@@ -32,6 +32,7 @@ pub benten_errors::ErrorCode::CidUnsupportedCodec
 pub benten_errors::ErrorCode::CidUnsupportedHash
 pub benten_errors::ErrorCode::DevServerStopped
 pub benten_errors::ErrorCode::DeviceAttestationForged
+pub benten_errors::ErrorCode::DropBundleEnvelopeIssuerMismatch
 pub benten_errors::ErrorCode::DropBundleEnvelopeSigInvalid
 pub benten_errors::ErrorCode::DropBundleMode3InlineRejected
 pub benten_errors::ErrorCode::DropBundleVersionUnsupported

@@ -219,6 +219,7 @@ export const CATALOG_CODES = [
   "E_DROP_BUNDLE_ENVELOPE_SIG_INVALID",
   "E_DROP_BUNDLE_VERSION_UNSUPPORTED",
   "E_DROP_BUNDLE_MODE3_INLINE_REJECTED",
+  "E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH",
   "E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY",
   "E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED",
   "E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED",
@@ -3029,6 +3030,21 @@ export class EDropBundleMode3InlineRejected extends BentenError {
 }
 
 /**
+ * E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH
+ *
+ * Thrown at: `crates/benten-drop/src/bundle.rs::DropBundle::consume_offline` (Phase 4-Meta-Core, F-INJ-2 pre-freeze injectivity/coverage closure) — the LIVE production typed arm is `DropBundleError::EnvelopeIssuerMismatch`, fired AFTER `auth_grant.verify_binding` establishes the authoritative issuer. Consistent with the sibling G-CORE-3f drop codes, the `benten-errors::ErrorCode::DropBundleEnvelopeIssuerMismatch` catalog surface is reserved (the boundary-lift into the engine-wide catalog lands at the G-CORE-9 v1-interface freeze when the outbound-Drop API surface stabilizes); the drift-detector's `reachability: ignore` annotation below names this reservation.
+ * Message template: "Drop bundle envelope-issuer mismatch: the envelope-sig verifying key is not the trusted grant's authoritative issuer"
+ */
+export class EDropBundleEnvelopeIssuerMismatch extends BentenError {
+  static readonly code = "E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH";
+  static readonly fixHint = "The envelope-sig verifies over the bundle header using `bundle.issuer_verifying_key` — an attacker-controllable field anchored to nothing on its own. Without a further anchor, a strip attack succeeds: the attacker re-authors the header, mints a fresh keypair, re-signs `build_envelope_message(&forged)`, and overwrites `issuer_verifying_key` with the fresh public key — `verify_envelope_signature` then passes (a signature-by-nobody). This code fires when, on the recipient trust path (`consume_offline`), the bundle's `issuer_verifying_key` does NOT match the authoritative issuer of the `AuthorizationGrant` the recipient trusts (`auth_grant.issuer_verifying_key`, which is cryptographically self-bound via the grant's 7-segment binding-message and re-verified by `AuthorizationGrant::verify_binding`). This anchors the otherwise-hollow envelope-sig to the grant the recipient actually trusts. This is a verify-time check only — no wire byte, CBOR field, or golden vector changes. Fix at the producer side: sign the envelope with the same issuer keypair that issued the `AuthorizationGrant`. No primitive-edge routing (None) — the typed-reject IS the defense.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH", "The envelope-sig verifies over the bundle header using `bundle.issuer_verifying_key` — an attacker-controllable field anchored to nothing on its own. Without a further anchor, a strip attack succeeds: the attacker re-authors the header, mints a fresh keypair, re-signs `build_envelope_message(&forged)`, and overwrites `issuer_verifying_key` with the fresh public key — `verify_envelope_signature` then passes (a signature-by-nobody). This code fires when, on the recipient trust path (`consume_offline`), the bundle's `issuer_verifying_key` does NOT match the authoritative issuer of the `AuthorizationGrant` the recipient trusts (`auth_grant.issuer_verifying_key`, which is cryptographically self-bound via the grant's 7-segment binding-message and re-verified by `AuthorizationGrant::verify_binding`). This anchors the otherwise-hollow envelope-sig to the grant the recipient actually trusts. This is a verify-time check only — no wire byte, CBOR field, or golden vector changes. Fix at the producer side: sign the envelope with the same issuer keypair that issued the `AuthorizationGrant`. No primitive-edge routing (None) — the typed-reject IS the defense.", message, context);
+    this.name = "EDropBundleEnvelopeIssuerMismatch";
+  }
+}
+
+/**
  * E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY
  *
  * Thrown at: `crates/benten-engine/src/manifest_envelope_recheck.rs::outcome_to_row_reject` (G-CORE-8, Phase 4-Meta-Core; security-r1-1 + security-r1-2 BLOCKER closure). Replaces the prior `NotApplicable → Ok(())` silent-admit path inside `apply_atrium_merge`'s per-row recheck loop. The default-builder also flips to install the `ProductionManifestEnvelopeRechecker` glue so Engine::default deployments inherit Layer-3 enforcement without an explicit `set_manifest_envelope_rechecker` call.
@@ -3448,6 +3464,7 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_DROP_BUNDLE_ENVELOPE_SIG_INVALID": EDropBundleEnvelopeSigInvalid,
   "E_DROP_BUNDLE_VERSION_UNSUPPORTED": EDropBundleVersionUnsupported,
   "E_DROP_BUNDLE_MODE3_INLINE_REJECTED": EDropBundleMode3InlineRejected,
+  "E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH": EDropBundleEnvelopeIssuerMismatch,
   "E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY": EManifestEnvelopeRecheckUnresolvedDeny,
   "E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED": EPluginInstallRecordAlreadyApplied,
   "E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED": EWriteBoundaryChainNotUserRooted,

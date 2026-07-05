@@ -1249,6 +1249,20 @@ pub enum ErrorCode {
     /// reject path) + the `synthesize_inline_tiny_cbor_for_test`
     /// fixture exercising it.
     DropBundleMode3InlineRejected,
+    /// Phase 4-Meta-Core (Drop bundle envelope-issuer anchoring, F-INJ-2):
+    /// the bundle's `issuer_verifying_key` (the key that signed the
+    /// otherwise-hollow envelope-sig, an attacker-controlled header field
+    /// anchored to nothing on its own) did NOT match the authoritative
+    /// issuer of the `AuthorizationGrant` the recipient trusts
+    /// (`auth_grant.issuer_verifying_key`, cryptographically self-bound via
+    /// the 7-segment binding-message). Surfaces at
+    /// `benten_drop::bundle::DropBundle::consume_offline` AFTER the grant
+    /// binding verifies — closing the strip attack where an attacker
+    /// re-authors the header, mints a fresh keypair, re-signs the envelope
+    /// message, and overwrites `issuer_verifying_key` (a signature-by-
+    /// nobody). This is a verify-time anchor check only: no wire byte /
+    /// CBOR field / golden vector changes.
+    DropBundleEnvelopeIssuerMismatch,
 
     // ----- Phase 4-Meta-Core G-CORE-8 — security-surface lock (4 codes) -----
     //
@@ -1786,6 +1800,7 @@ impl ErrorCode {
             ErrorCode::DropBundleEnvelopeSigInvalid => "E_DROP_BUNDLE_ENVELOPE_SIG_INVALID",
             ErrorCode::DropBundleVersionUnsupported => "E_DROP_BUNDLE_VERSION_UNSUPPORTED",
             ErrorCode::DropBundleMode3InlineRejected => "E_DROP_BUNDLE_MODE3_INLINE_REJECTED",
+            ErrorCode::DropBundleEnvelopeIssuerMismatch => "E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH",
             // G-CORE-8 §4.36/§4.37/§4.23/§4.22 — single-line per drift-detect regex.
             #[rustfmt::skip]
             ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny => "E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY",
@@ -2288,6 +2303,7 @@ impl ErrorCode {
             ErrorCode::DropBundleEnvelopeSigInvalid => None,
             ErrorCode::DropBundleVersionUnsupported => None,
             ErrorCode::DropBundleMode3InlineRejected => None,
+            ErrorCode::DropBundleEnvelopeIssuerMismatch => None,
 
             // G-CORE-3e (Phase 4-Meta-Core) — per-request UCAN-blobs
             // protocol typed rejects. All three route to `ON_DENIED`
@@ -2667,6 +2683,7 @@ impl core::str::FromStr for ErrorCode {
             "E_DROP_BUNDLE_ENVELOPE_SIG_INVALID" => ErrorCode::DropBundleEnvelopeSigInvalid,
             "E_DROP_BUNDLE_VERSION_UNSUPPORTED" => ErrorCode::DropBundleVersionUnsupported,
             "E_DROP_BUNDLE_MODE3_INLINE_REJECTED" => ErrorCode::DropBundleMode3InlineRejected,
+            "E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH" => ErrorCode::DropBundleEnvelopeIssuerMismatch,
             // Phase 4-Meta-Core G-CORE-8 security-surface lock.
             "E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY" => {
                 ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny

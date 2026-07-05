@@ -539,8 +539,10 @@ pub enum RendererBackend {
 // InstallRecord
 // =====================================================================
 
-/// Install-time consent record. User-DID signs over `(manifest_cid ||
-/// timestamp_nanos || nonce || plugin_did_bytes)`.
+/// Install-time consent record. User-DID signs over the injective
+/// pre-image `(manifest_cid[36] || timestamp_nanos[8] || len(nonce) ||
+/// nonce || len(plugin_did_bytes) || plugin_did_bytes ||
+/// len-prefixed(granted_caps_bytes))` — see [`InstallRecord::signing_payload`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InstallRecord {
     /// CID of the manifest this install record consents to.
@@ -577,25 +579,48 @@ impl InstallRecord {
     /// ones that must also be bound but cannot be recovered from the
     /// signature alone.
     ///
-    /// ## `granted_caps_bytes` binding (M-2b signed-surface gap)
+    /// ## Whole-pre-image injectivity (M-2b discipline extended)
     ///
-    /// `granted_caps_bytes` — the UCAN delegations the user consented to
-    /// grant this plugin — IS bound here so it cannot be tampered
-    /// independent of the user's consent signature (a store/filesystem
-    /// tamper appending an un-consented cap → capability-escalation would
-    /// otherwise pass verification). The vector is length-prefixed
-    /// canonically so the payload is deterministic + injective:
-    /// a BE-`u32` element count, then per element a BE-`u32` byte-length
-    /// followed by the element bytes. The length-prefixing (rather than
-    /// bare concatenation) prevents a boundary-shifting collision where
-    /// `[[a, b], [c]]` and `[[a], [b, c]]` would otherwise hash equal.
+    /// Every VARIABLE-width field in this payload is length-prefixed so the
+    /// entire pre-image is injective: no boundary-shifting collision can
+    /// map two distinct field-tuples onto identical bytes (and therefore
+    /// onto an identical BLAKE3 hash / identical Ed25519 verifying input).
+    /// Fixed-width fields carry no prefix because their boundaries are
+    /// unambiguous by construction:
+    /// - `manifest_cid` — fixed 36 bytes ([`benten_core::CID_LEN`]).
+    /// - `timestamp_stub_nanos` — fixed 8 bytes (BE-`u64`, M-19).
+    ///
+    /// Variable-width fields, each prefixed with a BE-`u32` byte-length:
+    /// - `nonce` — variable OsRng bytes. WITHOUT a length prefix the
+    ///   `nonce ‖ plugin_did_bytes` seam is ambiguous: shifting a byte
+    ///   across it yields a DISTINCT `(nonce, plugin_did)` tuple with
+    ///   IDENTICAL payload bytes (the reproduced F-INJ-1 collision), which
+    ///   would break signature injectivity AND collide the §4.37 replay
+    ///   store keyed on `blake3(signing_payload())`.
+    /// - `plugin_did_bytes` — variable DID string bytes; same seam hazard.
+    /// - `granted_caps_bytes` (M-2b signed-surface gap) — the UCAN
+    ///   delegations the user consented to grant this plugin, bound here so
+    ///   they cannot be tampered independent of the user's consent
+    ///   signature (a store/filesystem tamper appending an un-consented cap
+    ///   → capability-escalation would otherwise pass verification). Encoded
+    ///   as a BE-`u32` element count, then per element a BE-`u32` byte-length
+    ///   followed by the element bytes; the length-prefixing (rather than
+    ///   bare concatenation) prevents a boundary-shifting collision where
+    ///   `[[a, b], [c]]` and `[[a], [b, c]]` would otherwise hash equal.
+    ///
+    /// Note on `consenting_user_did` omit-by-design (r2-cp-5): it is NOT
+    /// literal-bytes here by design — the signer's identity is recovered via
+    /// pubkey-verify in [`Self::verify_user_signature`], so cross-DID
+    /// substitution requires forging the signature (infeasible).
     #[must_use]
     pub fn signing_payload(&self) -> Vec<u8> {
         let plugin_did_bytes = self.plugin_did.as_str().as_bytes();
         let caps_bytes_total: usize = self.granted_caps_bytes.iter().map(Vec::len).sum();
         let mut out = Vec::with_capacity(
             36 + 8
+                + 4
                 + self.nonce.len()
+                + 4
                 + plugin_did_bytes.len()
                 + 4
                 + self.granted_caps_bytes.len() * 4
@@ -604,7 +629,15 @@ impl InstallRecord {
         out.extend_from_slice(self.manifest_cid.as_bytes());
         // M-19: timestamp BIG-ENDIAN (migrated from LE at F-full Wave-0).
         out.extend_from_slice(&self.timestamp_stub_nanos.to_be_bytes());
+        // F-INJ-1: length-prefix the nonce → plugin_did seam. Each variable
+        // field carries a BE-u32 byte-length so the `nonce ‖ plugin_did`
+        // boundary is unambiguous — closes the reproduced byte-shift
+        // collision that broke signature injectivity + the §4.37 replay key.
+        let nonce_len = u32::try_from(self.nonce.len()).unwrap_or(u32::MAX);
+        out.extend_from_slice(&nonce_len.to_be_bytes());
         out.extend_from_slice(&self.nonce);
+        let plugin_did_len = u32::try_from(plugin_did_bytes.len()).unwrap_or(u32::MAX);
+        out.extend_from_slice(&plugin_did_len.to_be_bytes());
         out.extend_from_slice(plugin_did_bytes);
         // M-2b: canonical length-prefixed `granted_caps_bytes`. BE-u32 count,
         // then per-cap BE-u32-len ‖ bytes. Deterministic + injective so the

@@ -558,6 +558,18 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     //   reject of Mode-3 discriminator) + the
     //   `synthesize_inline_tiny_cbor_for_test` fixture.
     ErrorCode::DropBundleMode3InlineRejected,
+    // Phase 4-Meta-Core (Drop bundle envelope-issuer anchoring, F-INJ-2):
+    // `E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH` — the bundle's
+    // `issuer_verifying_key` (attacker-controllable, anchored to nothing on
+    // its own) did NOT match the authoritative issuer of the trusted
+    // `AuthorizationGrant` (`auth_grant.issuer_verifying_key`, self-bound via
+    // the 7-segment binding-message). Construction site:
+    //   `benten_drop::bundle::DropBundle::consume_offline` (AFTER
+    //   verify_binding; closes the fresh-key envelope-sig strip attack).
+    // §3.5g atomic mint: Rust variant + `errors.generated.ts` +
+    // ERROR-CATALOG.md + this list/count in the SAME commit.
+    // CATALOG_VARIANT_COUNT 199 -> 200.
+    ErrorCode::DropBundleEnvelopeIssuerMismatch,
     // Phase 4-Meta-Core G-CORE-8 — security-surface lock (4 codes;
     // §4.36 fail-CLOSED flip + §4.37 InstallRecord replay + §4.23
     // user-DID root write-boundary chain validator + §4.22 thin-
@@ -1087,8 +1099,11 @@ fn variant_count_is_pinned() {
     // §3.5g atomic mint across all four surfaces. 198 -> 199. (NOTE: the
     // parallel w-ms-sync wave may also mint codes; the integrator reconciles
     // the count at strategy-C integrate-time.)
+    // F-INJ-2 (Phase-4-Meta-Core pre-freeze): +1 for
+    // `DropBundleEnvelopeIssuerMismatch` (Drop envelope-issuer anchoring).
+    // 199 -> 200.
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 199,
+        CATALOG_VARIANT_COUNT, 200,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1351,6 +1366,9 @@ fn catalog_variant_count_matches_enum() {
             | ErrorCode::DropBundleEnvelopeSigInvalid
             | ErrorCode::DropBundleVersionUnsupported
             | ErrorCode::DropBundleMode3InlineRejected
+            // F-INJ-2: Drop envelope-issuer anchoring reject — verify-time
+            // anchor of the envelope-sig to the trusted grant issuer.
+            | ErrorCode::DropBundleEnvelopeIssuerMismatch
             // Phase 4-Meta-Core G-CORE-8 security-surface lock:
             // fail-closed typed-rejects at the recheck / install /
             // write-boundary / thin-client-bridge boundaries.

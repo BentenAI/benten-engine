@@ -537,6 +537,47 @@ impl AuthorizationGrant {
         audience: Cid,
     ) -> Result<Self, AuthorizationGrantError> {
         let signing_key = SigningKey::generate(&mut OsRng);
+        Self::issue_envelopes_signed_by(&signing_key, ucan, key_material, audience)
+    }
+
+    /// Test-only constructor (wave-3b envelope-shaped) — variant of
+    /// [`Self::issue_envelopes_for_test`] that signs the binding-message
+    /// with the caller-supplied issuer [`benten_id::keypair::Keypair`]
+    /// (rather than a freshly-generated ephemeral key), so the resulting
+    /// grant's `issuer_verifying_key` is the caller's public key.
+    ///
+    /// Fixtures that must bind the grant issuer to a KNOWN keypair use
+    /// this — e.g. the Drop-bundle fixture, whose F-INJ-2 envelope-issuer
+    /// anchor requires `bundle.issuer_verifying_key ==
+    /// auth_grant.issuer_verifying_key`. It preserves the wave-3b
+    /// shape (no scope, no audience_pubkey; controllable `key_material`).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AuthorizationGrantError::Serialization`] if CBOR
+    /// encoding of either half fails.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn issue_envelopes_for_test_with_issuer(
+        issuer_kp: &benten_id::keypair::Keypair,
+        ucan: UcanEnvelope,
+        key_material: GrantKeyMaterial,
+        audience: Cid,
+    ) -> Result<Self, AuthorizationGrantError> {
+        let signing_key = SigningKey::from_bytes(&issuer_kp.secret_bytes_unprotected());
+        Self::issue_envelopes_signed_by(&signing_key, ucan, key_material, audience)
+    }
+
+    /// Shared body for the two wave-3b `issue_envelopes_*` constructors.
+    /// Signs the 7-segment binding-message with `signing_key` and returns
+    /// a verifiable grant whose `issuer_verifying_key` is that key's
+    /// public half.
+    #[cfg(any(test, feature = "testing"))]
+    fn issue_envelopes_signed_by(
+        signing_key: &SigningKey,
+        ucan: UcanEnvelope,
+        key_material: GrantKeyMaterial,
+        audience: Cid,
+    ) -> Result<Self, AuthorizationGrantError> {
         let verifying_key = signing_key.verifying_key();
 
         // Wave-3b envelope shape has no scope and no audience_pubkey

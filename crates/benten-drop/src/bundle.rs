@@ -189,6 +189,31 @@ pub enum DropBundleError {
         detail: String,
     },
 
+    /// The bundle's `issuer_verifying_key` (the key the envelope-sig
+    /// verifies under — an attacker-controllable header field anchored
+    /// to nothing on its own) does NOT match the authoritative issuer of
+    /// the `AuthorizationGrant` the recipient trusts
+    /// (`auth_grant.issuer_verifying_key`, cryptographically self-bound
+    /// via the grant's 7-segment binding-message). Maps to
+    /// `E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH`. Fires on the recipient
+    /// trust path ([`DropBundle::consume_offline`]) AFTER the grant
+    /// binding verifies — closing the strip attack where an attacker
+    /// re-authors the header, mints a fresh keypair, re-signs the
+    /// envelope message, and overwrites `issuer_verifying_key` (a
+    /// signature-by-nobody). Verify-time only; no wire byte changes.
+    ///
+    /// The first-class `ErrorCode` mirror is
+    /// [`DropBundleError::code`] → `ErrorCode::DropBundleEnvelopeIssuerMismatch`
+    /// (`E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH`). The catalog surface itself is
+    /// reserved (boundary-lift at the G-CORE-9 v1-interface freeze, same as the
+    /// sibling drop codes); the live production typed arm is THIS variant.
+    #[error("envelope issuer mismatch (E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH): {detail}")]
+    EnvelopeIssuerMismatch {
+        /// Human-readable detail of the mismatch (the bundle
+        /// envelope-sig key is not the trusted grant's issuer).
+        detail: String,
+    },
+
     /// The carried `AuthorizationGrant` did not verify against the
     /// supplied audience. Composes with `AuthorizationGrantError`.
     #[error("authorization grant verification failed: {0}")]
@@ -203,6 +228,35 @@ impl From<EnvelopeSigError> for DropBundleError {
     fn from(e: EnvelopeSigError) -> Self {
         Self::EnvelopeSignatureInvalid {
             detail: format!("{e}"),
+        }
+    }
+}
+
+impl DropBundleError {
+    /// First-class stable [`benten_errors::ErrorCode`] mirror for this
+    /// typed failure (§3.5g item 6). Cross-language renderers surface the
+    /// wire-side stable code without losing the typed arm.
+    ///
+    /// The catalog surfaces for these codes are RESERVED at v1-beta (the
+    /// boundary-lift into the engine-wide outbound-Drop API lands at the
+    /// G-CORE-9 v1-interface freeze), so the codes carry a
+    /// `reachability: ignore` catalog annotation — they are referenced only
+    /// here, in this mapper arm, not constructed. The live production typed
+    /// arms are the `DropBundleError` variants themselves.
+    #[must_use]
+    pub fn code(&self) -> benten_errors::ErrorCode {
+        use benten_errors::ErrorCode;
+        match self {
+            Self::EnvelopeSignatureInvalid { .. } => ErrorCode::DropBundleEnvelopeSigInvalid,
+            Self::UnsupportedDropVersion { .. } => ErrorCode::DropBundleVersionUnsupported,
+            Self::UnsupportedDropMode { .. } => ErrorCode::DropBundleMode3InlineRejected,
+            Self::EnvelopeIssuerMismatch { .. } => ErrorCode::DropBundleEnvelopeIssuerMismatch,
+            // The AEAD-tag / per-Node-sig / grant-composition / codec arms map
+            // to their existing first-class codes.
+            Self::PerNodeAeadAuthenticationFailed { .. } => ErrorCode::AeadRebindingAttackDetected,
+            Self::PerNodeSignatureInvalid { .. } => ErrorCode::DropBundleEnvelopeSigInvalid,
+            Self::AuthorizationGrantFailed(_) => ErrorCode::AuthorizationGrantBindingSigInvalid,
+            Self::CodecError(_) => ErrorCode::Serialize,
         }
     }
 }
@@ -424,7 +478,7 @@ impl DropBundle {
     // Offline-consume pipeline
     // -----------------------------------------------------------------
 
-    /// Consume the bundle offline. Three sequential layers:
+    /// Consume the bundle offline. Sequential layers:
     ///
     /// 1. **Envelope-sig verify** — the outer defense-in-depth layer.
     ///    Fails BEFORE any decrypt attempt (no wasted work; no
@@ -432,6 +486,15 @@ impl DropBundle {
     /// 2. **Grant binding verify** — the
     ///    [`AuthorizationGrant::verify_binding`] check (A-1/A-2/A-3
     ///    tamper detection per RATIFIED §R3).
+    /// 2b. **Envelope-issuer anchor** (F-INJ-2) — REQUIRE the bundle's
+    ///    `issuer_verifying_key` (which Layer 1 verified the envelope-sig
+    ///    under, but which is attacker-controllable and anchored to
+    ///    nothing on its own) to equal the authoritative issuer of the
+    ///    grant just verified in Layer 2 (`auth_grant.issuer_verifying_key`,
+    ///    self-bound via the grant's 7-segment binding-message). On
+    ///    mismatch: [`DropBundleError::EnvelopeIssuerMismatch`]. Closes the
+    ///    strip attack (fresh-key re-sign of a re-authored header — a
+    ///    signature-by-nobody). Verify-time only; no wire-shape change.
     /// 3. **Per-Node decrypt + AEAD authentication** — the inner
     ///    layer. Each [`EncryptedContent`] is decoded then decrypted
     ///    via `benten_graph::aead_wrap::decrypt`; AEAD authentication-
@@ -452,6 +515,29 @@ impl DropBundle {
         // Layer 2: grant binding-sig verify.
         let recipient_did_cid = derive_audience_cid_from_keypair(recipient_kp);
         self.auth_grant.verify_binding(recipient_did_cid)?;
+
+        // Layer 2b (F-INJ-2): anchor the envelope-sig to the trusted grant
+        // issuer. `verify_envelope_signature` (Layer 1) verifies the header
+        // under `self.issuer_verifying_key` — an attacker-controllable field
+        // anchored to NOTHING on its own: a strip attacker re-authors the
+        // header, mints a fresh keypair, re-signs `build_envelope_message`,
+        // and overwrites `issuer_verifying_key`, and Layer 1 passes (a
+        // signature-by-nobody). Now that Layer 2 has established the
+        // authoritative issuer — `auth_grant.issuer_verifying_key`, which is
+        // cryptographically self-bound via the grant's 7-segment
+        // binding-message (segment 7) and re-verified by `verify_binding` —
+        // REQUIRE the two to match. On mismatch the otherwise-hollow
+        // envelope-sig is not anchored to the grant the recipient trusts, so
+        // reject typed. This is a verify-time check only; no wire byte /
+        // CBOR field / golden vector changes.
+        if self.issuer_verifying_key != self.auth_grant.issuer_verifying_key {
+            return Err(DropBundleError::EnvelopeIssuerMismatch {
+                detail: "bundle envelope-sig verifying key does not match the \
+                         authoritative issuer of the trusted AuthorizationGrant \
+                         (auth_grant.issuer_verifying_key)"
+                    .to_string(),
+            });
+        }
 
         // Layer 3: per-Node decode + decrypt under the carried key.
         // R6 R2 fix-pass (Bundle R6-R2-FP-A L4 sibling): use the
@@ -514,6 +600,21 @@ impl DropBundle {
         let recipient_did_cid = derive_audience_cid_from_keypair(recipient_kp);
         if let Err(e) = self.auth_grant.verify_binding(recipient_did_cid) {
             return Err((DropBundleError::AuthorizationGrantFailed(e), 0));
+        }
+
+        // Layer 2b (F-INJ-2): anchor the envelope-sig to the trusted grant
+        // issuer (mirrors `consume_offline`). Fires before any decrypt, so
+        // the reached-decrypt-count is 0.
+        if self.issuer_verifying_key != self.auth_grant.issuer_verifying_key {
+            return Err((
+                DropBundleError::EnvelopeIssuerMismatch {
+                    detail: "bundle envelope-sig verifying key does not match the \
+                             authoritative issuer of the trusted AuthorizationGrant \
+                             (auth_grant.issuer_verifying_key)"
+                        .to_string(),
+                },
+                0,
+            ));
         }
 
         // Layer 3: per-Node decrypt.
@@ -849,8 +950,19 @@ fn build_5_recipe_bundle_impl(
     // benten-drop fixture needs the wave-3b shape because it must control
     // `key_material.bytes` (matching the AEAD key_bytes above for
     // consume_offline decryption) — Strategy-C wave-2 batch consolidation.
-    let auth_grant = AuthorizationGrant::issue_envelopes_for_test(ucan, key_material, audience)
-        .expect("synthetic grant issues for test");
+    // F-INJ-2: issue the grant with the SAME `issuer_kp` that signs the
+    // envelope below, so the honest fixture satisfies the consume_offline
+    // envelope-issuer anchor (`bundle.issuer_verifying_key ==
+    // auth_grant.issuer_verifying_key`). The prior `issue_envelopes_for_test`
+    // generated an ephemeral grant-issuer key, decoupling the two — which the
+    // anchor check (correctly) rejects.
+    let auth_grant = AuthorizationGrant::issue_envelopes_for_test_with_issuer(
+        issuer_kp,
+        ucan,
+        key_material,
+        audience,
+    )
+    .expect("synthetic grant issues for test");
 
     // G-CORE-3f: this is a SIZED PLACEHOLDER, not real per-Node
     // Ed25519 signatures. The placeholder reserves the wire-shape
