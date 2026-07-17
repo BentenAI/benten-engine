@@ -10,6 +10,12 @@ This file + the latest HANDOFF + MEMORY.md index name what was load-bearing AT-W
 
 ---
 
+## 🧰 ONGOING SUB-PROJECTS (in-flight beyond the active phase)
+
+- **ADDL-as-Workflows Library** (kicked off 2026-07-17) — re-express the fully-spec'd ADDL pipeline as a coherent, PARAMETERIZED workflow library that makes the ~64 catalogued disciplines unskippable control-flow (replacing the brittle hardcoded `f-full-*` snapshots + ad-hoc one-offs). Build-core-now + **dogfood on the remaining GAP-KDB mini-ADDL** (Ben-ratified 2026-07-17). **Tracker: `.addl/ADDL-WORKFLOW-LIBRARY.md`** (design + per-stage status + discipline checklist + done/not-done log — keep it current). Memory: `project_addl_workflow_library_subproject`.
+
+---
+
 ## ⚠️ READ THIS FIRST AT EVERY SESSION START / POST-COMPACT (load-bearing)
 
 **This is the most-violated re-orient discipline. Ben has had to re-prompt for full re-orient ≥2 times.**
