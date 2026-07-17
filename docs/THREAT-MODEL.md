@@ -56,9 +56,12 @@ sealing a per-principal partition *at rest on a hostile host* is the deferred co
 (`0x6500` / `0x6510`, `benten_drop::layer_c::seal_inner`) ONLY, the content-encryption key is
 deterministically derived from the plaintext, so a party that **already holds the CEK** (the sealer, or a
 co-recipient that recovers it) can **confirm a guessed plaintext** — a confirmation oracle for low-entropy bodies.
-This does NOT apply to the group bands: the **`0x6520`** group CEK is a **fresh-random per-message value** (OS
-CSPRNG, delivered only via each stanza's HPKE-wrap; no wire-derived CEK, so no CEK confirmation-oracle at all), and
-the **`0x6610`** MembershipSet group CEK is `K_Set`-keyed (recoverable only by a member holding `K_Set`). The three
+The **`0x6520`** group CEK is a **fresh-random per-message value** (OS
+CSPRNG, delivered only via each stanza's HPKE-wrap; no wire-derived CEK, so no CEK confirmation-oracle at all), so
+the deterministic-CEK oracle above does NOT apply to it. The **`0x6610`** MembershipSet group CEK is `K_Set`-keyed
+and therefore **body-deterministic** — a member already holding `K_Set` CAN confirm a guessed body for a `0x6610`
+send — but that capability is **subsumed by the keyless `body_cid` oracle** below (which needs no `K_Set` at all),
+so `0x6610` discloses nothing beyond `body_cid` (do NOT lump it with the fresh-random `0x6520`). The three
 CEK constructions are enumerated in full at `docs/SECURITY-PROOFS.md` §4.1 (`0x6610` K_Set-keyed / `0x6520`
 fresh-random) + §4.2 (`0x6510` deterministic single-recipient). Separately, the `body_cid` low-entropy disclosure
 below is a property of the wire `body_cid` (not the CEK) and DOES apply across all bands.

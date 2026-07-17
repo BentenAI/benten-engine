@@ -39,11 +39,14 @@
 > > the freeze-lens + Ben §1.A.FROZEN-inclusion sign-off on the 15th crate's
 > > surface, a tag-gate decision that legitimately waits for the tag SHA.
 > > Registered here so the pre-tag-sweep pass surfaces it to Ben.
-> > **⚑ FZ-MS16-SCOPE (R18).** The Ben §1.A.FROZEN-inclusion sign-off above MUST
-> > cover the **full 15-`pub mod` set** of `benten-membership-set` (the complete
-> > `lib.rs` public module surface — `audit` / `governance` / `privacy` / `keying`
-> > / `member` / `aad` / `codepoints` / `federation` / … — every `pub mod` +
-> > re-export the cargo-public-api baseline pins), NOT only the abstract
+> > **⚑ FZ-MS16-SCOPE (R18; count corrected R21 F-06).** The Ben
+> > §1.A.FROZEN-inclusion sign-off above MUST cover the **full 16-`pub mod` set**
+> > of `benten-membership-set` (the complete `lib.rs` public module surface —
+> > `aad` / `audit` / `codepoints` / `error` / `federation` / `governance` /
+> > `keying` / `keying_kv` / `kind` / `member` / `privacy` / `role` / `scaffold` /
+> > `set` / `ucan` / `verify` — every `pub mod` + re-export the cargo-public-api
+> > baseline pins; the baseline additionally enumerates the nested `set::crdt`
+> > submodule + the crate root), NOT only the abstract
 > > "MembershipSet surface." Fold the enumerated 15-pub-mod set into the Ben
 > > sign-off checklist so the freeze decision is against the concrete module
 > > roster the baseline (`docs/public-api/benten-membership-set.txt`) freezes —
@@ -1410,7 +1413,7 @@ planners agreed; locked as-shipped.**
   in the const-allowlist. **Registration affordance REJECTED** per
   CLAUDE.md #19 engine-extensions-are-compile-time-linked discipline; a
   runtime-registerable IPC method bypasses the compile-time review gate.
-- `crates/benten-platform-foundation/src/materializer.rs:552` `pub trait
+- `crates/benten-platform-foundation/src/materializer.rs:587` `pub trait
   Renderer: Send + Sync` with `render(&MaterializerOutput) -> Result<(),
   RenderError>` + `backend_name() -> &'static str`. **Trait surface
   carries NO transport-specific methods** (compile-test pin asserts a

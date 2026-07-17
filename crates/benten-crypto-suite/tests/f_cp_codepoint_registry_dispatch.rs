@@ -213,6 +213,31 @@ fn new_codepoint_integers_wire_locked() {
          locked here so a single-const drift fails THIS registry test directly, not only via the \
          cross-file f_lc_hpke golden)"
     );
+    // Experimental-range base + extended-codepoint escape — the F-CP-1 family
+    // doc claims to wire-lock "experimental/escape" but these two consts were
+    // imported (see the `f_cp_stub` shim) and never value-pinned (R21 F-04).
+    // Pin both canonical out-of-band values here.
+    assert_eq!(
+        f_cp_stub::EXPERIMENTAL_BASE,
+        0xFE00,
+        "experimental-range base wire-locked at 0xFE00 (deliberately out-of-band)"
+    );
+    assert_eq!(
+        f_cp_stub::EXTENDED_CODEPOINT_ESCAPE,
+        0xFFFF,
+        "extended-codepoint escape wire-locked at 0xFFFF (deliberately out-of-band)"
+    );
+    // not-in-BENTEN-range: both live OUTSIDE the suite-selector band
+    // 0x6100..=0x6FFF by design, so a future edit pulling either INTO the band
+    // (where it could collide an envelope-family value) fails HERE directly.
+    assert!(
+        !BENTEN_ENVELOPE_RANGE.contains(&f_cp_stub::EXPERIMENTAL_BASE),
+        "EXPERIMENTAL_BASE (0xFE00) must live OUTSIDE the Benten envelope band 0x6100..=0x6FFF"
+    );
+    assert!(
+        !BENTEN_ENVELOPE_RANGE.contains(&f_cp_stub::EXTENDED_CODEPOINT_ESCAPE),
+        "EXTENDED_CODEPOINT_ESCAPE (0xFFFF) must live OUTSIDE the Benten envelope band 0x6100..=0x6FFF"
+    );
 }
 
 /// Collision scanner: returns `true` iff `codepoints` contains a duplicate

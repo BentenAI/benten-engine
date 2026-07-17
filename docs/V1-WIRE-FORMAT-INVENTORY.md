@@ -544,7 +544,7 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 | 3 | MerkleRangeProof v2 | TBD per Option (b) | — | ⚠️ DEFERRED to G-COMP-1 |
 | 4 | Per-chunk AEAD (4-segment AAD per F3 R6 R1 fix-pass) | Cipher codepoint | tf3a_*.rs + tf4_*.rs + canonical_bytes_v1_codepoints_and_aad.rs (aad_per_chunk_canonical_layout_pinned) | ✅ COVERED |
 | 5 | UCAN-Varsig v1 header | Sig codepoint | tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs + tf4_gcore3c_swap_matrix_conformance*.rs | ✅ COVERED |
-| 6 | AuthorizationGrant CBOR (audience-pubkey-binding-message at v3 per R6-R2-FP-A; scope-binding at v2 per L3-r1-1 R6 R1) | #[non_exhaustive] + BINDING_SIG_DOMAIN v3 | tf3b_authorization_grant_*.rs + tf3b_scope_substitution_post_sign_rejected.rs + tf3b_audience_substitution_post_sign_rejected.rs | ✅ COVERED |
+| 6 | AuthorizationGrant CBOR (binding-message at v4 / 7-segment self-bind: R6-R2-FP-A folded audience_pubkey at v3, then the Item-3 issuer_verifying_key self-bind bumped it to v4; scope-binding at v2 per L3-r1-1 R6 R1) | #[non_exhaustive] + BINDING_SIG_DOMAIN v4 | tf3b_authorization_grant_*.rs + tf3b_scope_substitution_post_sign_rejected.rs + tf3b_audience_substitution_post_sign_rejected.rs + tf3b_issuer_verifying_key_substitution_post_sign_rejected.rs | ✅ COVERED |
 | 7 | Drop bundle CBOR | `DropBundleVersion` enum | benten-drop/tests/ | ✅ COVERED |
 | 8 | TwoCidStore mapping | redb schema-version | tf3e_*.rs | ✅ COVERED |
 | 9 | EncryptionClass codepoint (NEW G-CORE-9) | #[non_exhaustive] + codepoint table | encryption_class.rs unit tests | ✅ COVERED |
@@ -580,7 +580,7 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 
 This inventory is the wave-time enumeration; Ben signs the freeze decision separately at the V1-FROZEN-INTERFACE.md item 4 P-III decision-point sweep. The decision-point question Ben answers:
 
-> "Are the 23 covered wire-format surfaces + the deferred MerkleRangeProof surface the COMPLETE v1-beta wire-format inventory (with item 24's suspension_store records noted as crate-private)? Is there any surface NOT listed above whose bytes the v1-beta lock-in needs to bind?"
+> "Are the 29 covered wire-format surfaces + the 1 deferred MerkleRangeProof surface (item 3) — 30 enumerated in total — the COMPLETE v1-beta wire-format inventory (with item 24's suspension_store records noted as crate-private, not in the public freeze scope)? Is there any surface NOT listed above whose bytes the v1-beta lock-in needs to bind?"
 
 A "yes, complete" answer locks the inventory; a "no, add X" answer adds the missing surface inline + extends the byte-pin coverage at the same wave.
 

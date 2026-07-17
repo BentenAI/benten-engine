@@ -3254,8 +3254,8 @@ Three load-bearing AEAD-layer defenses ride on the per-Node AEAD wrap
    arm for Nodes ≥ 64 KiB).** Per `§1.A.FROZEN item 15(g)` the
    per-chunk AEAD uses
    `aad_per_chunk(plaintext_cid, chunk_index, total_chunks) =
-   b"benten-aead:chunk:" || plaintext_cid_bytes || chunk_index_u64_le
-   || total_chunks_u32_le`. Shuffling chunk-N's ciphertext to
+   b"benten-aead:chunk:" || plaintext_cid_bytes || chunk_index_u64_be
+   || total_chunks_u32_be`. Shuffling chunk-N's ciphertext to
    index-M (the **cross-chunk rebinding attack** — silently
    reordering content within a Node) fails because the reconstructed
    AAD (binding `chunk_index=M`) doesn't match the seal-time AAD

@@ -545,7 +545,8 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
   Access-theft, NOT just attribution-forgery.
 - **Closed by:** [R6-R2-FP-A] folds `audience_pubkey` into the
   binding-message (6-segment layout under `BINDING_SIG_DOMAIN v3`
-  bumped from `v2`); pin
+  bumped from `v2`; subsequently bumped to **v4 / 7-segment self-bind**
+  by the `issuer_verifying_key` self-bind — the current frozen shape); pin
   `crates/benten-caps/tests/tf3b_audience_substitution_post_sign_rejected.rs`
   exercises the substantive arm + the would-FAIL-on-revert was
   verified (3/3 tests FAIL when binding_message ignores
@@ -1768,10 +1769,10 @@ Row D-15's audit-readiness concern.
 - **Observation (NAMED, not fixed this round):** a 32-bit-`usize` drop/exercise lane (catching `usize`-width assumptions on 32-bit targets) is not in v1-beta CI.
 - **Destination:** **v1-GM CI** (32-bit target lane).
 
-### Row D-49 — C-22: V1-FROZEN item 2 `.d.ts` count `15` → `14`
+### Row D-49 — C-22: V1-FROZEN item 2 `.d.ts` count — RESOLVED (this ledger row was the stale party; main-doc `15` is CORRECT)
 
-- **Observation (NAMED, not fixed this round):** `docs/V1-FROZEN-INTERFACE.md` item 2 (TS public-API parity gate) says the structural diff covers "all 15 `dist/*.d.ts` files"; the baseline `packages/engine/etc/public-api.txt` covers **14** real `.d.ts` modules (atrium, dsl, engine, errors, errors.generated, identity, index, manifest, mermaid, sandbox, stream, subscribe, types, views). Stale count `15` → `14`.
-- **Destination:** the freeze-record cite-precision reconcile sweep that precedes the Ben-gated tag.
+- **Resolution (R21 doc-drift reconcile):** this row originally claimed `docs/V1-FROZEN-INTERFACE.md` item 2's "all 15 `dist/*.d.ts` files" should be `14`. That claim was itself based on a NON-recursive `dist/*.d.ts` mis-count. The main doc actually says "all 15 `dist/**/*.d.ts` files" (RECURSIVE glob), and 15 = the 14 top-level modules (atrium, dsl, engine, errors, errors.generated, identity, index, manifest, mermaid, sandbox, stream, subscribe, types, views) PLUS the publicly-exported `dist/internal/trace.d.ts` subpath the recursive glob reaches. The main-doc `15` is CORRECT; THIS ledger row was the stale party — its `15 → 14` claim is WITHDRAWN. No change to `V1-FROZEN-INTERFACE.md`.
+- **Destination:** resolved inline (no downstream carry).
 
 ### Row D-50 — C-23 / C-24 / C-25: remaining doc-staleness cluster
 
@@ -2477,6 +2478,15 @@ Row D-15's audit-readiness concern.
     unwrapped.as_bytes().to_vec();` in the encryption-arm unwrap path, mirroring
     the hpke.rs copy) — VERIFIED still a bare `Vec<u8>` at HEAD; give it the same
     `Zeroizing` wrap.
+  - **The two `benten-sync` seed stack copies** (R21 F-08 sibling enumeration;
+    `crates/benten-sync/src/transport.rs:~262` +
+    `crates/benten-sync/src/peer_discovery.rs:~220` — each does `let secret_bytes
+    = keypair.secret_bytes_unprotected();` then `SecretKey::from_bytes(&secret_bytes)`
+    to reuse the Ed25519 secret as iroh's QUIC identity) — these are `[u8; 32]`
+    **stack** copies of the raw Ed25519 secret (NOT `Vec<u8>` heap copies like the
+    three sites above), left un-zeroized after `from_bytes` consumes them; the
+    same v1-GM tidy applies — zeroize the `secret_bytes` binding after use
+    (e.g. `zeroize::Zeroizing<[u8; 32]>` or an explicit `.zeroize()`).
 - **Anchor:** R14-council GAP-1 (mint); R15 F-03/F-05/F-08 + R16 F-11 sibling
   enumeration; R18 C3 + MEM-H-1; **R19/#3 secret-hygiene sweep (per-type
   redact+zeroize + `f_secret_hygiene_roster` meta-test LANDED at v1-beta);**
@@ -2489,6 +2499,8 @@ Row D-15's audit-readiness concern.
   `crates/benten-crypto-suite/src/hpke.rs` (`unwrap_key_from_recipient` residual
   return) + `crates/benten-engine/src/layer_d/device_link.rs`
   (`ProvisioningInnerPayload` + the residual `recovered` binding) +
+  `crates/benten-sync/src/transport.rs` + `crates/benten-sync/src/peer_discovery.rs`
+  (the two `[u8; 32]` Ed25519 seed stack copies; R21 F-08) +
   `crates/benten-engine/tests/f_secret_hygiene_roster.rs` (enforcing meta-test);
   `docs/SECURITY-POSTURE.md` Compromise #66 (now CLOSED-at-v1-beta).
 

@@ -147,6 +147,15 @@ device-link / remote-permission flows admit a chosen-recipient-pubkey surface �
 **external-cryptographer-audit deliverable** (§9.3 audit line; Compromise #45 / #59), NOT a unit-test "proof" in
 this doc.
 
+**DropBundle envelope-signature is INTEGRITY-only, NOT origin-authority (R21 F-10).** The outer DropBundle
+`envelope_sig` (`ENVELOPE_SIG_DOMAIN`; `benten_drop::bundle::verify_envelope_signature`) verifies the header bytes
+under the bundle's OWN `issuer_verifying_key` — an attacker-controllable field anchored to nothing on its own, so a
+valid envelope-sig proves only header integrity, never who authored the bundle. **Origin AUTHORITY comes
+exclusively from the `auth_grant`** (the ONE signed `AuthorizationGrant` / UCAN, whose issuer is cryptographically
+self-bound): `consume_offline` verifies the grant binding AND requires `bundle.issuer_verifying_key ==
+auth_grant.issuer_verifying_key`, so a re-authored-header + fresh-key-re-sign ("signature-by-nobody") is rejected
+at the grant-anchor check (the F-INJ-2 / D-42 closure). Never treat the envelope-sig as an origin-authenticator.
+
 **Inner-format domain-separation (single vs group).** The single
 (`benten_drop::layer_c::seal_inner`, `0x6500`/`0x6510`) inner format is domain-separated from the group
 (`benten_drop::layer_c::seal_group_impl`, `0x6520`) inner format by **independently-keyed CEKs plus the outer
@@ -196,7 +205,13 @@ cannot even recover the group CEK; see §4.1 and the `mc_1_non_recipient_cannot_
 `0x6520` CEK derivation from PUBLIC inputs (`body_cid ‖ sender_did ‖ generation`) was a confidentiality break —
 any relay guessing the sender's public DID could recompute the CEK and decrypt the group body — and is **DELETED**.
 The residual `body_cid` low-entropy disclosure below applies to **all** bands (it is a property of the wire
-`body_cid`, not the CEK); the CEK confirmation-oracle below applies to the single-recipient bands **only**.
+`body_cid`, not the CEK). The deterministic-CEK confirmation-oracle below applies **directly** to the
+single-recipient bands (`0x6500`/`0x6510`); the **`0x6610` MembershipSet group** CEK is `K_Set`-keyed and therefore
+**body-deterministic** (UNLIKE the fresh-random `0x6520` group CEK), so a member already holding `K_Set` has the
+same guess-confirmation capability for a `0x6610` send — but that capability is **strictly subsumed by the keyless
+`body_cid` oracle** (which confirms a low-entropy body with NO key material at all, `K_Set` or otherwise), so it
+discloses nothing beyond `body_cid`. Only `0x6520` — fresh-random CEK — has no deterministic-CEK
+confirmation-oracle of any kind; do NOT lump `0x6610` in with it.
 
 **Property (single-recipient bands; additive disclosure; does NOT weaken any claim above).** For the
 single-recipient bands the content-encryption key (CEK) is **deterministically derived** from the plaintext

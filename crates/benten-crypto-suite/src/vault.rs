@@ -708,6 +708,15 @@ pub enum VaultError {
     EngineLocked,
 
     /// The DAK derivation failed (wrong password).
+    ///
+    /// **Intentionally never constructed (F-VA-3).** The wrong-password path
+    /// deliberately surfaces the GENERIC decrypt-failure error
+    /// (`UnlockError::VaultDecryptFailed`), NOT this distinct variant, so that
+    /// "salt off" / "params off" / "tag off" / "wrong password" all land on ONE
+    /// typed error with no error-variant side-channel (the F-VA-3
+    /// single-typed-rejection / constant-time property). Constructing this
+    /// variant would re-introduce the wrong-password oracle F-VA-3 forbids; it is
+    /// retained as a named-but-unused code for API documentation only.
     #[error("wrong password — DAK does not open the vault")]
     WrongPassword,
 

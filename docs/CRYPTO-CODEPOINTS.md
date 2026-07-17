@@ -252,6 +252,8 @@ symbol; a prose-only mention does not count):
 | `0x6310..0x631F` | `DEVICE_LINK_BAND_BASE`/`DEVICE_LINK_BAND_END` | Layer-D DeviceLink (Signal-Provisioning) band | **FREEZE** (R0.7 §4.1; out-of-band integers typed-reject fail-closed) |
 | `0x6320..0x632F` | `REMOTE_PERMISSION_BAND_BASE`/`REMOTE_PERMISSION_BAND_END` | Layer-D RemotePermission band (incl. `ExecuteWorkflow` reserve) | **FREEZE** (R0.7 §4.1 band base; out-of-band integers typed-reject fail-closed; per-slot: `PermissionRequest`/`PermissionGrant` LIVE, `ExecuteWorkflow` reserved-typed-reject at v1-beta) |
 | `0x6700..0x67FF` | `LIFECYCLE_BAND_BASE` | Lifecycle / revocation band | CODEPOINT-RESERVE (band base registered; per-slot allocation at Composing) |
+| `0xFE00..0xFFFE` | `EXPERIMENTAL_BASE` | Experimental range (out-of-band; NOT a suite selector) | CODEPOINT-RESERVE (deliberately OUTSIDE the `0x6100..0x6FFF` envelope band; value-pinned in `f_cp_codepoint_registry_dispatch.rs`) |
+| `0xFFFF` | `EXTENDED_CODEPOINT_ESCAPE` | Extended-codepoint escape (out-of-band) | CODEPOINT-RESERVE (deliberately OUTSIDE the envelope band; also the IANA AEAD Export-only ID per §above; value-pinned in `f_cp_codepoint_registry_dispatch.rs`) |
 
 The in-code wire-lock for the group-band constants is regression-guarded in
 `crates/benten-crypto-suite/tests/f_cp_codepoint_registry_dispatch.rs`

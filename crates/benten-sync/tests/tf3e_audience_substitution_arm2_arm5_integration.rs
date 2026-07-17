@@ -22,7 +22,9 @@
 //! — silent access-theft.
 //!
 //! Post R6-R2-FP-A: `audience_pubkey` is folded into the
-//! binding-message (6-segment layout, `BINDING_SIG_DOMAIN v3`); the
+//! binding-message (`BINDING_SIG_DOMAIN`, now **v4 / 7-segment self-bind**
+//! after the subsequent `issuer_verifying_key` self-bind bump — R6-R2-FP-A
+//! itself landed the v3/6-segment audience_pubkey fold); the
 //! same attacker mutation now causes ARM 5 to surface
 //! `BindingSigInvalid` BEFORE ARM 2's pubkey-comparison admits her.
 //! This pin exercises the production pipeline end-to-end.

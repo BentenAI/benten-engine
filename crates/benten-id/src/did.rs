@@ -424,8 +424,15 @@ impl Did {
     /// previous `from_string_unchecked` blended into surrounding
     /// production code).
     ///
-    /// **NEVER call from production code.** Production callers MUST
-    /// use [`Did::parse_validated`].
+    /// **Not for production code** — enforced by naming convention +
+    /// code review, NOT by the type system: this constructor is `pub`
+    /// and physically callable, so a production-path call is a
+    /// review-flagged regression rather than a compile error. Production
+    /// callers construct DIDs through the validating constructors —
+    /// [`Did::parse_validated`] for a classical `did:key`, or
+    /// [`Did::parse_validated_hybrid`] for the PQ-hybrid `did:key` form —
+    /// so a malformed DID string surfaces a typed [`DidError`] instead of
+    /// silently constructing.
     #[must_use]
     pub fn from_string_for_test_fixture(s: String) -> Self {
         Self(s)
