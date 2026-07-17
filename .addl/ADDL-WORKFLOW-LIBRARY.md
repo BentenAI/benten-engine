@@ -36,6 +36,7 @@ Full catalog in the D-46 research (Agent B). Groups: (A) convergence/termination
 ## Done / not-done log
 
 - 2026-07-17: sub-project kicked off; research complete (Agent A per-script audit + Agent B ~64-discipline catalog); design ratified by Ben; tracking doc + memory + CLAUDE.md pointer created. NEXT: harden `addl-r3-test-writers` as GAP-KDB R3 dogfood #1 (once GAP-KDB R2 `wzf65yc6d` returns its R3 slicing).
+- 2026-07-17 (later): GAP-KDB R2 landscape done (66 families, no holes, R3 slicing ready) → R3 red-phase is DOGFOOD #1. NEXT: harden `addl-r3-test-writers` (config-as-consts + `git show` the R2-landscape doc for the family catalog + schema'd canary GATE + empty/partial-panel control-flow ABORT) then run GAP-KDB R3 W0-canary→GATE→W1∥W2∥W3→W4.
 
 ## Retire list (archive, do not reuse)
 
