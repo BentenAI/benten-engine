@@ -23,7 +23,7 @@ Base = the 6 existing generics (already well-built; harden them). RETIRE the 14 
 |---|---|---|---|
 | `addl-review-council` | R1 / R4 / R4b / R6 | ⬜ harden | add control-flow panel guard; round-state via git-show not default CFG; softSchema in concrete runs; delete dead LENSSET_SCHEMA |
 | `addl-r2-test-landscape` | R2 | ⬜ harden | add empty-discovery ABORT; add adversarial-verify on coverage matrix; iterate-on-completeness |
-| `addl-r3-test-writers` | R3 | ⬜ harden (DOGFOOD #1 — GAP-KDB R3) | replace regex canary-gate with schema'd gate; abort if all waves drop; dynamic wave count from R2 slicing |
+| `addl-r3-test-writers` | R3 | 🔄 DOGFOODING (GAP-KDB R3 `w3bslt84x` in flight) | replace regex canary-gate with schema'd gate; abort if all waves drop; dynamic wave count from R2 slicing |
 | `addl-r5-impl-to-green` | R5 | ⬜ harden (DOGFOOD #2 — GAP-KDB R5) | distinguish dropped-vs-approved waves before success check; config from consts not frozen body |
 | `converging-fix-loop` | R4-fix / R6-fix | ⬜ harden | panel-gate the `converged=true` shortcut; parameterize mainBase/corpusBranch/integWorktree (drop baked absolute path); retire 4 older hardcoded-lens variants |
 | `addl-r1-critic-council` (or reuse review-council@tier=R1) | R1 / pre-work | ⬜ | Pattern-6 architect + adversarial-verify (the f-full-r1* instances lacked verify) |
@@ -41,3 +41,4 @@ Full catalog in the D-46 research (Agent B). Groups: (A) convergence/termination
 ## Retire list (archive, do not reuse)
 
 The 14 `f-full-*` snapshots + `issue-audit.js` — hardcoded round-state; keep as `.addl/phase-4-meta/workflows/_archive-as-run/` for forensic history once the canonical library covers their stages.
+- 2026-07-17 (evening): **DOGFOOD #1 launched** — GAP-KDB R3 `wf-kdb-r3.js` (`w3bslt84x`), hardened vs the canonical: (1) config-as-CONSTS not flaky args; (2) fan-out DROP-GUARD (a dropped wave returns PANEL-INCOMPLETE, never false coverage); (3) waves branch off the CANARY branch so W0's shared fixtures are cross-crate-importable. On return: fold the validated hardening back into the canonical `addl-r3-test-writers`. Gates-wave HELD until R3's canary gate passes (avoid 2 compile-heavy workflows contending).
