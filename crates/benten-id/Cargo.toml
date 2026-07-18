@@ -30,7 +30,14 @@ workspace = true
 # arm) is a workspace CI-config concern OUTSIDE benten-id's lane and
 # is NOT a defect of this feature's design. `cargo test -p benten-id
 # --features testing` runs the arm green (verified).
-testing = []
+# GAP-KDB Shape-B (W0 canary): `kdb_testing` (the shared did:benten /
+# KeySetDocument red-phase fixtures) needs BLAKE3 for the frozen key-set-
+# doc CID commitment (`self_describing_cid(BLAKE3-256(canonical))`). Pulled
+# in as an OPTIONAL dep enabled ONLY by the `testing` feature so production
+# (default-feature) builds are unchanged. At R5 the real
+# `benten_id::keyset::KeySetDocument::cid` needs BLAKE3 in production —
+# promote `blake3` to a regular `[dependencies]` entry then.
+testing = ["dep:blake3"]
 
 [lib]
 # Disable the implicit libtest bench harness. Mirrors crates/benten-core/Cargo.toml.
@@ -52,6 +59,49 @@ required-features = ["testing"]
 # the import) when the feature isn't enabled.
 [[test]]
 name = "keypair"
+required-features = ["testing"]
+
+# GAP-KDB Shape-B (W0 canary) — the did:benten / KeySetDocument / resolver
+# RED-PHASE pins import the `benten_id::kdb_testing` fixtures, which live
+# behind the `testing` feature. Marked `required-features` so a
+# feature-less `cargo test --workspace` silently SKIPS them (rather than
+# failing the `use benten_id::kdb_testing` import). Run with
+# `cargo test -p benten-id --features testing` (bodies stay `#[ignore]`d
+# at R3; un-ignore at R5).
+[[test]]
+name = "kdb_did_benten_codec"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_f_inj_did_benten_reject"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_audit_no_hardcoded_sizes"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_canonical_bytes_v1_keyset"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_f_inj_keyset_strict_canonical"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_resolve_signing_dispatch"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_resolve_kem_fail_closed"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_rk8_generation_precedence_s2"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_dos_keyset_bounded_decode"
 required-features = ["testing"]
 
 # Per arch-r1-10: benten-id MUST NOT depend on benten-graph / benten-engine /
@@ -101,6 +151,10 @@ serde_ipld_dagcbor = { workspace = true }
 bs58 = { workspace = true }
 # Typed-error mapping.
 thiserror = { workspace = true }
+# GAP-KDB Shape-B W0 canary — OPTIONAL, enabled only by `testing`. Powers
+# the frozen KeySetDocument CID commitment in `kdb_testing`. See the
+# `testing` feature note above.
+blake3 = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Proptest carries `prop_keypair_generate_distinct_across_1k_calls`,
@@ -111,3 +165,6 @@ proptest = { workspace = true }
 hex = { workspace = true }
 toml = { workspace = true }
 serde_json = { workspace = true }
+# GAP-KDB Shape-B W0 canary red-phase tests independently recompute the
+# KeySetDocument CID = BLAKE3-256(canonical) to pin the commitment binding.
+blake3 = { workspace = true }

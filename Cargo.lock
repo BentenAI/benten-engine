@@ -541,6 +541,7 @@ dependencies = [
  "benten-core",
  "benten-crypto-suite",
  "benten-errors",
+ "blake3",
  "bs58",
  "getrandom 0.2.17",
  "hex",
