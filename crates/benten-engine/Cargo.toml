@@ -311,6 +311,16 @@ blake3 = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 benten-membership-set = { path = "../benten-membership-set", features = ["testing"] }
 
+# GAP-KDB Shape-B (W3 Fork-A authority-migration): the engine-seam RED-PHASE
+# pins (`kdb_eng_device_envelope_hybrid`, `kdb_eng_ucan_envelope_parity`)
+# import the `benten_id::kdb_testing` fixtures, which live behind benten-id's
+# `testing` feature. benten-id is already a native-only PRODUCTION dep above
+# (no `testing`); this dev-dep unions the `testing` feature into the ENGINE
+# TEST build ONLY (cargo feature unification is per-target — the production
+# lib build's dep-set + v1-frozen-interface surface are unchanged). Native-
+# only for the same reason benten-id itself is (CLAUDE.md baked-in #17).
+benten-id = { path = "../benten-id", features = ["testing"] }
+
 # Phase-3 G19-C2 wave-7 (§7.1) — SANDBOX execution-metrics propagation
 # tests. The `describe_sandbox_node_for_handler` accessor lives behind
 # `cfg(any(test, feature = "test-helpers"))` per Phase-2a sec-r6r2-02

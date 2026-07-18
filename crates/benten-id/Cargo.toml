@@ -104,6 +104,34 @@ required-features = ["testing"]
 name = "kdb_dos_keyset_bounded_decode"
 required-features = ["testing"]
 
+# GAP-KDB Shape-B (W3 Fork-A authority-migration) — UCAN-walk / rotation /
+# device-attestation hybrid-verify + envelope-resize + cross-seam RED-PHASE
+# pins. Same `testing`-feature gate as the W0 canary pins (they import the
+# `benten_id::kdb_testing` fixtures + the crypto-suite composite helpers).
+[[test]]
+name = "kdb_auth_ucan_walk_hybrid"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_auth_helper_grep_audit"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_auth_ucan_envelope_resize"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_auth_rotation_hybrid"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_auth_device_attestation_hybrid"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_seam_authority_drop_key_equality"
+required-features = ["testing"]
+
 # Per arch-r1-10: benten-id MUST NOT depend on benten-graph / benten-engine /
 # benten-eval / benten-caps. The `tests/dependency_edges.rs` pin enforces this
 # (rejects the forbidden set). The allowed set below covers crypto-blocker-1 /
