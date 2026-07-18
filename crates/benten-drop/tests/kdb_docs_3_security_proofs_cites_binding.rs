@@ -93,7 +93,6 @@ fn docs_3_recipient_key_premise_present_baseline() {
 /// honestly-obtained-KEM-key assumption. would-FAIL-on-revert: removing
 /// either cite from the premise flips the arm.
 #[test]
-#[ignore = "RED-PHASE: DOCS-3 §4.1 cites Inv-23/RecipientBinding — lands at R5 doc-wave — un-ignore at R5"]
 fn docs_3_recipient_key_premise_cites_the_binding() {
     let doc = security_proofs();
     let region = recipient_key_premise_region(&doc);
@@ -118,7 +117,6 @@ fn docs_3_recipient_key_premise_cites_the_binding() {
 /// commitment. would-FAIL-on-revert: reverting to the bare
 /// "assume-honestly-obtained" premise (no commitment) flips the arm.
 #[test]
-#[ignore = "RED-PHASE: DOCS-3 §4.1 discharges the address-book assumption — lands at R5 doc-wave — un-ignore at R5"]
 fn docs_3_recipient_key_premise_discharges_address_book_assumption() {
     let doc = security_proofs();
     let region = recipient_key_premise_region(&doc);

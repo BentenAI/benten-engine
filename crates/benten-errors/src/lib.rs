@@ -1264,6 +1264,29 @@ pub enum ErrorCode {
     /// CBOR field / golden vector changes.
     DropBundleEnvelopeIssuerMismatch,
 
+    // ----- Phase 4-Meta-Core GAP-KDB Shape-B — recipient-binding closure (1 code) -----
+    //
+    /// Phase 4-Meta-Core (GAP-KDB Shape-B recipient-binding closure, Inv-23):
+    /// a Layer-C Drop seal was refused because the recipient KEM key is NOT
+    /// committed by its audience `did:benten` — the audience DID's key-set
+    /// document did not hash to the DID's committed CID (a BLAKE3-256
+    /// 2nd-preimage), so no `RecipientBinding` could be constructed and the
+    /// KEM key an attacker tried to substitute is rejected fail-closed. The
+    /// live typed-reject arm is `did:benten` resolve_kem
+    /// (`benten_id::did::Did::resolve_kem` → `DidError::{NoKemCommitment,
+    /// KeysetCommitmentMismatch, …}`) consumed by
+    /// `benten_drop::layer_c::RecipientBinding::resolve`. Consistent with the
+    /// sibling reserved Drop codes (`DropBundleEnvelopeIssuerMismatch`), this
+    /// `benten_errors::ErrorCode` catalog surface is RESERVED — the
+    /// boundary-lift into the engine-wide catalog lands at the G-CORE-9
+    /// v1-interface freeze when the outbound-Drop API surface stabilizes; the
+    /// drift-detector `reachability: ignore` annotation on the catalog row
+    /// names this reservation. This is a construction-side guarantee (the
+    /// substitutable `(recipient_pub, audience_did)` seal API is DELETED), so
+    /// the typed reject IS the defense; no wire byte / CBOR field / golden
+    /// vector changes.
+    RecipientKemNotCommitted,
+
     // ----- Phase 4-Meta-Core G-CORE-8 — security-surface lock (4 codes) -----
     //
     // G-CORE-8 §4.36 fail-CLOSED flip + §4.37 InstallRecord replay defense +
@@ -1801,6 +1824,7 @@ impl ErrorCode {
             ErrorCode::DropBundleVersionUnsupported => "E_DROP_BUNDLE_VERSION_UNSUPPORTED",
             ErrorCode::DropBundleMode3InlineRejected => "E_DROP_BUNDLE_MODE3_INLINE_REJECTED",
             ErrorCode::DropBundleEnvelopeIssuerMismatch => "E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH",
+            ErrorCode::RecipientKemNotCommitted => "E_RECIPIENT_KEM_NOT_COMMITTED",
             // G-CORE-8 §4.36/§4.37/§4.23/§4.22 — single-line per drift-detect regex.
             #[rustfmt::skip]
             ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny => "E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY",
@@ -2304,6 +2328,11 @@ impl ErrorCode {
             ErrorCode::DropBundleVersionUnsupported => None,
             ErrorCode::DropBundleMode3InlineRejected => None,
             ErrorCode::DropBundleEnvelopeIssuerMismatch => None,
+            // GAP-KDB Shape-B — the substituted-KEM-key seal reject is a
+            // construction-side typed reject (Inv-23); re-routing through
+            // `ON_ERROR` would defeat the recipient-binding commitment the
+            // resolve_kem 2nd-preimage check exists to enforce.
+            ErrorCode::RecipientKemNotCommitted => None,
 
             // G-CORE-3e (Phase 4-Meta-Core) — per-request UCAN-blobs
             // protocol typed rejects. All three route to `ON_DENIED`
@@ -2684,6 +2713,7 @@ impl core::str::FromStr for ErrorCode {
             "E_DROP_BUNDLE_VERSION_UNSUPPORTED" => ErrorCode::DropBundleVersionUnsupported,
             "E_DROP_BUNDLE_MODE3_INLINE_REJECTED" => ErrorCode::DropBundleMode3InlineRejected,
             "E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH" => ErrorCode::DropBundleEnvelopeIssuerMismatch,
+            "E_RECIPIENT_KEM_NOT_COMMITTED" => ErrorCode::RecipientKemNotCommitted,
             // Phase 4-Meta-Core G-CORE-8 security-surface lock.
             "E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY" => {
                 ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny

@@ -78,11 +78,13 @@ fn docs_4_threat_model_trust_tiers_present_baseline() {
         "THREAT-MODEL.md MUST enumerate the Network-observer + Untrusted-host \
          tiers (the recipient-key threat surface the closure note extends)."
     );
-    // Sanity: at the R3 base neither residual is disclosed yet.
+    // Post-R5 (GAP-KDB doc-wave): the closure note landed — the sanity guard
+    // flips from "Inv-23 absent at R3 base" to "Inv-23 now cited", a live
+    // post-condition co-pinning the R5 closure alongside the RED arms below.
     assert!(
-        !doc.contains("Inv-23"),
-        "sanity: at the R3 freeze base THREAT-MODEL does not yet cite Inv-23; \
-         if this fires the base already carries the closure note (re-base RED)."
+        doc.contains("Inv-23"),
+        "post-R5: THREAT-MODEL now cites Inv-23 (the recipient-key closure the \
+         R5 doc-wave added). The parser recovers it FROM the on-disk doc."
     );
 }
 
@@ -97,7 +99,6 @@ fn docs_4_threat_model_trust_tiers_present_baseline() {
 /// on the recipient side. would-FAIL-on-revert: dropping the closure note
 /// leaves the rung silently trusting an honest address book.
 #[test]
-#[ignore = "RED-PHASE: DOCS-4 THREAT-MODEL recipient-key closure — lands at R5 doc-wave — un-ignore at R5"]
 fn docs_4_threat_model_recipient_key_closure() {
     let doc = threat_model();
     assert!(
@@ -127,7 +128,6 @@ fn docs_4_threat_model_recipient_key_closure() {
 /// would-FAIL-on-revert: dropping the seal-path-revocation-reach note (or
 /// conflating it into #67) fails the arm.
 #[test]
-#[ignore = "RED-PHASE: DOCS-4 seal-path revocation-reach residual — lands at R5 doc-wave — un-ignore at R5"]
 fn docs_4_seal_path_revocation_reach_residual_distinct_from_67() {
     let doc = threat_model();
     let lc = doc.to_lowercase();
@@ -163,14 +163,16 @@ fn docs_4_seal_path_revocation_reach_residual_distinct_from_67() {
 /// would-FAIL-on-revert: dropping the offline-first-send disclosure (or
 /// folding it into #67 / revocation-reach without a distinct name) fails.
 #[test]
-#[ignore = "RED-PHASE: DOCS-8 offline-first-send doc-availability disclosure — lands at R5 doc-wave — un-ignore at R5"]
 fn docs_8_offline_first_send_availability_residual_distinct() {
     let doc = threat_and_posture();
     let lc = doc.to_lowercase();
     // The residual is named: first-send to an uncached contact needs the
     // key-set doc; offline + uncached = cannot send.
     let discloses_availability = lc.lines().any(|l| {
-        (l.contains("offline") || l.contains("uncached") || l.contains("first-send") || l.contains("first send"))
+        (l.contains("offline")
+            || l.contains("uncached")
+            || l.contains("first-send")
+            || l.contains("first send"))
             && (l.contains("key-set") || l.contains("keyset") || l.contains("key set"))
     });
     assert!(
@@ -183,7 +185,10 @@ fn docs_8_offline_first_send_availability_residual_distinct() {
     // Distinctness: named as its own residual, not merely #67 or the
     // revocation-reach gap.
     let distinct = lc.contains("distinct from")
-        && (lc.contains("offline") || lc.contains("availability") || lc.contains("first-send") || lc.contains("first send"));
+        && (lc.contains("offline")
+            || lc.contains("availability")
+            || lc.contains("first-send")
+            || lc.contains("first send"));
     assert!(
         distinct,
         "the offline-first-send residual MUST be marked DISTINCT (from both \

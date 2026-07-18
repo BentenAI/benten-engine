@@ -18,6 +18,20 @@
 //! byte-string headers, cp values) is inspectable end-to-end. At R5 the
 //! production encoder MUST reproduce these bytes byte-for-byte.
 //!
+//! # TIER-A golden R5-note — SHARPENED (freeze-byte safety)
+//! This is a **TIER-A freezes-permanent-bytes** golden: these bytes become
+//! the v1-beta `KeySetDocument` wire. **A byte-divergence here is an ENCODER
+//! BUG to FIX, never a golden to hand-edit.** The R3 golden was captured from
+//! a stub + hand-verified; if the R5 production encoder reproduces DIFFERENT
+//! bytes, do NOT edit the frozen literal to match the encoder — that would
+//! freeze the encoder's bug into the permanent wire (an unrecoverable
+//! v1-beta mistake). Instead: re-derive the golden from the REAL encoder via
+//! an M-20 throwaway, diff it against the frozen literal, and if they differ
+//! either FIX the encoder (the usual case) or — only if the divergence is a
+//! deliberate, reviewed spec change — update the literal AND flag it
+//! FOR-BEN with `stub=… real=…`. Reconcile to real bytes; NEVER weaken the
+//! `assert_eq` to make a wrong encoder pass.
+//!
 //! # would_fail_on_revert
 //! A production encoder that reorders keys, uses indefinite lengths, emits
 //! a different field set, or a different cp value produces bytes `!=` the

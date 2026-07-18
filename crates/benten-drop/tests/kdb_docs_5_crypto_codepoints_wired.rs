@@ -43,7 +43,8 @@ fn crypto_codepoints() -> String {
 /// allocation-table shape the `f_disc_2` catch-net uses). Guards against a
 /// bare prose mention.
 fn registered_on_one_row(doc: &str, value: &str, binding: &str) -> bool {
-    doc.lines().any(|l| l.contains(value) && l.contains(binding))
+    doc.lines()
+        .any(|l| l.contains(value) && l.contains(binding))
 }
 
 // ===========================================================================
@@ -69,11 +70,13 @@ fn docs_5_codepoint_doc_recovers_live_codepoints_baseline() {
          0x1211 bound to `mldsa-65-pub` (the signing multikey component the \
          did:benten layout reuses)."
     );
-    // Sanity: at the R3 base did:benten is not yet registered.
+    // Post-R5 (GAP-KDB doc-wave): the did:benten method registration landed —
+    // the sanity guard flips from "absent at R3 base" to "now registered", a
+    // live post-condition co-pinning the R5 wiring alongside the RED arms.
     assert!(
-        !doc.contains("did:benten"),
-        "sanity: at the R3 freeze base CRYPTO-CODEPOINTS does not yet register \
-         the did:benten method; if this fires, re-base the RED arm."
+        doc.contains("did:benten"),
+        "post-R5: CRYPTO-CODEPOINTS now registers the did:benten method (the R5 \
+         doc-wave WIRED 0x120c/0xec + registered did:benten + retired 0xf0)."
     );
 }
 
@@ -91,7 +94,6 @@ fn docs_5_codepoint_doc_recovers_live_codepoints_baseline() {
 /// "when-wired"/`0xf0` interim removes the KeySetDocument/did:benten
 /// binding of 0x120c/0xec.
 #[test]
-#[ignore = "RED-PHASE: DOCS-5 0x120c/0xec WIRED to KeySetDocument kem — lands at R5 doc-wave — un-ignore at R5"]
 fn docs_5_wires_0x120c_0xec_into_keyset() {
     let doc = crypto_codepoints();
     let wired = |value: &str| {
@@ -123,7 +125,6 @@ fn docs_5_wires_0x120c_0xec_into_keyset() {
 /// the R3 base (0 hits). would-FAIL-on-revert: dropping the did:benten
 /// registration removes the mention.
 #[test]
-#[ignore = "RED-PHASE: DOCS-5 did:benten method registered — lands at R5 doc-wave — un-ignore at R5"]
 fn docs_5_registers_did_benten_method() {
     let doc = crypto_codepoints();
     assert!(
@@ -154,7 +155,6 @@ fn docs_5_registers_did_benten_method() {
 /// Absent at the R3 base (no "retired" language). would-FAIL-on-revert:
 /// removing the retirement note (0xf0 silently stays live) flips the arm.
 #[test]
-#[ignore = "RED-PHASE: DOCS-5 0xf0 HYBRID_KEM_MULTICODEC retired — lands at R5 doc-wave — un-ignore at R5"]
 fn docs_5_retires_0xf0_hybrid_kem_multicodec() {
     let doc = crypto_codepoints();
     let retired = doc.lines().any(|l| {

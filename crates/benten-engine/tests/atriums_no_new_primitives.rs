@@ -176,14 +176,17 @@ fn exit_criterion_13_no_new_structural_invariants_companion_to_no_new_primitive_
         })
         .count();
     assert_eq!(
-        count, 22,
-        "INVARIANT-COVERAGE.md must list exactly 22 invariants per \
+        count, 23,
+        "INVARIANT-COVERAGE.md must list exactly 23 invariants per \
          CLAUDE.md baked-in commitment + Phase-3 exit-criterion 13 + \
          Phase-4-Meta-Core Inv-15 mint + the Ben-ratified F-full freeze record \
+         + the GAP-KDB Shape-B Inv-23 mint \
          (14 from Phase 4-Foundation + Inv-15 for the LAMPS EUF-CMA-only \
          3-layer-decomposition per Compromise #31 + Inv-16..22 the F-full \
          design-mints: envelope-unification / hybrid-mandatory-floor / \
          codepoint-registry / keying-discipline / MembershipSet-primitive / \
-         fork-tie-break / member-nature-derived) (got {count})"
+         fork-tie-break / member-nature-derived + Inv-23 the GAP-KDB \
+         recipient-binding closure: a Layer-C seal's KEM key is committed by \
+         its audience DID) (got {count})"
     );
 }

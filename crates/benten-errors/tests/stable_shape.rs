@@ -570,6 +570,21 @@ const ALL_CATALOG_VARIANTS: &[ErrorCode] = &[
     // ERROR-CATALOG.md + this list/count in the SAME commit.
     // CATALOG_VARIANT_COUNT 199 -> 200.
     ErrorCode::DropBundleEnvelopeIssuerMismatch,
+    // Phase 4-Meta-Core (GAP-KDB Shape-B recipient-binding closure, Inv-23):
+    // `E_RECIPIENT_KEM_NOT_COMMITTED` — a Layer-C Drop seal was refused
+    // because the recipient KEM key is NOT committed by its audience
+    // `did:benten` (the key-set doc did not hash to the DID's committed CID —
+    // a BLAKE3-256 2nd-preimage), so `RecipientBinding::resolve` fails closed
+    // and the substituted KEM key is rejected. Live typed-reject arm:
+    //   `benten_id::did::Did::resolve_kem` (→ `DidError::{NoKemCommitment,
+    //   KeysetCommitmentMismatch, …}`) consumed by
+    //   `benten_drop::layer_c::RecipientBinding::resolve`. Reserved catalog
+    //   surface (like `DropBundleEnvelopeIssuerMismatch`); boundary-lift at
+    //   the G-CORE-9 v1-interface freeze.
+    // §3.5g atomic mint: Rust variant + `errors.generated.ts` +
+    // ERROR-CATALOG.md + this list/count in the SAME commit.
+    // CATALOG_VARIANT_COUNT 200 -> 201.
+    ErrorCode::RecipientKemNotCommitted,
     // Phase 4-Meta-Core G-CORE-8 — security-surface lock (4 codes;
     // §4.36 fail-CLOSED flip + §4.37 InstallRecord replay + §4.23
     // user-DID root write-boundary chain validator + §4.22 thin-
@@ -1102,8 +1117,17 @@ fn variant_count_is_pinned() {
     // F-INJ-2 (Phase-4-Meta-Core pre-freeze): +1 for
     // `DropBundleEnvelopeIssuerMismatch` (Drop envelope-issuer anchoring).
     // 199 -> 200.
+    // GAP-KDB Shape-B (Phase-4-Meta-Core, W4 docs-invariants): +1 for
+    // `RecipientKemNotCommitted` (`E_RECIPIENT_KEM_NOT_COMMITTED`) — the
+    // Layer-C seal reject when the recipient KEM key is not committed by its
+    // audience did:benten (Inv-23; resolve_kem / RecipientBinding 2nd-preimage
+    // fail-closed). §3.5g atomic mint across all four surfaces. 200 -> 201.
+    // (NOTE: the parallel GAP-KDB W2 benten-drop flagship wave uses the
+    // crate-local `RecipientBindingError`, NOT a throwable — no double-mint;
+    // the strategy-C integrator reconciles the count if any sibling wave also
+    // mints, per the historical #1319↔#1318 collision pattern.)
     assert_eq!(
-        CATALOG_VARIANT_COUNT, 200,
+        CATALOG_VARIANT_COUNT, 201,
         "CATALOG_VARIANT_COUNT drift — update this value AND docs/ERROR-CATALOG.md in the same commit",
     );
 }
@@ -1369,6 +1393,9 @@ fn catalog_variant_count_matches_enum() {
             // F-INJ-2: Drop envelope-issuer anchoring reject — verify-time
             // anchor of the envelope-sig to the trusted grant issuer.
             | ErrorCode::DropBundleEnvelopeIssuerMismatch
+            // GAP-KDB Shape-B (Inv-23): recipient KEM key not committed by
+            // its audience did:benten — the seal-side 2nd-preimage reject.
+            | ErrorCode::RecipientKemNotCommitted
             // Phase 4-Meta-Core G-CORE-8 security-surface lock:
             // fail-closed typed-rejects at the recheck / install /
             // write-boundary / thin-client-bridge boundaries.

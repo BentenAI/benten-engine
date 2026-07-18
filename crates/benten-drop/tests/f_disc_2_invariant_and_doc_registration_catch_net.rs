@@ -144,29 +144,37 @@ fn f_disc_2_registers_inv_16_through_22() {
     );
 }
 
-/// PIN 2 — header invariant-COUNT is the correct end-state (M-15) AND
-/// Inv-15 is NOT RE-registered (no duplicate). The header count MUST
-/// equal the highest registered invariant (22). Would-FAIL if the header
-/// drifts from the body (a classic registry-drift) or Inv-15 is duplicated.
+/// PIN 2 — header invariant-COUNT is the correct end-state (M-15 + GAP-KDB)
+/// AND Inv-15 is NOT RE-registered (no duplicate). The header count MUST
+/// equal the highest registered invariant. Would-FAIL if the header drifts
+/// from the body (a classic registry-drift) or Inv-15 is duplicated.
+///
+/// **GAP-KDB Shape-B update:** the end-state advanced 22 → **23** when the
+/// GAP-KDB recipient-binding closure minted **Inv-23** ("a Layer-C seal's
+/// KEM key is committed by its audience DID"; design §5). This catch-net
+/// tracks the current highest — bumping it here is the coupled consequence
+/// of the ratified Inv-23 mint (like a CATALOG_VARIANT_COUNT bump).
 #[test]
 fn f_disc_2_header_count_correct_and_inv15_not_re_registered() {
     let doc = invariant_coverage_md();
     let invs = registered_invariants(&doc);
     let highest = invs.iter().copied().max().unwrap_or(0);
     assert_eq!(
-        highest, 22,
-        "the highest registered invariant MUST be Inv-22 at the F-full \
-         end-state. Got highest = Inv-{highest}."
+        highest, 23,
+        "the highest registered invariant MUST be Inv-23 at the GAP-KDB \
+         Shape-B end-state (Inv-16..22 F-full + Inv-23 GAP-KDB). Got highest \
+         = Inv-{highest}."
     );
-    // The header MUST name the count (22) — drift-defense between header
+    // The header MUST name the count (23) — drift-defense between header
     // and body. We look for the literal count token near a header marker.
     assert!(
-        doc.contains("22 invariant")
-            || doc.contains("22 Invariant")
-            || doc.contains("Inv-1..Inv-22")
-            || doc.contains("Inv-1 .. Inv-22"),
+        doc.contains("23 invariant")
+            || doc.contains("23 Invariant")
+            || doc.contains("Inv-1..Inv-23")
+            || doc.contains("Inv-1 .. Inv-23"),
         "the INVARIANT-COVERAGE.md header MUST state the end-state count \
-         (22 invariants) so header and body don't drift (M-15)."
+         (23 invariants) so header and body don't drift (M-15 + GAP-KDB \
+         Inv-23)."
     );
     // Inv-15 appears, but MUST NOT be RE-registered as a NEW row in the
     // F-full mint block (no duplicate registration). We bound the count of

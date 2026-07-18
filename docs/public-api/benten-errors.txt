@@ -112,6 +112,7 @@ pub benten_errors::ErrorCode::PluginPerDelegationDenied
 pub benten_errors::ErrorCode::PluginPrivateNamespaceDelegationForbidden
 pub benten_errors::ErrorCode::PrimitiveNotImplemented
 pub benten_errors::ErrorCode::ProductionRequiresCaps
+pub benten_errors::ErrorCode::RecipientKemNotCommitted
 pub benten_errors::ErrorCode::RecipientLacksKeysForSuite
 pub benten_errors::ErrorCode::RegistryDiscoveryTimeout
 pub benten_errors::ErrorCode::ReloadSubscriberUnsubscribed

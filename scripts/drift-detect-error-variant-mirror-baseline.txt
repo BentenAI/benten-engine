@@ -115,6 +115,32 @@ DidError::HybridTrailingBytes
 DidError::InvalidHybridPublicKey
 DidError::InvalidPrefix
 DidError::UnknownMulticodec
+# # GAP-KDB Shape-B wave addition (2026-07) — 10 NEW DidError variants
+#
+# The GAP-KDB Shape-B recipient-binding closure (W0 canary) added 10
+# resolution/codec-path typed variants on the existing `DidError` enum for the
+# `did:benten` method + `Did::resolve_kem` / `Did::resolve_signing` fail-closed
+# rejects. These are EXACTLY the same category as the pre-existing baselined
+# `DidError::{BodyTooShort, HybridTrailingBytes, UnknownMulticodec}` above:
+# `DidError` has NO `code() -> ErrorCode` mapping (its `code()` returns a
+# `&'static str`) and does NOT itself cross the napi/wire/ErrorCode catalog
+# surface — it is a `Did::resolve_kem` / codec typed-reject error. Externally,
+# these surface at the Layer-C `RecipientBinding::resolve` seal boundary as the
+# SINGLE reserved catalog code `E_RECIPIENT_KEM_NOT_COMMITTED`
+# (`benten_errors::ErrorCode::RecipientKemNotCommitted`; ERROR-CATALOG.md), the
+# GAP-KDB throwable minted by the W4 docs-invariants wave. They join the SAME
+# NAMED-DEFERRED post-FREEZE §3.5g item 6 drain wave as the sibling `DidError`
+# variants (the whole `DidError` type is in the PRE-FREEZE-BACKLOG drain row).
+DidError::InvalidKeysetCid
+DidError::KeysetBelowPqFloor
+DidError::KeysetCommitmentMismatch
+DidError::KeysetDocMalformed
+DidError::KeysetDocNonCanonical
+DidError::KeysetDocTooLong
+DidError::KeysetDocUnsupportedVersion
+DidError::KeysetEmbeddedSigningMismatch
+DidError::MalformedKemMultikey
+DidError::NoKemCommitment
 DidRotationError::HlcNotStrictlyMonotonic
 DidRotationError::PreviousDidMismatch
 DidRotationError::VerbatimReplay
