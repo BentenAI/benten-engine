@@ -193,13 +193,22 @@ x25519-dalek = { version = "2", default-features = false, features = ["alloc", "
 # `wasm32-unknown-unknown` build of the whole crate is NOT
 # getrandom-free and its entropy/getrandom-backend story on that target is
 # CI-unexercised (native-only by dep-graph today; see
-# `docs/future/phase-3-backlog.md`). Pinned EXACTLY (`=0.0.9`) per the spike's
+# `docs/future/phase-3-backlog.md`). Pinned EXACTLY (`=0.0.10`) per the spike's
 # maturity caveat (libcrux-ml-kem is pre-0.1; expect API/SemVer churn —
 # vendor-lock the audited version; the NF-2 / C-GM-AUDIT covers whichever
 # impl is pinned at v1-GM). NOT a crypto-primitive FORK — this is the ONLY
 # crypto-primitive call site wrapping a vetted upstream crate per
 # CLAUDE.md baked-in #5 / crypto-agility-contract:6.
-libcrux-ml-kem = { version = "=0.0.9", default-features = false, features = ["mlkem768"] }
+# BUMP 0.0.9 -> 0.0.10 (Ben-ratified 2026-07-18): clears RUSTSEC-2026-0207 +
+# -0208 (libcrux-sha3 SHAKE bugs) + RUSTSEC-2026-0212 (libcrux-secrets CT
+# swap/select on aarch64) via the transitive chain (libcrux-sha3 =0.0.10 +
+# libcrux-secrets =0.0.6). VERIFIED byte-identical: every FIPS-203/204 KAT +
+# X-Wing + DAK + keyset/DID golden reproduces the frozen bytes unchanged
+# (0.0.10 is a bugfix-only release on the portable/verified backend Benten
+# uses). 0.0.10 pulls bindgen/clang-sys as HOST build-deps — these run on the
+# build host, not the wasm target, so the wasm32 required builds are
+# unaffected (validated pre-commit).
+libcrux-ml-kem = { version = "=0.0.10", default-features = false, features = ["mlkem768"] }
 chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc", "getrandom", "rand_core"] }
 hkdf = { version = "0.12", default-features = false }
 
