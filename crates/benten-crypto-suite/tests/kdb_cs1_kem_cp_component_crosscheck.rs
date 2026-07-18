@@ -81,24 +81,21 @@ fn concat(a: Vec<u8>, b: Vec<u8>) -> Vec<u8> {
     out
 }
 
-/// The CS-1 logic-under-test (RED-PHASE stub → real entry at R5). Mirror
-/// of `kdb_cs1_kem_recipient_wiring.rs::cs1_shim`.
+/// The CS-1 logic-under-test — delegates to the real crypto-suite entry
+/// [`RecipientPublic::from_kem_multikey`]. Mirror of
+/// `kdb_cs1_kem_recipient_wiring.rs::cs1_shim`.
 mod cs1_shim {
     use super::RecipientPublic;
-    use benten_crypto_suite::AeadError;
+    use benten_crypto_suite::{AeadError, CipherSuiteCodepoint};
 
     /// See `kdb_cs1_kem_recipient_wiring.rs` for the full contract. Here
     /// the exercised property is step 2: the `kem_cp ⟺ component-codec`
     /// cross-check that fails closed on algorithm confusion (C2).
     pub fn recipient_public_from_kem_multikey(
-        _kem_cp: u16,
-        _kem_multikey: &[u8],
+        kem_cp: u16,
+        kem_multikey: &[u8],
     ) -> Result<RecipientPublic, AeadError> {
-        todo!(
-            "RED-PHASE (CS-1): kem_cp⟺components cross-check (C2 \
-             algorithm-confusion defense) lands at R5 (GAP-KDB-B W1). \
-             un-ignore then."
-        )
+        RecipientPublic::from_kem_multikey(CipherSuiteCodepoint::from_raw(kem_cp), kem_multikey)
     }
 }
 
@@ -114,7 +111,6 @@ const CLASSICAL: u16 = 0x6400;
 /// leading ML-KEM bytes as the x25519 half. Only the component-ORDER
 /// cross-check (x25519 MUST lead) rejects it.
 #[test]
-#[ignore = "RED-PHASE: CS-1 PQ-first kem multikey rejected (C2 X25519-first freeze) — un-ignore at R5"]
 fn cs1_crosscheck_rejects_pq_first_order() {
     let pq_first = concat(
         frame(MLKEM768_PUB_MULTICODEC, &mlkem768_ek_filler()),
@@ -137,7 +133,6 @@ fn cs1_crosscheck_rejects_pq_first_order() {
 /// (`0x120c`) that `0x647a` mandates. The payload length is correct for
 /// `0x647a`, so ONLY the codec cross-check rejects.
 #[test]
-#[ignore = "RED-PHASE: CS-1 wrong ML-KEM parameter codec (0x120d) rejected under 0x647a — un-ignore at R5"]
 fn cs1_crosscheck_rejects_wrong_mlkem_parameter_codec() {
     let confused = concat(
         frame(X25519_PUB_MULTICODEC, &x25519_filler()),
@@ -160,7 +155,6 @@ fn cs1_crosscheck_rejects_wrong_mlkem_parameter_codec() {
 /// `x25519-pub` KEM codec `0x647a` mandates. Wrong-role confusion; payload
 /// length correct so only the cross-check rejects.
 #[test]
-#[ignore = "RED-PHASE: CS-1 signing codec (0xed) in the KEM slot rejected under 0x647a — un-ignore at R5"]
 fn cs1_crosscheck_rejects_signing_codec_in_kem_slot() {
     let confused = concat(
         frame(ED25519_PUB_MULTICODEC, &x25519_filler()),
@@ -184,7 +178,6 @@ fn cs1_crosscheck_rejects_signing_codec_in_kem_slot() {
 /// rejects it earlier at the codec-SET level with an algorithm-confusion
 /// error rather than a length error.)
 #[test]
-#[ignore = "RED-PHASE: CS-1 classical-only component set rejected under hybrid 0x647a — un-ignore at R5"]
 fn cs1_crosscheck_rejects_classical_only_components_under_hybrid() {
     let classical_only = frame(X25519_PUB_MULTICODEC, &x25519_filler());
     let outcome = cs1_shim::recipient_public_from_kem_multikey(HYBRID, &classical_only);
@@ -203,7 +196,6 @@ fn cs1_crosscheck_rejects_classical_only_components_under_hybrid() {
 /// ML-KEM `0x120c` component is present. The reverse-direction confusion
 /// (a below-PQ-floor suite carrying PQ bytes it will not use).
 #[test]
-#[ignore = "RED-PHASE: CS-1 hybrid component set rejected under classical 0x6400 — un-ignore at R5"]
 fn cs1_crosscheck_rejects_hybrid_components_under_classical() {
     let hybrid_components = concat(
         frame(X25519_PUB_MULTICODEC, &x25519_filler()),

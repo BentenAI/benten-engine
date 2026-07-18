@@ -181,6 +181,7 @@ pub struct benten_crypto_suite::cipher_suite::RecipientPublic
 impl benten_crypto_suite::cipher_suite::RecipientPublic
 pub const fn benten_crypto_suite::cipher_suite::RecipientPublic::codepoint(&self) -> benten_crypto_suite::codepoint::CipherSuiteCodepoint
 pub fn benten_crypto_suite::cipher_suite::RecipientPublic::from_bytes(benten_crypto_suite::codepoint::CipherSuiteCodepoint, &[u8]) -> core::result::Result<Self, benten_crypto_suite::aead::AeadError>
+pub fn benten_crypto_suite::cipher_suite::RecipientPublic::from_kem_multikey(benten_crypto_suite::codepoint::CipherSuiteCodepoint, &[u8]) -> core::result::Result<Self, benten_crypto_suite::aead::AeadError>
 pub fn benten_crypto_suite::cipher_suite::RecipientPublic::to_bytes(&self) -> alloc::vec::Vec<u8>
 impl core::marker::Freeze for benten_crypto_suite::cipher_suite::RecipientPublic
 impl core::marker::Send for benten_crypto_suite::cipher_suite::RecipientPublic
