@@ -35,8 +35,8 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_crypto_suite::sig::{self, HybridSignature};
 use benten_crypto_suite::SignatureSuite;
+use benten_crypto_suite::sig::{self, HybridSignature};
 use benten_id::CanonicalBytes;
 use benten_id::did::Did;
 use benten_id::did_rotation::{RotationAttestation, RotationLog, rotate_keypair};
@@ -59,25 +59,22 @@ const HLC_BASE: u64 = 1_900_000_000;
 // ─────────────────────────────────────────────────────────────────────────
 
 fn r5_rotation_verify(
-    _att: &RotationAttestation,
-    _prev_signing_pk: &sig::PublicKey,
+    att: &RotationAttestation,
+    prev_signing_pk: &sig::PublicKey,
 ) -> Result<(), DidRotationError> {
-    todo!(
-        "RED-PHASE (AUTH-8): RotationAttestation hybrid verify lands at R5. \
-         Body := att.verify_signature_with(prev_signing_pk) once it takes a composite key. \
-         un-ignore then."
-    )
+    // R5: `verify_signature_with` now takes any `ToSigningKey` and routes
+    // through the single Fork-A `authority_verify` helper — a composite
+    // `sig::PublicKey` dispatches the hybrid verify.
+    att.verify_signature_with(prev_signing_pk)
 }
 
 fn r5_accept_rotation_event(
-    _log: &mut RotationLog,
-    _att: &RotationAttestation,
+    log: &mut RotationLog,
+    att: &RotationAttestation,
 ) -> Result<(), DidRotationError> {
-    todo!(
-        "RED-PHASE (AUTH-9): accept_rotation_event hybrid authenticity gate lands at R5. \
-         Body := log.accept_rotation_event(att) once the gate resolve_signing's the \
-         did:benten prev + hybrid-verifies BEFORE HLC/replay. un-ignore then."
-    )
+    // R5: the authenticity gate resolve_signing's the did:benten prev and
+    // hybrid-verifies BEFORE the HLC / verbatim-replay checks.
+    log.accept_rotation_event(att)
 }
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
@@ -98,7 +95,12 @@ fn benten_did_for(signer: &sig::Keypair, tag: &str) -> Did {
 /// A rotation attestation from `prev` → `next` (both did:benten),
 /// signed with `sig_wire` (caller-chosen manipulation). `sig_wire` is
 /// over `to_canonical_bytes` = `(previous_did, next_did, superseded_at)`.
-fn benten_rotation(prev: &Did, next: &Did, superseded_at: u64, sig_wire: Vec<u8>) -> RotationAttestation {
+fn benten_rotation(
+    prev: &Did,
+    next: &Did,
+    superseded_at: u64,
+    sig_wire: Vec<u8>,
+) -> RotationAttestation {
     RotationAttestation {
         previous_did: prev.as_str().to_string(),
         next_did: next.as_str().to_string(),
@@ -115,7 +117,6 @@ fn composite_sign_rotation(signer: &sig::Keypair, att: &RotationAttestation) -> 
 // ── AUTH-8 — RotationAttestation verify: did:benten prev composite ────────
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-8 rotation verify did:benten prev composite (positive) — un-ignore at R5"]
 fn auth8_did_benten_prev_composite_rotation_verifies() {
     let prev_signer = kdb::hybrid_keypair();
     let next_signer = kdb::hybrid_keypair();
@@ -133,7 +134,6 @@ fn auth8_did_benten_prev_composite_rotation_verifies() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-8 rotation verify did:benten prev PQ-strip rejects — un-ignore at R5"]
 fn auth8_did_benten_prev_pq_stripped_rotation_rejects() {
     let prev_signer = kdb::hybrid_keypair();
     let next_signer = kdb::hybrid_keypair();
@@ -161,7 +161,6 @@ fn auth8_did_benten_prev_pq_stripped_rotation_rejects() {
 // ── AUTH-9 — accept_rotation_event authenticity gate BEFORE HLC/replay ────
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-9 accept_rotation_event hybrid authenticity gate fails-closed before HLC — un-ignore at R5"]
 fn auth9_pq_stripped_rotation_rejects_at_authenticity_gate_and_is_not_recorded() {
     let prev_signer = kdb::hybrid_keypair();
     let next_signer = kdb::hybrid_keypair();

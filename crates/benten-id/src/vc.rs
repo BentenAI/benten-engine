@@ -86,14 +86,13 @@
 //! `crates/benten-id/tests/graph_encoded.rs` (named destination per
 //! HARD RULE rule-12 disposition (b)).
 
-use benten_crypto_suite::primitives::ed25519_dalek::{Signature, Signer, Verifier};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Mutex;
 
 use crate::did::Did;
 use crate::errors::VcError;
-use crate::keypair::{Keypair, PublicKey};
+use crate::keypair::Keypair;
 
 /// W3C VC v1.1 `@context` literal — the primary VC context URL.
 pub const VC_CONTEXT_V1: &str = "https://www.w3.org/2018/credentials/v1";
@@ -447,18 +446,19 @@ pub fn verify(vc: &Credential, expected_issuer: &Did) -> Result<(), VcError> {
     if vc.claims.issuer != expected_issuer.as_str() {
         return Err(VcError::BadSignature);
     }
-    let pk: PublicKey = expected_issuer
-        .resolve()
+    // GAP-KDB Fork-A (D-53): the VC-verify is the ONE codepoint-dispatched
+    // hybrid verify — the same silent-PQ-strip class as the UCAN
+    // chain-walk. The issuer signing key is resolved zero-I/O via
+    // `resolve_signing` (a `did:key` yields the classical `pq = None`
+    // handle; a `did:benten` issuer yields the composite), and its SHAPE
+    // selects the verify arm: a `did:benten`-issued VC whose `proof` carries
+    // only the Ed25519 half is a silent PQ-strip that MUST reject. No inline
+    // Ed25519-only `[u8; 64]` extraction here anymore (AUTH-7 net).
+    let signing_pk = expected_issuer
+        .resolve_signing()
         .map_err(|_| VcError::BadSignature)?;
-    let sig_bytes: [u8; 64] = vc
-        .proof
-        .as_slice()
-        .try_into()
-        .map_err(|_| VcError::BadSignature)?;
-    let sig = Signature::from_bytes(&sig_bytes);
     let bytes = vc.to_canonical_bytes();
-    pk.as_verifying_key()
-        .verify(&bytes, &sig)
+    crate::authority_verify::verify_authority_signature(&signing_pk, &bytes, &vc.proof)
         .map_err(|_| VcError::BadSignature)?;
     Ok(())
 }

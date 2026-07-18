@@ -30,8 +30,8 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_crypto_suite::sig::{self, HybridSignature};
 use benten_crypto_suite::SignatureSuite;
+use benten_crypto_suite::sig::{self, HybridSignature};
 use benten_id::CanonicalBytes;
 use benten_id::device_attestation::{CapabilityEnvelope, DeviceAttestation};
 use benten_id::did::Did;
@@ -49,14 +49,13 @@ const NOW: u64 = 1_900_000_000;
 // ─────────────────────────────────────────────────────────────────────────
 
 fn r5_device_verify(
-    _att: &DeviceAttestation,
-    _parent_signing_pk: &sig::PublicKey,
+    att: &DeviceAttestation,
+    parent_signing_pk: &sig::PublicKey,
 ) -> Result<(), DeviceAttestationError> {
-    todo!(
-        "RED-PHASE (AUTH-13): DeviceAttestation hybrid parent verify lands at R5. \
-         Body := att.verify_signature_with(parent_signing_pk) once it takes a composite key. \
-         un-ignore then."
-    )
+    // R5: `verify_signature_with` now takes any `ToSigningKey` and routes
+    // through the single Fork-A `authority_verify` helper — a composite
+    // `sig::PublicKey` parent dispatches the hybrid verify.
+    att.verify_signature_with(parent_signing_pk)
 }
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
@@ -93,7 +92,6 @@ fn composite_sign_attestation(signer: &sig::Keypair, att: &DeviceAttestation) ->
 // ── AUTH-13 — did:benten parent composite verify (positive) ───────────────
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-13 device-attestation did:benten parent composite verifies — un-ignore at R5"]
 fn auth13_did_benten_parent_composite_attestation_verifies() {
     let parent_signer = kdb::hybrid_keypair();
     let parent = benten_did_for(&parent_signer, "auth13/parent");
@@ -113,7 +111,6 @@ fn auth13_did_benten_parent_composite_attestation_verifies() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-13 device-attestation did:benten parent PQ-strip rejects — un-ignore at R5"]
 fn auth13_did_benten_parent_pq_stripped_attestation_rejects() {
     let parent_signer = kdb::hybrid_keypair();
     let parent = benten_did_for(&parent_signer, "auth13s/parent");

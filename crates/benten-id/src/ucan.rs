@@ -54,14 +54,13 @@
 //! `docs/future/phase-4-backlog.md §4.26`. See
 //! `crates/benten-id/tests/ucan.rs` for the full pin catalogue.
 
-use benten_crypto_suite::primitives::ed25519_dalek::{Signature, Signer, Verifier};
 use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
 
 use crate::CanonicalBytes;
 use crate::did::Did;
 use crate::errors::UcanError;
-use crate::keypair::{Keypair, PublicKey};
+use crate::keypair::Keypair;
 
 /// Maximum CBOR container-nesting depth accepted for an untrusted
 /// `Ucan` byte blob (safe-2 #549).
@@ -97,11 +96,27 @@ pub const MAX_UCAN_PROOF_DEPTH: usize = 32;
 /// `Vec<Ucan>` prf). Both live untrusted-input decode sites — the typed-CALL
 /// `ucan_validate_chain` op and the durable UCAN backend read path — feed the
 /// token bytes VERBATIM with no upstream byte cap, so a within-depth but
-/// enormous blob is an O(N) allocation DoS. `MAX_UCAN_PROOF_DEPTH` (32) × a
-/// generous ~2 KiB per token gives 64 KiB, which comfortably clears any
-/// well-formed multi-hop chain while bounding a hostile blob. Mirrors the
+/// enormous blob is an O(N) allocation DoS. Mirrors the
 /// `keypair.rs::SEED_ENVELOPE_MAX_BYTES` fail-closed pattern.
-pub const MAX_UCAN_ENVELOPE_BYTES: usize = 64 * 1024;
+///
+/// **GAP-KDB Fork-A re-size (AUTH-11 / FS-1 — a FROZEN v1-beta wire budget).**
+/// The Ed25519-era `64 * 1024` (32 × ~2 KiB per token) was sized for
+/// 64-byte signatures + `did:key` identity strings. A `did:benten` issuer
+/// embeds a LAMPS composite signing key + a ~3373-byte composite signature,
+/// and carries a ~2762-char `did:benten` `iss`/`aud` — a full-depth
+/// ([`MAX_UCAN_PROOF_DEPTH`]-link) composite chain dwarfs 64 KiB (the
+/// composite signature bytes ALONE are `32 × 3373 ≈ 105 KiB`). The cap is
+/// re-derived as `MAX_UCAN_PROOF_DEPTH × MAX_UCAN_PER_LINK_BYTES` so a
+/// legitimate composite chain is admitted while an over-cap blob still
+/// rejects at the byte boundary BEFORE serde materializes it (the F2 / META
+/// #629 DoS ceiling survives the re-size). The per-link budget is a generous
+/// 16 KiB — comfortably above one composite link (~3373 B signature + two
+/// ~2762 B `did:benten` strings + attenuation caps + DAG-CBOR framing ≈ 9 KiB).
+pub const MAX_UCAN_PER_LINK_BYTES: usize = 16 * 1024;
+
+/// See [`MAX_UCAN_PER_LINK_BYTES`] for the Fork-A re-size rationale. `512
+/// KiB` (`32 × 16 KiB`) — the frozen v1-beta envelope budget.
+pub const MAX_UCAN_ENVELOPE_BYTES: usize = MAX_UCAN_PROOF_DEPTH * MAX_UCAN_PER_LINK_BYTES;
 
 /// Capability grant pair: `(resource, ability)`.
 ///
@@ -682,28 +697,23 @@ fn validate_chain_inner(
             check_time_window(&token.claims, now)?;
         }
 
-        // 2. Signature check at every link (crypto-major-4: comparison
-        // is constant-time via subtle).
-        let sig_bytes: [u8; 64] = token
-            .signature
-            .as_slice()
-            .try_into()
-            .map_err(|_| UcanError::BadSignature { link_index: idx })?;
-        let sig = Signature::from_bytes(&sig_bytes);
-
-        // Resolve issuer DID to its public key.
+        // 2. Signature check at every link — GAP-KDB Fork-A: ONE
+        // codepoint-dispatched hybrid verify (design §6 / Worry-#1). The
+        // issuer key is resolved zero-I/O via `resolve_signing` (a
+        // `did:key` yields the classical `pq = None` handle; a
+        // `did:benten` / hybrid `did:key` yields the composite), and its
+        // SHAPE selects the verify arm — a composite-committing
+        // `did:benten` issuer whose token carries only the Ed25519 half is
+        // a silent PQ-strip that MUST reject (FLAGSHIP-2). There is no
+        // inline Ed25519-only `[u8; 64]` extraction here anymore — it lives
+        // in the single `authority_verify` helper (AUTH-7 completeness net).
         let iss_did = Did::from_string_for_test_fixture(token.claims.iss.clone());
-        let pk: PublicKey = iss_did
-            .resolve()
+        let signing_pk = iss_did
+            .resolve_signing()
             .map_err(|_| UcanError::BadSignature { link_index: idx })?;
         let bytes = token.claims.to_canonical_bytes();
-        // ed25519-dalek's verify is itself constant-time on the
-        // signature bytes (ed25519 verification has no early-exit on
-        // signature mismatch); we still flow the result through a
-        // typed error for the chain-walk audit trail.
-        if pk.as_verifying_key().verify(&bytes, &sig).is_err() {
-            return Err(UcanError::BadSignature { link_index: idx });
-        }
+        crate::authority_verify::verify_authority_signature(&signing_pk, &bytes, &token.signature)
+            .map_err(|_| UcanError::BadSignature { link_index: idx })?;
 
         // 3. Chain-link integrity: token's `aud` must equal next
         // token's `iss` (audience-binding within the chain).

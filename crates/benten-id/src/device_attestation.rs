@@ -43,13 +43,12 @@
 //! `E_DEVICE_ATTESTATION_INCOMPATIBLE_WITH_RUNTIME` per
 //! `crates/benten-id/tests/device_attestation.rs::browser_target_with_runs_sandbox_true_claim_rejected_at_attestation_construction_time`.
 
-use benten_crypto_suite::primitives::ed25519_dalek::{Signature, Verifier};
 use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 
 use crate::did::Did;
 use crate::errors::DeviceAttestationError;
-use crate::keypair::{Keypair, PublicKey};
+use crate::keypair::Keypair;
 
 /// Zone scope — what storage zones a device participates in.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -296,35 +295,39 @@ impl DeviceAttestation {
         Self::issue(parent_kp, device_did, envelope)
     }
 
-    /// Verify the signature against the supplied parent public key.
+    /// Verify the signature against the supplied parent signing key.
     ///
-    /// **Qual-1 #672 — DISAGREE-WITH-EXPLANATION (HARD RULE 12 (c)).**
-    /// The finding cited "4× duplicated `verify_signature_with` body".
-    /// Post-COLLAPSE only TWO remain (here +
-    /// `did_rotation::RotationAttestation::verify_signature_with`), and
-    /// they are NOT mechanical duplicates: each verifies a different
-    /// canonical-bytes `SigInput` shape and returns a different typed
-    /// error (`DeviceAttestationError::BadSignature` vs
-    /// `DidRotationError::BadSignature`). A shared generic helper would
-    /// need a SigInput-encoder trait + an error-mapping closure per
-    /// site — strictly more surface than the ~6-line bodies it would
-    /// replace, with no behavior gain. The duplication is the simpler
-    /// shape here.
+    /// **GAP-KDB Fork-A (AUTH-13):** the verify is the ONE
+    /// codepoint-dispatched hybrid verify
+    /// ([`crate::authority_verify::verify_authority_signature`]) — the same
+    /// helper the UCAN chain-walk, rotation-verify, and VC-verify route
+    /// through (the prior inline Ed25519-only `[u8; 64]` extraction is gone;
+    /// AUTH-7 completeness net). `parent_pk` accepts BOTH a composite
+    /// [`sig::PublicKey`](benten_crypto_suite::sig::PublicKey) (a
+    /// `did:benten` parent, resolved via
+    /// [`crate::did::Did::resolve_signing`]) AND the classical
+    /// [`crate::keypair::PublicKey`] (a `did:key` parent) via the
+    /// [`ToSigningKey`](crate::authority_verify::ToSigningKey) projection;
+    /// its SHAPE selects the arm, so a composite-committing `did:benten`
+    /// parent whose attestation carries only the Ed25519 half is a silent
+    /// PQ-strip that rejects.
+    ///
+    /// (Retires the Qual-1 #672 "duplication is the simpler shape"
+    /// disposition — Fork-A REQUIRES the shared codepoint-dispatched verify
+    /// so no un-migrated Ed25519-only site re-opens the strip; the per-site
+    /// `SigInput` shape + typed error stay here, only the raw-verify
+    /// consolidates.)
     pub fn verify_signature_with(
         &self,
-        parent_pk: &PublicKey,
+        parent_pk: &impl crate::authority_verify::ToSigningKey,
     ) -> Result<(), DeviceAttestationError> {
         let bytes = crate::CanonicalBytes::to_canonical_bytes(self);
-        let sig_bytes: [u8; 64] = self
-            .signature
-            .as_slice()
-            .try_into()
-            .map_err(|_| DeviceAttestationError::BadSignature)?;
-        let sig = Signature::from_bytes(&sig_bytes);
-        parent_pk
-            .as_verifying_key()
-            .verify(&bytes, &sig)
-            .map_err(|_| DeviceAttestationError::BadSignature)
+        crate::authority_verify::verify_authority_signature(
+            &parent_pk.to_signing_key(),
+            &bytes,
+            &self.signature,
+        )
+        .map_err(|_| DeviceAttestationError::BadSignature)
     }
 
     /// Encode to canonical bytes (DAG-CBOR).
