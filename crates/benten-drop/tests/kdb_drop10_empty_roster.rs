@@ -25,12 +25,11 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_drop::kdb_seal_testing as seal;
+use benten_drop::layer_c::RecipientBinding;
 use benten_drop::layer_c::group_posture::GroupSealParams;
-use benten_id::kdb_testing::RecipientBinding;
 
 /// DROP-10 (`0x6520`) — an empty group roster is a typed reject.
 #[test]
-#[ignore = "RED-PHASE: DROP-10 0x6520 empty binding roster typed-reject — un-ignore at R5"]
 fn drop10_group_0x6520_empty_roster_rejects() {
     let (sk, sender) = seal::hybrid_did_key_sender();
     let empty: Vec<RecipientBinding> = Vec::new();
@@ -48,7 +47,6 @@ fn drop10_group_0x6520_empty_roster_rejects() {
 
 /// DROP-10 (`0x6610`) — an empty MembershipSet roster is a typed reject.
 #[test]
-#[ignore = "RED-PHASE: DROP-10 0x6610 empty binding roster typed-reject — un-ignore at R5"]
 fn drop10_membership_set_0x6610_empty_roster_rejects() {
     let (sk, sender) = seal::hybrid_did_key_sender();
     let empty: Vec<RecipientBinding> = Vec::new();

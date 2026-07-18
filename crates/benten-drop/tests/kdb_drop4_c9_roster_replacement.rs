@@ -30,18 +30,17 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_drop::kdb_seal_testing as seal;
+use benten_drop::layer_c::RecipientBinding;
 use benten_drop::layer_c::group_posture::{
     GroupError, GroupSealParams, GroupVerifyContext, open_membership_set_group,
 };
 use benten_drop::layer_c::{LayerCError, group_roster_for_test, open_group_stanza};
-use benten_id::kdb_testing::RecipientBinding;
 
 /// DROP-4 (`0x6520`) — the group commitment is over the REAL binding DIDs.
 /// Opening with the real-DID roster succeeds; opening with the OLD KEM-key-
 /// hashed placeholder roster fails closed (the seal bound identities, not
 /// key-hashes).
 #[test]
-#[ignore = "RED-PHASE: DROP-4 0x6520 commitment over real binding DIDs (C9) — un-ignore at R5"]
 fn drop4_group_0x6520_commitment_over_real_binding_dids() {
     let a = seal::real_recipient();
     let b = seal::real_recipient();
@@ -86,7 +85,6 @@ fn drop4_group_0x6520_commitment_over_real_binding_dids() {
 /// DROP-4 (`0x6610`) — the MembershipSet commitment is over the REAL binding
 /// member DIDs; the OLD KEM-key-hashed member roster fails closed.
 #[test]
-#[ignore = "RED-PHASE: DROP-4 0x6610 commitment over real binding member DIDs (C9) — un-ignore at R5"]
 fn drop4_membership_set_0x6610_commitment_over_real_binding_dids() {
     let a = seal::real_recipient();
     let b = seal::real_recipient();

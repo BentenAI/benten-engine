@@ -29,12 +29,13 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_drop::kdb_seal_testing as seal;
+use benten_drop::layer_c::RecipientBinding;
 use benten_drop::layer_c::{
     AAD_VERSION, BindingContext, DROP_TO_RECIPIENT_SEALED_SENDER, self_describing_cid,
     single_plaintext_aad_region,
 };
 use benten_id::did::Did;
-use benten_id::kdb_testing::{self as kdb, RecipientBinding};
+use benten_id::kdb_testing as kdb;
 
 /// The frozen `0x6510` AAD for a SHORT deterministic audience
 /// `b"did:benten:zShortDrop11Audience"` (31 B), body-CID over
@@ -144,7 +145,6 @@ fn drop11_did_benten_audience_carried_transparently() {
 /// recipient produces an AAD whose `u32` audience length == the recipient's
 /// `did:benten` byte length (wire-transparency through the real seal path).
 #[test]
-#[ignore = "RED-PHASE: DROP-11 binding-typed seal threads the did:benten audience u32-framed — un-ignore at R5"]
 fn drop11_binding_seal_threads_did_benten_audience_u32_framed() {
     let r = seal::real_recipient();
     let binding = RecipientBinding::resolve(&r.did, &r.doc).expect("recipient binding resolves");

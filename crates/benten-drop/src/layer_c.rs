@@ -88,6 +88,11 @@ use alloc::vec::Vec;
 
 use benten_crypto_suite::cipher_suite::{CipherSuite, CipherSuiteCodepoint, WrappedKey};
 use benten_crypto_suite::{AeadEnvelope, AeadKeyMaterial};
+// GAP-KDB Shape-B (W2): the seal-API typestate resolves the recipient KEM key
+// FROM the audience DID's content-addressed key-set commitment (design §5 /
+// Inv-23), so the identity model + resolver live in `benten-id`.
+use benten_id::did::Did;
+use benten_id::keyset::KeySetDocument;
 // R11 MC-1: `RngCore` in scope for `OsRng.fill_bytes` (fresh random 0x6520
 // group CEK). `rand_core` is the workspace CSPRNG crate (see
 // `benten_crypto_suite::cipher_suite` `rand_core::OsRng`).
@@ -286,14 +291,18 @@ fn verify_m_auth(
     if sig_codepoint != SENDER_AUTH_SIG_CODEPOINT {
         return Err(());
     }
-    // The sealed sender-DID must be a valid hybrid did:key (UTF-8). Resolve
-    // the HYBRID verifying key from the self-certifying did:key —
-    // ML-DSA-first two-component multikey (F-NQC4-1) — via the
-    // production-safe validate-on-construct constructor. Fail-closed on any
-    // malformed / non-hybrid / unknown-multicodec DID.
+    // The sealed sender-DID must be a valid `did:key` OR `did:benten` (UTF-8).
+    // Resolve the signing key via the METHOD/multicodec-aware
+    // `resolve_signing` (DROP-8 / design §2 Tier-1): a hybrid `did:key`
+    // resolves to the composite key exactly as before, and a `did:benten`
+    // sender's embedded composite signing key resolves after stripping the
+    // trailing committed key-set CID — NO doc, zero-I/O. Fail-closed on any
+    // malformed / unknown-multicodec DID. (Verifying only the Ed25519 half of
+    // a composite would be a silent PQ-strip on the origin-auth path — the
+    // whole-composite verify below defeats it.)
     let did_str = core::str::from_utf8(sender_did).map_err(|_| ())?;
-    let did = benten_id::did::Did::parse_validated_hybrid(did_str).map_err(|_| ())?;
-    let vk = did.resolve_hybrid().map_err(|_| ())?;
+    let did = benten_id::did::Did::parse_validated_signing(did_str).map_err(|_| ())?;
+    let vk = did.resolve_signing().map_err(|_| ())?;
     // Reconstruct the LAMPS composite signature from the ML-DSA-first wire
     // and cryptographically verify BOTH halves over M_auth (empty LAMPS ctx;
     // domain separation is the SENDER_AUTH_DOMAIN prefix in M_auth — F-1).
@@ -353,6 +362,210 @@ pub const MAX_LAYER_C_GROUP_RECIPIENTS: usize = u16::MAX as usize; // 65_535
 // could decrypt). This module stays pure crypto glue (no DID knowledge) and
 // exposes the real types coherently on its public surface.
 pub use benten_crypto_suite::cipher_suite::{RecipientPublic, RecipientSecret};
+
+// ---------------------------------------------------------------------------
+// GAP-KDB Shape-B seal typestate — `RecipientBinding` (design §5, Inv-23).
+// ---------------------------------------------------------------------------
+
+/// A recipient whose KEM key is **PROVEN committed by its audience DID**
+/// (design §5 — the freeze-surface analogue of Inv-15, minted as **Inv-23**:
+/// *"a Layer-C seal's KEM key is committed by its audience DID"*).
+///
+/// This is the GAP-KDB closure **by construction**. The pre-Shape-B seal API
+/// took the recipient KEM key and the audience DID as
+/// **two independently-chosen params** — nothing bound the KEM key to the
+/// audience DID, so an active attacker who substituted `recipient_pub` at the
+/// address-book boundary read everything (the "Recipient-key premise" the
+/// confidentiality proofs silently assumed). `RecipientBinding` collapses the
+/// two into ONE value whose `kem_pub` is recovered-and-verified from the
+/// audience DID's content-addressed key-set commitment via
+/// [`Did::resolve_kem`] — a BLAKE3-256 CID 2nd-preimage. A KEM key not
+/// committed by the DID **cannot be bound**, so no seal can ever target it.
+///
+/// **Sole-constructor discipline (design C4).** [`RecipientBinding::resolve`]
+/// is the ONLY constructor — there is NO `pub` field, NO `From`, NO
+/// `_for_test`/`unchecked` escape hatch, and NO `(kem_pub, did)` fallback
+/// door. A fallback door is exactly what re-opens the GAP-KDB substitution, so
+/// its absence is load-bearing (the anti-downgrade property).
+///
+/// No `Debug` derive: [`RecipientPublic`] carries no `Debug` impl (key
+/// material stays out of any `Debug` sink).
+pub struct RecipientBinding {
+    audience_did: Did,
+    kem_pub: RecipientPublic,
+}
+
+impl RecipientBinding {
+    /// The **ONLY** constructor (design C4). Fail-closed typed-reject on ANY
+    /// commitment mismatch — recovers + VERIFIES the recipient KEM key from
+    /// `audience_did`'s content-addressed key-set commitment via
+    /// [`Did::resolve_kem`] (CID 2nd-preimage · `doc.sig == embedded-signing`
+    /// cross-check · PQ floor `0x647a` · `kem_cp` ⟺ components). A bare
+    /// `did:key` commits NO KEM key → rejects. An attacker-substituted key-set
+    /// hashes to a DIFFERENT CID → rejects (Inv-23 fires).
+    ///
+    /// # Errors
+    ///
+    /// [`RecipientBindingError::Uncommitted`] carrying the originating
+    /// [`DidError`](benten_id::errors::DidError) when the KEM key is not
+    /// committed by `audience_did` (bare `did:key` / CID 2nd-preimage mismatch
+    /// / embedded-signing splice / below-PQ-floor / malformed kem multikey).
+    pub fn resolve(
+        audience_did: &Did,
+        keyset_doc: &KeySetDocument,
+    ) -> Result<Self, RecipientBindingError> {
+        let kem_pub = audience_did
+            .resolve_kem(keyset_doc)
+            .map_err(RecipientBindingError::Uncommitted)?;
+        Ok(Self {
+            audience_did: audience_did.clone(),
+            kem_pub,
+        })
+    }
+
+    /// The bound audience DID (the identity the seal binds into the AAD).
+    #[must_use]
+    pub fn audience_did(&self) -> &Did {
+        &self.audience_did
+    }
+
+    /// The committed KEM key recovered from the audience DID's key-set.
+    #[must_use]
+    pub fn kem_pub(&self) -> &RecipientPublic {
+        &self.kem_pub
+    }
+
+    /// The audience DID as the length-prefixed AAD `audience` bytes.
+    fn audience_bytes(&self) -> Vec<u8> {
+        self.audience_did.as_str().as_bytes().to_vec()
+    }
+}
+
+// `RecipientPublic` has no `Clone` derive; reconstruct through the frozen
+// `to_bytes`/`from_bytes` surface (the same X25519-first layout `resolve`
+// recovered, always the `0x647a` PQ-floor suite). Used by test rosters that
+// replicate a binding (e.g. the over-band cardinality guard).
+impl Clone for RecipientBinding {
+    fn clone(&self) -> Self {
+        let kem_pub = RecipientPublic::from_bytes(
+            CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+            &self.kem_pub.to_bytes(),
+        )
+        .expect("a bound KEM key re-parses through the frozen RecipientPublic surface");
+        Self {
+            audience_did: self.audience_did.clone(),
+            kem_pub,
+        }
+    }
+}
+
+/// Typed failure of the [`RecipientBinding::resolve`] sole constructor.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness). This is a **benten-drop-internal**
+/// error (like [`LayerCError`]); the boundary-crossing catalog `ErrorCode`
+/// mirror (`E_RECIPIENT_KEM_NOT_COMMITTED`) is minted at the engine surface, not
+/// here (§3.5g precedent: `LayerCError` / `DidError` carry no napi/wire mirror).
+///
+/// Derives `Debug, PartialEq, Eq` (NOT `Clone`) to match the wrapped
+/// [`DidError`](benten_id::errors::DidError), which is not `Clone`.
+#[derive(Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum RecipientBindingError {
+    /// The audience DID does not commit the supplied key-set's KEM key — the
+    /// fail-closed [`Did::resolve_kem`] reject (Inv-23): a bare `did:key`
+    /// (`NoKemCommitment`), a CID 2nd-preimage mismatch (GAP-KDB active
+    /// substitution), an embedded-signing ⊕ KEM splice, a below-PQ-floor
+    /// `0x6400` suite (C5), or a malformed kem multikey. Carries the
+    /// originating [`DidError`](benten_id::errors::DidError).
+    Uncommitted(benten_id::errors::DidError), // drift-detect: internal-only — layer_c-internal; no napi/wire ErrorCode boundary (§3.5g precedent: SenderOriginAuthFailed / DidError; catalog E_RECIPIENT_KEM_NOT_COMMITTED minted at the engine surface).
+}
+
+/// **Test-only (design C4-safe):** mint an HONEST [`RecipientBinding`]
+/// committing `recipient_pub` under a fresh self-committed `did:benten`. It
+/// goes through the SOLE `resolve` constructor over a key-set doc the DID
+/// commits — so it is NOT a fallback door (no arbitrary `(kem_pub, did)` pair;
+/// the DID content-addresses this exact doc). Used by the migrated Layer-C
+/// round-trip / attack tests (whose recipient identities are honest — the
+/// attacks live on the OPEN side) to obtain a binding for a real recipient
+/// keypair. Uses only the PRODUCTION `benten-id` surface + the registered
+/// multicodec constants, so it compiles under both plain `cargo test` and the
+/// `testing` feature.
+#[cfg(any(test, feature = "testing"))]
+#[must_use]
+pub fn binding_for_test(recipient_pub: &RecipientPublic) -> RecipientBinding {
+    use benten_crypto_suite::cipher_suite::X25519_PUBLIC_LEN;
+    use benten_id::did::{
+        ED25519_MULTICODEC, MLDSA65_PUB_MULTICODEC, MLKEM768_PUB_MULTICODEC, X25519_PUB_MULTICODEC,
+    };
+
+    // Signing multikey (ML-DSA-first) from a fresh hybrid signing key — the
+    // exact `sig` bytes `from_benten_keyset` embeds (so `resolve_kem`'s
+    // `doc.sig == embedded-signing` cross-check passes).
+    let sig_kp = benten_crypto_suite::sig::SignatureSuite::v1_default().generate_keypair();
+    let composite = sig_kp
+        .public()
+        .to_lamps_composite_bytes()
+        .expect("v1_default keypair is hybrid");
+    let mldsa_len = benten_crypto_suite::sizes::ml_dsa_65_pubkey_len();
+    let (mldsa_pk, ed_pk) = composite.split_at(mldsa_len);
+    let mut sig_mk = Vec::with_capacity(2 + mldsa_pk.len() + 2 + ed_pk.len());
+    sig_mk.extend_from_slice(&MLDSA65_PUB_MULTICODEC);
+    sig_mk.extend_from_slice(mldsa_pk);
+    sig_mk.extend_from_slice(&ED25519_MULTICODEC);
+    sig_mk.extend_from_slice(ed_pk);
+
+    // KEM multikey (X25519-first, C2) from the recipient's REAL public bytes —
+    // `RecipientPublic::to_bytes()` is `x25519(32) ‖ mlkem768_ek(1184)`, the
+    // exact order the frozen `kem` multikey uses, so `resolve_kem` recovers a
+    // KEM key byte-identical to `recipient_pub`.
+    let raw = recipient_pub.to_bytes();
+    let (x, ek) = raw.split_at(X25519_PUBLIC_LEN);
+    let mut kem_mk = Vec::with_capacity(2 + x.len() + 2 + ek.len());
+    kem_mk.extend_from_slice(&X25519_PUB_MULTICODEC);
+    kem_mk.extend_from_slice(x);
+    kem_mk.extend_from_slice(&MLKEM768_PUB_MULTICODEC);
+    kem_mk.extend_from_slice(ek);
+
+    let doc = KeySetDocument::v1_hybrid(sig_mk, kem_mk);
+    let did = Did::from_benten_keyset(&sig_kp.public(), &doc);
+    RecipientBinding::resolve(&did, &doc)
+        .expect("a self-committed key-set MUST bind (honest recipient)")
+}
+
+/// **Test-only:** a roster of HONEST committed [`RecipientBinding`]s, one per
+/// recipient public (each via [`binding_for_test`]). The seal binds these
+/// exact identities (C9); an honest open recomputes the commitment from the
+/// SAME roster via [`binding_roster_for_test`] / [`member_dids_for_test`].
+#[cfg(any(test, feature = "testing"))]
+#[must_use]
+pub fn group_bindings_for_test(recipient_pubs: &[RecipientPublic]) -> Vec<RecipientBinding> {
+    recipient_pubs.iter().map(binding_for_test).collect()
+}
+
+/// **Test-only:** the independently-held `0x6520` roster (REAL committed
+/// audience DID bytes) an honest `open_group_stanza` recipient recomputes the
+/// C9 `audience_set_commitment` from — the SAME identities the seal bound.
+#[cfg(any(test, feature = "testing"))]
+#[must_use]
+pub fn binding_roster_for_test(bindings: &[RecipientBinding]) -> Vec<RecipientDid> {
+    bindings
+        .iter()
+        .map(RecipientBinding::audience_bytes)
+        .collect()
+}
+
+/// **Test-only:** the `0x6610` member-DID roster (`Vec<String>` for
+/// `GroupVerifyContext`) — the REAL committed audience DID strings (C9).
+#[cfg(any(test, feature = "testing"))]
+#[must_use]
+pub fn member_dids_for_test(
+    bindings: &[RecipientBinding],
+) -> alloc::vec::Vec<alloc::string::String> {
+    bindings
+        .iter()
+        .map(|b| b.audience_did().as_str().to_owned())
+        .collect()
+}
 
 /// A sender DID (`did:key` multibase string in production), as raw bytes.
 pub type SenderDid = Vec<u8>;
@@ -663,6 +876,11 @@ pub enum LayerCError {
         /// The wire-frozen ceiling ([`MAX_LAYER_C_GROUP_RECIPIENTS`]).
         max: usize,
     },
+    /// A group seal was handed an EMPTY `&[RecipientBinding]` roster (design §5
+    /// / DROP-10 — the C9 single-slice roster's missing LOWER bound). A group
+    /// envelope with zero recipients is degenerate (no one can open it); the
+    /// seal typed-rejects rather than emit a zero-stanza envelope.
+    EmptyRecipientRoster, // drift-detect: internal-only — layer_c-internal; no napi/wire ErrorCode boundary (§3.5g precedent: SenderOriginAuthFailed / StanzaCountMismatch / DidError).
     /// The number of stanzas actually DELIVERED does not equal the
     /// `stanza_count` bound into every stanza's AAD — a relay dropped /
     /// censored / truncated stanzas (SECURITY-PROOFS §3.3/§4.1
@@ -938,21 +1156,28 @@ fn open_inner(
 /// AAD binds the `audience` + body-CID + recipient_key_generation.
 ///
 /// **B2 ORIGIN-AUTH (always-on, BD-2):** `sender_kp` is the sender's
-/// LAMPS-hybrid signing keypair, and `sender_did` MUST be the hybrid
-/// `did:key` that [`benten_id::did::Did::resolve_hybrid`] resolves to
+/// LAMPS-hybrid signing keypair, and `sender_did` MUST be the hybrid `did:key`
+/// or `did:benten` that [`benten_id::did::Did::resolve_signing`] resolves to
 /// `sender_kp.public()` — the recipient verifies the per-message signature
 /// against that resolved key post-decrypt. There is NO unauthenticated
 /// single-recipient seal.
+///
+/// **GAP-KDB Shape-B (design §5 / DROP-3):** the recipient arrives as a
+/// [`RecipientBinding`] whose KEM key is PROVEN committed by its audience DID —
+/// there is NO two-independent-param door taking a raw recipient KEM key
+/// alongside a separately-chosen audience DID. The KEM key + the audience DID
+/// are one bound value; an attacker cannot downgrade a `did:benten` recipient
+/// back to the un-cross-checked path (that path is deleted).
 #[must_use]
 pub fn seal_sealed_sender(
-    recipient_pub: &RecipientPublic,
-    audience_did: &AudienceDid,
+    recipient: &RecipientBinding,
     sender_did: &SenderDid,
     sender_kp: &benten_crypto_suite::sig::Keypair,
     body_cid: &BodyCidDigest,
     recipient_key_generation: u32,
     plaintext: &[u8],
 ) -> EncryptedEnvelope {
+    let audience_did = recipient.audience_bytes();
     let cid = self_describing_cid(body_cid);
     let binding = BindingContext::DropSealedSender {
         aad_version: AAD_VERSION,
@@ -963,11 +1188,11 @@ pub fn seal_sealed_sender(
     };
     let aad = binding.plaintext_aad_bytes();
     let (enc, ciphertext) = seal_inner(
-        recipient_pub,
+        recipient.kem_pub(),
         sender_did,
         sender_kp,
         DROP_TO_RECIPIENT_SEALED_SENDER,
-        audience_did,
+        &audience_did,
         &cid,
         recipient_key_generation,
         &aad,
@@ -988,14 +1213,14 @@ pub fn seal_sealed_sender(
 /// see `sender_kp` on [`seal_sealed_sender`].
 #[must_use]
 pub fn seal_plaintext_sender(
-    recipient_pub: &RecipientPublic,
-    audience_did: &AudienceDid,
+    recipient: &RecipientBinding,
     sender_did: &SenderDid,
     sender_kp: &benten_crypto_suite::sig::Keypair,
     body_cid: &BodyCidDigest,
     recipient_key_generation: u32,
     plaintext: &[u8],
 ) -> EncryptedEnvelope {
+    let audience_did = recipient.audience_bytes();
     let cid = self_describing_cid(body_cid);
     let binding = BindingContext::DropPlaintextSender {
         aad_version: AAD_VERSION,
@@ -1007,11 +1232,11 @@ pub fn seal_plaintext_sender(
     };
     let aad = binding.plaintext_aad_bytes();
     let (enc, ciphertext) = seal_inner(
-        recipient_pub,
+        recipient.kem_pub(),
         sender_did,
         sender_kp,
         LAYER_C_DROP,
-        audience_did,
+        &audience_did,
         &cid,
         recipient_key_generation,
         &aad,
@@ -1261,7 +1486,7 @@ fn validate_group_roster_len(n: usize) -> Result<(), LayerCError> {
 }
 
 fn seal_group_impl(
-    recipient_pubs: &[RecipientPublic],
+    recipients: &[RecipientBinding],
     sender_did: &SenderDid,
     sender_kp: &benten_crypto_suite::sig::Keypair,
     body_cid: &BodyCidDigest,
@@ -1269,10 +1494,24 @@ fn seal_group_impl(
     plaintext: &[u8],
     plaintext_sender: bool,
 ) -> Result<EncryptedEnvelope, LayerCError> {
-    validate_group_roster_len(recipient_pubs.len())?;
+    validate_group_roster_len(recipients.len())?;
+    // DROP-10 (C9 lower bound): an empty binding roster is a degenerate send
+    // (a zero-stanza envelope no one can open); typed-reject, never emit it.
+    if recipients.is_empty() {
+        return Err(LayerCError::EmptyRecipientRoster);
+    }
     let suite = hybrid_suite();
-    let roster = group_roster(recipient_pubs);
-    let stanza_count = u32::try_from(recipient_pubs.len()).expect("stanza count fits u32");
+    // C9 roster-REPLACEMENT (design §5 / DROP-4): the commitment roster is the
+    // REAL audience DIDs the bindings carry — NOT a placeholder fabricated by
+    // hashing the KEM keys (`group_roster`, retired here). Both the blinded
+    // `audience_set_commitment` AND the per-stanza wrap-targets derive from the
+    // ONE `&[RecipientBinding]` slice, so the commitment binds recipient
+    // IDENTITIES, not key-hashes.
+    let roster: Vec<RecipientDid> = recipients
+        .iter()
+        .map(RecipientBinding::audience_bytes)
+        .collect();
+    let stanza_count = u32::try_from(recipients.len()).expect("stanza count fits u32");
     let cid = self_describing_cid(body_cid);
 
     // One shared CEK seals the bulk body ONCE; each recipient gets a wrapped
@@ -1341,8 +1580,9 @@ fn seal_group_impl(
     cek_aead_nonce.copy_from_slice(&body_env.nonce[..12]);
     let cek_aead_ciphertext = body_env.to_wire_bytes();
 
-    let mut stanzas = Vec::with_capacity(recipient_pubs.len());
-    for (idx, pk) in recipient_pubs.iter().enumerate() {
+    let mut stanzas = Vec::with_capacity(recipients.len());
+    for (idx, binding) in recipients.iter().enumerate() {
+        let pk = binding.kem_pub();
         let stanza_index = u32::try_from(idx).expect("stanza index fits u32");
         let plaintext_sender_did = if plaintext_sender {
             Some(sender_did.clone())
@@ -1398,14 +1638,22 @@ fn seal_group_impl(
 /// `audience_set_commitment` + counts WITHOUT the sender-DID NOR the raw
 /// roster; the inner-sender-DID is sealed inside the per-stanza payload.
 ///
+/// **GAP-KDB Shape-B (design §5 / C9):** BOTH the blinded
+/// `audience_set_commitment` roster AND the per-stanza wrap-targets are derived
+/// from the ONE `&[RecipientBinding]` slice — each recipient's KEM key is
+/// PROVEN committed by its audience DID. This retires the fabricated-DID
+/// placeholder roster (which hashed KEM keys into `did:key:z…` with zero
+/// identity binding).
+///
 /// # Errors
 ///
 /// Returns [`LayerCError::RecipientCountExceedsBandWidth`] when the recipient
 /// roster exceeds the band's wire-frozen `u16` cardinality limit
-/// ([`MAX_LAYER_C_GROUP_RECIPIENTS`] = 65535); split the send into multiple
-/// groups. This is the ONLY failure mode — the seal is otherwise infallible.
+/// ([`MAX_LAYER_C_GROUP_RECIPIENTS`] = 65535; split the send into multiple
+/// groups), and [`LayerCError::EmptyRecipientRoster`] for an empty roster
+/// (a zero-stanza envelope is never emitted).
 pub fn seal_group_multi(
-    recipient_pubs: &[RecipientPublic],
+    recipients: &[RecipientBinding],
     sender_did: &SenderDid,
     sender_kp: &benten_crypto_suite::sig::Keypair,
     body_cid: &BodyCidDigest,
@@ -1413,7 +1661,7 @@ pub fn seal_group_multi(
     plaintext: &[u8],
 ) -> Result<EncryptedEnvelope, LayerCError> {
     seal_group_impl(
-        recipient_pubs,
+        recipients,
         sender_did,
         sender_kp,
         body_cid,
@@ -1431,10 +1679,10 @@ pub fn seal_group_multi(
 ///
 /// Returns [`LayerCError::RecipientCountExceedsBandWidth`] when the recipient
 /// roster exceeds the band's wire-frozen `u16` cardinality limit
-/// ([`MAX_LAYER_C_GROUP_RECIPIENTS`] = 65535); split the send into multiple
-/// groups. This is the ONLY failure mode — the seal is otherwise infallible.
+/// ([`MAX_LAYER_C_GROUP_RECIPIENTS`] = 65535; split the send into multiple
+/// groups), and [`LayerCError::EmptyRecipientRoster`] for an empty roster.
 pub fn seal_group_multi_plaintext_sender(
-    recipient_pubs: &[RecipientPublic],
+    recipients: &[RecipientBinding],
     sender_did: &SenderDid,
     sender_kp: &benten_crypto_suite::sig::Keypair,
     body_cid: &BodyCidDigest,
@@ -1442,7 +1690,7 @@ pub fn seal_group_multi_plaintext_sender(
     plaintext: &[u8],
 ) -> Result<EncryptedEnvelope, LayerCError> {
     seal_group_impl(
-        recipient_pubs,
+        recipients,
         sender_did,
         sender_kp,
         body_cid,
@@ -1864,7 +2112,10 @@ pub mod abuse_control {
 /// group wire; `0x6610` (MembershipSet) is distinct from `0x6520` (Layer-C
 /// group) and the dispatch strict-rejects a cross-band feed.
 pub mod group_posture {
-    use super::{AAD_VERSION, Vec, audience_set_commitment, lp_range_end, self_describing_cid};
+    use super::{
+        AAD_VERSION, RecipientBinding, Vec, audience_set_commitment, lp_range_end,
+        self_describing_cid,
+    };
     use benten_crypto_suite::cipher_suite::{CipherSuite, CipherSuiteCodepoint, WrappedKey};
     use benten_crypto_suite::{AeadEnvelope, AeadKeyMaterial};
 
@@ -2334,7 +2585,7 @@ pub mod group_posture {
     /// adversarial caller input. The valid-roster envelope bytes are unaffected
     /// by this gate (R12 F-11 / R18 C2).
     pub fn seal_membership_set_group(
-        recipient_pubs: &[RecipientPublic],
+        recipients: &[RecipientBinding],
         sender_did: &SenderDid,
         sender_kp: &benten_crypto_suite::sig::Keypair,
         k_set: &[u8; 32],
@@ -2343,10 +2594,23 @@ pub mod group_posture {
     ) -> Result<GroupSealedEnvelope, super::LayerCError> {
         // R18 C2: roster ceiling FIRST — mirror the sibling `seal_group_impl`
         // choke point so an over-band roster is a typed reject, not a panic.
-        super::validate_group_roster_len(recipient_pubs.len())?;
+        super::validate_group_roster_len(recipients.len())?;
+        // DROP-10 (C9 lower bound): reject an empty binding roster (never emit
+        // a zero-stanza envelope).
+        if recipients.is_empty() {
+            return Err(super::LayerCError::EmptyRecipientRoster);
+        }
         let suite = hybrid_suite();
-        let roster = group_roster(recipient_pubs);
-        let stanza_count = u32::try_from(recipient_pubs.len()).expect("count fits u32");
+        // C9 roster-REPLACEMENT (design §5 / DROP-4): the member roster is the
+        // REAL audience DIDs the bindings carry — NOT the KEM-key-hashed
+        // placeholder (`group_roster`, retired here for the seal). Both the
+        // blinded `audience_set_commitment` AND the per-stanza wrap-targets
+        // derive from the ONE `&[RecipientBinding]` slice.
+        let roster: Vec<Vec<u8>> = recipients
+            .iter()
+            .map(|b| b.audience_did().as_str().as_bytes().to_vec())
+            .collect();
+        let stanza_count = u32::try_from(recipients.len()).expect("count fits u32");
         let body_digest = *blake3::hash(plaintext).as_bytes();
         let cid = self_describing_cid(&body_digest);
         // The group CEK is the K_Set-derived PER-MESSAGE key (READ K_Set; the
@@ -2423,8 +2687,9 @@ pub mod group_posture {
         wire.extend_from_slice(&cid);
         wire.extend_from_slice(&body_wire);
 
-        let mut stanzas = Vec::with_capacity(recipient_pubs.len());
-        for (idx, pk) in recipient_pubs.iter().enumerate() {
+        let mut stanzas = Vec::with_capacity(recipients.len());
+        for (idx, binding) in recipients.iter().enumerate() {
+            let pk = binding.kem_pub();
             let stanza_index = u32::try_from(idx).expect("idx fits u32");
             // Per-stanza AAD = the BLINDED 11-field set assembled LOCALLY (F-02
             // option-(b); benten-drop-owned, NO production membership-set dep).
@@ -2954,30 +3219,24 @@ mod group_roster_cardinality_guard {
     /// line restores that panic; this test then aborts instead of asserting a
     /// typed `Err`.
     ///
-    /// The roster is built from cheap classical (`0x6400`, 32-byte)
-    /// `RecipientPublic` placeholders replicated to the over-band length: the
-    /// ceiling is the FIRST action in the seal, so it returns BEFORE any
-    /// suite/keying work touches the (unused) recipient publics — the codepoint
-    /// of the placeholders is irrelevant, only the roster length matters.
+    /// The roster is ONE honest committed [`RecipientBinding`](super::RecipientBinding)
+    /// cloned to the over-band length: the ceiling is the FIRST action in the
+    /// seal, so it returns BEFORE any per-binding keying work touches the
+    /// (cloned) recipient keys — only the roster LENGTH matters.
     #[test]
     fn seal_membership_set_group_rejects_over_band_roster_with_typed_error() {
         use super::group_posture::{GroupSealParams, seal_membership_set_group};
-        use benten_crypto_suite::cipher_suite::{CipherSuiteCodepoint, RecipientPublic};
+        use benten_crypto_suite::cipher_suite::{CipherSuite, CipherSuiteCodepoint};
 
-        // One cheap classical recipient-public byte template (32 bytes), then
-        // replicate to exactly `MAX_LAYER_C_GROUP_RECIPIENTS + 1` (65_536).
-        let template_bytes = [7u8; 32];
+        // ONE honest committed did:benten binding, cloned to exactly
+        // `MAX_LAYER_C_GROUP_RECIPIENTS + 1` (65_536). The seal returns at the
+        // roster-length ceiling gate before touching the (cloned) keys.
+        let kp = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
+            .expect("0x647a wire-locked")
+            .generate_recipient_keypair();
+        let one = super::binding_for_test(kp.public());
         let over_band = MAX_LAYER_C_GROUP_RECIPIENTS + 1;
-        let mut roster: Vec<RecipientPublic> = Vec::with_capacity(over_band);
-        for _ in 0..over_band {
-            roster.push(
-                RecipientPublic::from_bytes(
-                    CipherSuiteCodepoint::CLASSICAL_X25519,
-                    &template_bytes,
-                )
-                .expect("classical recipient public re-parse must succeed"),
-            );
-        }
+        let roster: Vec<super::RecipientBinding> = vec![one; over_band];
 
         let sender_did: super::SenderDid = b"did:key:zR18C2SealCeilingTest".to_vec();
         let sender_kp = benten_crypto_suite::sig::SignatureSuite::v1_default().generate_keypair();

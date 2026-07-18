@@ -369,8 +369,8 @@ use benten_drop::layer_c::group_posture::{
     seal_membership_set_group,
 };
 use benten_drop::layer_c::{
-    AAD_VERSION, EncryptedEnvelope, LayerCError, group_roster_for_test, open_single,
-    seal_sealed_sender, sealed_aad,
+    AAD_VERSION, EncryptedEnvelope, LayerCError, RecipientBinding, binding_for_test,
+    group_bindings_for_test, member_dids_for_test, open_single, seal_sealed_sender, sealed_aad,
 };
 use benten_id::did::Did;
 
@@ -407,13 +407,9 @@ fn fixed_sk(seed: u8) -> RecipientSecret {
 
 /// The independently-held `GroupVerifyContext` for a `0x6610` membership-set
 /// round-trip with all generations = 1 (the common fixture shape here).
-fn verify_ctx_gen1(pks: &[RecipientPublic]) -> GroupVerifyContext {
-    let member_dids = group_roster_for_test(pks)
-        .iter()
-        .map(|d| String::from_utf8_lossy(d).into_owned())
-        .collect();
+fn verify_ctx_gen1(bindings: &[RecipientBinding]) -> GroupVerifyContext {
     GroupVerifyContext {
-        member_dids,
+        member_dids: member_dids_for_test(bindings),
         member_key_generation: 1,
         membership_set_generation: 1,
         role_assignments_generation: 1,
@@ -435,9 +431,10 @@ fn verify_ctx_gen1(pks: &[RecipientPublic]) -> GroupVerifyContext {
 fn f_disc_2_inv16_codepoint_dispatch_enforced_fail_closed() {
     use benten_drop::layer_c::seal_group_multi;
     let pks = [fixed_pk(0x21), fixed_pk(0x22)];
+    let bindings = group_bindings_for_test(&pks);
     let body_cid = *blake3::hash(b"inv16 enforced body").as_bytes();
     let (sender_kp, sender) = hybrid_sender();
-    let group_env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 1, b"inv16 body")
+    let group_env = seal_group_multi(&bindings, &sender, &sender_kp, &body_cid, 1, b"inv16 body")
         .expect("group seal within recipient limit");
 
     // The single-recipient open arm MUST refuse a group envelope by codepoint
@@ -491,9 +488,9 @@ fn f_disc_2_inv18_sealed_sender_default_metadata_disclosure_enforced() {
 
     // (2) A REAL seal's plaintext AAD region MUST NOT contain the sender-DID.
     let (sender_kp, sender) = hybrid_sender();
+    let binding = binding_for_test(&fixed_pk(0x31));
     let env = seal_sealed_sender(
-        &fixed_pk(0x31),
-        &b"did:key:zAUDIENCE".to_vec(),
+        &binding,
         &sender,
         &sender_kp,
         &[0x07u8; 32],
@@ -537,8 +534,9 @@ fn f_disc_2_inv20_clause_c_group_aad_field_set_enforced_blinded() {
         role_assignments_generation: 1,
     };
     let (sender_kp, sender) = hybrid_sender();
+    let bindings = group_bindings_for_test(&pks);
     let env = seal_membership_set_group(
-        &pks,
+        &bindings,
         &sender,
         &sender_kp,
         &k_set,
@@ -592,8 +590,9 @@ fn f_disc_2_inv19_inv20_truncation_defense_enforced_fail_closed() {
         role_assignments_generation: 1,
     };
     let (sender_kp, sender) = hybrid_sender();
+    let bindings = group_bindings_for_test(&pks);
     let env = seal_membership_set_group(
-        &pks,
+        &bindings,
         &sender,
         &sender_kp,
         &[0x77u8; 32],
@@ -601,7 +600,7 @@ fn f_disc_2_inv19_inv20_truncation_defense_enforced_fail_closed() {
         b"inv19 body",
     )
     .expect("valid roster must seal (R18 C2)");
-    let ctx = verify_ctx_gen1(&pks);
+    let ctx = verify_ctx_gen1(&bindings);
     // Pre-condition (would-FAIL-on-revert witness): the FULL envelope opens.
     assert!(
         open_membership_set_group(&sks[1], 1, &ctx, &env).is_ok(),

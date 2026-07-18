@@ -308,13 +308,31 @@ use benten_crypto_suite::sig::{Keypair as SigKeypair, SignatureSuite};
 use benten_drop::layer_c::{
     AAD_VERSION, BindingContext, BodyCidDigest, DROP_TO_RECIPIENT_SEALED_SENDER,
     ENVELOPE_FORMAT_VERSION, EncryptedEnvelope, HYBRID_X25519_MLKEM768, HpkeRecipientStanza,
-    LAYER_C_DROP, LAYER_C_DROP_MULTI_RECIPIENT, LayerCError, SENDER_AUTH_DOMAIN,
-    SENDER_AUTH_SIG_CODEPOINT, SenderAuthBinding, audience_set_commitment, build_m_auth,
-    group_plaintext_aad_region, group_roster_for_test, open_group_stanza, open_single,
-    seal_group_multi, seal_group_multi_plaintext_sender, seal_plaintext_sender, seal_sealed_sender,
+    LAYER_C_DROP, LAYER_C_DROP_MULTI_RECIPIENT, LayerCError, RecipientBinding, SENDER_AUTH_DOMAIN,
+    SENDER_AUTH_SIG_CODEPOINT, SenderAuthBinding, audience_set_commitment, binding_for_test,
+    binding_roster_for_test, build_m_auth, group_bindings_for_test, group_plaintext_aad_region,
+    member_dids_for_test, open_group_stanza, open_single, seal_group_multi,
+    seal_group_multi_plaintext_sender, seal_plaintext_sender, seal_sealed_sender,
     self_describing_cid, serialize,
 };
 use benten_id::did::Did;
+
+// GAP-KDB Shape-B (W2) migration helper. The Layer-C seal API now takes a
+// `RecipientBinding` whose KEM key is PROVEN committed by its audience DID (the
+// two-independent-param `(recipient_pub, audience_did)` door is deleted — DROP-3).
+// The group helpers (`group_bindings_for_test` / `binding_roster_for_test` /
+// `member_dids_for_test`) live in the library; the single-recipient `recipient`
+// helper is local (it also returns the matching sk). Every attack these tests
+// exercise lives on the OPEN side; the seal-side recipient identity is honest.
+
+/// An honest committed recipient for `seed`: `(binding, matching sk, audience
+/// bytes)`. The audience is the binding's content-addressed `did:benten`; the
+/// seal binds it and `open_single` re-derives from the SAME audience.
+fn recipient(seed: u8) -> (RecipientBinding, RecipientSecret, Vec<u8>) {
+    let binding = binding_for_test(&fixed_pk(seed));
+    let audience = binding.audience_did().as_str().as_bytes().to_vec();
+    (binding, fixed_sk(seed), audience)
+}
 
 /// Hermetic per-seed recipient keypair helper (R9 GAP-1). Each `seed` maps to a
 /// stable REAL hybrid keypair via the deterministic-from-SECRET-seed KAT tool —
@@ -393,16 +411,12 @@ fn to_hex(bytes: &[u8]) -> String {
 /// not reconstruct the content-encryption key.
 #[test]
 fn f_lc_1_hpke_base_single_recipient_round_trips() {
-    let pk = fixed_pk(0x01);
-    let sk = fixed_sk(0x01);
-    let audience = did("did:key:zRecipientAudience");
+    let (binding, sk, audience) = recipient(0x01);
     let (sender_kp, sender) = hybrid_sender();
     let plaintext = b"layer-c single recipient payload".to_vec();
     let body_cid = body_cid_of(&plaintext);
 
-    let env = seal_sealed_sender(
-        &pk, &audience, &sender, &sender_kp, &body_cid, 0, &plaintext,
-    );
+    let env = seal_sealed_sender(&binding, &sender, &sender_kp, &body_cid, 0, &plaintext);
     let (recovered, recovered_sender) = open_single(&sk, &audience, 0, &env)
         .expect("intended recipient MUST open the HPKE-base single-recipient envelope");
 
@@ -424,13 +438,12 @@ fn f_lc_1_hpke_base_single_recipient_round_trips() {
 /// the KEM decapsulation result and returns plaintext regardless.
 #[test]
 fn f_lc_1_wrong_recipient_sk_fails_to_open() {
-    let pk = fixed_pk(0x02);
-    let wrong_sk = fixed_sk(0x77); // NOT the matching sk for pk
-    let audience = did("did:key:zRecipientAudience");
+    let (binding, _sk, audience) = recipient(0x02);
+    let wrong_sk = fixed_sk(0x77); // NOT the matching sk for the binding's committed key
     let (sender_kp, sender) = hybrid_sender();
     let body_cid = fixed_body_cid_digest(0xC2);
 
-    let env = seal_sealed_sender(&pk, &audience, &sender, &sender_kp, &body_cid, 0, b"secret");
+    let env = seal_sealed_sender(&binding, &sender, &sender_kp, &body_cid, 0, b"secret");
     let outcome = open_single(&wrong_sk, &audience, 0, &env);
 
     assert!(
@@ -447,9 +460,9 @@ fn f_lc_1_wrong_recipient_sk_fails_to_open() {
 #[test]
 fn f_lc_1_envelope_is_v2_and_carries_hybrid_codepoint() {
     let (sender_kp, sender) = hybrid_sender();
+    let binding = binding_for_test(&fixed_pk(0x03));
     let env = seal_sealed_sender(
-        &fixed_pk(0x03),
-        &did("did:key:zRecipientAudience"),
+        &binding,
         &sender,
         &sender_kp,
         &fixed_body_cid_digest(0xC3),
@@ -507,13 +520,14 @@ fn f_lc_1_envelope_is_v2_and_carries_hybrid_codepoint() {
 #[test]
 fn f_lc_2_multi_stanza_each_recipient_opens_same_plaintext() {
     let pks = [fixed_pk(0x10), fixed_pk(0x11), fixed_pk(0x12)];
+    let bindings = group_bindings_for_test(&pks);
     let sks = [fixed_sk(0x10), fixed_sk(0x11), fixed_sk(0x12)];
     let (sender_kp, sender) = hybrid_sender();
-    let roster = group_roster_for_test(&pks);
+    let roster = binding_roster_for_test(&bindings);
     let plaintext = b"group payload".to_vec();
     let body_cid = body_cid_of(&plaintext);
 
-    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, &plaintext)
+    let env = seal_group_multi(&bindings, &sender, &sender_kp, &body_cid, 0, &plaintext)
         .expect("group seal within recipient limit");
 
     for (idx, sk) in sks.iter().enumerate() {
@@ -537,13 +551,21 @@ fn f_lc_2_multi_stanza_each_recipient_opens_same_plaintext() {
 #[test]
 fn f_lc_2_cross_stanza_substitution_rejected() {
     let pks = [fixed_pk(0x20), fixed_pk(0x21)];
+    let bindings = group_bindings_for_test(&pks);
     let sks = [fixed_sk(0x20), fixed_sk(0x21)];
     let (sender_kp, sender) = hybrid_sender();
-    let roster = group_roster_for_test(&pks);
+    let roster = binding_roster_for_test(&bindings);
     let body_cid = fixed_body_cid_digest(0xD1);
 
-    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, b"group payload")
-        .expect("group seal within recipient limit");
+    let env = seal_group_multi(
+        &bindings,
+        &sender,
+        &sender_kp,
+        &body_cid,
+        0,
+        b"group payload",
+    )
+    .expect("group seal within recipient limit");
 
     // Adversary swaps stanza 0 and stanza 1.
     let mut tampered = env.clone();
@@ -577,13 +599,21 @@ fn f_lc_2_cross_stanza_substitution_rejected() {
 #[test]
 fn f_lc_2_stanza_retarget_to_different_recipient_rejected() {
     let pks = [fixed_pk(0x30), fixed_pk(0x31)];
+    let bindings = group_bindings_for_test(&pks);
     let sks = [fixed_sk(0x30)];
     let (sender_kp, sender) = hybrid_sender();
-    let roster = group_roster_for_test(&pks);
+    let roster = binding_roster_for_test(&bindings);
     let body_cid = fixed_body_cid_digest(0xD2);
 
-    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, b"group payload")
-        .expect("group seal within recipient limit");
+    let env = seal_group_multi(
+        &bindings,
+        &sender,
+        &sender_kp,
+        &body_cid,
+        0,
+        b"group payload",
+    )
+    .expect("group seal within recipient limit");
 
     // Adversary rewrites the bound recipient roster of stanza 0 to a
     // different membership. Even though the roster is BLINDED (never on the
@@ -630,9 +660,10 @@ fn f_lc_2_group_envelope_codepoint_and_stanza_count() {
         fixed_pk(0x42),
         fixed_pk(0x43),
     ];
+    let bindings = group_bindings_for_test(&pks);
     let (sender_kp, sender) = hybrid_sender();
     let env = seal_group_multi(
-        &pks,
+        &bindings,
         &sender,
         &sender_kp,
         &fixed_body_cid_digest(0xD3),
@@ -702,11 +733,19 @@ fn f_lc_2_group_envelope_codepoint_and_stanza_count() {
 #[test]
 fn f_lc_2_default_group_send_honors_sealed_sender_no_plaintext_sender_did() {
     let pks = [fixed_pk(0x60), fixed_pk(0x61), fixed_pk(0x62)];
+    let bindings = group_bindings_for_test(&pks);
     let (sender_kp, sender) = hybrid_sender();
     let body_cid = fixed_body_cid_digest(0xD6);
 
-    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, b"group payload")
-        .expect("group seal within recipient limit");
+    let env = seal_group_multi(
+        &bindings,
+        &sender,
+        &sender_kp,
+        &body_cid,
+        0,
+        b"group payload",
+    )
+    .expect("group seal within recipient limit");
 
     // (a) Typed-shape guard: NO stanza carries a plaintext_sender_did on
     //     the DEFAULT path (it lives in `sealed_inner` instead).
@@ -770,11 +809,12 @@ fn f_lc_2_default_group_send_honors_sealed_sender_no_plaintext_sender_did() {
 #[test]
 fn f_lc_2_nondefault_plaintext_sender_group_carries_sender_did_in_aad() {
     let pks = [fixed_pk(0x70), fixed_pk(0x71)];
+    let bindings = group_bindings_for_test(&pks);
     let (sender_kp, sender) = hybrid_sender();
     let body_cid = fixed_body_cid_digest(0xD7);
 
     let env = seal_group_multi_plaintext_sender(
-        &pks,
+        &bindings,
         &sender,
         &sender_kp,
         &body_cid,
@@ -1391,11 +1431,11 @@ fn f_lc_3_sealed_sender_single_recipient_aad_binds_audience_union_and_frozen_gol
 /// fixes).
 #[test]
 fn f_lc_3_sealed_sender_default_omits_sender_did_from_wire() {
-    let audience = did("did:key:zRecipientAudienceUNIQUE");
+    let binding = binding_for_test(&fixed_pk(0x50));
+    let audience = binding.audience_did().as_str().as_bytes().to_vec();
     let (sender_kp, sender) = hybrid_sender();
     let env = seal_sealed_sender(
-        &fixed_pk(0x50),
-        &audience,
+        &binding,
         &sender,
         &sender_kp,
         &fixed_body_cid_digest(0xE0),
@@ -1454,11 +1494,11 @@ fn f_lc_3_sealed_sender_default_omits_sender_did_from_wire() {
 /// (then the scanner can't tell the two paths apart).
 #[test]
 fn f_lc_3_plaintext_sender_sibling_carries_sender_did_on_wire() {
-    let audience = did("did:key:zRecipientAudienceUNIQUE");
+    let binding = binding_for_test(&fixed_pk(0x51));
+    let audience = binding.audience_did().as_str().as_bytes().to_vec();
     let (sender_kp, sender) = hybrid_sender();
     let env = seal_plaintext_sender(
-        &fixed_pk(0x51),
-        &audience,
+        &binding,
         &sender,
         &sender_kp,
         &fixed_body_cid_digest(0xE1),
@@ -1514,19 +1554,9 @@ fn f_lc_3_plaintext_sender_sibling_carries_sender_did_on_wire() {
 /// recoverable (then Sealed-Sender breaks sender attribution entirely).
 #[test]
 fn f_lc_3_recovered_inner_sender_did_equals_bound() {
-    let pk = fixed_pk(0x52);
-    let sk = fixed_sk(0x52);
-    let audience = did("did:key:zRecipientAudience");
+    let (binding, sk, audience) = recipient(0x52);
     let (sender_kp, sender) = hybrid_sender();
-    let env = seal_sealed_sender(
-        &pk,
-        &audience,
-        &sender,
-        &sender_kp,
-        &body_cid_of(b"hi"),
-        0,
-        b"hi",
-    );
+    let env = seal_sealed_sender(&binding, &sender, &sender_kp, &body_cid_of(b"hi"), 0, b"hi");
 
     let (_pt, recovered_sender) = open_single(&sk, &audience, 0, &env)
         .expect("recipient MUST open the sealed-sender envelope");
@@ -1563,13 +1593,11 @@ fn f_lc_3_recovered_inner_sender_did_equals_bound() {
 /// flip (the OLD shape-trap) would NOT catch this — the AEAD tag is valid.
 #[test]
 fn f_lc_3_second_sealer_spoof_rejected_single() {
-    let pk = fixed_pk(0x53);
-    let sk = fixed_sk(0x53);
-    let audience = did("did:key:zRecipientAudience");
+    let (binding, sk, audience) = recipient(0x53);
 
     // Positive control: A's own send opens + origin-verifies.
     let (a_kp, a_did) = hybrid_sender();
-    let honest = seal_sealed_sender(&pk, &audience, &a_did, &a_kp, &body_cid_of(b"hi"), 0, b"hi");
+    let honest = seal_sealed_sender(&binding, &a_did, &a_kp, &body_cid_of(b"hi"), 0, b"hi");
     let (_pt, recovered) =
         open_single(&sk, &audience, 0, &honest).expect("A's honest send MUST open + origin-verify");
     assert_eq!(recovered, a_did, "positive control recovers A");
@@ -1579,8 +1607,7 @@ fn f_lc_3_second_sealer_spoof_rejected_single() {
     // origin-auth failure, NOT the F-01 content-splice guard).
     let (b_kp, _b_did) = hybrid_sender();
     let spoof = seal_sealed_sender(
-        &pk,
-        &audience,
+        &binding,
         &a_did,
         &b_kp,
         &body_cid_of(b"forged-as-A"),
@@ -1617,6 +1644,7 @@ fn f_lc_3_second_member_spoof_rejected_membership_group() {
     };
 
     let pks = [fixed_pk(0x80), fixed_pk(0x81), fixed_pk(0x82)];
+    let bindings = group_bindings_for_test(&pks);
     let sks = [fixed_sk(0x80), fixed_sk(0x81), fixed_sk(0x82)];
     let k_set = [0x99u8; 32];
     let params = GroupSealParams {
@@ -1626,10 +1654,7 @@ fn f_lc_3_second_member_spoof_rejected_membership_group() {
         role_assignments_generation: 2,
     };
     // The honest members hold the roster + generations independently.
-    let member_dids: Vec<String> = group_roster_for_test(&pks)
-        .iter()
-        .map(|d| String::from_utf8_lossy(d).into_owned())
-        .collect();
+    let member_dids: Vec<String> = member_dids_for_test(&bindings);
     let ctx = GroupVerifyContext {
         member_dids: member_dids.clone(),
         member_key_generation: 4,
@@ -1640,7 +1665,7 @@ fn f_lc_3_second_member_spoof_rejected_membership_group() {
     // Positive control: A (a real member) seals; every honest member opens +
     // origin-verifies.
     let (a_kp, a_did) = hybrid_sender();
-    let honest = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, b"group hi")
+    let honest = seal_membership_set_group(&bindings, &a_did, &a_kp, &k_set, &params, b"group hi")
         .expect("valid roster must seal (R18 C2)");
     for (i, sk) in sks.iter().enumerate() {
         let (_pt, rec) = open_membership_set_group(sk, i, &ctx, &honest)
@@ -1650,8 +1675,9 @@ fn f_lc_3_second_member_spoof_rejected_membership_group() {
 
     // ATTACK: member B (holds K_Set) claims sender_did = A, signs with B's key.
     let (b_kp, _b_did) = hybrid_sender();
-    let spoof = seal_membership_set_group(&pks, &a_did, &b_kp, &k_set, &params, b"forged-as-A")
-        .expect("valid roster must seal (R18 C2)");
+    let spoof =
+        seal_membership_set_group(&bindings, &a_did, &b_kp, &k_set, &params, b"forged-as-A")
+            .expect("valid roster must seal (R18 C2)");
     for (i, sk) in sks.iter().enumerate() {
         let outcome = open_membership_set_group(sk, i, &ctx, &spoof);
         assert_eq!(
@@ -1694,6 +1720,7 @@ fn f_conf_1_membership_group_cek_is_per_message_unique() {
     };
 
     let pks = [fixed_pk(0xA0), fixed_pk(0xA1), fixed_pk(0xA2)];
+    let bindings = group_bindings_for_test(&pks);
     let sks = [fixed_sk(0xA0), fixed_sk(0xA1), fixed_sk(0xA2)];
     let k_set = [0x5Au8; 32];
     let params = GroupSealParams {
@@ -1702,10 +1729,7 @@ fn f_conf_1_membership_group_cek_is_per_message_unique() {
         membership_set_generation: 9,
         role_assignments_generation: 1,
     };
-    let member_dids: Vec<String> = group_roster_for_test(&pks)
-        .iter()
-        .map(|d| String::from_utf8_lossy(d).into_owned())
-        .collect();
+    let member_dids: Vec<String> = member_dids_for_test(&bindings);
     let ctx = GroupVerifyContext {
         member_dids,
         member_key_generation: 3,
@@ -1718,9 +1742,9 @@ fn f_conf_1_membership_group_cek_is_per_message_unique() {
     let (a_kp, a_did) = hybrid_sender();
     let body_1 = b"membership group message ONE";
     let body_2 = b"membership group message TWO (a different body)";
-    let env_1 = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, body_1)
+    let env_1 = seal_membership_set_group(&bindings, &a_did, &a_kp, &k_set, &params, body_1)
         .expect("valid roster must seal (R18 C2)");
-    let env_2 = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, body_2)
+    let env_2 = seal_membership_set_group(&bindings, &a_did, &a_kp, &k_set, &params, body_2)
         .expect("valid roster must seal (R18 C2)");
 
     // Re-derive each per-message CEK via the SAME live `derive_group_cek` the
@@ -1743,7 +1767,7 @@ fn f_conf_1_membership_group_cek_is_per_message_unique() {
     // CONTROL: re-sealing the SAME body (→ same cid) re-derives the SAME CEK —
     // confirming the CEK is a deterministic function of (K_Set, sender, cid)
     // and that it is the BODY (via cid) driving the difference above, nothing else.
-    let env_1b = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, body_1)
+    let env_1b = seal_membership_set_group(&bindings, &a_did, &a_kp, &k_set, &params, body_1)
         .expect("valid roster must seal (R18 C2)");
     assert_eq!(
         cek_1,
@@ -1775,13 +1799,14 @@ fn f_conf_1_membership_group_cek_is_per_message_unique() {
 #[test]
 fn f_lc_3_second_sealer_spoof_rejected_layer_c_group() {
     let pks = [fixed_pk(0x90), fixed_pk(0x91)];
+    let bindings = group_bindings_for_test(&pks);
     let sks = [fixed_sk(0x90), fixed_sk(0x91)];
-    let roster = group_roster_for_test(&pks);
+    let roster = binding_roster_for_test(&bindings);
 
     // Positive control.
     let (a_kp, a_did) = hybrid_sender();
     let honest = seal_group_multi(
-        &pks,
+        &bindings,
         &a_did,
         &a_kp,
         &body_cid_of(b"group hi"),
@@ -1800,7 +1825,7 @@ fn f_lc_3_second_sealer_spoof_rejected_layer_c_group() {
     // origin-auth failure, NOT the F-01 content-splice guard).
     let (b_kp, _b_did) = hybrid_sender();
     let spoof = seal_group_multi(
-        &pks,
+        &bindings,
         &a_did,
         &b_kp,
         &body_cid_of(b"forged-as-A"),
@@ -1845,6 +1870,7 @@ fn f_lc_3_content_splice_rejected_membership_group() {
     };
 
     let pks = [fixed_pk(0xB0), fixed_pk(0xB1), fixed_pk(0xB2)];
+    let bindings = group_bindings_for_test(&pks);
     let sks = [fixed_sk(0xB0), fixed_sk(0xB1), fixed_sk(0xB2)];
     let k_set = [0x5Au8; 32];
     let params = GroupSealParams {
@@ -1853,10 +1879,7 @@ fn f_lc_3_content_splice_rejected_membership_group() {
         membership_set_generation: 9,
         role_assignments_generation: 1,
     };
-    let member_dids: Vec<String> = group_roster_for_test(&pks)
-        .iter()
-        .map(|d| String::from_utf8_lossy(d).into_owned())
-        .collect();
+    let member_dids: Vec<String> = member_dids_for_test(&bindings);
     let ctx = GroupVerifyContext {
         member_dids,
         member_key_generation: 3,
@@ -1868,8 +1891,9 @@ fn f_lc_3_content_splice_rejected_membership_group() {
     // recovers A's EXACT body (the F-01 guard does NOT reject honest sends —
     // the honest body's recomputed cid == its wire body_cid).
     let (a_kp, a_did) = hybrid_sender();
-    let honest = seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &params, b"honest body")
-        .expect("valid roster must seal (R18 C2)");
+    let honest =
+        seal_membership_set_group(&bindings, &a_did, &a_kp, &k_set, &params, b"honest body")
+            .expect("valid roster must seal (R18 C2)");
     for (i, sk) in sks.iter().enumerate() {
         let (pt, rec) = open_membership_set_group(sk, i, &ctx, &honest)
             .unwrap_or_else(|e| panic!("member {i} MUST open A's honest group send: {e:?}"));
@@ -1914,15 +1938,16 @@ fn f_lc_3_content_splice_rejected_layer_c_group() {
     use benten_drop::layer_c::splice_group_multi_body_for_test;
 
     let pks = [fixed_pk(0xC0), fixed_pk(0xC1)];
+    let bindings = group_bindings_for_test(&pks);
     let sks = [fixed_sk(0xC0), fixed_sk(0xC1)];
-    let roster = group_roster_for_test(&pks);
+    let roster = binding_roster_for_test(&bindings);
     // HONEST sender: body_cid = BLAKE3(body) (the design's content-CID contract).
     let body_cid = body_cid_of(b"honest body");
 
     // Positive control: A's honest send recovers A's EXACT body for every
     // recipient (the F-01 guard does NOT reject the honest send).
     let (a_kp, a_did) = hybrid_sender();
-    let honest = seal_group_multi(&pks, &a_did, &a_kp, &body_cid, 0, b"honest body")
+    let honest = seal_group_multi(&bindings, &a_did, &a_kp, &body_cid, 0, b"honest body")
         .expect("group seal within recipient limit");
     for (i, sk) in sks.iter().enumerate() {
         let (pt, rec) = open_group_stanza(sk, i, &roster, 0, &honest)
@@ -1971,14 +1996,15 @@ fn mc_1_non_recipient_cannot_recover_group_cek() {
     use benten_drop::layer_c::{LAYER_C_GROUP_CEK_CONTEXT, unwrap_group_cek_for_test};
 
     let pks = [fixed_pk(0xD0), fixed_pk(0xD1)];
+    let bindings = group_bindings_for_test(&pks);
     let sks = [fixed_sk(0xD0), fixed_sk(0xD1)];
-    let roster = group_roster_for_test(&pks);
+    let roster = binding_roster_for_test(&bindings);
     let generation = 0u32;
     let body = b"secret group body a relay must not read";
     let body_cid = body_cid_of(body);
 
     let (a_kp, a_did) = hybrid_sender();
-    let env = seal_group_multi(&pks, &a_did, &a_kp, &body_cid, generation, body)
+    let env = seal_group_multi(&bindings, &a_did, &a_kp, &body_cid, generation, body)
         .expect("group seal within recipient limit");
 
     // A LEGITIMATE recipient CAN open (the CEK it unwraps is the real one).
@@ -2060,12 +2086,13 @@ fn mc_1_non_recipient_cannot_recover_group_cek() {
 fn f_lc_3_retarget_to_new_audience_rejected() {
     // --- 0x6520 Layer-C group ---
     let pks = [fixed_pk(0xA0), fixed_pk(0xA1)];
+    let bindings = group_bindings_for_test(&pks);
     let sks = [fixed_sk(0xA0), fixed_sk(0xA1)];
-    let roster_s1 = group_roster_for_test(&pks); // what A signed over (S1)
+    let roster_s1 = binding_roster_for_test(&bindings); // what A signed over (S1)
     let body_cid = body_cid_of(b"to S1 only");
 
     let (a_kp, a_did) = hybrid_sender();
-    let env = seal_group_multi(&pks, &a_did, &a_kp, &body_cid, 0, b"to S1 only")
+    let env = seal_group_multi(&bindings, &a_did, &a_kp, &body_cid, 0, b"to S1 only")
         .expect("group seal within recipient limit");
 
     // S1 recipient with the CORRECT held roster: opens + verifies (control).
@@ -2104,13 +2131,11 @@ fn f_lc_3_retarget_to_new_audience_rejected() {
         role_assignments_generation: 1,
     };
     let (ga_kp, ga_did) = hybrid_sender();
-    let genv = seal_membership_set_group(&pks, &ga_did, &ga_kp, &k_set, &params, b"to set-beta")
-        .expect("valid roster must seal (R18 C2)");
+    let genv =
+        seal_membership_set_group(&bindings, &ga_did, &ga_kp, &k_set, &params, b"to set-beta")
+            .expect("valid roster must seal (R18 C2)");
 
-    let true_members: Vec<String> = group_roster_for_test(&pks)
-        .iter()
-        .map(|d| String::from_utf8_lossy(d).into_owned())
-        .collect();
+    let true_members: Vec<String> = member_dids_for_test(&bindings);
     // Control: the honest member set verifies.
     let ctx_ok = GroupVerifyContext {
         member_dids: true_members,
@@ -2157,6 +2182,7 @@ fn f_lc_3_stale_generation_replay_rejected() {
     };
 
     let pks = [fixed_pk(0xB0), fixed_pk(0xB1)];
+    let bindings = group_bindings_for_test(&pks);
     let sks = [fixed_sk(0xB0), fixed_sk(0xB1)];
     let k_set = [0x22u8; 32];
     // Sender seals under the OLD generation set (e.g. before a member was
@@ -2168,14 +2194,17 @@ fn f_lc_3_stale_generation_replay_rejected() {
         role_assignments_generation: 1,
     };
     let (a_kp, a_did) = hybrid_sender();
-    let stale =
-        seal_membership_set_group(&pks, &a_did, &a_kp, &k_set, &old_params, b"old-gen body")
-            .expect("valid roster must seal (R18 C2)");
+    let stale = seal_membership_set_group(
+        &bindings,
+        &a_did,
+        &a_kp,
+        &k_set,
+        &old_params,
+        b"old-gen body",
+    )
+    .expect("valid roster must seal (R18 C2)");
 
-    let members: Vec<String> = group_roster_for_test(&pks)
-        .iter()
-        .map(|d| String::from_utf8_lossy(d).into_owned())
-        .collect();
+    let members: Vec<String> = member_dids_for_test(&bindings);
 
     // Control: a recipient holding the SAME (old) generations verifies.
     let ctx_old = GroupVerifyContext {

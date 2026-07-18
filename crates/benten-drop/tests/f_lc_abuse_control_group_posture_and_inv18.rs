@@ -189,6 +189,9 @@ use benten_crypto_suite::cipher_suite::{
     CipherSuite, CipherSuiteCodepoint, RecipientPublic, RecipientSecret,
 };
 use benten_crypto_suite::sig::{Keypair as SigKeypair, SignatureSuite};
+use benten_drop::layer_c::{
+    RecipientBinding, binding_for_test, group_bindings_for_test, member_dids_for_test,
+};
 use benten_id::did::Did;
 use group_posture_stub::{
     GroupError, GroupSealParams, GroupVerifyContext, LAYER_C_DROP_MULTI_RECIPIENT,
@@ -229,13 +232,9 @@ fn fixed_sk(seed: u8) -> RecipientSecret {
 
 /// The independently-held `GroupVerifyContext` over a derived roster (all
 /// generations = 1, matching `group_seal_params`).
-fn verify_ctx(pks: &[RecipientPublic]) -> GroupVerifyContext {
-    let member_dids = benten_drop::layer_c::group_roster_for_test(pks)
-        .iter()
-        .map(|d| String::from_utf8_lossy(d).into_owned())
-        .collect();
+fn verify_ctx(bindings: &[RecipientBinding]) -> GroupVerifyContext {
     GroupVerifyContext {
-        member_dids,
+        member_dids: member_dids_for_test(bindings),
         member_key_generation: 1,
         membership_set_generation: 1,
         role_assignments_generation: 1,
@@ -533,11 +532,12 @@ fn f_lc_8_mutated_token_binding_aad_fails_admit() {
 #[test]
 fn f_lc_9_group_send_honors_sealed_sender_no_plaintext_sender_did() {
     let pks = [fixed_pk(0x10), fixed_pk(0x11), fixed_pk(0x12)];
+    let bindings = group_bindings_for_test(&pks);
     let (sender_kp, sender) = hybrid_sender();
     let k_set = [0x33u8; 32];
 
     let env = seal_membership_set_group(
-        &pks,
+        &bindings,
         &sender,
         &sender_kp,
         &k_set,
@@ -575,11 +575,12 @@ fn f_lc_9_group_recipient_recovers_inner_sender_did() {
     // R9 GAP-1: pk + sk are the SAME real keypair per recipient (paired seed).
     let pks = [fixed_pk(0x20), fixed_pk(0x21)];
     let sks = [fixed_sk(0x20), fixed_sk(0x21)];
+    let bindings = group_bindings_for_test(&pks);
     let (sender_kp, sender) = hybrid_sender();
     let k_set = [0x44u8; 32];
 
     let env = seal_membership_set_group(
-        &pks,
+        &bindings,
         &sender,
         &sender_kp,
         &k_set,
@@ -587,8 +588,9 @@ fn f_lc_9_group_recipient_recovers_inner_sender_did() {
         b"hello group",
     )
     .expect("valid roster must seal (R18 C2)");
-    let (pt, recovered_sender) = open_membership_set_group(&sks[1], 1, &verify_ctx(&pks), &env)
-        .expect("group recipient MUST open + origin-verify their stanza");
+    let (pt, recovered_sender) =
+        open_membership_set_group(&sks[1], 1, &verify_ctx(&bindings), &env)
+            .expect("group recipient MUST open + origin-verify their stanza");
 
     assert_eq!(
         pt, b"hello group",
@@ -618,7 +620,7 @@ fn f_lc_9_group_codepoints_distinct_and_dispatch_strict_reject() {
     // Feed 0x6610-declared bytes to the 0x6520 arm → strict-reject.
     let (sender_kp, sender) = hybrid_sender();
     let env = seal_membership_set_group(
-        &[fixed_pk(0x30)],
+        &[binding_for_test(&fixed_pk(0x30))],
         &sender,
         &sender_kp,
         &[0x55u8; 32],
@@ -898,11 +900,11 @@ fn f_lc_7_hpke_non_fs_old_envelope_still_opens_with_recovered_sk() {
             &recovered_kp.secret().to_bytes(),
         )
         .expect("re-parse of recipient secret must succeed");
-        let audience = b"did:key:zLongTermRecipient".to_vec();
+        let binding = binding_for_test(recovered_kp.public());
+        let audience = binding.audience_did().as_str().as_bytes().to_vec();
         let (sender_kp, sender) = hybrid_sender();
         let env = seal_sealed_sender(
-            recovered_kp.public(),
-            &audience,
+            &binding,
             &sender,
             &sender_kp,
             // HONEST sender: body_cid = BLAKE3(body) (F-01 content-CID contract).

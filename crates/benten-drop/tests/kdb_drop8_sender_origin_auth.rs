@@ -28,13 +28,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_drop::kdb_seal_testing as seal;
+use benten_drop::layer_c::RecipientBinding;
 use benten_drop::layer_c::{LayerCError, open_single};
-use benten_id::kdb_testing::RecipientBinding;
 
 /// DROP-8 (`0x6510`) — a `did:benten` sender's Drop round-trips: origin-auth
 /// resolves the sender's SIGNING key via `resolve_signing` + hybrid-verifies.
 #[test]
-#[ignore = "RED-PHASE: DROP-8 did:benten sender origin-auth via resolve_signing — un-ignore at R5"]
 fn drop8_did_benten_sender_origin_auth_roundtrips() {
     let r = seal::real_recipient();
     let binding = RecipientBinding::resolve(&r.did, &r.doc).expect("recipient binding resolves");
@@ -68,7 +67,6 @@ fn drop8_did_benten_sender_origin_auth_roundtrips() {
 /// ≠ the actual signer) fails closed. This pins that origin-auth verifies
 /// against the DID-EMBEDDED signing key, not a wire-provided one.
 #[test]
-#[ignore = "RED-PHASE: DROP-8 forged-origin did:benten sender fails closed — un-ignore at R5"]
 fn drop8_forged_origin_did_benten_sender_fails_closed() {
     let r = seal::real_recipient();
     let binding = RecipientBinding::resolve(&r.did, &r.doc).expect("recipient binding resolves");

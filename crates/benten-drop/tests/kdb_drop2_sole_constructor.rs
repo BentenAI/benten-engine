@@ -27,13 +27,13 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use benten_id::kdb_testing::{self as kdb, KeySetDocument, RecipientBinding};
+use benten_drop::layer_c::RecipientBinding;
+use benten_id::kdb_testing::{self as kdb, KeySetDocument};
 
 /// DROP-2 — a bare `did:key` commits NO KEM key, so `resolve` fails closed
 /// (`NoKemCommitment`-class): a signing-only principal is not a sealable Drop
 /// recipient (design §6).
 #[test]
-#[ignore = "RED-PHASE: DROP-2 bare did:key → NoKemCommitment (seal-ineligible) — un-ignore at R5"]
 fn drop2_bare_did_key_is_seal_ineligible() {
     // A bare hybrid `did:key` — no committed key-set CID at all.
     let did_key = benten_id::did::Did::from_hybrid_public_key(&kdb::hybrid_keypair().public());
@@ -58,7 +58,6 @@ fn drop2_bare_did_key_is_seal_ineligible() {
 /// HNDL-exposed and MUST be rejected by `resolve`, even when its CID + embedded
 /// signing key are internally consistent (design C5).
 #[test]
-#[ignore = "RED-PHASE: DROP-2 below-floor 0x6400 key-set is seal-ineligible (C5 PQ floor) — un-ignore at R5"]
 fn drop2_below_pq_floor_0x6400_is_seal_ineligible() {
     let sig_mk = kdb::signing_multikey_of(&kdb::hybrid_keypair().public());
     // A CLASSICAL-only kem multikey (`0xec ‖ x25519(32)`, NO ML-KEM half) + a
@@ -94,7 +93,6 @@ fn drop2_below_pq_floor_0x6400_is_seal_ineligible() {
 /// `RecipientBinding`-targeting impls, so unrelated structs' `pub audience_did`
 /// fields (e.g. the token-binding AADs) never false-positive.
 #[test]
-#[ignore = "RED-PHASE: DROP-2 RecipientBinding no-fallback-door grep-net (C4) — un-ignore at R5"]
 fn drop2_recipient_binding_has_no_fallback_door() {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let path = std::path::Path::new(manifest_dir).join("src/layer_c.rs");

@@ -46,7 +46,8 @@ use benten_drop::layer_c::group_posture::{
     seal_membership_set_group,
 };
 use benten_drop::layer_c::{
-    EncryptedEnvelope, LayerCError, group_roster_for_test, open_group_stanza, open_single,
+    EncryptedEnvelope, LayerCError, RecipientBinding, binding_for_test, binding_roster_for_test,
+    group_bindings_for_test, member_dids_for_test, open_group_stanza, open_single,
     seal_group_multi, seal_sealed_sender,
 };
 use benten_id::did::Did;
@@ -114,20 +115,13 @@ fn hybrid_sender() -> (SigKeypair, Vec<u8>) {
 fn f_lc_gap1_single_0x6510_real_recipient_keying() {
     let kp_a = real_kp();
     let kp_b = real_kp();
-    let audience = b"did:key:zRecipientAudienceGAP1".to_vec();
+    let binding = binding_for_test(&pub_of(&kp_a));
+    let audience = binding.audience_did().as_str().as_bytes().to_vec();
     let (sender_kp, sender) = hybrid_sender();
     let plaintext = b"gap-1 single-recipient confidential payload".to_vec();
     let body_cid = *blake3::hash(&plaintext).as_bytes();
 
-    let env = seal_sealed_sender(
-        &pub_of(&kp_a),
-        &audience,
-        &sender,
-        &sender_kp,
-        &body_cid,
-        0,
-        &plaintext,
-    );
+    let env = seal_sealed_sender(&binding, &sender, &sender_kp, &body_cid, 0, &plaintext);
 
     // Positive — the intended recipient's REAL secret round-trips.
     let (recovered, recovered_sender) = open_single(&sec_of(&kp_a), &audience, 0, &env)
@@ -178,12 +172,13 @@ fn f_lc_gap1_group_0x6520_real_recipient_keying() {
     let kp_b = real_kp();
     let kp_c = real_kp(); // a non-member
     let pks = [pub_of(&kp_a), pub_of(&kp_b)];
-    let roster = group_roster_for_test(&pks);
+    let bindings = group_bindings_for_test(&pks);
+    let roster = binding_roster_for_test(&bindings);
     let (sender_kp, sender) = hybrid_sender();
     let plaintext = b"gap-1 group confidential payload".to_vec();
     let body_cid = *blake3::hash(&plaintext).as_bytes();
 
-    let env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 0, &plaintext)
+    let env = seal_group_multi(&bindings, &sender, &sender_kp, &body_cid, 0, &plaintext)
         .expect("group seal within recipient limit");
 
     // Positive — each member opens their OWN stanza with their real secret.
@@ -224,13 +219,9 @@ fn f_lc_gap1_group_0x6520_real_recipient_keying() {
 // 0x6610 — MembershipSet K_Set group.
 // ===========================================================================
 
-fn verify_ctx(pks: &[RecipientPublic]) -> GroupVerifyContext {
-    let member_dids = group_roster_for_test(pks)
-        .iter()
-        .map(|d| String::from_utf8_lossy(d).into_owned())
-        .collect();
+fn verify_ctx(bindings: &[RecipientBinding]) -> GroupVerifyContext {
     GroupVerifyContext {
-        member_dids,
+        member_dids: member_dids_for_test(bindings),
         member_key_generation: 1,
         membership_set_generation: 1,
         role_assignments_generation: 1,
@@ -245,7 +236,8 @@ fn f_lc_gap1_membership_set_group_0x6610_real_recipient_keying() {
     let kp_b = real_kp();
     let kp_c = real_kp(); // a non-member
     let pks = [pub_of(&kp_a), pub_of(&kp_b)];
-    let ctx = verify_ctx(&pks);
+    let bindings = group_bindings_for_test(&pks);
+    let ctx = verify_ctx(&bindings);
     let (sender_kp, sender) = hybrid_sender();
     let k_set = [0x5au8; 32];
     let params = GroupSealParams {
@@ -256,8 +248,9 @@ fn f_lc_gap1_membership_set_group_0x6610_real_recipient_keying() {
     };
     let plaintext = b"gap-1 membership-set confidential payload".to_vec();
 
-    let env = seal_membership_set_group(&pks, &sender, &sender_kp, &k_set, &params, &plaintext)
-        .expect("valid roster must seal (R18 C2)");
+    let env =
+        seal_membership_set_group(&bindings, &sender, &sender_kp, &k_set, &params, &plaintext)
+            .expect("valid roster must seal (R18 C2)");
 
     // Positive — each member opens their OWN stanza with their real secret.
     let (pt_a, _) = open_membership_set_group(&sec_of(&kp_a), 0, &ctx, &env)
