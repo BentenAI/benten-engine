@@ -8,7 +8,9 @@
 > Composition-Hazard-Honest-Disclosure · **`OOS`** = Out-Of-Scope · **`MIT`** = Mitigated-Open. The full narrative
 > for each lives in its `### Compromise #N` detail section below (the summary tables + cross-references that follow
 > ride this index). #30–#66 dispositions are R0.7 §5.2 (#65/#66 are the R13/R14 mints); #1–#29 reflect the
-> Phase-1→4-Foundation closure state.
+> Phase-1→4-Foundation closure state; **#67** is the Phase-4-Meta-Core GAP-KDB Shape-B mint (`SGD`;
+> first-contact / TOFU DID-authenticity residual) whose canonical registration is its detail section at the
+> foot of this document.
 
 | Compromise # | class | Compromise # | class | Compromise # | class |
 |---|---|---|---|---|---|
@@ -3610,3 +3612,33 @@ take it back. The cryptographic property:
   `crates/benten-id/src/did_rotation.rs` (`RotationLog`) +
   `crates/benten-caps/src/grant_backed.rs` (the UCAN-gated cap policy
   consulted at the ALPN boundary).
+
+---
+
+### Compromise #67 — First-contact / TOFU DID-authenticity bootstrap (GAP-KDB Shape-B residual)
+
+**Status.** SUBSTRATE-GUARANTEE HONEST DISCLOSURE (`SGD`); OPEN residual — NOT eliminated (the honest
+bind-once boundary). **Source.** GAP-KDB Shape-B identity-model council (design
+`.addl/phase-4-meta/GAP-KDB-B-DESIGN-R1.md` §8 / R1 §5; disposition per the R0.7 §5.2 registry conventions).
+
+Shape-B — the content-addressed `did:benten` key-set + `Did::resolve_kem` + the `RecipientBinding`
+sole-constructor typestate + Inv-23 — closes *key-substitution-given-a-known-DID*: an active attacker can no
+longer swap the recipient KEM key under a `did:benten` a sender already holds, because doing so requires a
+BLAKE3-256 2nd-preimage over the canonical DAG-CBOR key-set (infeasible). It does **NOT** shut
+*DID-authenticity-at-first-contact*: whoever controls the channel where a sender **first learns**
+"Alice ↔ `did:benten:…`" can hand them their own self-consistent `did:benten`, which then resolves and verifies
+cleanly.
+
+Shape-B therefore **reduces the** confidentiality trust window from **continuous** (swap the address-book KEM
+key at any time) to **bind-once** (substitute the DID only at the single moment of first contact) — the
+identical posture to Signal safety numbers, MLS, and PGP fingerprints, all of which share this exact residual.
+Authenticating that initial DID↔principal binding is **out-of-band** and the user's responsibility; Benten
+provides no PKI / CA for it and **cannot authenticate the first** contact. The bare-`did:key` / Shape-A fallback
+has the *same* residual — no reviewer's push for A can frame it as "eliminating" this.
+
+**Not eliminated — reduced.** The honest statement is: *post*-first-contact key substitution is infeasible
+(a 2nd-preimage); *first-contact* DID-authenticity is a bind-once, TOFU boundary the user bootstraps out-of-band.
+**Cross-ref:** Inv-23 (`INVARIANT-COVERAGE.md`); `SECURITY-PROOFS.md` §4.1 (the recipient-key premise now cites
+the binding rather than assuming an honest address book); `THREAT-MODEL.md` (recipient-key closure + the
+DISTINCT seal-path revocation-reach residual, Compromise #62 — a separate open residual, NOT this one); design
+§8 / R1 §5.

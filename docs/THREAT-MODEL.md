@@ -121,6 +121,38 @@ granularity, the typed-reject-never-silent-fallback contract — are named at ea
 
 ---
 
+## §2b — Recipient-key SUBSTITUTION closure (GAP-KDB Shape-B / Inv-23) + the two DISTINCT open residuals
+
+The §2 rung-4 blast-radius is a *key-COMPROMISE* axis. A DISTINCT, previously-open seam was recipient-key
+*SUBSTITUTION*: nothing bound the `RecipientPublic` fed to a seal to the `audience_did` it was sealed under, so
+an active attacker at the address-book boundary could hand a sender the WRONG recipient's KEM key and read
+everything (the "silently trusts an honest address book" premise every §2 proof rested on).
+
+**Recipient-key substitution — CLOSED (GAP-KDB Shape-B).** The audience `did:benten` now *commits* the recipient's
+key-set (including the KEM key) by CID, and `Did::resolve_kem` recovers-and-verifies the KEM key from the DID —
+a substituted recipient KEM key not committed by the audience DID fails closed and cannot be sealed to (Inv-23,
+a BLAKE3-256 2nd-preimage, enforced behind the `RecipientBinding` sole-constructor typestate). The recipient side
+is now symmetric to the already-self-certifying sender side. Cross-link Inv-23 (`INVARIANT-COVERAGE.md`) +
+`SECURITY-PROOFS.md` §4.1 (the recipient-key premise now cites the binding, not an honest address book).
+
+**Residual A — seal-path revocation-reach (DISTINCT from Compromise #67).** Shape-B does NOT close a separate
+seal-path gap: rotating away from a compromised key does NOT stop *inbound* Drops — any sender still holding the
+recipient's old key-set doc can keep sealing inbound Drops to the old key-set's KEM key (the old committed doc
+stays a resolvable, self-consistent commitment for any sender who cached it). This is an OPEN
+seal-path revocation-reach residual, distinct from Compromise #67 (first-contact / TOFU). Cross-link Compromise
+#62 (revocation-reach; Drops forever-valid once distributed). It is disclosed here so it is never conflated with
+the first-contact residual.
+
+**Residual B — offline-first-send availability (DISTINCT from #67 AND from Residual A).** Sending a *first* Drop
+to an offline / uncached / brand-new contact still needs their key-set doc (carried in-band, cached in the vault
+keyed by DID, or fetched by CID over iroh-blobs); offline + uncached + never-contacted = cannot send. This is
+strictly better than the pre-Shape-B state (you would otherwise hold an *unverified* RecipientPublic) and is the
+same first-contact ergonomic every system has, but it is a genuine availability cost — the operational face of
+Compromise #67, named separately here (distinct from both #67 and Residual A) so the three residuals are never
+silently conflated.
+
+---
+
 ## §3 — Per-recipient unlinkability scope = NETWORK-OBSERVER-ONLY (load-bearing)
 
 The Layer-C group-AAD blinding (`0x6610` MembershipSet group + `0x6520` Layer-C multi-recipient) replaces the raw

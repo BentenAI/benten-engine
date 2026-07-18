@@ -112,11 +112,18 @@ fn eng_3_catalog_count_rows_agree_baseline() {
          its Regression-list-entries count ({regression}) — the 1:1 mirror \
          (`catalog_variant_count_matches_enum`)."
     );
-    assert_eq!(
-        throwable, CATALOG_THROWABLE_COUNT_AT_R3_BASE,
-        "sanity: the R3 freeze-base throwable count is \
-         {CATALOG_THROWABLE_COUNT_AT_R3_BASE}. If this fires, the base moved \
-         and the RED count arm must be re-based."
+    // Post-R5 (GAP-KDB doc-wave): the catalog GREW past the R3 base — the
+    // sanity guard flips from "== R3 base (200)" to "> R3 base", a live
+    // post-condition co-pinning the R5 mint (`E_RECIPIENT_KEM_NOT_COMMITTED`)
+    // alongside the RED arm below. Kept as `>` (not `== 201`) so the
+    // strategy-C integrator can reconcile the count if a sibling wave also
+    // mints, per the historical #1319↔#1318 collision pattern. The 1:1
+    // rows-agree mirror above is the load-bearing half.
+    assert!(
+        throwable > CATALOG_THROWABLE_COUNT_AT_R3_BASE,
+        "post-R5: the throwable count ({throwable}) MUST have GROWN past the R3 \
+         freeze base ({CATALOG_THROWABLE_COUNT_AT_R3_BASE}) — the GAP-KDB \
+         recipient-binding boundary code was minted + mirrored."
     );
 }
 
@@ -133,16 +140,15 @@ fn eng_3_catalog_count_rows_agree_baseline() {
 /// would-FAIL-on-revert: dropping the mint lowers the count back to 200 AND
 /// removes the boundary-bound code from the catalog.
 #[test]
-#[ignore = "RED-PHASE: ENG-3 GAP-KDB ErrorCode mirror + count — lands at R5 — un-ignore at R5"]
 fn eng_3_catalog_mirrors_gapkdb_boundary_codes() {
     let doc = error_catalog();
 
     // (1) The doc-stated throwable count GREW past the R3 base (new codes
     //     minted + mirrored). The two count rows still agree (mirror held).
-    let throwable = doc_stated_count(&doc, "Throwable enum variants")
-        .expect("throwable count row present");
-    let regression = doc_stated_count(&doc, "Regression-list entries")
-        .expect("regression count row present");
+    let throwable =
+        doc_stated_count(&doc, "Throwable enum variants").expect("throwable count row present");
+    let regression =
+        doc_stated_count(&doc, "Regression-list entries").expect("regression count row present");
     assert_eq!(
         throwable, regression,
         "the enum↔catalog 1:1 mirror MUST still hold after the GAP-KDB mint."
@@ -196,11 +202,13 @@ fn eng_4_1073_record_present_baseline() {
         "the #1073 record MUST name the did:key-only `Did::resolve` \
          preservation clause at the R3 base (the clause Shape-B supersedes)."
     );
-    // Sanity: no did:benten supersession recorded yet.
+    // Post-R5 (GAP-KDB doc-wave): the #1073 supersession landed — the sanity
+    // guard flips from "no did:benten at R3 base" to "now recorded", a live
+    // post-condition co-pinning the R5 supersession alongside the RED arm.
     assert!(
-        !doc.contains("did:benten"),
-        "sanity: at the R3 base phase-4-backlog.md carries no did:benten \
-         supersession; if this fires, re-base the RED arm."
+        doc.contains("did:benten"),
+        "post-R5: phase-4-backlog.md now records the did:benten supersession of \
+         the #1073 did:key-only-resolve clause (design R1 §4 item 10)."
     );
 }
 
@@ -216,7 +224,6 @@ fn eng_4_1073_record_present_baseline() {
 /// would-FAIL-on-revert: dropping the supersession note (leaving #1073's
 /// clause silently authoritative) flips the arm.
 #[test]
-#[ignore = "RED-PHASE: ENG-4 #1073 did:key-only clause superseded by did:benten — lands at R5 — un-ignore at R5"]
 fn eng_4_1073_clause_superseded_by_did_benten() {
     let doc = phase_4_backlog();
     assert!(

@@ -71,11 +71,14 @@ fn docs_7_authority_path_present_baseline() {
         "the authority-facing docs MUST inventory the UCAN authority surface \
          at the R3 base (proves the parser reads the docs)."
     );
-    // Sanity: the Fork-A migration is NOT yet registered at the R3 base.
+    // Post-R5 (GAP-KDB doc-wave): the Fork-A authority migration landed — the
+    // sanity guard flips from "no authority-facing doc registers did:benten at
+    // R3 base" to "now registered", a live post-condition co-pinning the R5
+    // registration alongside the RED arm below.
     assert!(
-        !combined.contains("did:benten"),
-        "sanity: at the R3 freeze base no authority-facing doc registers a \
-         did:benten issuer; if this fires, re-base the RED arm."
+        combined.contains("did:benten"),
+        "post-R5: an authority-facing doc now registers the did:benten Fork-A \
+         hybrid-migration (composite issuer verify + silent-PQ-strip defense)."
     );
 }
 
@@ -93,7 +96,6 @@ fn docs_7_authority_path_present_baseline() {
 /// would-FAIL-on-revert: dropping the migration registration (either the
 /// composite-issuer wiring OR the silent-PQ-strip defense) flips the arm.
 #[test]
-#[ignore = "RED-PHASE: DOCS-7 Fork-A authority hybrid-migration registration — lands at R5 doc-wave — un-ignore at R5"]
 fn docs_7_registers_fork_a_authority_hybrid_migration() {
     let combined = authority_docs_combined();
     let lc = combined.to_lowercase();
@@ -122,11 +124,8 @@ fn docs_7_registers_fork_a_authority_hybrid_migration() {
     let pq_strip_defended = lc.contains("pq-strip")
         || lc.contains("pq strip")
         || (lc.contains("ed25519")
-            && (lc.contains("only")
-                || lc.contains("half"))
-            && (lc.contains("reject")
-                || lc.contains("downgrade")
-                || lc.contains("strip")));
+            && (lc.contains("only") || lc.contains("half"))
+            && (lc.contains("reject") || lc.contains("downgrade") || lc.contains("strip")));
     assert!(
         pq_strip_defended,
         "an authority-facing doc MUST register the silent-PQ-strip defense — \

@@ -200,6 +200,27 @@ encoding** — they are retained as **documented fallback-only** and are
 **#5-RISKY** (single-byte private values that squat the registered single-byte
 multicodec range). New content uses the two-component-multikey form above.
 
+**GAP-KDB Shape-B — `0x120c`/`0xec` NOW WIRED + `did:benten` method registered + `0xf0` RETIRED (Phase-4-Meta-Core).**
+The GAP-KDB Shape-B recipient-binding closure discharges the "when wired" hedge above: the registered KEM
+components are now WIRED into the `KeySetDocument` `kem` field of the new `did:benten` method.
+
+- `mlkem-768-pub = 0x120c` is WIRED into the `KeySetDocument` `kem` multikey (the ML-KEM-768 encapsulation key).
+- `x25519-pub = 0xec` is WIRED into the `KeySetDocument` `kem` multikey, **X25519-FIRST** (C2): the `kem` field is `varint(0xec) ‖ x25519(32) ‖ varint(0x120c) ‖ mlkem768_ek(1184)`, matching the already-frozen `RecipientPublic::to_bytes()` order (no reorder step). The `kem_cp = 0x647a` field cross-checks the component set `{0xec, 0x120c}`, fail-closed on disagreement (algorithm-confusion defense).
+- The `did:benten` method commits the recipient key-set by CID: its method-specific-id is `[varint(0x1211) ‖ mldsa(1952)] ‖ [varint(0xed) ‖ ed25519(32)] ‖ [CIDv1 0x01,0x71,0x1e,0x20 ‖ blake3(32)]`, where the trailing standard CIDv1 is the BLAKE3-256 commitment of the canonical `KeySetDocument` — so a `did:benten` DID *is* the content-address of its key-set (Inv-23; **no invented framing byte**, C1 — the CIDv1 self-describing prefix disambiguates the decode). The committed KEM key is recovered-and-verified from the DID via `Did::resolve_kem`. `did:key` bytes are unchanged (zero migration for the classical/authority world).
+- `HYBRID_KEM_MULTICODEC = [0xf0, 0x01]` is **RETIRED** (superseded by the registered `0x120c`/`0xec` components): the #5-RISKY single-byte-squat reserved-private interim is no longer the KEM encoding on any Shape-B path; the `KeySetDocument` `kem` field uses the registered two-component-multikey form exclusively.
+
+**Fork-A — authority-path Ed25519→hybrid migration (Phase-4-Meta-Core; the `did:benten` UCAN-issuer surface).**
+The entire authority path — the UCAN chain-walk, `RotationAttestation` verify, `DeviceAttestation` verify, and the
+`benten_id::vc` W3C-VC credential verify (now hybrid per D-53) — verifies a `did:benten` **COMPOSITE / hybrid**
+issuer signature via ONE **codepoint-dispatched** hybrid verify (dispatch on the `iss` DID's leading multicodec:
+`0xed01` → classical Ed25519 64-byte, `0x1211` → LAMPS Composite ML-DSA-65⊕Ed25519). Existing 64-byte `did:key`
+tokens verify unchanged (additive, no wire-break, so Fork-A does NOT gate the freeze either way).
+**Silent-PQ-strip defense (the load-bearing failure mode).** A `did:benten` issuer's token signed with only the
+Ed25519 half of a composite (or a zeroed / forged ML-DSA half, or a classical-codepoint sig) MUST be **REJECTED** —
+verifying only the classical Ed25519 half of a composite is a silent PQ downgrade / strip on the authority path, so
+the composite verify is ONE dispatch, never a bolt-on Ed25519-only path. Regression-pinned by the AUTH-3
+silent-PQ-strip reject + the AUTH-7 one-helper grep-audit (no second Ed25519-only verify site can re-open it).
+
 The `did:agent:` method is an **optional allowlist alias** (Inv-22: nature
 DERIVED via method-parse; the alias is a hint, never a stored authoritative
 discriminator and never authority-bearing).

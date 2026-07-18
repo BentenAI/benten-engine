@@ -220,6 +220,7 @@ export const CATALOG_CODES = [
   "E_DROP_BUNDLE_VERSION_UNSUPPORTED",
   "E_DROP_BUNDLE_MODE3_INLINE_REJECTED",
   "E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH",
+  "E_RECIPIENT_KEM_NOT_COMMITTED",
   "E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY",
   "E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED",
   "E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED",
@@ -3045,6 +3046,21 @@ export class EDropBundleEnvelopeIssuerMismatch extends BentenError {
 }
 
 /**
+ * E_RECIPIENT_KEM_NOT_COMMITTED
+ *
+ * Thrown at: `crates/benten-id/src/did.rs::Did::resolve_kem` (Phase 4-Meta-Core, GAP-KDB Shape-B recipient-binding closure) — the LIVE production typed arm is `DidError::{NoKemCommitment, KeysetCommitmentMismatch, …}`, consumed by `crates/benten-drop/src/layer_c.rs::RecipientBinding::resolve` (the sole-constructor typestate that PROVES the KEM key is committed). Consistent with the sibling reserved Drop codes (`E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH`), the `benten-errors::ErrorCode::RecipientKemNotCommitted` catalog surface is reserved (the boundary-lift into the engine-wide catalog lands at the G-CORE-9 v1-interface freeze when the outbound-Drop API surface stabilizes); the drift-detector's `reachability: ignore` annotation below names this reservation.
+ * Message template: "recipient KEM key is not committed by its audience did:benten — no RecipientBinding could be constructed"
+ */
+export class ERecipientKemNotCommitted extends BentenError {
+  static readonly code = "E_RECIPIENT_KEM_NOT_COMMITTED";
+  static readonly fixHint = "GAP-KDB Shape-B closes the recipient-side key-substitution seam (design §5, Inv-23): a Layer-C Drop seal's KEM key is committed by its audience DID. `Did::resolve_kem(keyset_doc)` recovers-and-verifies the recipient KEM key FROM the DID — it fail-closed rejects when (a) the received key-set document does not hash to the DID's committed CIDv1 (a BLAKE3-256 2nd-preimage — the flagship active-substitution defense), (b) the document's embedded `sig` multikey disagrees with the DID's embedded signing key (spliced-sig reject), (c) the `kem_cp` disagrees with the wired `{0xec, 0x120c}` components (algorithm-confusion reject), or (d) the committed suite is below the PQ floor (a `0x6400` classical-only commitment is refused). `RecipientBinding::resolve(audience_did, keyset_doc)` is the SOLE constructor; there is NO public constructor pairing an arbitrary `kem_pub` with an `audience_did`, so a substituted KEM key an attacker tries to seal to is unconstructible. A bare `did:key` commits no key-set → `NoKemCommitment` (signing-only principals need no KEM key; Drop recipients MUST be `did:benten`). Fix at the sender side: obtain the audience's key-set document over the same first-contact / address-book / cached-vault channel that verifies against the DID (a changed key-set = a changed DID). This is a construction-side guarantee — no wire byte, CBOR field, or golden vector changes. No primitive-edge routing (None) — the typed-reject IS the defense.";
+  constructor(message: string, context?: Record<string, unknown>) {
+    super("E_RECIPIENT_KEM_NOT_COMMITTED", "GAP-KDB Shape-B closes the recipient-side key-substitution seam (design §5, Inv-23): a Layer-C Drop seal's KEM key is committed by its audience DID. `Did::resolve_kem(keyset_doc)` recovers-and-verifies the recipient KEM key FROM the DID — it fail-closed rejects when (a) the received key-set document does not hash to the DID's committed CIDv1 (a BLAKE3-256 2nd-preimage — the flagship active-substitution defense), (b) the document's embedded `sig` multikey disagrees with the DID's embedded signing key (spliced-sig reject), (c) the `kem_cp` disagrees with the wired `{0xec, 0x120c}` components (algorithm-confusion reject), or (d) the committed suite is below the PQ floor (a `0x6400` classical-only commitment is refused). `RecipientBinding::resolve(audience_did, keyset_doc)` is the SOLE constructor; there is NO public constructor pairing an arbitrary `kem_pub` with an `audience_did`, so a substituted KEM key an attacker tries to seal to is unconstructible. A bare `did:key` commits no key-set → `NoKemCommitment` (signing-only principals need no KEM key; Drop recipients MUST be `did:benten`). Fix at the sender side: obtain the audience's key-set document over the same first-contact / address-book / cached-vault channel that verifies against the DID (a changed key-set = a changed DID). This is a construction-side guarantee — no wire byte, CBOR field, or golden vector changes. No primitive-edge routing (None) — the typed-reject IS the defense.", message, context);
+    this.name = "ERecipientKemNotCommitted";
+  }
+}
+
+/**
  * E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY
  *
  * Thrown at: `crates/benten-engine/src/manifest_envelope_recheck.rs::outcome_to_row_reject` (G-CORE-8, Phase 4-Meta-Core; security-r1-1 + security-r1-2 BLOCKER closure). Replaces the prior `NotApplicable → Ok(())` silent-admit path inside `apply_atrium_merge`'s per-row recheck loop. The default-builder also flips to install the `ProductionManifestEnvelopeRechecker` glue so Engine::default deployments inherit Layer-3 enforcement without an explicit `set_manifest_envelope_rechecker` call.
@@ -3465,6 +3481,7 @@ export const CODE_TO_CTOR_GENERATED: Readonly<Record<string, new (message: strin
   "E_DROP_BUNDLE_VERSION_UNSUPPORTED": EDropBundleVersionUnsupported,
   "E_DROP_BUNDLE_MODE3_INLINE_REJECTED": EDropBundleMode3InlineRejected,
   "E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH": EDropBundleEnvelopeIssuerMismatch,
+  "E_RECIPIENT_KEM_NOT_COMMITTED": ERecipientKemNotCommitted,
   "E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY": EManifestEnvelopeRecheckUnresolvedDeny,
   "E_PLUGIN_INSTALL_RECORD_ALREADY_APPLIED": EPluginInstallRecordAlreadyApplied,
   "E_WRITE_BOUNDARY_CHAIN_NOT_USER_ROOTED": EWriteBoundaryChainNotUserRooted,

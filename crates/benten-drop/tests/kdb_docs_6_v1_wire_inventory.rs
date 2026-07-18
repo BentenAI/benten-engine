@@ -59,11 +59,13 @@ fn docs_6_inventory_recovers_existing_surfaces_baseline() {
              {surface:?} at the R3 base (proves the parser reads the doc)."
         );
     }
-    // Sanity: at the R3 base neither GAP-KDB surface is registered yet.
+    // Post-R5 (GAP-KDB doc-wave): both freeze surfaces are now inventoried —
+    // the sanity guard flips from "absent at R3 base" to "now registered", a
+    // live post-condition co-pinning the R5 rows alongside the RED arms.
     assert!(
-        !doc.contains("did:benten") && !doc.contains("KeySetDocument"),
-        "sanity: at the R3 freeze base the inventory does not yet register \
-         did:benten / KeySetDocument; if this fires, re-base the RED arms."
+        doc.contains("did:benten") && doc.contains("KeySetDocument"),
+        "post-R5: the inventory now registers both GAP-KDB freeze surfaces \
+         (did:benten method + KeySetDocument schema), each with a byte-pin cite."
     );
 }
 
@@ -76,7 +78,6 @@ fn docs_6_inventory_recovers_existing_surfaces_baseline() {
 /// citation (the `.rs` file that pins its golden layout). would-FAIL-on-
 /// revert: dropping the row (or citing no byte-pin test) fails.
 #[test]
-#[ignore = "RED-PHASE: DOCS-6 did:benten inventory row — lands at R5 doc-wave — un-ignore at R5"]
 fn docs_6_registers_did_benten_surface() {
     let doc = wire_inventory();
     assert!(
@@ -86,7 +87,9 @@ fn docs_6_registers_did_benten_surface() {
     );
     // Freeze-completeness = the row cites a byte-pin test (a `.rs` file),
     // matching every other inventory row's shape.
-    let cites_byte_pin = doc.lines().any(|l| l.contains("did:benten") && l.contains(".rs"));
+    let cites_byte_pin = doc
+        .lines()
+        .any(|l| l.contains("did:benten") && l.contains(".rs"));
     assert!(
         cites_byte_pin,
         "the did:benten inventory row MUST cite a byte-pin test (`.rs`) — the \
@@ -99,7 +102,6 @@ fn docs_6_registers_did_benten_surface() {
 /// a byte-pin test citation. would-FAIL-on-revert: dropping the row (or
 /// citing no byte-pin test) fails.
 #[test]
-#[ignore = "RED-PHASE: DOCS-6 KeySetDocument inventory row — lands at R5 doc-wave — un-ignore at R5"]
 fn docs_6_registers_keyset_document_surface() {
     let doc = wire_inventory();
     assert!(
@@ -107,7 +109,9 @@ fn docs_6_registers_keyset_document_surface() {
         "V1-WIRE-FORMAT-INVENTORY.md MUST register the KeySetDocument v=1 \
          canonical DAG-CBOR schema as a frozen v1-beta wire surface (design §7)."
     );
-    let cites_byte_pin = doc.lines().any(|l| l.contains("KeySetDocument") && l.contains(".rs"));
+    let cites_byte_pin = doc
+        .lines()
+        .any(|l| l.contains("KeySetDocument") && l.contains(".rs"));
     assert!(
         cites_byte_pin,
         "the KeySetDocument inventory row MUST cite a byte-pin test (`.rs`) — \

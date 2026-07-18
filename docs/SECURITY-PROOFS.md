@@ -89,7 +89,13 @@ additive with no wire-break.
 
 ## §4.1 — Sealed-Sender property + the per-stanza-LIVE binding (the proof shape)
 
-**Recipient-key premise (REAL, not a placeholder — R9 GAP-1).** Every claim below stands on the CEK being
+**Recipient-key premise (REAL, not a placeholder — R9 GAP-1; DISCHARGED by the GAP-KDB Shape-B binding).** The
+former "assume the recipient KEM key was honestly obtained" address-book assumption is now discharged: the KEM key
+is committed by its audience did:benten (Inv-23), recovered-and-verified from the DID via Did::resolve_kem behind
+the RecipientBinding sole-constructor typestate (a BLAKE3-256 2nd-preimage over the canonical DAG-CBOR key-set) —
+the recipient secret still carries genuine OS-RNG entropy and is unrecoverable from the public key, and now that
+public key is itself bound to the DID, so this premise rests on the binding, not on an honest address book. Every
+claim below stands on the CEK being
 HPKE-key-wrapped to a **REAL hybrid recipient key**: the seal path
 (`benten_drop::layer_c::seal_sealed_sender` / `seal_group_multi`) takes a `&RecipientPublic` (`&[RecipientPublic]`
 for the group) and the open path (`open_single` / `open_group_stanza`) takes a `&RecipientSecret`, both re-exported

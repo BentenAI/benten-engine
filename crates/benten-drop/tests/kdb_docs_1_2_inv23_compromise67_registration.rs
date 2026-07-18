@@ -129,11 +129,15 @@ fn docs_1_compromise_parser_reads_doc_baseline_66_top() {
          MUST be recovered. Got top: {:?}",
         comps.iter().max()
     );
+    // R5 doc-wave landed: the sanity guard flips from "absent at R3 base" to
+    // "present after R5" — a live post-condition that co-pins the #67 mint
+    // alongside the RED arm below (parser-reads-doc property preserved; the
+    // load-bearing half is `contains(&66)` above).
     assert!(
-        !comps.contains(&67),
-        "sanity: at the R3 freeze base Compromise #67 is NOT yet registered \
-         (the GAP-KDB residual is minted by the R5 doc-wave). If this fires, \
-         the base already carries #67 and the RED arm must be re-based."
+        comps.contains(&67),
+        "post-R5 (GAP-KDB Shape-B doc-wave): Compromise #67 (the \
+         first-contact/TOFU DID-authenticity residual) is now registered — the \
+         R5 doc-wave minted it. The parser recovers it FROM the on-disk doc."
     );
 }
 
@@ -147,7 +151,6 @@ fn docs_1_compromise_parser_reads_doc_baseline_66_top() {
 /// drift). would-FAIL-on-revert: dropping the Inv-23 mint or leaving the
 /// header count at 22 flips the arm.
 #[test]
-#[ignore = "RED-PHASE: DOCS-1 Inv-23 registration lands at R5 doc-wave — un-ignore at R5"]
 fn docs_1_registers_inv_23_header_coheres() {
     let doc = read_doc("docs/INVARIANT-COVERAGE.md");
     let invs = registered_invariants(&doc);
@@ -182,7 +185,6 @@ fn docs_1_registers_inv_23_header_coheres() {
 /// `f_disc_2` PIN-6/7 discipline. would-FAIL-on-revert: registering the
 /// number without the binding meaning fails.
 #[test]
-#[ignore = "RED-PHASE: DOCS-1 Inv-23 subject-binding lands at R5 doc-wave — un-ignore at R5"]
 fn docs_1_inv_23_row_binds_kem_commitment_meaning() {
     let doc = read_doc("docs/INVARIANT-COVERAGE.md");
     let bound = doc.lines().any(|l| {
@@ -203,7 +205,6 @@ fn docs_1_inv_23_row_binds_kem_commitment_meaning() {
 /// top compromise (design §8 / R1 §5). would-FAIL-on-revert: dropping the
 /// #67 mint flips the arm.
 #[test]
-#[ignore = "RED-PHASE: DOCS-2 Compromise #67 registration lands at R5 doc-wave — un-ignore at R5"]
 fn docs_2_registers_compromise_67() {
     let comps = registered_compromises(&read_doc("docs/SECURITY-POSTURE.md"));
     assert!(
@@ -230,7 +231,6 @@ fn docs_2_registers_compromise_67() {
 /// disclosure fails the honesty half; adding an "eliminates first-contact
 /// substitution" over-claim fails the no-overclaim half.
 #[test]
-#[ignore = "RED-PHASE: DOCS-2 Compromise #67 no-overclaim disclosure lands at R5 doc-wave — un-ignore at R5"]
 fn docs_2_compromise_67_honest_no_overclaim() {
     let doc = read_doc("docs/SECURITY-POSTURE.md");
 
