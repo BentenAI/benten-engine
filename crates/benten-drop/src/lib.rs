@@ -88,6 +88,15 @@ pub mod bundle;
 pub mod envelope_sig;
 pub mod layer_c;
 
+// GAP-KDB Shape-B (W2) — benten-drop-side RED-PHASE seal-API fixtures (the
+// binding-typed seal surface that closes GAP-KDB, design §5). Gated on
+// `feature = "testing"` ONLY (NOT `any(test, …)`): it imports
+// `benten_id::kdb_testing`, available only when `benten-id/testing` is on —
+// which benten-drop's `testing` feature chains. Never reaches a production
+// build. See `crates/benten-drop/src/kdb_seal_testing.rs`.
+#[cfg(feature = "testing")]
+pub mod kdb_seal_testing;
+
 pub use bundle::{
     DROP_BUNDLE_MAX_SIZE_BYTES, DropBundle, DropBundleError, DropBundleVersion, DropContentMode,
     EncryptedContent,

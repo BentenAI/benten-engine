@@ -17,6 +17,53 @@ workspace = true
 # longer rationale.
 bench = false
 
+# GAP-KDB Shape-B (W2) — the benten-drop Layer-C RED-PHASE pins import the
+# `benten_drop::kdb_seal_testing` (+ `benten_id::kdb_testing`) fixtures, which
+# live behind the `testing` feature. Marked `required-features` so a feature-less
+# `cargo test --workspace` SKIPS them (compile-skip) rather than failing on the
+# `use benten_drop::kdb_seal_testing` import. CI runs the workspace with
+# `--features …benten-drop/testing…`, so they compile + run there (ignored pins
+# skip; the live golden / framing pins run green). un-ignore the RED pins at R5.
+[[test]]
+name = "kdb_drop1_7_gapkdb_seal_flagship"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop2_sole_constructor"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop3_anti_downgrade_grep"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop4_c9_roster_replacement"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop5_c8_generation_precedence"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop6_seal_roundtrip"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop8_sender_origin_auth"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop9_group_commitment_golden"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop10_empty_roster"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop11_audience_aad_golden"
+required-features = ["testing"]
+
 # G-CORE-3f Drop-bundle deps — leans on the substrate cascade:
 #   - benten-crypto-suite (3a CANARY) — AeadKeyMaterial + AeadEnvelope + cipher dispatch
 #   - benten-graph (3d) — EncryptedNode + per-Node AEAD wrap (the storage-layer
