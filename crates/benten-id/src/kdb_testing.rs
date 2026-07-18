@@ -109,56 +109,15 @@ pub const CID_V1_DAGCBOR_BLAKE3_HEADER: [u8; 4] = [
 pub use crate::keyset::KeySetDocument;
 
 // ─────────────────────────────────────────────────────────────────────────
-// RecipientBinding — the seal-API typestate (design §5).
+// RecipientBinding — RELOCATED to benten-drop Layer-C at R5 (W2).
 //
-// The REAL type lands in benten-drop Layer-C at R5 (W2). This stub exists
-// only so cross-crate red-phase tests can name the SHAPE + so the sole-
-// constructor / no-fallback-door discipline (design C4) has a pin surface.
+// The seal-API typestate (design §5 — Inv-23) is now the REAL
+// `benten_drop::layer_c::RecipientBinding` (its DESIGN HOME — the Layer-C
+// seal surface). Its sole `resolve` constructor calls `Did::resolve_kem`.
+// The R3 stub (with its `for_test_unchecked` escape hatch) is GONE — the
+// real sole-constructor / no-fallback-door discipline (design C4) subsumes
+// it. Cross-crate W2 tests import it from `benten_drop::layer_c`.
 // ─────────────────────────────────────────────────────────────────────────
-
-/// A recipient whose KEM key is PROVEN committed by its DID (design §5 —
-/// Inv-23). The real type + its sole `resolve` constructor land in
-/// benten-drop at R5; this stub mirrors the frozen shape for cross-crate
-/// W2 red-phase tests.
-///
-/// (No `Debug` derive: `RecipientPublic` carries no `Debug` impl — key
-/// material stays out of any `Debug` sink.)
-pub struct RecipientBinding {
-    audience_did: Did,
-    kem_pub: RecipientPublic,
-}
-
-impl RecipientBinding {
-    /// The ONLY real constructor (design C4). Fail-closed typed-reject on
-    /// commitment mismatch — calls `resolve_kem` internally. STUB
-    /// `todo!()` → real at R5 (benten-drop Layer-C).
-    pub fn resolve(_audience_did: &Did, _keyset_doc: &KeySetDocument) -> Result<Self, DidError> {
-        todo!(
-            "RED-PHASE (DROP-2): RecipientBinding::resolve (sole constructor, \
-             no fallback door — design C4) lands in benten-drop Layer-C at R5 (W2)."
-        )
-    }
-
-    /// Fixture escape hatch — pairs an ARBITRARY (possibly un-committed)
-    /// KEM key with a DID, bypassing the commitment check. Used ONLY to
-    /// stage the anti-downgrade / substitution scenarios W2 exercises;
-    /// the real API has NO such door (design C4). Openly `_for_test`.
-    pub fn for_test_unchecked(audience_did: Did, kem_pub: RecipientPublic) -> Self {
-        Self {
-            audience_did,
-            kem_pub,
-        }
-    }
-
-    /// The bound audience DID.
-    pub fn audience_did(&self) -> &Did {
-        &self.audience_did
-    }
-    /// The committed KEM key.
-    pub fn kem_pub(&self) -> &RecipientPublic {
-        &self.kem_pub
-    }
-}
 
 // ─────────────────────────────────────────────────────────────────────────
 // CODEC + RESOLVERS — LOGIC-UNDER-TEST (stub `todo!()` → real entry at R5).

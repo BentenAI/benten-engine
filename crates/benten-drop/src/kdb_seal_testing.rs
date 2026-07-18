@@ -62,11 +62,11 @@ use benten_crypto_suite::cipher_suite::{
 };
 use benten_crypto_suite::sig::{Keypair as SigKeypair, SignatureSuite};
 use benten_id::did::Did;
-use benten_id::kdb_testing::{self as kdb, KeySetDocument, RecipientBinding};
+use benten_id::kdb_testing::{self as kdb, KeySetDocument};
 
 use crate::layer_c::group_posture::{GroupSealParams, GroupSealedEnvelope};
 use crate::layer_c::{
-    self, BodyCidDigest, EncryptedEnvelope, LayerCError, RecipientDid, SenderDid,
+    self, BodyCidDigest, EncryptedEnvelope, LayerCError, RecipientBinding, RecipientDid, SenderDid,
 };
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -89,16 +89,20 @@ pub fn hybrid_kem_codepoint() -> CipherSuiteCodepoint {
 /// &AudienceDid)` two-param door (design C4 / DROP-3). STUB `todo!()` → R5
 /// `layer_c::seal_sealed_sender(recipient: &RecipientBinding, …)`.
 pub fn seal_to_binding(
-    _recipient: &RecipientBinding,
-    _sender_did: &SenderDid,
-    _sender_kp: &SigKeypair,
-    _body_cid: &BodyCidDigest,
-    _recipient_key_generation: u32,
-    _plaintext: &[u8],
+    recipient: &RecipientBinding,
+    sender_did: &SenderDid,
+    sender_kp: &SigKeypair,
+    body_cid: &BodyCidDigest,
+    recipient_key_generation: u32,
+    plaintext: &[u8],
 ) -> EncryptedEnvelope {
-    todo!(
-        "RED-PHASE (DROP-1/5/6/8): binding-typed seal_sealed_sender(&RecipientBinding) \
-         lands in benten-drop Layer-C at R5 (GAP-KDB-B W2). un-ignore then."
+    layer_c::seal_sealed_sender(
+        recipient,
+        sender_did,
+        sender_kp,
+        body_cid,
+        recipient_key_generation,
+        plaintext,
     )
 }
 
@@ -109,16 +113,20 @@ pub fn seal_to_binding(
 /// `did:key:z…`). An empty slice is a typed-reject (DROP-10). STUB `todo!()` →
 /// R5 `layer_c::seal_group_multi(recipients: &[RecipientBinding], …)`.
 pub fn seal_group_to_bindings(
-    _recipients: &[RecipientBinding],
-    _sender_did: &SenderDid,
-    _sender_kp: &SigKeypair,
-    _body_cid: &BodyCidDigest,
-    _recipient_key_generation: u32,
-    _plaintext: &[u8],
+    recipients: &[RecipientBinding],
+    sender_did: &SenderDid,
+    sender_kp: &SigKeypair,
+    body_cid: &BodyCidDigest,
+    recipient_key_generation: u32,
+    plaintext: &[u8],
 ) -> Result<EncryptedEnvelope, LayerCError> {
-    todo!(
-        "RED-PHASE (DROP-1/4/6/9/10): binding-typed group seal_group_multi(&[RecipientBinding]) \
-         (C9 roster-replacement) lands in benten-drop Layer-C at R5 (GAP-KDB-B W2). un-ignore then."
+    layer_c::seal_group_multi(
+        recipients,
+        sender_did,
+        sender_kp,
+        body_cid,
+        recipient_key_generation,
+        plaintext,
     )
 }
 
@@ -128,16 +136,15 @@ pub fn seal_group_to_bindings(
 /// `todo!()` → R5 `layer_c::group_posture::seal_membership_set_group(recipients:
 /// &[RecipientBinding], …)`.
 pub fn seal_membership_set_to_bindings(
-    _recipients: &[RecipientBinding],
-    _sender_did: &SenderDid,
-    _sender_kp: &SigKeypair,
-    _k_set: &[u8; 32],
-    _params: &GroupSealParams,
-    _plaintext: &[u8],
+    recipients: &[RecipientBinding],
+    sender_did: &SenderDid,
+    sender_kp: &SigKeypair,
+    k_set: &[u8; 32],
+    params: &GroupSealParams,
+    plaintext: &[u8],
 ) -> Result<GroupSealedEnvelope, LayerCError> {
-    todo!(
-        "RED-PHASE (DROP-1/6): binding-typed seal_membership_set_group(&[RecipientBinding]) \
-         lands in benten-drop Layer-C at R5 (GAP-KDB-B W2). un-ignore then."
+    layer_c::group_posture::seal_membership_set_group(
+        recipients, sender_did, sender_kp, k_set, params, plaintext,
     )
 }
 

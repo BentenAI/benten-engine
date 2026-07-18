@@ -459,6 +459,32 @@ impl Did {
         Ok(candidate)
     }
 
+    /// Validate-on-construct typed constructor via the **method/multicodec-
+    /// aware** [`Did::resolve_signing`] (design §2 Tier-1, C6) — the signing-
+    /// key sibling of [`Did::parse_validated_hybrid`] that ALSO accepts a
+    /// `did:benten` (composite signing multikey ‖ committed key-set CID) and a
+    /// classical `did:key` (`pq = None`), not only a hybrid `did:key`.
+    ///
+    /// The **production-safe** path for callers (e.g. `benten-drop`'s Layer-C
+    /// Sealed-Sender ORIGIN-AUTH verify — the DROP-8 sender-origin-auth
+    /// migration) that receive a `did:key` OR `did:benten` sender-DID string
+    /// from the wire and need to resolve its signing key. Distinct from
+    /// [`Did::parse_validated_hybrid`] (which would reject a `did:benten` at
+    /// its trailing committed-CID) and the test-only
+    /// [`Did::from_string_for_test_fixture`].
+    ///
+    /// # Errors
+    ///
+    /// Surfaces the [`Did::resolve_signing`] typed-reject set (wrong prefix /
+    /// base58 / unknown component multicodec / body-too-short / trailing bytes
+    /// / invalid key / over-long input) rather than swallowing bad input.
+    pub fn parse_validated_signing(s: impl Into<String>) -> Result<Self, DidError> {
+        let s = s.into();
+        let candidate = Self(s);
+        candidate.resolve_signing()?;
+        Ok(candidate)
+    }
+
     // ── GAP-KDB Shape-B — `did:benten` content-addressed key-set DID ──────
 
     /// Encode a `did:benten` committing `keyset_doc` (design §1.1).

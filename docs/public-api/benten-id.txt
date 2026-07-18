@@ -158,6 +158,7 @@ pub fn benten_id::did::Did::from_string_for_test_fixture(alloc::string::String) 
 pub fn benten_id::did::Did::keyset_cid(&self) -> core::result::Result<benten_core::Cid, benten_id::errors::DidError>
 pub fn benten_id::did::Did::parse_validated(impl core::convert::Into<alloc::string::String>) -> core::result::Result<Self, benten_id::errors::DidError>
 pub fn benten_id::did::Did::parse_validated_hybrid(impl core::convert::Into<alloc::string::String>) -> core::result::Result<Self, benten_id::errors::DidError>
+pub fn benten_id::did::Did::parse_validated_signing(impl core::convert::Into<alloc::string::String>) -> core::result::Result<Self, benten_id::errors::DidError>
 pub fn benten_id::did::Did::resolve(&self) -> core::result::Result<benten_id::keypair::PublicKey, benten_id::errors::DidError>
 pub fn benten_id::did::Did::resolve_hybrid(&self) -> core::result::Result<benten_crypto_suite::sig::PublicKey, benten_id::errors::DidError>
 pub fn benten_id::did::Did::resolve_kem(&self, &benten_id::keyset::KeySetDocument) -> core::result::Result<benten_crypto_suite::cipher_suite::RecipientPublic, benten_id::errors::DidError>

@@ -31,13 +31,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_drop::kdb_seal_testing as seal;
+use benten_drop::layer_c::RecipientBinding;
 use benten_drop::layer_c::{LayerCError, open_single};
-use benten_id::kdb_testing::RecipientBinding;
 
 /// DROP-5 — role separation: the committed key-set authoritatively +
 /// deterministically fixes the KEM key; the generation does not select it.
 #[test]
-#[ignore = "RED-PHASE: DROP-5 committed key-set is authoritative for the KEM key (C8 role separation) — un-ignore at R5"]
 fn drop5_committed_key_set_is_authoritative_for_the_kem_key() {
     let r = seal::real_recipient();
 
@@ -62,7 +61,6 @@ fn drop5_committed_key_set_is_authoritative_for_the_kem_key() {
 /// intra-keypair freshness index; an open whose independently-held generation
 /// DISAGREES fails closed (no rotation → one valid generation).
 #[test]
-#[ignore = "RED-PHASE: DROP-5 recipient_key_generation matches-or-fail-closed (C8/S2) — un-ignore at R5"]
 fn drop5_generation_matches_or_fail_closed() {
     let r = seal::real_recipient();
     let binding = RecipientBinding::resolve(&r.did, &r.doc).expect("binding resolves");

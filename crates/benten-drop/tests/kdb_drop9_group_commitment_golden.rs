@@ -27,9 +27,10 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_drop::kdb_seal_testing as seal;
+use benten_drop::layer_c::RecipientBinding;
 use benten_drop::layer_c::open_group_stanza;
 use benten_id::did::Did;
-use benten_id::kdb_testing::{self as kdb, RecipientBinding};
+use benten_id::kdb_testing as kdb;
 
 /// The frozen `audience_set_commitment` over the three deterministic
 /// `did:benten` member DIDs `det_member_did("drop9/member/{a,b,c}")`.
@@ -98,7 +99,6 @@ fn drop9_group_commitment_sort_order_independent() {
 /// commitment over the real binding DIDs: an honest member recomputes it from
 /// the real-DID roster (in ANY order) and opens.
 #[test]
-#[ignore = "RED-PHASE: DROP-9 C9 group seal binds the real-DID commitment (any order) — un-ignore at R5"]
 fn drop9_c9_seal_binds_real_did_commitment_order_independent() {
     let a = seal::real_recipient();
     let b = seal::real_recipient();

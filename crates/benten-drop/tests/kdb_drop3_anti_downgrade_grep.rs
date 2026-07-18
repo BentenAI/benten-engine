@@ -43,7 +43,6 @@ fn squished_layer_c() -> String {
 /// sender` two-param door; the internal `seal_inner` pairs `recipient_pub` with
 /// `sender_did`, not `audience_did`) must not appear.
 #[test]
-#[ignore = "RED-PHASE: DROP-3 two-param single-recipient seal door retired — un-ignore at R5"]
 fn drop3_two_param_single_seal_door_is_retired() {
     let squished = squished_layer_c();
     assert!(
@@ -60,7 +59,6 @@ fn drop3_two_param_single_seal_door_is_retired() {
 /// This is the positive half: the vulnerable API was replaced, not just
 /// removed.
 #[test]
-#[ignore = "RED-PHASE: DROP-3 binding-typed seal door replaces the raw-pubkey entry — un-ignore at R5"]
 fn drop3_binding_typed_seal_door_exists() {
     let squished = squished_layer_c();
     // Param-name-agnostic: any `<name>: &RecipientBinding` (single) or

@@ -36,11 +36,11 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_drop::kdb_seal_testing as seal;
+use benten_drop::layer_c::RecipientBinding;
 use benten_drop::layer_c::group_posture::{
     GroupSealParams, GroupVerifyContext, open_membership_set_group,
 };
 use benten_drop::layer_c::{open_group_stanza, open_single};
-use benten_id::kdb_testing::RecipientBinding;
 
 // ===========================================================================
 // DROP-1 ★ — seal to a substituted KEM key fails closed (all three codepoints).
@@ -50,7 +50,6 @@ use benten_id::kdb_testing::RecipientBinding;
 /// committed key-set resolves + seals + round-trips through the honest
 /// recipient's REAL secret; the substituted key cannot be bound.
 #[test]
-#[ignore = "RED-PHASE: DROP-1 ★ 0x6510 seal-to-substituted-KEM-key fails closed — un-ignore at R5"]
 fn drop1_flagship_single_0x6510_substituted_kem_key_fails_closed() {
     let s = seal::substitution_scenario();
 
@@ -87,7 +86,6 @@ fn drop1_flagship_single_0x6510_substituted_kem_key_fails_closed() {
 /// own stanza with their real secret; the substituted key cannot enter the
 /// `&[RecipientBinding]` roster.
 #[test]
-#[ignore = "RED-PHASE: DROP-1 ★ 0x6520 group seal-to-substituted-KEM-key fails closed — un-ignore at R5"]
 fn drop1_flagship_group_0x6520_substituted_kem_key_fails_closed() {
     let a = seal::real_recipient();
     let b = seal::real_recipient();
@@ -125,7 +123,6 @@ fn drop1_flagship_group_0x6520_substituted_kem_key_fails_closed() {
 /// MembershipSet stanza with their real secret; the substituted key cannot
 /// enter the `&[RecipientBinding]` roster.
 #[test]
-#[ignore = "RED-PHASE: DROP-1 ★ 0x6610 membership-set seal-to-substituted-KEM-key fails closed — un-ignore at R5"]
 fn drop1_flagship_membership_set_0x6610_substituted_kem_key_fails_closed() {
     let a = seal::real_recipient();
     let b = seal::real_recipient();
@@ -178,7 +175,6 @@ fn drop1_flagship_membership_set_0x6610_substituted_kem_key_fails_closed() {
 /// (committed-CID != recomputed-CID, BLAKE3-256 2nd-preimage), so no seal to
 /// K_attacker is constructible.
 #[test]
-#[ignore = "RED-PHASE: DROP-7 ★ Inv-23 production-driving firing (seal-side resolve) — un-ignore at R5"]
 fn drop7_flagship_inv23_fires_on_seal_side_binding_resolve() {
     let s = seal::substitution_scenario();
 
@@ -215,7 +211,6 @@ fn drop7_flagship_inv23_fires_on_seal_side_binding_resolve() {
 /// catch-net: there is no seal entry that accepts a raw `(K_attacker,
 /// victim_did)` pair (that entry is retired — DROP-3 greps its absence).
 #[test]
-#[ignore = "RED-PHASE: DROP-7 ★ Inv-23 firing gates every roster slot — un-ignore at R5"]
 fn drop7_flagship_inv23_gates_every_group_roster_slot() {
     let s = seal::substitution_scenario();
 

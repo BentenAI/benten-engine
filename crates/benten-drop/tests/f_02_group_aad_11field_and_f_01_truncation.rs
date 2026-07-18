@@ -63,7 +63,9 @@ use benten_drop::layer_c::group_posture::{
     seal_membership_set_group,
 };
 use benten_drop::layer_c::{
-    EncryptedEnvelope, LayerCError, group_roster_for_test, open_group_stanza, seal_group_multi,
+    EncryptedEnvelope, LayerCError, RecipientBinding, binding_roster_for_test,
+    group_bindings_for_test, group_roster_for_test, member_dids_for_test, open_group_stanza,
+    seal_group_multi,
 };
 use benten_id::did::Did;
 // F-02 option-(b) TEST-ONLY cross-check (dev-dependency ONLY): the canonical
@@ -130,15 +132,20 @@ fn hybrid_sender() -> (SigKeypair, Vec<u8>) {
     (kp, did_str.into_bytes())
 }
 
-/// The independently-held `GroupVerifyContext` over the fixture roster (all
-/// generations = 1, matching `fixture_params`).
-fn fixture_verify_ctx() -> GroupVerifyContext {
-    let member_dids = group_roster_for_test(&fixture_pks())
-        .iter()
-        .map(|d| String::from_utf8_lossy(d).into_owned())
-        .collect();
+/// The fixture recipients as HONEST committed `did:benten` bindings — the C9
+/// seal input (both the blinded commitment roster AND the wrap-targets derive
+/// from this ONE slice). Build ONCE per test and reuse for the seal AND the
+/// open ctx (`binding_for_test` mints a fresh signing identity per call, so the
+/// SAME `bindings` value must feed both sides).
+fn fixture_bindings() -> Vec<RecipientBinding> {
+    group_bindings_for_test(&fixture_pks())
+}
+
+/// The independently-held `GroupVerifyContext` over the C9 binding member-DID
+/// roster (all generations = 1, matching `fixture_params`).
+fn fixture_verify_ctx(bindings: &[RecipientBinding]) -> GroupVerifyContext {
     GroupVerifyContext {
-        member_dids,
+        member_dids: member_dids_for_test(bindings),
         member_key_generation: 1,
         membership_set_generation: 1,
         role_assignments_generation: 1,
@@ -177,10 +184,23 @@ fn fixture_body_cid() -> Vec<u8> {
 /// inputs the live seal routes through the benten-drop-OWNED
 /// [`assemble_group_aad_local`] (F-02 option-(b)).
 fn fixture_aad_inputs(idx: u32, stanza_count: u32) -> GroupAadInputs {
+    fixture_aad_inputs_with(fixture_roster(), idx, stanza_count)
+}
+
+/// `fixture_aad_inputs` over an EXPLICIT member-DID roster — used by the golden
+/// test's live-seal-consistency arm to feed the SAME C9 binding roster the live
+/// seal bound (the frozen-golden arm still uses the deterministic fabricated
+/// `fixture_roster()`, which freezes the ENCODER byte-layout independently of
+/// the per-run binding identities).
+fn fixture_aad_inputs_with(
+    member_dids: Vec<String>,
+    idx: u32,
+    stanza_count: u32,
+) -> GroupAadInputs {
     GroupAadInputs {
         codepoint: MEMBERSHIP_SET_GROUP_MULTI_STANZA,
         body_cid: fixture_body_cid(),
-        member_dids: fixture_roster(),
+        member_dids,
         k_set: FIXTURE_K_SET,
         stanza_index: idx,
         stanza_count,
@@ -263,8 +283,9 @@ const F_02_LIVE_SEAL_STANZA0_AAD_HEX: &str = "01661001711e20632048ee454f9854f70d
 #[test]
 fn f_02_live_0x6610_seal_binds_canonical_11_field_aad_golden() {
     let (sender_kp, sender) = hybrid_sender();
+    let bindings = fixture_bindings();
     let env = seal_membership_set_group(
-        &fixture_pks(),
+        &bindings,
         &sender,
         &sender_kp,
         &FIXTURE_K_SET,
@@ -274,8 +295,16 @@ fn f_02_live_0x6610_seal_binds_canonical_11_field_aad_golden() {
     .expect("valid roster must seal (R18 C2)");
     let live_aad = env.stanza_aad_for_test(0);
 
-    // (a) single-source-of-truth: live seal == benten-drop-LOCAL assembler.
-    let local = assemble_group_aad_local(&fixture_aad_inputs(0, 3));
+    // (a) single-source-of-truth: the live C9 seal routes its per-stanza AAD
+    // through the benten-drop-LOCAL assemble_group_aad_local over the SAME
+    // committed binding roster it bound (the C9 REAL-DID member set, not the
+    // retired KEM-key-hashed placeholder). A divergent encoder = cross-engine
+    // AEAD-open failure.
+    let local = assemble_group_aad_local(&fixture_aad_inputs_with(
+        member_dids_for_test(&bindings),
+        0,
+        3,
+    ));
     assert_eq!(
         to_hex(&live_aad),
         to_hex(&local),
@@ -302,11 +331,19 @@ fn f_02_live_0x6610_seal_binds_canonical_11_field_aad_golden() {
         &[0x01, 0x66, 0x10],
         "F-02: aad_version(0x01) ‖ codepoint(0x6610 BE) lead the canonical AAD."
     );
+    // (b) M-20 absolute ENCODER golden — the frozen 11-field byte layout over a
+    // FIXED deterministic roster (`fixture_roster()`, the deterministic
+    // KEM-derived `did:key:z…` set). Post-C9 the LIVE seal binds the REAL
+    // committed `did:benten` identities (per-run, arm (a)), so the frozen golden
+    // pins the ENCODER byte-layout over a fixed input rather than the live
+    // seal's per-run roster — the encoder is the v1-beta wire-freeze surface;
+    // the seal-uses-encoder is pinned by arm (a). Golden VALUE unchanged (the
+    // encoder + fixed roster are both unchanged).
     assert_eq!(
-        to_hex(&live_aad),
+        to_hex(&assemble_group_aad_local(&fixture_aad_inputs(0, 3))),
         F_02_LIVE_SEAL_STANZA0_AAD_HEX,
-        "F-02: the live 0x6610 seal per-stanza AAD drifted from the frozen \
-         BLINDED-11-field golden vector (M-20)."
+        "F-02: the 0x6610 BLINDED-11-field ENCODER byte-layout drifted from the \
+         frozen golden vector (M-20)."
     );
 }
 
@@ -430,8 +467,9 @@ fn f_04_aad_version_byte_mirrors_across_engines() {
 fn f_02_seal_open_round_trip_under_11_field_aad() {
     let (sender_kp, sender) = hybrid_sender();
     let sks = fixture_sks();
+    let bindings = fixture_bindings();
     let env = seal_membership_set_group(
-        &fixture_pks(),
+        &bindings,
         &sender,
         &sender_kp,
         &FIXTURE_K_SET,
@@ -439,8 +477,10 @@ fn f_02_seal_open_round_trip_under_11_field_aad() {
         FIXTURE_PLAINTEXT,
     )
     .expect("valid roster must seal (R18 C2)");
-    let (pt, recovered_sender) = open_membership_set_group(&sks[1], 1, &fixture_verify_ctx(), &env)
-        .expect("F-02: the 0x6610 group stanza MUST open + origin-verify under the 11-field AAD");
+    let (pt, recovered_sender) =
+        open_membership_set_group(&sks[1], 1, &fixture_verify_ctx(&bindings), &env).expect(
+            "F-02: the 0x6610 group stanza MUST open + origin-verify under the 11-field AAD",
+        );
     assert_eq!(
         pt, FIXTURE_PLAINTEXT,
         "F-02: round-trip plaintext preserved"
@@ -467,10 +507,11 @@ fn f_02_seal_open_round_trip_under_11_field_aad() {
 #[test]
 fn f_01_0x6610_dropped_stanza_fails_closed() {
     let (sender_kp, sender) = hybrid_sender();
-    let ctx = fixture_verify_ctx();
+    let bindings = fixture_bindings();
+    let ctx = fixture_verify_ctx(&bindings);
     let sks = fixture_sks();
     let env = seal_membership_set_group(
-        &fixture_pks(),
+        &bindings,
         &sender,
         &sender_kp,
         &FIXTURE_K_SET,
@@ -546,9 +587,10 @@ fn f_01_0x6520_dropped_stanza_fails_closed() {
     let (sender_kp, sender) = hybrid_sender();
     let pks = fixture_pks();
     let sks = fixture_sks();
-    let roster = group_roster_for_test(&pks);
+    let bindings = group_bindings_for_test(&pks);
+    let roster = binding_roster_for_test(&bindings);
     let env = seal_group_multi(
-        &pks,
+        &bindings,
         &sender,
         &sender_kp,
         &body_cid,

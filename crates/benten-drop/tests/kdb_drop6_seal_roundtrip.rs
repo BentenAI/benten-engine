@@ -23,15 +23,14 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_drop::kdb_seal_testing as seal;
+use benten_drop::layer_c::RecipientBinding;
 use benten_drop::layer_c::group_posture::{
     GroupSealParams, GroupVerifyContext, open_membership_set_group,
 };
 use benten_drop::layer_c::{LayerCError, open_group_stanza, open_single};
-use benten_id::kdb_testing::RecipientBinding;
 
 /// DROP-6 (`0x6510`) — single-recipient round-trip + AAD threading.
 #[test]
-#[ignore = "RED-PHASE: DROP-6 0x6510 seal→open round-trip + AAD threading — un-ignore at R5"]
 fn drop6_single_0x6510_roundtrip_and_aad_threading() {
     let r = seal::real_recipient();
     let binding = RecipientBinding::resolve(&r.did, &r.doc).expect("recipient binding resolves");
@@ -69,7 +68,6 @@ fn drop6_single_0x6510_roundtrip_and_aad_threading() {
 
 /// DROP-6 (`0x6520`) — Layer-C group round-trip.
 #[test]
-#[ignore = "RED-PHASE: DROP-6 0x6520 group seal→open round-trip — un-ignore at R5"]
 fn drop6_group_0x6520_roundtrip() {
     let a = seal::real_recipient();
     let b = seal::real_recipient();
@@ -94,7 +92,6 @@ fn drop6_group_0x6520_roundtrip() {
 
 /// DROP-6 (`0x6610`) — MembershipSet K_Set group round-trip.
 #[test]
-#[ignore = "RED-PHASE: DROP-6 0x6610 membership-set seal→open round-trip — un-ignore at R5"]
 fn drop6_membership_set_0x6610_roundtrip() {
     let a = seal::real_recipient();
     let b = seal::real_recipient();

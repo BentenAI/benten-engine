@@ -345,7 +345,7 @@ pub const benten_drop::layer_c::group_posture::SELF_DESCRIBING_CID_LEN: usize
 pub fn benten_drop::layer_c::group_posture::assemble_group_aad_local(&benten_drop::layer_c::group_posture::GroupAadInputs) -> alloc::vec::Vec<u8>
 pub fn benten_drop::layer_c::group_posture::dispatch_group(&[u8], u16, u16) -> core::result::Result<(), benten_drop::layer_c::group_posture::GroupError>
 pub fn benten_drop::layer_c::group_posture::open_membership_set_group(&benten_crypto_suite::cipher_suite::RecipientSecret, usize, &benten_drop::layer_c::group_posture::GroupVerifyContext, &benten_drop::layer_c::group_posture::GroupSealedEnvelope) -> core::result::Result<(alloc::vec::Vec<u8>, benten_drop::layer_c::group_posture::SenderDid), benten_drop::layer_c::group_posture::GroupError>
-pub fn benten_drop::layer_c::group_posture::seal_membership_set_group(&[benten_crypto_suite::cipher_suite::RecipientPublic], &benten_drop::layer_c::group_posture::SenderDid, &benten_crypto_suite::sig::Keypair, &[u8; 32], &benten_drop::layer_c::group_posture::GroupSealParams, &[u8]) -> core::result::Result<benten_drop::layer_c::group_posture::GroupSealedEnvelope, benten_drop::layer_c::LayerCError>
+pub fn benten_drop::layer_c::group_posture::seal_membership_set_group(&[benten_drop::layer_c::RecipientBinding], &benten_drop::layer_c::group_posture::SenderDid, &benten_crypto_suite::sig::Keypair, &[u8; 32], &benten_drop::layer_c::group_posture::GroupSealParams, &[u8]) -> core::result::Result<benten_drop::layer_c::group_posture::GroupSealedEnvelope, benten_drop::layer_c::LayerCError>
 pub type benten_drop::layer_c::group_posture::SenderDid = alloc::vec::Vec<u8>
 pub mod benten_drop::layer_c::sealed_aad
 pub struct benten_drop::layer_c::sealed_aad::SealedSenderAad
@@ -430,6 +430,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::Encrypted
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::EncryptedEnvelope
 #[non_exhaustive] pub enum benten_drop::layer_c::LayerCError
 pub benten_drop::layer_c::LayerCError::AeadAuthenticationFailed
+pub benten_drop::layer_c::LayerCError::EmptyRecipientRoster
 pub benten_drop::layer_c::LayerCError::MalformedInnerPayload
 pub benten_drop::layer_c::LayerCError::RecipientCountExceedsBandWidth
 pub benten_drop::layer_c::LayerCError::RecipientCountExceedsBandWidth::count: usize
@@ -454,6 +455,21 @@ impl core::marker::Unpin for benten_drop::layer_c::LayerCError
 impl core::marker::UnsafeUnpin for benten_drop::layer_c::LayerCError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::LayerCError
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::LayerCError
+#[non_exhaustive] pub enum benten_drop::layer_c::RecipientBindingError
+pub benten_drop::layer_c::RecipientBindingError::Uncommitted(benten_id::errors::DidError)
+impl core::cmp::Eq for benten_drop::layer_c::RecipientBindingError
+impl core::cmp::PartialEq for benten_drop::layer_c::RecipientBindingError
+pub fn benten_drop::layer_c::RecipientBindingError::eq(&self, &benten_drop::layer_c::RecipientBindingError) -> bool
+impl core::fmt::Debug for benten_drop::layer_c::RecipientBindingError
+pub fn benten_drop::layer_c::RecipientBindingError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_drop::layer_c::RecipientBindingError
+impl core::marker::Freeze for benten_drop::layer_c::RecipientBindingError
+impl core::marker::Send for benten_drop::layer_c::RecipientBindingError
+impl core::marker::Sync for benten_drop::layer_c::RecipientBindingError
+impl core::marker::Unpin for benten_drop::layer_c::RecipientBindingError
+impl core::marker::UnsafeUnpin for benten_drop::layer_c::RecipientBindingError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::RecipientBindingError
+impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::RecipientBindingError
 pub struct benten_drop::layer_c::HpkeRecipientStanza
 pub benten_drop::layer_c::HpkeRecipientStanza::body_cid: benten_drop::layer_c::SelfDescribingCid
 pub benten_drop::layer_c::HpkeRecipientStanza::codepoint: u16
@@ -481,6 +497,20 @@ impl core::marker::Unpin for benten_drop::layer_c::HpkeRecipientStanza
 impl core::marker::UnsafeUnpin for benten_drop::layer_c::HpkeRecipientStanza
 impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::HpkeRecipientStanza
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::HpkeRecipientStanza
+pub struct benten_drop::layer_c::RecipientBinding
+impl benten_drop::layer_c::RecipientBinding
+pub fn benten_drop::layer_c::RecipientBinding::audience_did(&self) -> &benten_id::did::Did
+pub fn benten_drop::layer_c::RecipientBinding::kem_pub(&self) -> &benten_crypto_suite::cipher_suite::RecipientPublic
+pub fn benten_drop::layer_c::RecipientBinding::resolve(&benten_id::did::Did, &benten_id::keyset::KeySetDocument) -> core::result::Result<Self, benten_drop::layer_c::RecipientBindingError>
+impl core::clone::Clone for benten_drop::layer_c::RecipientBinding
+pub fn benten_drop::layer_c::RecipientBinding::clone(&self) -> Self
+impl core::marker::Freeze for benten_drop::layer_c::RecipientBinding
+impl core::marker::Send for benten_drop::layer_c::RecipientBinding
+impl core::marker::Sync for benten_drop::layer_c::RecipientBinding
+impl core::marker::Unpin for benten_drop::layer_c::RecipientBinding
+impl core::marker::UnsafeUnpin for benten_drop::layer_c::RecipientBinding
+impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::layer_c::RecipientBinding
+impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::RecipientBinding
 pub struct benten_drop::layer_c::SenderAuthBinding<'a>
 pub benten_drop::layer_c::SenderAuthBinding::audience_commitment: &'a [u8]
 pub benten_drop::layer_c::SenderAuthBinding::body_aad_digest: [u8; 32]
@@ -513,10 +543,10 @@ pub fn benten_drop::layer_c::build_m_auth(&benten_drop::layer_c::SenderAuthBindi
 pub fn benten_drop::layer_c::group_plaintext_aad_region(&benten_drop::layer_c::EncryptedEnvelope) -> alloc::vec::Vec<u8>
 pub fn benten_drop::layer_c::open_group_stanza(&benten_crypto_suite::cipher_suite::RecipientSecret, usize, &[benten_drop::layer_c::RecipientDid], u32, &benten_drop::layer_c::EncryptedEnvelope) -> core::result::Result<(alloc::vec::Vec<u8>, benten_drop::layer_c::SenderDid), benten_drop::layer_c::LayerCError>
 pub fn benten_drop::layer_c::open_single(&benten_crypto_suite::cipher_suite::RecipientSecret, &benten_drop::layer_c::AudienceDid, u32, &benten_drop::layer_c::EncryptedEnvelope) -> core::result::Result<(alloc::vec::Vec<u8>, benten_drop::layer_c::SenderDid), benten_drop::layer_c::LayerCError>
-pub fn benten_drop::layer_c::seal_group_multi(&[benten_crypto_suite::cipher_suite::RecipientPublic], &benten_drop::layer_c::SenderDid, &benten_crypto_suite::sig::Keypair, &benten_drop::layer_c::BodyCidDigest, u32, &[u8]) -> core::result::Result<benten_drop::layer_c::EncryptedEnvelope, benten_drop::layer_c::LayerCError>
-pub fn benten_drop::layer_c::seal_group_multi_plaintext_sender(&[benten_crypto_suite::cipher_suite::RecipientPublic], &benten_drop::layer_c::SenderDid, &benten_crypto_suite::sig::Keypair, &benten_drop::layer_c::BodyCidDigest, u32, &[u8]) -> core::result::Result<benten_drop::layer_c::EncryptedEnvelope, benten_drop::layer_c::LayerCError>
-pub fn benten_drop::layer_c::seal_plaintext_sender(&benten_crypto_suite::cipher_suite::RecipientPublic, &benten_drop::layer_c::AudienceDid, &benten_drop::layer_c::SenderDid, &benten_crypto_suite::sig::Keypair, &benten_drop::layer_c::BodyCidDigest, u32, &[u8]) -> benten_drop::layer_c::EncryptedEnvelope
-pub fn benten_drop::layer_c::seal_sealed_sender(&benten_crypto_suite::cipher_suite::RecipientPublic, &benten_drop::layer_c::AudienceDid, &benten_drop::layer_c::SenderDid, &benten_crypto_suite::sig::Keypair, &benten_drop::layer_c::BodyCidDigest, u32, &[u8]) -> benten_drop::layer_c::EncryptedEnvelope
+pub fn benten_drop::layer_c::seal_group_multi(&[benten_drop::layer_c::RecipientBinding], &benten_drop::layer_c::SenderDid, &benten_crypto_suite::sig::Keypair, &benten_drop::layer_c::BodyCidDigest, u32, &[u8]) -> core::result::Result<benten_drop::layer_c::EncryptedEnvelope, benten_drop::layer_c::LayerCError>
+pub fn benten_drop::layer_c::seal_group_multi_plaintext_sender(&[benten_drop::layer_c::RecipientBinding], &benten_drop::layer_c::SenderDid, &benten_crypto_suite::sig::Keypair, &benten_drop::layer_c::BodyCidDigest, u32, &[u8]) -> core::result::Result<benten_drop::layer_c::EncryptedEnvelope, benten_drop::layer_c::LayerCError>
+pub fn benten_drop::layer_c::seal_plaintext_sender(&benten_drop::layer_c::RecipientBinding, &benten_drop::layer_c::SenderDid, &benten_crypto_suite::sig::Keypair, &benten_drop::layer_c::BodyCidDigest, u32, &[u8]) -> benten_drop::layer_c::EncryptedEnvelope
+pub fn benten_drop::layer_c::seal_sealed_sender(&benten_drop::layer_c::RecipientBinding, &benten_drop::layer_c::SenderDid, &benten_crypto_suite::sig::Keypair, &benten_drop::layer_c::BodyCidDigest, u32, &[u8]) -> benten_drop::layer_c::EncryptedEnvelope
 pub fn benten_drop::layer_c::self_describing_cid(&benten_drop::layer_c::BodyCidDigest) -> benten_drop::layer_c::SelfDescribingCid
 pub fn benten_drop::layer_c::serialize(&benten_drop::layer_c::EncryptedEnvelope) -> alloc::vec::Vec<u8>
 pub fn benten_drop::layer_c::single_plaintext_aad_region(&benten_drop::layer_c::EncryptedEnvelope) -> alloc::vec::Vec<u8>

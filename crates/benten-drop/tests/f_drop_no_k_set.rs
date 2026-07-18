@@ -76,7 +76,7 @@
 
 use benten_crypto_suite::cipher_suite::{CipherSuite, CipherSuiteCodepoint, RecipientPublic};
 use benten_crypto_suite::sig::{Keypair as SigKeypair, SignatureSuite};
-use benten_drop::layer_c::{seal_sealed_sender, serialize};
+use benten_drop::layer_c::{binding_for_test, seal_sealed_sender, serialize};
 use benten_id::did::Did;
 
 /// The per-set group key (the MembershipSet keying-axis key). A Drop MUST
@@ -99,9 +99,6 @@ fn fixed_pk(seed: u8) -> RecipientPublic {
 }
 fn fixed_body_cid_digest(body: &[u8]) -> [u8; 32] {
     *blake3::hash(body).as_bytes()
-}
-fn did_bytes(s: &str) -> Vec<u8> {
-    s.as_bytes().to_vec()
 }
 
 /// A real sender — a LAMPS-hybrid keypair PLUS its matching hybrid
@@ -169,23 +166,14 @@ fn contains_subslice(haystack: &[u8], needle: &[u8]) -> bool {
 fn f_drop_no_kset_serialized_envelope_omits_k_set() {
     let k_set = live_k_set_sentinel();
     let body = member_subtree_view(&k_set);
-    let recipient_pk = fixed_pk(0x07);
-    let audience = did_bytes("did:key:zRecipientAudience");
+    let binding = binding_for_test(&fixed_pk(0x07));
     let (sender_kp, sender_did) = hybrid_sender();
     let body_cid = fixed_body_cid_digest(&body);
 
     // Seal a real Drop over the member's subtree view. `K_Set` is READ to
     // derive that view, but the production seal NEVER serializes it — the
     // seal API takes no `K_Set` parameter at all.
-    let env = seal_sealed_sender(
-        &recipient_pk,
-        &audience,
-        &sender_did,
-        &sender_kp,
-        &body_cid,
-        0,
-        &body,
-    );
+    let env = seal_sealed_sender(&binding, &sender_did, &sender_kp, &body_cid, 0, &body);
     let wire = serialize(&env);
 
     // Sanity: the wire is non-trivial (the scan is over a real bundle).
@@ -258,19 +246,11 @@ fn f_drop_no_kset_negative_control_leaky_body_is_caught() {
 fn f_drop_no_kset_recipient_wrap_is_independent_of_k_set() {
     let k_set = live_k_set_sentinel();
     let body = member_subtree_view(&k_set);
-    let audience = did_bytes("did:key:zRecipientAudience");
     let (sender_kp, sender_did) = hybrid_sender();
     let body_cid = fixed_body_cid_digest(&body);
 
-    let env_a = seal_sealed_sender(
-        &fixed_pk(0x07),
-        &audience,
-        &sender_did,
-        &sender_kp,
-        &body_cid,
-        0,
-        &body,
-    );
+    let binding_a = binding_for_test(&fixed_pk(0x07));
+    let env_a = seal_sealed_sender(&binding_a, &sender_did, &sender_kp, &body_cid, 0, &body);
     let wire_a = serialize(&env_a);
 
     // The wrapped-CEK / KEM material on the wire MUST be independent of the
@@ -286,15 +266,8 @@ fn f_drop_no_kset_recipient_wrap_is_independent_of_k_set() {
     // Cross-control: a Drop of the SAME content to a DIFFERENT recipient
     // produces DIFFERENT wire bytes — confirming the wrap tracks the
     // recipient, not the (shared) set key.
-    let env_b = seal_sealed_sender(
-        &fixed_pk(0x99),
-        &audience,
-        &sender_did,
-        &sender_kp,
-        &body_cid,
-        0,
-        &body,
-    );
+    let binding_b = binding_for_test(&fixed_pk(0x99));
+    let env_b = seal_sealed_sender(&binding_b, &sender_did, &sender_kp, &body_cid, 0, &body);
     let wire_b = serialize(&env_b);
     assert_ne!(
         wire_a, wire_b,
