@@ -112,13 +112,13 @@ fn ksd2_canonical_key_order_and_definite_lengths() {
         &[0x63, b'k', b'e', b'm'],
         "canonical order: `kem` before `sig`"
     );
-    // No indefinite-length markers anywhere (0xbf map / 0x5f bytes / 0x7f text).
-    assert!(
-        !bytes
-            .iter()
-            .any(|&b| b == 0x5f || b == 0xbf || b == 0x7f || b == 0xff),
-        "canonical DAG-CBOR MUST NOT use any indefinite-length encoding"
-    );
+    // NOTE (R3 canary-gate fix): definite-length of the MAP is pinned by the `0xa5`
+    // header asserted above; definite-length of the VALUES is pinned end-to-end by
+    // KSD-1 (whole-buffer golden byte-pin) + KSD-3 (decode REJECTS indefinite-length).
+    // Do NOT re-add a whole-buffer byte-scan for 0x5f/0x7f/0xbf/0xff: 0x5f is `_` in the
+    // "kem_cp"/"sig_cp" text keys and the opaque ML-DSA-65 (1952 B) / ML-KEM-768 (1184 B)
+    // key payloads routinely contain those bytes as DATA — such a scan false-fails a
+    // correct impl. (Fan-out golden-pin writers: same rule — never byte-scan key payloads.)
 }
 
 #[test]
