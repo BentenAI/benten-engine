@@ -100,7 +100,6 @@ fn canonical_map() -> Vec<u8> {
 // ── KSD-4 — round-trip byte-stability (positive) ──────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: KSD-4 encode→decode→encode round-trip — un-ignore at R5"]
 fn ksd4_round_trip_byte_stable() {
     let (sig, kem) = tiny_fields();
     let doc = kdb::KeySetDocument::v1_hybrid(sig, kem);
@@ -118,7 +117,6 @@ fn ksd4_round_trip_byte_stable() {
 // ── KSD-3 — strict-canonical decode REJECT matrix (design C3) ─────────────
 
 #[test]
-#[ignore = "RED-PHASE: KSD-3 indefinite-length reject — un-ignore at R5"]
 fn ksd3_indefinite_length_map_rejects() {
     // Indefinite-length map (0xbf … 0xff) instead of the definite 0xa5.
     let mut m = canonical_map();
@@ -131,7 +129,6 @@ fn ksd3_indefinite_length_map_rejects() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: KSD-3 S1 extra `dev` field reject (CLOSED 5-field map) — un-ignore at R5"]
 fn ksd3_s1_extra_dev_field_rejects() {
     // S1: Shape-B DROPS the `dev` field at v1-beta — the map is a CLOSED
     // 5-field map. A canonically-sorted 6-field map that adds `dev`
@@ -151,7 +148,6 @@ fn ksd3_s1_extra_dev_field_rejects() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: KSD-3 unsorted-key reject — un-ignore at R5"]
 fn ksd3_unsorted_keys_reject() {
     // Emit `sig` before `kem` (bytewise-unsorted at equal length).
     let (sig, kem) = tiny_fields();
@@ -168,7 +164,6 @@ fn ksd3_unsorted_keys_reject() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: KSD-3 non-minimal integer reject — un-ignore at R5"]
 fn ksd3_non_minimal_int_rejects() {
     // Encode `v = 1` as a non-minimal 2-byte uint (0x19 0x00 0x01).
     let (sig, kem) = tiny_fields();
@@ -185,7 +180,6 @@ fn ksd3_non_minimal_int_rejects() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: KSD-3 duplicate-key reject — un-ignore at R5"]
 fn ksd3_duplicate_key_rejects() {
     let (sig, kem) = tiny_fields();
     let mut m = vec![0xa6]; // map(6): duplicate `v`
@@ -202,7 +196,6 @@ fn ksd3_duplicate_key_rejects() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: KSD-3 trailing-bytes reject — un-ignore at R5"]
 fn ksd3_trailing_bytes_reject() {
     let mut m = canonical_map();
     m.push(0x00); // trailing byte after a complete map
@@ -215,7 +208,6 @@ fn ksd3_trailing_bytes_reject() {
 // ── KSD-5 — version pin + forward-version reject ──────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: KSD-5 forward-version typed-reject — un-ignore at R5"]
 fn ksd5_forward_version_rejects() {
     // v = 2 is a future format the v1-beta decoder MUST typed-reject
     // (fail-closed, never a best-effort parse).
@@ -235,7 +227,6 @@ fn ksd5_forward_version_rejects() {
 // ── KSD-8 — kem multikey malformed / wrong-length / wrong-codec reject ────
 
 #[test]
-#[ignore = "RED-PHASE: KSD-8 kem multikey wrong-length reject — un-ignore at R5"]
 fn ksd8_kem_multikey_wrong_length_rejects() {
     // A kem field whose ML-KEM component is truncated (wrong length) MUST
     // fail closed when resolve_kem decodes it. Build a self-committed DID
@@ -252,7 +243,6 @@ fn ksd8_kem_multikey_wrong_length_rejects() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: KSD-8 kem multikey wrong-codec reject — un-ignore at R5"]
 fn ksd8_kem_multikey_wrong_codec_rejects() {
     // A kem field whose second component carries a WRONG multicodec (not
     // mlkem-768-pub 0x120c) MUST fail closed.

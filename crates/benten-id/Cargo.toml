@@ -30,14 +30,13 @@ workspace = true
 # arm) is a workspace CI-config concern OUTSIDE benten-id's lane and
 # is NOT a defect of this feature's design. `cargo test -p benten-id
 # --features testing` runs the arm green (verified).
-# GAP-KDB Shape-B (W0 canary): `kdb_testing` (the shared did:benten /
-# KeySetDocument red-phase fixtures) needs BLAKE3 for the frozen key-set-
-# doc CID commitment (`self_describing_cid(BLAKE3-256(canonical))`). Pulled
-# in as an OPTIONAL dep enabled ONLY by the `testing` feature so production
-# (default-feature) builds are unchanged. At R5 the real
-# `benten_id::keyset::KeySetDocument::cid` needs BLAKE3 in production —
-# promote `blake3` to a regular `[dependencies]` entry then.
-testing = ["dep:blake3"]
+# GAP-KDB Shape-B: `kdb_testing` (the shared did:benten / KeySetDocument
+# red-phase fixtures) is `testing`-gated. Its BLAKE3 dependency (the frozen
+# key-set-doc CID commitment `self_describing_cid(BLAKE3-256(canonical))`) is
+# now a REGULAR `[dependencies]` entry (R5 canary): the real
+# `benten_id::keyset::KeySetDocument::cid` needs BLAKE3 in PRODUCTION, so
+# `blake3` is no longer optional / feature-gated.
+testing = []
 
 [lib]
 # Disable the implicit libtest bench harness. Mirrors crates/benten-core/Cargo.toml.
@@ -179,10 +178,11 @@ serde_ipld_dagcbor = { workspace = true }
 bs58 = { workspace = true }
 # Typed-error mapping.
 thiserror = { workspace = true }
-# GAP-KDB Shape-B W0 canary — OPTIONAL, enabled only by `testing`. Powers
-# the frozen KeySetDocument CID commitment in `kdb_testing`. See the
-# `testing` feature note above.
-blake3 = { workspace = true, optional = true }
+# GAP-KDB Shape-B (R5 canary) — REGULAR dep (promoted from testing-only
+# optional): the real `benten_id::keyset::KeySetDocument::cid` computes the
+# frozen key-set-doc commitment `self_describing_cid(BLAKE3-256(canonical))`
+# in PRODUCTION. Ratified R3 carry.
+blake3 = { workspace = true }
 
 [dev-dependencies]
 # Proptest carries `prop_keypair_generate_distinct_across_1k_calls`,
@@ -193,6 +193,6 @@ proptest = { workspace = true }
 hex = { workspace = true }
 toml = { workspace = true }
 serde_json = { workspace = true }
-# GAP-KDB Shape-B W0 canary red-phase tests independently recompute the
-# KeySetDocument CID = BLAKE3-256(canonical) to pin the commitment binding.
-blake3 = { workspace = true }
+# NOTE: `blake3` is a REGULAR `[dependencies]` entry (R5 canary promotion);
+# the GAP-KDB red-phase tests that independently recompute the KeySetDocument
+# CID pick it up from there — no separate dev-dependency needed.

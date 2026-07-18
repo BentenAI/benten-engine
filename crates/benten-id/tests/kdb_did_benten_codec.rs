@@ -40,7 +40,6 @@ use benten_id::keypair::Keypair;
 // ── DID-1 — golden byte-layout (design §1.1, C1) ──────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: DID-1 did:benten golden byte-layout — un-ignore at R5"]
 fn did1_golden_byte_layout_signing_multikey_then_cid_no_framing_byte() {
     let (did, honest_doc, _attacker) = kdb::substituted_recipient_scenario();
     // The victim DID was built (via the frozen §1.1 layout) to commit
@@ -104,7 +103,6 @@ fn did1_golden_byte_layout_signing_multikey_then_cid_no_framing_byte() {
 // ── DID-2 — encode↔decode round-trip byte-identity ────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: DID-2 did:benten round-trip byte-identity — un-ignore at R5"]
 fn did2_encode_decode_round_trip_recovers_signing_key_and_committed_cid() {
     let kp = kdb::hybrid_keypair();
     let sig_mk = kdb::signing_multikey_of(&kp.public());
@@ -175,7 +173,6 @@ fn did5_didkey_classical_encoding_unchanged_regression() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: DID-5 resolve_signing handles the did:key degenerate case — un-ignore at R5"]
 fn did5_resolve_signing_accepts_bare_didkey_degenerate() {
     // A bare Ed25519 did:key is the signing-only degenerate identity
     // (design §6). The method-aware resolve_signing MUST recover its key
@@ -199,7 +196,6 @@ fn did5_resolve_signing_accepts_bare_didkey_degenerate() {
 // ── DID-6 — string injectivity, CID-sensitivity ──────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: DID-6 did:benten CID-sensitivity — un-ignore at R5"]
 fn did6_changing_committed_keyset_changes_the_did_string() {
     // Same signing key, DIFFERENT key-set (different KEM key ⇒ different
     // canonical CID). The encoder commits the CID, so the DID strings MUST

@@ -67,7 +67,6 @@ fn wellformed_map_with_kem_len(kem_len: usize) -> Vec<u8> {
 }
 
 #[test]
-#[ignore = "RED-PHASE: DOS-1 oversized-but-well-formed KeySetDocument bounded reject — un-ignore at R5"]
 fn dos1_oversized_but_wellformed_doc_rejects() {
     // A COMPLETE, valid doc whose `kem` is ~512 KB — ≫ the ≈3.2 KB
     // legitimate max. A bounded decoder MUST reject on the size cap; an
@@ -93,7 +92,6 @@ fn dos1_oversized_but_wellformed_doc_rejects() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: DOS-1 declared-length pre-alloc bomb bounded reject — un-ignore at R5"]
 fn dos1_declared_length_bomb_rejects_fast() {
     // A `kem` byte-string header DECLARING ~2 GB but carrying no data. A
     // decoder that pre-allocates the declared capacity OOMs/hangs; a

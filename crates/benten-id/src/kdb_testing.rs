@@ -61,7 +61,6 @@ use benten_core::Cid;
 use benten_crypto_suite::CipherSuiteCodepoint;
 use benten_crypto_suite::cipher_suite::RecipientPublic;
 use benten_crypto_suite::sig;
-use serde::Serialize;
 
 use crate::did::{Did, ED25519_MULTICODEC, MLDSA65_PUB_MULTICODEC};
 use crate::errors::DidError;
@@ -70,30 +69,16 @@ use crate::errors::DidError;
 // FROZEN constants (v1-beta wire — MUST match the R5 production surface).
 // ─────────────────────────────────────────────────────────────────────────
 
-/// `did:benten` method prefix incl. the `z` base58btc multibase marker.
-/// A distinct method makes "this DID commits my full key-set" lexically
-/// un-confusable with a signing-only `did:key` (design §1.1).
-pub const DID_BENTEN_PREFIX: &str = "did:benten:z";
-
-/// `did:benten` method identifier (no multibase marker).
-pub const DID_BENTEN_METHOD: &str = "did:benten:";
-
-/// Registered `mlkem-768-pub = 0x120c`, unsigned-varint `[0x8c, 0x24]`
-/// (design §5 — wires the registered component, retiring the #5-risky
-/// private `HYBRID_KEM_MULTICODEC = 0xf0`).
-pub const MLKEM768_PUB_MULTICODEC: [u8; 2] = [0x8c, 0x24];
-
-/// Registered `x25519-pub = 0xec`, unsigned-varint `[0xec, 0x01]`.
-pub const X25519_PUB_MULTICODEC: [u8; 2] = [0xec, 0x01];
-
-/// [`KeySetDocument`] v1-beta format version (design §1.2).
-pub const KEYSET_DOC_VERSION: u16 = 1;
-
-/// Frozen `sig_cp` — LAMPS `id-MLDSA65-Ed25519-SHA512` (design §1.2).
-pub const SIG_CP_LAMPS_MLDSA65_ED25519: u16 = 0x0001;
-
-/// Frozen `kem_cp` — `HYBRID_X25519_MLKEM768` (design §1.2).
-pub const KEM_CP_HYBRID_X25519_MLKEM768: u16 = 0x647a;
+// R5 swap: the frozen `did:benten` + KeySetDocument constants are now the
+// REAL production surface — re-exported here so the fixture builders + the
+// red-phase test call sites (`kdb::DID_BENTEN_PREFIX`, `kdb::X25519_PUB_MULTICODEC`,
+// …) are unchanged.
+pub use crate::did::{
+    DID_BENTEN_METHOD, DID_BENTEN_PREFIX, MLKEM768_PUB_MULTICODEC, X25519_PUB_MULTICODEC,
+};
+pub use crate::keyset::{
+    KEM_CP_HYBRID_X25519_MLKEM768, KEYSET_DOC_VERSION, SIG_CP_LAMPS_MLDSA65_ED25519,
+};
 
 /// The below-PQ-floor classical-only `0x6400` cipher suite. A key-set
 /// committing this is HNDL-exposed and MUST be rejected by `resolve_kem`
@@ -112,128 +97,16 @@ pub const CID_V1_DAGCBOR_BLAKE3_HEADER: [u8; 4] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────
-// KeySetDocument — canonical DAG-CBOR key-set document (design §1.2).
+// KeySetDocument (design §1.2) — R5 swap: the REAL production type.
 //
-// FROZEN schema (canonical map, sorted keys): `{v, sig, kem, sig_cp,
-// kem_cp}`. `to_canonical_bytes` + `cid` are the REAL frozen serialization
-// (deterministic); `from_canonical_bytes` is the strict-canonical decode
-// LOGIC-UNDER-TEST (stub `todo!()` → real at R5).
+// At R3 this was a stub whose `to_canonical_bytes` / `cid` were the frozen
+// serialization and whose `from_canonical_bytes` was a `todo!()`. At R5 the
+// real `benten_id::keyset::KeySetDocument` (identical public API: `v1_hybrid`
+// / `v1_with` / `to_canonical_bytes` / `cid` / accessors + the now-real strict
+// `from_canonical_bytes`) is re-exported so the test call sites are unchanged.
 // ─────────────────────────────────────────────────────────────────────────
 
-/// A committed key-set document. At v1-beta this is a CLOSED 5-field map
-/// (design S1: any extra field — including a `dev` key — REJECTS).
-///
-/// Fields are private; construct via [`Self::v1_hybrid`] /
-/// [`Self::v1_with`]. The stub carries the exact FROZEN public API the R5
-/// `benten_id::keyset::KeySetDocument` re-export must satisfy.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct KeySetDocument {
-    v: u16,
-    sig: Vec<u8>,
-    kem: Vec<u8>,
-    sig_cp: u16,
-    kem_cp: u16,
-}
-
-/// Canonical DAG-CBOR wire projection. Fields declared in **DAG-CBOR
-/// canonical key order** (length-first, then bytewise): `v`(1) < `kem`(3)
-/// < `sig`(3) < `kem_cp`(6) < `sig_cp`(6). `serde_bytes` forces the
-/// definite-length byte-string encoding (`0x58.. len ..`) that gives
-/// injectivity for free (design §1.2).
-#[derive(Serialize)]
-struct KeySetWire<'a> {
-    v: u16,
-    #[serde(with = "serde_bytes")]
-    kem: &'a [u8],
-    #[serde(with = "serde_bytes")]
-    sig: &'a [u8],
-    kem_cp: u16,
-    sig_cp: u16,
-}
-
-impl KeySetDocument {
-    /// The v1-beta hybrid default: `v = 1`, `sig_cp = 0x0001`,
-    /// `kem_cp = 0x647a`. `sig` = the signing multikey
-    /// (`0x1211‖mldsa ‖ 0xed‖ed25519`), `kem` = the KEM multikey,
-    /// **X25519-first** (`0xec‖x25519 ‖ 0x120c‖mlkem768_ek`, design C2).
-    pub fn v1_hybrid(sig: Vec<u8>, kem: Vec<u8>) -> Self {
-        Self {
-            v: KEYSET_DOC_VERSION,
-            sig,
-            kem,
-            sig_cp: SIG_CP_LAMPS_MLDSA65_ED25519,
-            kem_cp: KEM_CP_HYBRID_X25519_MLKEM768,
-        }
-    }
-
-    /// Fully-explicit constructor for reject-matrix fixtures (arbitrary
-    /// version / codepoints / malformed multikeys).
-    pub fn v1_with(v: u16, sig: Vec<u8>, kem: Vec<u8>, sig_cp: u16, kem_cp: u16) -> Self {
-        Self {
-            v,
-            sig,
-            kem,
-            sig_cp,
-            kem_cp,
-        }
-    }
-
-    /// Canonical DAG-CBOR bytes — the FROZEN commitment preimage
-    /// (design §1.2). REAL; the R5 encoder MUST produce identical bytes
-    /// (pinned by KSD-1).
-    pub fn to_canonical_bytes(&self) -> Vec<u8> {
-        serde_ipld_dagcbor::to_vec(&KeySetWire {
-            v: self.v,
-            kem: &self.kem,
-            sig: &self.sig,
-            kem_cp: self.kem_cp,
-            sig_cp: self.sig_cp,
-        })
-        .expect("DAG-CBOR encoding of the fixed-shape KeySetDocument cannot fail")
-    }
-
-    /// The document's CID: `self_describing_cid(BLAKE3-256(canonical))`
-    /// (design §1.2). This CID is what a `did:benten` COMMITS. REAL.
-    pub fn cid(&self) -> Cid {
-        let digest = blake3::hash(&self.to_canonical_bytes());
-        Cid::from_blake3_digest(*digest.as_bytes())
-    }
-
-    /// STRICT-canonical decode (design C3 / Row-D-13) — the
-    /// LOGIC-UNDER-TEST for KSD-3/5/8 + DOS-1. Rejects indefinite-length
-    /// / duplicate-key / unsorted-key / non-minimal-int / trailing /
-    /// extra-key (incl. `dev`) / forward-version / bounded-decode-cap.
-    ///
-    /// R5: replace this stub with the real strict decoder (or re-export
-    /// `benten_id::keyset::KeySetDocument::from_canonical_bytes`).
-    pub fn from_canonical_bytes(_bytes: &[u8]) -> Result<Self, DidError> {
-        todo!(
-            "RED-PHASE (KSD-3/5/8, DOS-1): strict-canonical KeySetDocument decode \
-             lands at R5 (GAP-KDB-B canary). un-ignore then."
-        )
-    }
-
-    /// Format version (`v` field).
-    pub fn version(&self) -> u16 {
-        self.v
-    }
-    /// Signing multikey (`sig` field).
-    pub fn sig(&self) -> &[u8] {
-        &self.sig
-    }
-    /// KEM multikey (`kem` field).
-    pub fn kem(&self) -> &[u8] {
-        &self.kem
-    }
-    /// Signature-suite codepoint (`sig_cp` field).
-    pub fn sig_cp(&self) -> u16 {
-        self.sig_cp
-    }
-    /// Cipher-suite codepoint (`kem_cp` field).
-    pub fn kem_cp(&self) -> u16 {
-        self.kem_cp
-    }
-}
+pub use crate::keyset::KeySetDocument;
 
 // ─────────────────────────────────────────────────────────────────────────
 // RecipientBinding — the seal-API typestate (design §5).
@@ -297,46 +170,36 @@ impl RecipientBinding {
 
 /// Encode a `did:benten` committing `doc` (design §1.1): method-specific
 /// id = `signing_multikey(sig_pk) ‖ doc.cid()` (36 B), base58btc, no
-/// framing byte (design C1). STUB → R5 `Did::from_benten_keyset(sig_pk, doc)`.
-pub fn encode_did_benten(_sig_pk: &sig::PublicKey, _doc: &KeySetDocument) -> Did {
-    todo!(
-        "RED-PHASE (DID-1/2/6): Did::from_benten_keyset (did:benten encoder) \
-         lands at R5 (GAP-KDB-B canary). un-ignore then."
-    )
+/// framing byte (design C1). R5: delegates to the real
+/// [`Did::from_benten_keyset`].
+pub fn encode_did_benten(sig_pk: &sig::PublicKey, doc: &KeySetDocument) -> Did {
+    Did::from_benten_keyset(sig_pk, doc)
 }
 
 /// Method-aware signing-key resolve (design §2 Tier-1, C6). `did:key`
 /// (0xed01) → classical; hybrid `did:key` (0x1211) → composite;
 /// `did:benten` → composite + strip the trailing keyset-CID component.
-/// Zero-I/O, no doc. STUB → R5 `did.resolve_signing()`.
-pub fn resolve_signing(_did: &Did) -> Result<sig::PublicKey, DidError> {
-    todo!(
-        "RED-PHASE (DID-4, RS-1/2): Did::resolve_signing (method/multicodec-aware) \
-         lands at R5 (GAP-KDB-B canary). un-ignore then."
-    )
+/// Zero-I/O, no doc. R5: delegates to the real [`Did::resolve_signing`].
+pub fn resolve_signing(did: &Did) -> Result<sig::PublicKey, DidError> {
+    did.resolve_signing()
 }
 
 /// KEM-key resolve (design §2 Tier-2). Recovers + VERIFIES the recipient
 /// KEM key from the DID's key-set commitment: (1) `cid(doc) ==
 /// committed_cid` (2nd-preimage), (2) `doc.sig == embedded_signing`
-/// cross-check, (3) `kem_cp ⟺ components`, (4) PQ-floor (`0x6400`
-/// reject). Fail-closed on ANY mismatch. STUB → R5 `did.resolve_kem(doc)`.
-pub fn resolve_kem(_did: &Did, _doc: &KeySetDocument) -> Result<RecipientPublic, DidError> {
-    todo!(
-        "RED-PHASE (RK-1..7, flagship RK-2): Did::resolve_kem (CID 2nd-preimage \
-         fail-closed) lands at R5 (GAP-KDB-B canary). un-ignore then."
-    )
+/// cross-check, (3) PQ-floor (`0x6400` reject), (4) kem multikey decode +
+/// `kem_cp ⟺ components`. Fail-closed on ANY mismatch. R5: delegates to the
+/// real [`Did::resolve_kem`].
+pub fn resolve_kem(did: &Did, doc: &KeySetDocument) -> Result<RecipientPublic, DidError> {
+    did.resolve_kem(doc)
 }
 
 /// The committed key-set CID carried in a `did:benten` string (the last
 /// 36 payload bytes). A bare `did:key` commits none →
-/// `NoKemCommitment`-class reject (design §6). STUB → R5
-/// `did.keyset_cid()`.
-pub fn committed_keyset_cid(_did: &Did) -> Result<Cid, DidError> {
-    todo!(
-        "RED-PHASE (RK-7, DID-3): Did::keyset_cid accessor lands at R5 \
-         (GAP-KDB-B canary). un-ignore then."
-    )
+/// [`DidError::NoKemCommitment`] (design §6). R5: delegates to the real
+/// [`Did::keyset_cid`].
+pub fn committed_keyset_cid(did: &Did) -> Result<Cid, DidError> {
+    did.keyset_cid()
 }
 
 // ─────────────────────────────────────────────────────────────────────────

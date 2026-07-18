@@ -33,7 +33,6 @@ use benten_id::keypair::Keypair;
 // ── RK-1 — happy path (committed KEM key recovered) ───────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: RK-1 resolve_kem happy path — un-ignore at R5"]
 fn rk1_resolve_kem_recovers_committed_kem_key() {
     let (did, doc) = kdb::honest_recipient_scenario();
     let recipient = kdb::resolve_kem(&did, &doc).expect("honest key-set resolves the KEM key");
@@ -60,7 +59,6 @@ fn rk1_resolve_kem_recovers_committed_kem_key() {
 // ── RK-2 ★ FLAGSHIP — active substitution fails closed ────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: RK-2 ★ GAP-KDB active-substitution CID 2nd-preimage fail-closed — un-ignore at R5"]
 fn rk2_flagship_substituted_kem_key_fails_closed() {
     let (victim_did, honest_doc, attacker_doc) = kdb::substituted_recipient_scenario();
 
@@ -92,7 +90,6 @@ fn rk2_flagship_substituted_kem_key_fails_closed() {
 // ── RK-3 — doc.sig == embedded-signing cross-check (spliced-sig reject) ────
 
 #[test]
-#[ignore = "RED-PHASE: RK-3 spliced doc.sig vs embedded-signing reject — un-ignore at R5"]
 fn rk3_spliced_doc_sig_mismatch_fails_closed() {
     // Attacker pairs the VICTIM's embedded signing key (in the DID string)
     // with a doc whose `sig` field is the ATTACKER's. The DID commits
@@ -126,7 +123,6 @@ fn rk3_spliced_doc_sig_mismatch_fails_closed() {
 // ── RK-4 — kem_cp ⟺ components cross-check (algorithm-confusion reject) ────
 
 #[test]
-#[ignore = "RED-PHASE: RK-4 kem_cp⟺components cross-check (C2) — un-ignore at R5"]
 fn rk4_kem_cp_component_mismatch_fails_closed() {
     // kem_cp declares the HYBRID suite (0x647a) but the kem multikey carries
     // only a classical X25519 component (no ML-KEM). resolve_kem MUST reject
@@ -150,7 +146,6 @@ fn rk4_kem_cp_component_mismatch_fails_closed() {
 // ── RK-5 — PQ floor (0x6400 classical-only reject, C5) ────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: RK-5 PQ-floor 0x6400 below-floor reject (C5) — un-ignore at R5"]
 fn rk5_below_pq_floor_classical_only_fails_closed() {
     // A key-set committing 0x6400 (classical-only X25519) is a below-PQ-floor,
     // HNDL-exposed recipient. resolve_kem MUST NEVER silently seal to it
@@ -168,7 +163,6 @@ fn rk5_below_pq_floor_classical_only_fails_closed() {
 // ── RK-6 — strict-canonical consumer (no raw-byte compare, C3) ────────────
 
 #[test]
-#[ignore = "RED-PHASE: RK-6 resolve_kem over strict-canonical decode (C3) — un-ignore at R5"]
 fn rk6_resolve_kem_over_strict_canonical_decoded_doc() {
     // resolve_kem recomputes the commitment CID over a re-canonicalized /
     // strict-canonical decode of the doc (design C3), NOT a raw-byte compare.
@@ -190,7 +184,6 @@ fn rk6_resolve_kem_over_strict_canonical_decoded_doc() {
 // ── RK-7 — bare did:key → NoKemCommitment degenerate ──────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: RK-7 bare did:key commits no KEM key — un-ignore at R5"]
 fn rk7_bare_did_key_has_no_kem_commitment() {
     // A bare did:key is the signing-only degenerate identity (design §6): it
     // commits NO key-set → resolve_kem MUST reject (NoKemCommitment) and

@@ -29,7 +29,6 @@ use benten_id::kdb_testing as kdb;
 const ED25519_SHAPED_PUBKEY: usize = 32;
 
 #[test]
-#[ignore = "RED-PHASE: AUDIT-1 did:benten codec sources sizes from named constants — un-ignore at R5"]
 fn audit1_did_benten_payload_dimensions_from_named_constants_not_literals() {
     let kp = kdb::hybrid_keypair();
     let doc = kdb::KeySetDocument::v1_hybrid(
@@ -62,7 +61,6 @@ fn audit1_did_benten_payload_dimensions_from_named_constants_not_literals() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: AUDIT-1 KeySetDocument kem multikey dimensions from named constants — un-ignore at R5"]
 fn audit1_keyset_kem_multikey_dimensions_from_named_constants() {
     // The kem multikey (X25519-first, C2) is `2 + X25519_PUBLIC_LEN + 2 +
     // ML_KEM_768_EK_LEN`. Sourcing from the named constants means a

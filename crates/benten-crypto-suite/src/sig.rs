@@ -306,6 +306,40 @@ impl PublicKey {
             pq: Some(pq),
         })
     }
+
+    /// Reconstruct a **classical-only** (`pq = None`) public-key handle from a
+    /// raw 32-byte Ed25519 verifying key (GAP-KDB Shape-B FS-2 / identity-resolve
+    /// FS-2).
+    ///
+    /// This is the classical sibling of [`Self::from_lamps_composite_bytes`]:
+    /// it lets ONE codepoint-dispatched signing-key resolver
+    /// (`benten_id::did::Did::resolve_signing`) return a `sig::PublicKey` for
+    /// BOTH issuer shapes — a classical `did:key` (`0xed01 ‖ ed25519(32)`) →
+    /// this `pq = None` handle, and a hybrid / `did:benten` (`0x1211 ‖ mldsa …`)
+    /// → the `pq = Some` composite handle — without a second Ed25519-only
+    /// verify path (the silent-PQ-strip surface). The `pq = None` shape is
+    /// load-bearing: [`Self::is_hybrid`] returns `false` and
+    /// [`Self::to_lamps_composite_bytes`] fails closed, so a classical issuer
+    /// can never be mis-typed as hybrid (a silent PQ-UPGRADE) and vice-versa.
+    ///
+    /// Sizes flow from `ED25519_PUBLIC_LEN` (the upstream
+    /// `ed25519_dalek::PUBLIC_KEY_LENGTH`) — never hardcoded (CLAUDE.md
+    /// baked-in #5).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VerifyError::MalformedKey`] if the 32 bytes are not a valid
+    /// Ed25519 curve point (fail-closed — never a silent default).
+    pub fn from_classical_ed25519_bytes(
+        bytes: &[u8; ED25519_PUBLIC_LEN],
+    ) -> Result<Self, VerifyError> {
+        let classical = ed25519_dalek::VerifyingKey::from_bytes(bytes)
+            .map_err(|_| VerifyError::MalformedKey("Ed25519 public key bytes not a point"))?;
+        Ok(Self {
+            classical,
+            pq: None,
+        })
+    }
 }
 
 /// Hybrid signature — the IETF LAMPS composite `id-MLDSA65-Ed25519-SHA512`.

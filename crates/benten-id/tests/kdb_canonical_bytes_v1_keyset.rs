@@ -53,7 +53,6 @@ fn tiny_doc() -> kdb::KeySetDocument {
 // ── KSD-1 — golden canonical-bytes + golden CID ───────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: KSD-1 KeySetDocument golden canonical bytes — un-ignore at R5"]
 fn ksd1_canonical_bytes_match_frozen_golden() {
     let doc = tiny_doc();
     assert_eq!(
@@ -65,7 +64,6 @@ fn ksd1_canonical_bytes_match_frozen_golden() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: KSD-1 KeySetDocument golden CID — un-ignore at R5"]
 fn ksd1_cid_matches_frozen_golden_and_is_blake3_over_canonical() {
     let doc = tiny_doc();
     assert_eq!(
@@ -92,7 +90,6 @@ fn ksd1_cid_matches_frozen_golden_and_is_blake3_over_canonical() {
 // ── KSD-2 — canonical key-order + definite-length injectivity ──────────────
 
 #[test]
-#[ignore = "RED-PHASE: KSD-2 canonical key-order + definite-length injectivity — un-ignore at R5"]
 fn ksd2_canonical_key_order_and_definite_lengths() {
     let bytes = tiny_doc().to_canonical_bytes();
     // 5-pair definite-length map.
@@ -122,7 +119,6 @@ fn ksd2_canonical_key_order_and_definite_lengths() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: KSD-2 field-injectivity (distinct fields ⇒ distinct bytes) — un-ignore at R5"]
 fn ksd2_distinct_fields_give_distinct_canonical_bytes() {
     let a = kdb::KeySetDocument::v1_hybrid(kdb::det_bytes("a/sig", 8), kdb::det_bytes("a/kem", 6));
     let b = kdb::KeySetDocument::v1_hybrid(kdb::det_bytes("b/sig", 8), kdb::det_bytes("a/kem", 6));
@@ -137,7 +133,6 @@ fn ksd2_distinct_fields_give_distinct_canonical_bytes() {
 // ── KSD-6 — frozen field-value pins (sig_cp=0x0001, kem_cp=0x647a) ─────────
 
 #[test]
-#[ignore = "RED-PHASE: KSD-6 frozen sig_cp/kem_cp field values — un-ignore at R5"]
 fn ksd6_frozen_codepoint_field_values() {
     let doc = tiny_doc();
     assert_eq!(
@@ -163,7 +158,6 @@ fn ksd6_frozen_codepoint_field_values() {
 // ── KSD-7 — kem multikey X25519-first golden (C2, no reorder) ──────────────
 
 #[test]
-#[ignore = "RED-PHASE: KSD-7 kem multikey X25519-first layout (C2) — un-ignore at R5"]
 fn ksd7_kem_multikey_is_x25519_first_then_mlkem768() {
     use benten_crypto_suite::cipher_suite::{ML_KEM_768_EK_LEN, X25519_PUBLIC_LEN};
     let x = kdb::det_x25519_pub("ksd7/x");

@@ -42,7 +42,6 @@ fn honest_payload() -> Vec<u8> {
 // ── DID-3 — exact-consume injectivity reject matrix (design C1) ───────────
 
 #[test]
-#[ignore = "RED-PHASE: DID-3 trailing-byte reject — un-ignore at R5"]
 fn did3_trailing_byte_after_committed_cid_rejects() {
     // A well-formed did:benten body is EXACTLY signing_multikey ‖ CID(36) —
     // no slack. One extra byte MUST fail closed (HybridTrailingBytes-class).
@@ -60,7 +59,6 @@ fn did3_trailing_byte_after_committed_cid_rejects() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: DID-3 component-truncation reject — un-ignore at R5"]
 fn did3_component_truncation_rejects() {
     // Drop the final byte of the committed CID: the body is now too short
     // for the fixed CIDv1(36) tail → fail closed, never a truncated read.
@@ -82,7 +80,6 @@ fn did3_component_truncation_rejects() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: DID-3 committed-component-not-a-CIDv1 reject — un-ignore at R5"]
 fn did3_committed_component_wrong_cid_prefix_rejects() {
     // The committed 36-byte tail must be a Benten CIDv1
     // (`0x01,0x71,0x1e,0x20 ‖ 32B`). Corrupt the version byte → the tail is
@@ -101,7 +98,6 @@ fn did3_committed_component_wrong_cid_prefix_rejects() {
 // ── DID-7 — F2 DoS cap under did:benten (design C7) ───────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: DID-7 F2 DoS cap gates bs58 O(N²) on did:benten — un-ignore at R5"]
 fn did7_oversized_did_benten_rejects_fast_not_multi_second_hang() {
     // The `iss` is attacker-controlled per UCAN link. A ~5 MB did:benten
     // string MUST be rejected by `length_pre_check` BEFORE the O(N²)
@@ -126,7 +122,6 @@ fn did7_oversized_did_benten_rejects_fast_not_multi_second_hang() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: DID-7 MAX_DID_KEY_STRING_LEN boundary — un-ignore at R5"]
 fn did7_valid_did_benten_is_under_the_cap_and_resolves() {
     // A real did:benten (payload ≈ 2024 B → ≈ 2764 base58 chars) is well
     // under MAX_DID_KEY_STRING_LEN = 4096: the cap must not reject any

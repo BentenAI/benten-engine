@@ -206,6 +206,91 @@ pub enum DidError {
     /// valid key encoding). Fail-closed.
     #[error("did:key hybrid body holds an invalid LAMPS composite public key: {0}")]
     InvalidHybridPublicKey(&'static str),
+
+    // ── GAP-KDB Shape-B (did:benten content-addressed key-set) ────────────
+    /// The DID commits no KEM key-set, so it has no KEM key / committed CID
+    /// to recover. Fired by
+    /// [`crate::did::Did::resolve_kem`] / [`crate::did::Did::keyset_cid`] on a
+    /// bare `did:key` — the signing-only degenerate identity (design §6). A
+    /// Drop recipient MUST be a `did:benten`. Fail-closed.
+    #[error("DID commits no KEM key-set (bare did:key is signing-only — no KEM commitment)")]
+    NoKemCommitment,
+    /// A `did:benten` string's committed component (the trailing 36 bytes)
+    /// is not a well-formed Benten CIDv1 (`0x01,0x71,0x1e,0x20 ‖ 32B`) —
+    /// design §1.1 / C1. Fired by [`crate::did::Did::keyset_cid`]. Fail-closed
+    /// (never treats arbitrary 36 bytes as a CID).
+    #[error("did:benten committed key-set component is not a valid Benten CIDv1")]
+    InvalidKeysetCid,
+    /// A supplied [`crate::keyset::KeySetDocument`]'s canonical BLAKE3-256 CID
+    /// does NOT equal the audience DID's committed key-set CID — the GAP-KDB
+    /// active-substitution guard (design §2 Tier-2 step 1; a BLAKE3-256
+    /// 2nd-preimage). Fired by [`crate::did::Did::resolve_kem`]. Fail-closed:
+    /// a KEM key not committed by the DID is NEVER resolved.
+    #[error(
+        "key-set document CID does not match the audience DID's committed key-set (substitution)"
+    )]
+    KeysetCommitmentMismatch,
+    /// A supplied key-set document's `sig` field does NOT equal the signing
+    /// multikey embedded in the audience `did:benten` string (design §2
+    /// Tier-2 step 2). Defeats an embedded-victim-sig ⊕ attacker-KEM splice.
+    /// Fired by [`crate::did::Did::resolve_kem`]. Fail-closed.
+    #[error(
+        "key-set document sig field does not match the DID's embedded signing multikey (splice)"
+    )]
+    KeysetEmbeddedSigningMismatch,
+    /// The key-set document's committed cipher suite (`kem_cp`) is below the
+    /// PQ floor — a non-hybrid (e.g. classical-only `0x6400`), HNDL-exposed
+    /// recipient — and MUST NEVER be silently sealed to (design C5 / baked-in
+    /// #5/#18). Fired by [`crate::did::Did::resolve_kem`]. Fail-closed.
+    #[error("key-set cipher suite {kem_cp:#06x} is below the PQ floor (not 0x647a hybrid)")]
+    KeysetBelowPqFloor {
+        /// The committed `kem_cp` codepoint that failed the PQ floor.
+        kem_cp: u16,
+    },
+    /// The key-set document's `kem` multikey is malformed for the declared
+    /// hybrid suite: wrong total length, a wrong component multicodec (not
+    /// `x25519-pub 0xec01` then `mlkem-768-pub 0x120c`), or a component of the
+    /// wrong length (design §2 Tier-2 steps 3–4 / C2 kem_cp⟺components
+    /// cross-check). Fired by [`crate::did::Did::resolve_kem`]. Fail-closed.
+    #[error("key-set kem multikey is malformed (wrong length / codec / component)")]
+    MalformedKemMultikey,
+    /// A [`crate::keyset::KeySetDocument`] presented for strict-canonical
+    /// decode is not well-formed DAG-CBOR / not the CLOSED 5-field
+    /// `{v,kem,sig,kem_cp,sig_cp}` map, or carried an extra field (incl. a
+    /// `dev` key, S1), a duplicate key, an indefinite length, or trailing
+    /// bytes (design §1.2 / C3, Row-D-13). Fired by
+    /// [`crate::keyset::KeySetDocument::from_canonical_bytes`]. Fail-closed.
+    #[error("key-set document is not a strict-canonical CLOSED 5-field DAG-CBOR map")]
+    KeysetDocMalformed,
+    /// A key-set document decoded structurally but its bytes are NOT in strict
+    /// DAG-CBOR canonical form (non-minimal integer or unsorted map keys the
+    /// lenient reader accepted) — design C3 / Row-D-13 (never a raw-byte
+    /// compare; canonicality is enforced by decode→re-encode equality). Fired
+    /// by [`crate::keyset::KeySetDocument::from_canonical_bytes`]. Fail-closed.
+    #[error("key-set document bytes are not in strict DAG-CBOR canonical form")]
+    KeysetDocNonCanonical,
+    /// A key-set document declares a format version this v1-beta decoder does
+    /// not support (`v != 1`) — a forward/unknown version typed-reject (never
+    /// a best-effort parse). Fired by
+    /// [`crate::keyset::KeySetDocument::from_canonical_bytes`]. Fail-closed.
+    #[error("key-set document unsupported version: {version} (v1-beta decoder expects v=1)")]
+    KeysetDocUnsupportedVersion {
+        /// The unsupported `v` field the decoder saw.
+        version: u16,
+    },
+    /// A key-set document input is larger than any structurally-valid key-set
+    /// and is rejected BEFORE the allocating decode (bounded-decode DoS cap;
+    /// META #629 / DOS-1). A first-contact / cached / iroh-fetched key-set doc
+    /// is attacker-influenced. Fired by
+    /// [`crate::keyset::KeySetDocument::from_canonical_bytes`]. Fail-closed.
+    #[error("key-set document too large: got {got} bytes, expected at most {max}")]
+    KeysetDocTooLong {
+        /// Length of the key-set-document bytes presented.
+        got: usize,
+        /// Maximum accepted key-set-document byte length
+        /// ([`crate::keyset::MAX_KEYSET_DOC_BYTES`]).
+        max: usize,
+    },
 }
 
 /// Errors emitted by [`crate::ucan`] chain-walk validation.

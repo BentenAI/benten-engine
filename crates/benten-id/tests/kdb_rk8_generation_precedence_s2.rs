@@ -38,7 +38,6 @@
 use benten_id::kdb_testing as kdb;
 
 #[test]
-#[ignore = "RED-PHASE: RK-8 committed key-set solely determines the KEM key (role separation) — un-ignore at R5"]
 fn rk8_resolve_kem_is_pure_over_the_committed_key_set() {
     // The committed key-set fully determines the KEM key: resolving the
     // same (DID, doc) twice yields byte-identical keys. No freshness index

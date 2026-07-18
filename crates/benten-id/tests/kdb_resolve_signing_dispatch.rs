@@ -28,7 +28,6 @@ use benten_id::keypair::Keypair;
 // ── RS-1 — classical arm (0xed01) round-trip ──────────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: RS-1 resolve_signing classical (0xed01) arm — un-ignore at R5"]
 fn rs1_resolve_signing_classical_didkey_arm() {
     let kp = Keypair::generate();
     let did = kp.public_key().to_did();
@@ -47,7 +46,6 @@ fn rs1_resolve_signing_classical_didkey_arm() {
 // ── RS-2 — did:benten composite arm + trailing-CID strip, ZERO-I/O ────────
 
 #[test]
-#[ignore = "RED-PHASE: RS-2 resolve_signing did:benten composite arm (zero-I/O) — un-ignore at R5"]
 fn rs2_resolve_signing_did_benten_composite_arm_strips_trailing_cid() {
     // The killer-neutralizer: recover a did:benten's composite signing key
     // WITHOUT any key-set doc (zero-I/O) by stripping the trailing 36-B CID
@@ -81,7 +79,6 @@ fn rs2_resolve_signing_did_benten_composite_arm_strips_trailing_cid() {
 // ── DID-4 — C6 multicodec-peek dispatch matrix ────────────────────────────
 
 #[test]
-#[ignore = "RED-PHASE: DID-4 C6 multicodec-peek dispatch (hybrid did:key vs did:benten) — un-ignore at R5"]
 fn did4_dispatch_peeks_multicodec_not_method_string() {
     let kp = kdb::hybrid_keypair();
 

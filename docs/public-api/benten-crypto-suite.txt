@@ -756,6 +756,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::sig::Keypa
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::sig::Keypair
 pub struct benten_crypto_suite::sig::PublicKey
 impl benten_crypto_suite::sig::PublicKey
+pub fn benten_crypto_suite::sig::PublicKey::from_classical_ed25519_bytes(&[u8; 32]) -> core::result::Result<Self, benten_crypto_suite::error::VerifyError>
 pub fn benten_crypto_suite::sig::PublicKey::from_lamps_composite_bytes(&[u8]) -> core::result::Result<Self, benten_crypto_suite::error::VerifyError>
 pub fn benten_crypto_suite::sig::PublicKey::is_hybrid(&self) -> bool
 pub fn benten_crypto_suite::sig::PublicKey::to_lamps_composite_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_crypto_suite::error::VerifyError>

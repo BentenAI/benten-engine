@@ -88,6 +88,11 @@ pub mod grant_reader;
 #[cfg(any(test, feature = "testing"))]
 pub mod kdb_testing;
 pub mod keypair;
+// GAP-KDB Shape-B (W0 canary → R5) — the real content-addressed
+// `KeySetDocument` a `did:benten` commits by CID. Production module (the real
+// KeySetDocument CID uses BLAKE3 in production); `did::Did::resolve_kem`
+// consumes it.
+pub mod keyset;
 pub mod multi_sig;
 pub mod plugin_did;
 pub mod ucan;
