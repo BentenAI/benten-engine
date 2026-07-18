@@ -110,10 +110,14 @@ for (const batch of chunk(WAVES, 7)) {
 }
 const approved = waveResults.filter(w => w.review?.verdict === 'APPROVE')
 const needFix = waveResults.filter(w => w.review?.verdict !== 'APPROVE')
-log(`waves: ${approved.length}/${WAVES.length} APPROVE; ${needFix.length} FIX-NEEDED`)
-if (needFix.length) {
-  log(`HALT before integrate — ${needFix.length} wave(s) FIX-NEEDED. Do NOT integrate a PARTIAL set (a half-implemented corpus is worse than none). Orchestrator: fix-pass the flagged waves + re-run.`)
-  return { converged: false, stage: 'waves', approvedWaves: approved.map(w => w.wave), needFix: needFix.map(w => ({ wave: w.wave, branch: w.branch, review: w.review })), note: 'orchestrator-led wave fix-pass + re-run before integrate (partial-integrate suppressed)' }
+// DROP-GUARD (dogfood-#1 fold-back): a wave whose pipeline THREW -> null -> got filtered out of waveResults
+// is a DROPPED wave (agent died / PANEL-INCOMPLETE), NOT a silent success. The needFix check below can't see it
+// (it's absent, not FIX-NEEDED). Count + HALT explicitly, else a dropped wave sails into a partial integrate.
+const dropped = WAVES.length - waveResults.length
+log(`waves: ${approved.length}/${WAVES.length} APPROVE; ${needFix.length} FIX-NEEDED; ${dropped} DROPPED`)
+if (dropped > 0 || needFix.length) {
+  log(`HALT before integrate — ${needFix.length} FIX-NEEDED + ${dropped} DROPPED. Do NOT integrate a PARTIAL set (a half-implemented corpus is worse than none). Orchestrator: fix-pass / re-run the missing waves.`)
+  return { converged: false, stage: 'waves', status: dropped > 0 ? 'PANEL-INCOMPLETE' : 'FIX-NEEDED', dropped, approvedWaves: approved.map(w => w.wave), needFix: needFix.map(w => ({ wave: w.wave, branch: w.branch, review: w.review })), note: 'orchestrator-led wave fix-pass / re-run before integrate (partial-integrate suppressed)' }
 }
 
 // ===== INTEGRATE (strategy-C) + FULL-SUITE — only reached when ALL waves APPROVE =====

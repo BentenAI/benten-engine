@@ -75,7 +75,14 @@ for (const b of chunk(WAVES, 7)) {
   results.push(...res.filter(Boolean))
 }
 const approved = results.filter(w => w.review?.verdict === 'APPROVE')
-log(`fan-out: ${approved.length}/${WAVES.length} APPROVE`)
+log(`fan-out: ${approved.length}/${WAVES.length} APPROVE; ${WAVES.length - results.length} DROPPED`)
+// DROP-GUARD (dogfood-#1 validated): a wave whose pipeline THREW -> null -> filtered out of results is a DROPPED
+// wave (agent died), not silent coverage. Refuse to certify coverage on a partial corpus (else coverage-verify
+// runs over fewer waves + can falsely CONVERGE on an incomplete family set).
+if (results.length < WAVES.length) {
+  log(`PANEL-INCOMPLETE — ${WAVES.length - results.length} wave(s) DROPPED. Refusing coverage-verify on a partial corpus; orchestrator must re-run the dropped waves first.`)
+  return { converged: false, status: 'PANEL-INCOMPLETE', dropped: WAVES.length - results.length, waves: results.map(r => ({ wave: r.wave, verdict: r.review?.verdict })), note: 'orchestrator-led re-run of dropped waves before coverage-verify' }
+}
 
 // COVERAGE-VERIFY — every R2 family covered, zero double-impl, convergence call
 phase('Coverage')
