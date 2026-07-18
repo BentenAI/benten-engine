@@ -79,19 +79,16 @@ mod cs1_fs2_shim {
     /// the composite `did:benten` arm without a second Ed25519-only verify
     /// path.
     ///
-    /// STUB `todo!()` at R3. R5: delegate to the minted real entry
-    /// (e.g. `sig::PublicKey::from_classical_ed25519_bytes`).
+    /// Delegates to the real [`PublicKey::from_classical_ed25519_bytes`]
+    /// (R5 GAP-KDB-B W1).
     ///
     /// # Errors
     /// [`VerifyError::MalformedKey`] if the 32 bytes are not a valid
     /// Ed25519 curve point — fail-closed (never a silent default).
     pub fn classical_public_from_ed25519_bytes(
-        _ed25519: &[u8; 32],
+        ed25519: &[u8; 32],
     ) -> Result<PublicKey, VerifyError> {
-        todo!(
-            "RED-PHASE (CS-1/FS-2): classical-from-bytes sig::PublicKey \
-             (pq=None) constructor lands at R5 (GAP-KDB-B W1). un-ignore then."
-        )
+        PublicKey::from_classical_ed25519_bytes(ed25519)
     }
 }
 
@@ -101,7 +98,6 @@ mod cs1_fs2_shim {
 /// CLASSICAL-only: `is_hybrid()` is `false` and it carries no LAMPS
 /// composite to serialize.
 #[test]
-#[ignore = "RED-PHASE: CS-1/FS-2 classical-from-bytes sig::PublicKey is pq=None — un-ignore at R5"]
 fn cs1_fs2_classical_constructor_is_not_hybrid() {
     let (ed25519_half, _composite) = real_ed25519_half_and_composite();
 
@@ -130,7 +126,6 @@ fn cs1_fs2_classical_constructor_is_not_hybrid() {
 /// classical arm and the composite arm are distinguishable by exactly the
 /// `pq` shape the ONE `resolve_signing` helper dispatches on.
 #[test]
-#[ignore = "RED-PHASE: CS-1/FS-2 composite arm stays pq=Some (both-shapes distinction) — un-ignore at R5"]
 fn cs1_fs2_composite_arm_is_hybrid_distinct_from_classical() {
     let (ed25519_half, composite) = real_ed25519_half_and_composite();
 

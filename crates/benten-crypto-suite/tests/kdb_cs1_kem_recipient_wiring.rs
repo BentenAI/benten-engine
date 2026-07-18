@@ -86,43 +86,32 @@ fn kem_multikey_x25519_first(x25519: &[u8], mlkem768_ek: &[u8]) -> Vec<u8> {
     out
 }
 
-/// The CS-1 logic-under-test (RED-PHASE stub → real entry at R5).
+/// The CS-1 logic-under-test — delegates to the minted real crypto-suite
+/// entry [`RecipientPublic::from_kem_multikey`] (R5 GAP-KDB-B W1).
 mod cs1_shim {
-    use super::RecipientPublic;
+    use super::{CipherSuiteCodepoint, RecipientPublic};
     use benten_crypto_suite::AeadError;
 
-    /// CS-1 kem-field → `RecipientPublic` wiring (design §5 + C2).
-    ///
-    /// Decode a [`KeySetDocument`] `kem` multikey and build the recipient
-    /// public material bound to `kem_cp`:
-    /// 1. parse the X25519-first component multikeys
+    /// CS-1 kem-field → `RecipientPublic` wiring (design §5 + C2). Delegates
+    /// to the real [`RecipientPublic::from_kem_multikey`], which:
+    /// 1. parses the X25519-first component multikeys
     ///    (`0xec‖x25519(32)`, then `0x120c‖mlkem768_ek(1184)`),
-    /// 2. **cross-check the component multicodec set against `kem_cp`**
+    /// 2. **cross-checks the component multicodec set against `kem_cp`**
     ///    (`0x647a ⟺ {0xec, 0x120c}`), fail-closed on disagreement
     ///    (algorithm-confusion defense, C2),
-    /// 3. hand the concatenated `x25519(32) ‖ mlkem768_ek(1184)` payload
+    /// 3. hands the concatenated `x25519(32) ‖ mlkem768_ek(1184)` payload
     ///    to the already-frozen X25519-first
     ///    [`RecipientPublic::from_bytes`] (NO reorder — the §5 REORDER
     ///    step is deleted by C2).
-    ///
-    /// STUB `todo!()` at R3. R5: delegate to the minted real entry. Body
-    /// sketch:
-    ///   `let cp = CipherSuiteCodepoint::from_raw(_kem_cp);`
-    ///   `let payload = decode_kem_multikey_x25519_first(cp, _kem_multikey)?;`
-    ///   `RecipientPublic::from_bytes(cp, &payload)`
     ///
     /// # Errors
     /// [`AeadError`] on any malformed multikey / component-vs-`kem_cp`
     /// disagreement / unsupported codepoint — never a silent default.
     pub fn recipient_public_from_kem_multikey(
-        _kem_cp: u16,
-        _kem_multikey: &[u8],
+        kem_cp: u16,
+        kem_multikey: &[u8],
     ) -> Result<RecipientPublic, AeadError> {
-        todo!(
-            "RED-PHASE (CS-1): kem-multikey → RecipientPublic wiring \
-             (X25519-first, C2) + kem_cp⟺components cross-check lands at \
-             R5 (GAP-KDB-B W1). un-ignore then."
-        )
+        RecipientPublic::from_kem_multikey(CipherSuiteCodepoint::from_raw(kem_cp), kem_multikey)
     }
 }
 
@@ -137,7 +126,6 @@ mod cs1_shim {
 /// `to_bytes()` (X25519-first `x25519(32) ‖ mlkem768_ek(1184)`) MUST equal
 /// the original public's bytes.
 #[test]
-#[ignore = "RED-PHASE: CS-1 kem multikey → RecipientPublic X25519-first wiring (C2) — un-ignore at R5"]
 fn cs1_kem_wiring_round_trips_x25519_first() {
     let suite = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
         .expect("0x647a LIVE at G-CORE-3a");
@@ -184,7 +172,6 @@ fn cs1_kem_wiring_round_trips_x25519_first() {
 /// `RecipientPublic` the secret cannot unwrap → the recovery `assert_eq`
 /// flips.
 #[test]
-#[ignore = "RED-PHASE: CS-1 wired RecipientPublic wrap/unwraps against its own secret — un-ignore at R5"]
 fn cs1_kem_wiring_wrap_unwrap_end_to_end() {
     let suite = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
         .expect("0x647a LIVE at G-CORE-3a");

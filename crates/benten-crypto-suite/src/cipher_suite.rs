@@ -112,6 +112,29 @@ pub use crate::mlkem::{
     ML_KEM_768_CT_LEN, ML_KEM_768_DK_LEN, ML_KEM_768_EK_LEN, ML_KEM_768_SS_LEN,
 };
 
+/// Multicodec varint prefix for the **X25519** KEM public-key COMPONENT —
+/// the registered `x25519-pub = 0xec`, unsigned-varint-encoded as
+/// `[0xec, 0x01]`. Per the multiformats multicodec table
+/// (<https://github.com/multiformats/multicodec/blob/master/table.csv>).
+///
+/// The **first** component of a GAP-KDB Shape-B key-set `kem` multikey
+/// (X25519-first per design correction C2 — matches the already-frozen
+/// [`RecipientPublic::to_bytes`] order so no reorder is needed). Un-confusable
+/// with the `[0x8c, 0x24]` ML-KEM tag. This is a component *algorithm* ID that
+/// references a REGISTERED multiformats codec (CLAUDE.md baked-in #5 — Benten
+/// never mints algorithm numbers).
+const X25519_PUB_MULTICODEC: [u8; 2] = [0xec, 0x01];
+
+/// Multicodec varint prefix for the **ML-KEM-768** KEM public-key COMPONENT —
+/// the registered `mlkem-768-pub = 0x120c`, unsigned-varint-encoded as
+/// `[0x8c, 0x24]`. Per the multiformats multicodec table.
+///
+/// The **second** component of a GAP-KDB Shape-B key-set `kem` multikey
+/// (X25519-first per C2). Retires the #5-risky reserved-private
+/// `HYBRID_KEM_MULTICODEC = 0xf0` in favor of the registered component codes
+/// (design §5 + the `did:benten` HYBRID DID layout).
+const MLKEM768_PUB_MULTICODEC: [u8; 2] = [0x8c, 0x24];
+
 /// The real draft-connolly X-Wing `XWingLabel` — the 6 bytes
 /// `0x5c2e2f2f5e5c` (ASCII `\.//^\`). **APPENDED** as the trailing suffix
 /// of the combiner pre-image per `draft-connolly-cfrg-xwing-kem-10` §5.3
@@ -864,6 +887,121 @@ impl RecipientPublic {
                     x25519: Some(X25519PublicKey::from(x_arr)),
                     mlkem768_ek: None,
                 })
+            }
+        }
+    }
+
+    /// Decode a **GAP-KDB Shape-B key-set `kem` multikey** (the `did:benten`
+    /// key-set-document `kem` field) into a [`RecipientPublic`] bound to
+    /// `codepoint`, cross-checking the component multicodecs against the
+    /// out-of-band `kem_cp` (design correction **C2**). Fail-closed
+    /// typed-reject on ANY malformed multikey / component-vs-`kem_cp`
+    /// disagreement / unsupported codepoint — NEVER a silent default
+    /// (CLAUDE.md baked-in #5).
+    ///
+    /// # The frozen wire (design §5 + C2)
+    ///
+    /// The `kem` multikey is **X25519-first** (matching the already-frozen
+    /// [`Self::to_bytes`] order, so no reorder is needed — the §5 REORDER
+    /// foot-gun is deleted by C2). Component algorithm IDs reference REGISTERED
+    /// multiformats codecs:
+    ///
+    /// - `0x647a` hybrid: `0xec01 ‖ x25519(32) ‖ 0x8c24 ‖ mlkem768_ek(1184)`
+    ///   (component set `{x25519-pub, mlkem-768-pub}`, in that order).
+    /// - `0x6400` classical: `0xec01 ‖ x25519(32)` (component set `{x25519-pub}`).
+    ///
+    /// # The `kem_cp` ⟺ component-set cross-check (C2 — the load-bearing check)
+    ///
+    /// [`Self::from_bytes`] dispatches purely on `codepoint` over the
+    /// component-varint-STRIPPED payload, so it cannot catch a multikey whose
+    /// payload length is correct for `codepoint` but whose component varints
+    /// declare the WRONG algorithms (X25519 ↔ ML-KEM swapped / ML-KEM-1024
+    /// substituted / a signing codec spliced into the KEM slot / a hybrid ML-KEM
+    /// component present under a classical claim). This decoder is the ONLY place
+    /// the component codecs are cross-checked against `kem_cp` — the
+    /// algorithm-confusion defense. Every component multicodec MUST match the
+    /// sequence mandated by `codepoint`, at its exact length, with NO trailing
+    /// bytes (Row-D-13 injectivity discipline).
+    ///
+    /// All sizes flow from the upstream size constants ([`X25519_PUBLIC_LEN`],
+    /// [`ML_KEM_768_EK_LEN`]) — never hardcoded (CLAUDE.md baked-in #5).
+    ///
+    /// # Errors
+    ///
+    /// - [`AeadError::MalformedRecipientPublic`] on a wrong total length, a
+    ///   wrong / mis-ordered component multicodec, or (via [`Self::from_bytes`])
+    ///   a malformed component payload.
+    /// - [`AeadError::Unsupported`] if `codepoint` is not a live cipher suite.
+    pub fn from_kem_multikey(
+        codepoint: CipherSuiteCodepoint,
+        kem_multikey: &[u8],
+    ) -> Result<Self, AeadError> {
+        // Reject unknown/reserved codepoints up-front (never silent default);
+        // this bounds the match below to the two live cipher suites.
+        CipherSuite::resolve(codepoint)?;
+        match codepoint.raw() {
+            0x647a => {
+                // Hybrid: 0xec01 ‖ x25519(32) ‖ 0x8c24 ‖ mlkem768_ek(1184).
+                let expected = X25519_PUB_MULTICODEC.len()
+                    + X25519_PUBLIC_LEN
+                    + MLKEM768_PUB_MULTICODEC.len()
+                    + mlkem::ML_KEM_768_EK_LEN;
+                if kem_multikey.len() != expected {
+                    return Err(AeadError::MalformedRecipientPublic(
+                        "hybrid kem multikey wrong length (expected \
+                         0xec‖x25519(32)‖0x120c‖mlkem768_ek(1184))",
+                    ));
+                }
+                // Component 1: x25519-pub (0xec01) — MUST lead (C2 X25519-first).
+                if kem_multikey[0] != X25519_PUB_MULTICODEC[0]
+                    || kem_multikey[1] != X25519_PUB_MULTICODEC[1]
+                {
+                    return Err(AeadError::MalformedRecipientPublic(
+                        "hybrid kem multikey: first component multicodec != \
+                         x25519-pub 0xec (kem_cp⟺components cross-check — C2 \
+                         mandates X25519-first)",
+                    ));
+                }
+                let x_start = X25519_PUB_MULTICODEC.len();
+                let ml_tag = x_start + X25519_PUBLIC_LEN;
+                // Component 2: mlkem-768-pub (0x120c → varint 0x8c24).
+                if kem_multikey[ml_tag] != MLKEM768_PUB_MULTICODEC[0]
+                    || kem_multikey[ml_tag + 1] != MLKEM768_PUB_MULTICODEC[1]
+                {
+                    return Err(AeadError::MalformedRecipientPublic(
+                        "hybrid kem multikey: second component multicodec != \
+                         mlkem-768-pub 0x120c (kem_cp⟺components cross-check — \
+                         wrong ML-KEM parameter / wrong-role codec / classical-\
+                         only-under-hybrid)",
+                    ));
+                }
+                let ek_start = ml_tag + MLKEM768_PUB_MULTICODEC.len();
+                // Reassemble the X25519-first from_bytes payload
+                // `x25519(32) ‖ mlkem768_ek(1184)` (no reorder — C2).
+                let mut payload = Vec::with_capacity(X25519_PUBLIC_LEN + mlkem::ML_KEM_768_EK_LEN);
+                payload.extend_from_slice(&kem_multikey[x_start..ml_tag]);
+                payload.extend_from_slice(&kem_multikey[ek_start..]);
+                Self::from_bytes(codepoint, &payload)
+            }
+            // Classical-only `0x6400`: 0xec01 ‖ x25519(32), no ML-KEM component.
+            _ => {
+                let expected = X25519_PUB_MULTICODEC.len() + X25519_PUBLIC_LEN;
+                if kem_multikey.len() != expected {
+                    return Err(AeadError::MalformedRecipientPublic(
+                        "classical kem multikey wrong length (expected \
+                         0xec‖x25519(32)) — a hybrid ML-KEM component under a \
+                         classical kem_cp fails closed here",
+                    ));
+                }
+                if kem_multikey[0] != X25519_PUB_MULTICODEC[0]
+                    || kem_multikey[1] != X25519_PUB_MULTICODEC[1]
+                {
+                    return Err(AeadError::MalformedRecipientPublic(
+                        "classical kem multikey: component multicodec != \
+                         x25519-pub 0xec (kem_cp⟺components cross-check)",
+                    ));
+                }
+                Self::from_bytes(codepoint, &kem_multikey[X25519_PUB_MULTICODEC.len()..])
             }
         }
     }
