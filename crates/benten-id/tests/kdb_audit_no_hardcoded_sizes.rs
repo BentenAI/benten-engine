@@ -62,19 +62,33 @@ fn audit1_did_benten_payload_dimensions_from_named_constants_not_literals() {
 
 #[test]
 fn audit1_keyset_kem_multikey_dimensions_from_named_constants() {
-    // The kem multikey (X25519-first, C2) is `2 + X25519_PUBLIC_LEN + 2 +
-    // ML_KEM_768_EK_LEN`. Sourcing from the named constants means a
-    // ciphertext/key-size drift upstream flows through, never a literal.
-    let kem_mk = kdb::kem_multikey_hybrid(
-        &kdb::det_x25519_pub("audit/kx"),
-        &kdb::det_mlkem768_ek("audit/kek"),
-    );
-    let expected = 2 + X25519_PUBLIC_LEN + 2 + ML_KEM_768_EK_LEN;
+    // R4b MINOR fix — exercise the PRODUCTION codec, not a fixture helper.
+    // `honest_recipient_scenario` builds a real (DID, KeySetDocument); the
+    // doc's `kem` field is read via the PRODUCTION `KeySetDocument::kem()`
+    // accessor, and `resolve_kem` DECODES it through the production
+    // `decode_kem_multikey_x25519_first` path. Both must frame the kem
+    // multikey (X25519-first, C2) as `2 + X25519_PUBLIC_LEN + 2 +
+    // ML_KEM_768_EK_LEN` and recover a `RecipientPublic` of `X25519_PUBLIC_LEN
+    // + ML_KEM_768_EK_LEN` — every size from a named constant, never a literal
+    // (#5). A codec that hardcodes an Ed25519-shaped size mis-frames and the
+    // resolve fails / the lengths diverge.
+    let (did, doc) = kdb::honest_recipient_scenario();
+
+    let expected_multikey_len = 2 + X25519_PUBLIC_LEN + 2 + ML_KEM_768_EK_LEN;
     assert_eq!(
-        kem_mk.len(),
-        expected,
-        "kem multikey length MUST come from X25519_PUBLIC_LEN + ML_KEM_768_EK_LEN (#5); \
-         ML-KEM-768 EK is {ML_KEM_768_EK_LEN} B — a codec that hardcodes an Ed25519-shaped \
-         {ED25519_SHAPED_PUBKEY} B assumption cannot frame it"
+        doc.kem().len(),
+        expected_multikey_len,
+        "production KeySetDocument::kem() multikey length MUST be 2+X25519_PUBLIC_LEN+2+\
+         ML_KEM_768_EK_LEN (#5); ML-KEM-768 EK is {ML_KEM_768_EK_LEN} B — a codec that \
+         hardcodes an Ed25519-shaped {ED25519_SHAPED_PUBKEY} B assumption cannot frame it"
+    );
+
+    let recipient = kdb::resolve_kem(&did, &doc)
+        .expect("production resolve_kem decodes the X25519-first kem multikey");
+    assert_eq!(
+        recipient.to_bytes().len(),
+        X25519_PUBLIC_LEN + ML_KEM_768_EK_LEN,
+        "production resolve_kem MUST recover a RecipientPublic dimensioned from \
+         X25519_PUBLIC_LEN + ML_KEM_768_EK_LEN (#5) — never a hardcoded Ed25519-shaped size"
     );
 }

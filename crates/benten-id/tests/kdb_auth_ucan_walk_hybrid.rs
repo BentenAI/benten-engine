@@ -58,12 +58,11 @@ use benten_id::ucan::{Capability, Ucan, UcanClaims};
 // way each pin goes green is against the real migrated walk.
 // ─────────────────────────────────────────────────────────────────────────
 
-fn r5_validate_chain_at(_chain: &[Ucan], _now: u64) -> Result<(), benten_id::errors::UcanError> {
-    todo!(
-        "RED-PHASE (AUTH-1..6, flagship AUTH-3): Fork-A hybrid-dispatched UCAN chain-walk \
-         lands at R5. Body := benten_id::ucan::validate_chain_at(chain, now) once \
-         validate_chain_inner is codepoint-dispatched. un-ignore then."
-    )
+fn r5_validate_chain_at(chain: &[Ucan], now: u64) -> Result<(), benten_id::errors::UcanError> {
+    // R5: `validate_chain_inner` is now codepoint-dispatched (Fork-A) — the
+    // issuer key is resolved via `resolve_signing` and the verify routes
+    // through the single `authority_verify` helper.
+    benten_id::ucan::validate_chain_at(chain, now)
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -110,7 +109,6 @@ fn composite_over(signer: &sig::Keypair, claims: &UcanClaims) -> HybridSignature
 // ── AUTH-1 — did:benten composite issuer verifies (positive control) ──────
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-1 UCAN-walk did:benten composite issuer verifies — un-ignore at R5"]
 fn auth1_did_benten_composite_issuer_verifies() {
     let signer = kdb::hybrid_keypair();
     let iss = benten_did_for(&signer);
@@ -137,7 +135,6 @@ fn auth1_did_benten_composite_issuer_verifies() {
 // ── AUTH-2 — backward-compat: did:key 64-byte Ed25519 unchanged ───────────
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-2 UCAN-walk did:key 64-byte backward-compat unchanged — un-ignore at R5"]
 fn auth2_did_key_ed25519_backward_compat_unchanged() {
     // A classical did:key issuer signs a 64-byte Ed25519 token exactly as
     // today. The Fork-A dispatch (multicodec 0xed01 → Ed25519 arm) MUST
@@ -168,7 +165,6 @@ fn auth2_did_key_ed25519_backward_compat_unchanged() {
 // ── AUTH-3★ — SILENT-PQ-STRIP reject matrix (FLAGSHIP-2) ──────────────────
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-3 flagship silent-PQ-strip — did:benten bare-Ed25519 rejects — un-ignore at R5"]
 fn auth3a_bare_ed25519_signature_for_benten_issuer_rejects() {
     // (a) A bare Ed25519 signature (classical-only suite → 64-byte
     //     Ed25519 over the RAW claims, the un-migrated did:key shape)
@@ -199,7 +195,6 @@ fn auth3a_bare_ed25519_signature_for_benten_issuer_rejects() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-3 flagship silent-PQ-strip — PQ-half-removed rejects — un-ignore at R5"]
 fn auth3b_pq_half_stripped_composite_rejects() {
     // (b) THE load-bearing silent-strip case: a real composite whose
     //     Ed25519 half is VALID over M' but the ML-DSA half is removed.
@@ -229,7 +224,6 @@ fn auth3b_pq_half_stripped_composite_rejects() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-3 flagship silent-PQ-strip — forged/zeroed ML-DSA half rejects — un-ignore at R5"]
 fn auth3c_forged_zeroed_mldsa_half_rejects() {
     // (c) Valid Ed25519 half + a full-length but ZEROED ML-DSA half.
     //     Full composite length, but the PQ half does not verify. A
@@ -262,7 +256,6 @@ fn auth3c_forged_zeroed_mldsa_half_rejects() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-3 flagship silent-PQ-strip — classical-codepoint sig rejects — un-ignore at R5"]
 fn auth3d_classical_codepoint_signature_for_benten_issuer_rejects() {
     // (d) A signature explicitly tagged CLASSICAL_ED25519 (0x0002) — the
     //     classical half over M' — presented for a did:benten issuer that
@@ -296,7 +289,6 @@ fn auth3d_classical_codepoint_signature_for_benten_issuer_rejects() {
 // ── AUTH-4 — both halves bind the SAME issuer key (half-splice reject) ────
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-4 cross-key half-splice reject — un-ignore at R5"]
 fn auth4_cross_key_half_splice_rejects() {
     // Issuer A's did:benten commits A's composite key. Splice A's valid
     // Ed25519 half (over M') with a DIFFERENT keypair B's ML-DSA half
@@ -331,7 +323,6 @@ fn auth4_cross_key_half_splice_rejects() {
 // ── AUTH-5 — per-link mixed-issuer dispatch (each link own multicodec) ────
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-5 per-link mixed-issuer dispatch (did:key parent + did:benten leaf) — un-ignore at R5"]
 fn auth5_per_link_mixed_issuer_dispatch_validates() {
     // A 2-link chain: parent issuer = classical did:key (Ed25519), leaf
     // issuer = did:benten (composite). The walk MUST dispatch EACH link
@@ -356,7 +347,10 @@ fn auth5_per_link_mixed_issuer_dispatch_validates() {
         prf: Vec::new(),
     };
     let parent = Ucan {
-        signature: parent_kp.sign(&parent_claims.to_canonical_bytes()).to_bytes().to_vec(),
+        signature: parent_kp
+            .sign(&parent_claims.to_canonical_bytes())
+            .to_bytes()
+            .to_vec(),
         claims: parent_claims,
     };
 
@@ -369,7 +363,8 @@ fn auth5_per_link_mixed_issuer_dispatch_validates() {
         exp: Some(NOW + 3600),
         prf: vec![parent.clone()],
     };
-    let leaf_sig = SignatureSuite::v1_default().sign(&leaf_signer, &leaf_claims_val.to_canonical_bytes());
+    let leaf_sig =
+        SignatureSuite::v1_default().sign(&leaf_signer, &leaf_claims_val.to_canonical_bytes());
     let leaf = Ucan {
         signature: leaf_sig.to_wire_bytes(),
         claims: leaf_claims_val,
@@ -403,7 +398,6 @@ fn auth6_reserved_sig_codepoint_typed_rejects_at_dispatcher() {
 }
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-6 did:benten with unknown embedded signing multicodec rejects on the walk — un-ignore at R5"]
 fn auth6_unknown_signing_multicodec_issuer_rejects_no_silent_fallback() {
     // A did:benten-shaped issuer whose embedded signing multikey leads
     // with an UNKNOWN/reserved multicodec (not 0xed01 classical, not

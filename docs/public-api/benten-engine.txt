@@ -843,7 +843,7 @@ pub const benten_engine::engine_sync::DeviceAttestationEnvelope::MAX_WIRE_VERSIO
 pub const benten_engine::engine_sync::DeviceAttestationEnvelope::WIRE_VERSION: u8
 pub fn benten_engine::engine_sync::DeviceAttestationEnvelope::declared_device_did(&self) -> core::option::Option<&str>
 pub fn benten_engine::engine_sync::DeviceAttestationEnvelope::from_canonical_bytes(&[u8]) -> benten_engine::engine_sync::AtriumResult<Self>
-pub fn benten_engine::engine_sync::DeviceAttestationEnvelope::new_signed(benten_id::device_attestation::DeviceAttestation, &[u8], &benten_id::keypair::Keypair) -> benten_engine::engine_sync::AtriumResult<Self>
+pub fn benten_engine::engine_sync::DeviceAttestationEnvelope::new_signed<K: benten_engine::engine_sync::EnvelopeDeviceSigner>(benten_id::device_attestation::DeviceAttestation, &[u8], &K) -> benten_engine::engine_sync::AtriumResult<Self>
 pub fn benten_engine::engine_sync::DeviceAttestationEnvelope::new_unsigned() -> Self
 pub fn benten_engine::engine_sync::DeviceAttestationEnvelope::to_canonical_bytes(&self) -> benten_engine::engine_sync::AtriumResult<alloc::vec::Vec<u8>>
 pub fn benten_engine::engine_sync::DeviceAttestationEnvelope::verify(&self, &[u8], u64, u64) -> benten_engine::engine_sync::AtriumResult<core::option::Option<benten_id::device_attestation::CapabilityEnvelope>>
@@ -877,6 +877,12 @@ impl core::marker::Unpin for benten_engine::engine_sync::SyncMergeAttribution
 impl core::marker::UnsafeUnpin for benten_engine::engine_sync::SyncMergeAttribution
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::engine_sync::SyncMergeAttribution
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::engine_sync::SyncMergeAttribution
+pub trait benten_engine::engine_sync::EnvelopeDeviceSigner
+pub fn benten_engine::engine_sync::EnvelopeDeviceSigner::sign_envelope(&self, &[u8]) -> alloc::vec::Vec<u8>
+impl benten_engine::engine_sync::EnvelopeDeviceSigner for benten_crypto_suite::sig::Keypair
+pub fn benten_crypto_suite::sig::Keypair::sign_envelope(&self, &[u8]) -> alloc::vec::Vec<u8>
+impl benten_engine::engine_sync::EnvelopeDeviceSigner for benten_id::keypair::Keypair
+pub fn benten_id::keypair::Keypair::sign_envelope(&self, &[u8]) -> alloc::vec::Vec<u8>
 pub type benten_engine::engine_sync::AtriumResult<T> = core::result::Result<T, benten_engine::engine_sync::AtriumError>
 pub mod benten_engine::engine_transaction
 pub struct benten_engine::engine_transaction::EngineTransaction<'tx, 'coll>

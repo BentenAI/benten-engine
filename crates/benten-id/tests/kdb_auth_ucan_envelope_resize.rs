@@ -56,17 +56,16 @@ const NOW: u64 = 1_900_000_000;
 // At R5: body := benten_id::ucan::validate_chain_for_audience(chain, aud).
 // ─────────────────────────────────────────────────────────────────────────
 
-fn r5_validate_chain_for_audience(_chain: &[Ucan], _aud: &Did) -> Result<(), UcanError> {
-    todo!(
-        "RED-PHASE (AUTH-12): Fork-A hybrid audience-bound UCAN walk lands at R5. \
-         Body := benten_id::ucan::validate_chain_for_audience(chain, aud). un-ignore then."
-    )
+fn r5_validate_chain_for_audience(chain: &[Ucan], aud: &Did) -> Result<(), UcanError> {
+    // R5: the audience-bound walk is codepoint-dispatched (Fork-A) — a
+    // did:benten issuer verifies its composite; the audience binding holds
+    // for did:benten audiences.
+    benten_id::ucan::validate_chain_for_audience(chain, aud)
 }
 
 // ── AUTH-11 — MAX_UCAN_ENVELOPE_BYTES admits a 32-link composite chain ────
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-11 MAX_UCAN_ENVELOPE_BYTES re-sized to admit a 32-link composite chain — un-ignore at R5"]
 fn auth11_envelope_cap_admits_32_link_composite_chain() {
     // A 32-link composite chain carries at MINIMUM one composite
     // signature per link — the signature bytes alone are a hard lower
@@ -95,15 +94,16 @@ fn auth11_envelope_cap_admits_32_link_composite_chain() {
 }
 
 /// M-20 frozen-value pin (TIER-A). The re-sized cap is a permanent
-/// v1-beta wire budget — freeze the EXACT value captured via
-/// throwaway-compute from the real re-sized const at R5, never a
-/// hand-authored literal. Placeholder `0` at R3; the R5 author fills it
-/// with the captured value and un-ignores. (Assertion references the
-/// real const so the file compiles at baseline.)
-const AUTH11_R5_FROZEN_MAX_UCAN_ENVELOPE_BYTES: usize = 0; // M-20: capture at R5.
+/// v1-beta wire budget — freeze the EXACT value captured from the real
+/// re-sized const at R5, never a hand-authored literal.
+///
+/// R5 capture: `MAX_UCAN_ENVELOPE_BYTES = MAX_UCAN_PROOF_DEPTH (32) ×
+/// MAX_UCAN_PER_LINK_BYTES (16 × 1024 = 16_384) = 524_288` (512 KiB). The
+/// un-ignored assertion below reconciles this frozen value against the real
+/// const — a mis-sized const would flip it.
+const AUTH11_R5_FROZEN_MAX_UCAN_ENVELOPE_BYTES: usize = 524_288;
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-11 MAX_UCAN_ENVELOPE_BYTES frozen value (M-20 capture at R5) — un-ignore at R5"]
 fn auth11_envelope_cap_frozen_value_m20() {
     assert_eq!(
         MAX_UCAN_ENVELOPE_BYTES, AUTH11_R5_FROZEN_MAX_UCAN_ENVELOPE_BYTES,
@@ -146,7 +146,6 @@ fn benten_did_for(signer: &sig::Keypair, tag: &str) -> Did {
 }
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-12 did:benten as UCAN audience validates under the hybrid walk — un-ignore at R5"]
 fn auth12_did_benten_audience_binding_validates_and_rejects_replay() {
     // Issuer = did:benten (composite; needs hybrid verify), audience =
     // did:benten (the delegation target). The audience-bound walk MUST

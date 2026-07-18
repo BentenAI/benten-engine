@@ -4,15 +4,17 @@
 //! Ref `3bea1294`: `GAP-KDB-B-DESIGN-R1.md` C8 + `R2-LANDSCAPE` RK-8 + §5
 //! **S2** (this is the plan-acknowledged UNDER-SPECIFIED item).
 //!
-//! # ⚠️ S2 HOLD — the exact disagreement arm is DESIGN-GATED
-//! Per R2-LANDSCAPE §5 S2: the *precise* "what counts as disagreement, and
-//! the exact typed reject" for `recipient_key_generation` vs the committed
-//! key-set is under-specified and needs a design nail BEFORE its red test
-//! can assert a concrete `expect_err`. This file pins ONLY what is
-//! decidable now — the **role separation** and the **fail-closed-on-
-//! disagreement direction** — and explicitly HOLDS the concrete
-//! disagreement `expect_err` (it lives at the Drop layer, DROP-5, once S2
-//! lands). Do NOT block the W2 flagships on this file.
+//! # ✅ S2 RESOLVED (D-47) — the concrete disagreement arm is DROP-5 (benten-drop W2)
+//! S2 (the C8 `recipient_key_generation` ⟺ committed-key-set precedence
+//! semantics — "what counts as disagreement, and the exact typed reject") is
+//! RESOLVED per D-47. This file pins the **id-side role separation** (below);
+//! the concrete disagreement `expect_err` — a specific generation index that
+//! must fail-closed against the committed key-set — is homed at the Drop
+//! layer as **DROP-5 (benten-drop, W2)**, where the
+//! `recipient_key_generation` AAD field actually lives, and un-ignores in
+//! that wave. `resolve_kem` on the id side takes NO generation index, so the
+//! id-side role-separation property is fully pinned here and independent of
+//! the Drop-layer disagreement arm.
 //!
 //! # Role separation pinned now (C8)
 //! - The **committed key-set** (the DID + its key-set doc) identifies WHICH
@@ -28,10 +30,10 @@
 //! a generation index leaked into key selection on the id side), the
 //! determinism assert flips.
 //!
-//! # R5 un-ignore (role-separation arm only); DROP-5 un-ignore after S2.
-//! Mint `Did::resolve_kem` (pure over the commitment); drop `#[ignore]` on
-//! the role-separation arm. The concrete disagreement arm stays HELD until
-//! the S2 design decision, then lands as DROP-5.
+//! # R5 (role-separation arm — non-ignored, id side); DROP-5 lands in benten-drop W2.
+//! `Did::resolve_kem` is pure over the commitment (takes no generation
+//! index); the role-separation arm below is non-ignored. The concrete
+//! disagreement arm is DROP-5 (benten-drop W2), now that S2 is resolved (D-47).
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -54,10 +56,9 @@ fn rk8_resolve_kem_is_pure_over_the_committed_key_set() {
     assert_eq!(first.codepoint().raw(), second.codepoint().raw());
 }
 
-// NOTE (S2 HOLD): the concrete `recipient_key_generation`-vs-committed-
-// key-set DISAGREEMENT arm (a specific generation index that must
-// fail-closed against the committed key-set, with the precise typed
-// reject) is intentionally NOT written here — it is design-gated (R2 §5
-// S2) and lands as DROP-5 at the Drop layer once the exact semantics are
-// nailed. Writing a concrete `expect_err` before that decision would pin
-// an arbitrary interpretation.
+// NOTE (S2 RESOLVED, D-47): the concrete `recipient_key_generation`-vs-
+// committed-key-set DISAGREEMENT arm (a specific generation index that must
+// fail-closed against the committed key-set, with the precise typed reject)
+// is homed at the Drop layer as DROP-5 (benten-drop, W2) — the
+// `recipient_key_generation` AAD field lives there, not on the pure id-side
+// `resolve_kem`. This id-side file pins the role separation only.

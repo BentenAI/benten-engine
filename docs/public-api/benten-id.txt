@@ -1,4 +1,31 @@
 pub mod benten_id
+pub mod benten_id::authority_verify
+pub enum benten_id::authority_verify::AuthorityVerifyError
+pub benten_id::authority_verify::AuthorityVerifyError::Malformed
+pub benten_id::authority_verify::AuthorityVerifyError::VerifyFailed
+impl core::clone::Clone for benten_id::authority_verify::AuthorityVerifyError
+pub fn benten_id::authority_verify::AuthorityVerifyError::clone(&self) -> benten_id::authority_verify::AuthorityVerifyError
+impl core::cmp::Eq for benten_id::authority_verify::AuthorityVerifyError
+impl core::cmp::PartialEq for benten_id::authority_verify::AuthorityVerifyError
+pub fn benten_id::authority_verify::AuthorityVerifyError::eq(&self, &benten_id::authority_verify::AuthorityVerifyError) -> bool
+impl core::fmt::Debug for benten_id::authority_verify::AuthorityVerifyError
+pub fn benten_id::authority_verify::AuthorityVerifyError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_id::authority_verify::AuthorityVerifyError
+impl core::marker::StructuralPartialEq for benten_id::authority_verify::AuthorityVerifyError
+impl core::marker::Freeze for benten_id::authority_verify::AuthorityVerifyError
+impl core::marker::Send for benten_id::authority_verify::AuthorityVerifyError
+impl core::marker::Sync for benten_id::authority_verify::AuthorityVerifyError
+impl core::marker::Unpin for benten_id::authority_verify::AuthorityVerifyError
+impl core::marker::UnsafeUnpin for benten_id::authority_verify::AuthorityVerifyError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_id::authority_verify::AuthorityVerifyError
+impl core::panic::unwind_safe::UnwindSafe for benten_id::authority_verify::AuthorityVerifyError
+pub trait benten_id::authority_verify::ToSigningKey
+pub fn benten_id::authority_verify::ToSigningKey::to_signing_key(&self) -> benten_crypto_suite::sig::PublicKey
+impl benten_id::authority_verify::ToSigningKey for benten_crypto_suite::sig::PublicKey
+pub fn benten_crypto_suite::sig::PublicKey::to_signing_key(&self) -> benten_crypto_suite::sig::PublicKey
+impl benten_id::authority_verify::ToSigningKey for benten_id::keypair::PublicKey
+pub fn benten_id::keypair::PublicKey::to_signing_key(&self) -> benten_crypto_suite::sig::PublicKey
+pub fn benten_id::authority_verify::verify_authority_signature(&benten_crypto_suite::sig::PublicKey, &[u8], &[u8]) -> core::result::Result<(), benten_id::authority_verify::AuthorityVerifyError>
 pub mod benten_id::canonical_bytes
 pub trait benten_id::canonical_bytes::CanonicalBytes
 pub fn benten_id::canonical_bytes::CanonicalBytes::to_canonical_bytes(&self) -> alloc::vec::Vec<u8>
@@ -125,7 +152,7 @@ pub fn benten_id::device_attestation::DeviceAttestation::issue_with_nonce(&bente
 pub fn benten_id::device_attestation::DeviceAttestation::issue_with_runtime_check(&benten_id::keypair::Keypair, benten_id::did::Did, benten_id::device_attestation::CapabilityEnvelope, benten_id::device_attestation::RuntimeTarget) -> core::result::Result<Self, benten_id::errors::DeviceAttestationError>
 pub fn benten_id::device_attestation::DeviceAttestation::parent_did(&self) -> benten_id::did::Did
 pub fn benten_id::device_attestation::DeviceAttestation::to_canonical_bytes(&self) -> alloc::vec::Vec<u8>
-pub fn benten_id::device_attestation::DeviceAttestation::verify_signature_with(&self, &benten_id::keypair::PublicKey) -> core::result::Result<(), benten_id::errors::DeviceAttestationError>
+pub fn benten_id::device_attestation::DeviceAttestation::verify_signature_with(&self, &impl benten_id::authority_verify::ToSigningKey) -> core::result::Result<(), benten_id::errors::DeviceAttestationError>
 impl benten_id::canonical_bytes::CanonicalBytes for benten_id::device_attestation::DeviceAttestation
 pub fn benten_id::device_attestation::DeviceAttestation::to_canonical_bytes(&self) -> alloc::vec::Vec<u8>
 impl core::clone::Clone for benten_id::device_attestation::DeviceAttestation
@@ -230,7 +257,7 @@ impl benten_id::did_rotation::RotationAttestation
 pub fn benten_id::did_rotation::RotationAttestation::kind(&self) -> benten_id::did_rotation::AttestationKind
 pub fn benten_id::did_rotation::RotationAttestation::next_keypair_did(&self) -> benten_id::did::Did
 pub fn benten_id::did_rotation::RotationAttestation::previous_keypair_did(&self) -> benten_id::did::Did
-pub fn benten_id::did_rotation::RotationAttestation::verify_signature_with(&self, &benten_id::keypair::PublicKey) -> core::result::Result<(), benten_id::errors::DidRotationError>
+pub fn benten_id::did_rotation::RotationAttestation::verify_signature_with(&self, &impl benten_id::authority_verify::ToSigningKey) -> core::result::Result<(), benten_id::errors::DidRotationError>
 impl benten_id::canonical_bytes::CanonicalBytes for benten_id::did_rotation::RotationAttestation
 pub fn benten_id::did_rotation::RotationAttestation::to_canonical_bytes(&self) -> alloc::vec::Vec<u8>
 impl core::clone::Clone for benten_id::did_rotation::RotationAttestation
@@ -596,6 +623,8 @@ pub fn benten_id::keypair::PublicKey::from_bytes(&[u8; 32]) -> core::option::Opt
 pub fn benten_id::keypair::PublicKey::to_bytes(&self) -> [u8; 32]
 pub fn benten_id::keypair::PublicKey::to_did(&self) -> benten_id::did::Did
 pub fn benten_id::keypair::PublicKey::verify(&self, &[u8], &ed25519::Signature) -> core::result::Result<(), ed25519_dalek::errors::SignatureError>
+impl benten_id::authority_verify::ToSigningKey for benten_id::keypair::PublicKey
+pub fn benten_id::keypair::PublicKey::to_signing_key(&self) -> benten_crypto_suite::sig::PublicKey
 impl core::clone::Clone for benten_id::keypair::PublicKey
 pub fn benten_id::keypair::PublicKey::clone(&self) -> benten_id::keypair::PublicKey
 impl core::cmp::Eq for benten_id::keypair::PublicKey
@@ -847,6 +876,7 @@ impl core::marker::UnsafeUnpin for benten_id::ucan::UcanClaims
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::ucan::UcanClaims
 impl core::panic::unwind_safe::UnwindSafe for benten_id::ucan::UcanClaims
 pub const benten_id::ucan::MAX_UCAN_ENVELOPE_BYTES: usize
+pub const benten_id::ucan::MAX_UCAN_PER_LINK_BYTES: usize
 pub const benten_id::ucan::MAX_UCAN_PROOF_DEPTH: usize
 pub fn benten_id::ucan::validate_chain_at(&[benten_id::ucan::Ucan], u64) -> core::result::Result<(), benten_id::errors::UcanError>
 pub fn benten_id::ucan::validate_chain_for_audience(&[benten_id::ucan::Ucan], &benten_id::did::Did) -> core::result::Result<(), benten_id::errors::UcanError>

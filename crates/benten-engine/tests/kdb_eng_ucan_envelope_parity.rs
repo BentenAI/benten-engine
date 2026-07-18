@@ -37,7 +37,9 @@ use std::path::PathBuf;
 use benten_crypto_suite::{SigCodepoint, SignatureSuite};
 use benten_id::did::Did;
 use benten_id::kdb_testing as kdb;
-use benten_id::ucan::{Capability, MAX_UCAN_ENVELOPE_BYTES, MAX_UCAN_PROOF_DEPTH, Ucan, UcanClaims};
+use benten_id::ucan::{
+    Capability, MAX_UCAN_ENVELOPE_BYTES, MAX_UCAN_PROOF_DEPTH, Ucan, UcanClaims,
+};
 
 const NOW: u64 = 1_900_000_000;
 
@@ -58,7 +60,6 @@ fn benten_did() -> Did {
 // ── ENG-2 — engine decoder admits a composite-sized envelope (parity) ─────
 
 #[test]
-#[ignore = "RED-PHASE: ENG-2 engine UCAN decoder admits composite-sized envelope after re-size — un-ignore at R5"]
 fn eng2_engine_decoder_admits_composite_sized_envelope() {
     // Build a nested composite-sized UCAN chain whose serialized envelope
     // exceeds the Ed25519-era 64 KiB base cap. Signatures are dummy
@@ -72,9 +73,20 @@ fn eng2_engine_decoder_admits_composite_sized_envelope() {
     let did = benten_did();
     let did_str = did.as_str().to_string();
 
-    // 16 nested links: depth 15 < MAX_UCAN_PROOF_DEPTH (32); byte weight
-    // (16 × ~9 KB) comfortably exceeds 64 KiB.
-    const LINKS: usize = 16;
+    // R5 reconciliation: `MAX_UCAN_PROOF_DEPTH` (32) is a CBOR
+    // container-nesting-depth cap, and each nested `did:benten` UCAN link
+    // adds ~3 CBOR container levels (its Ucan map → claims map → `prf`
+    // array), so `N` links yield ~`3N` container depth — the max decodable
+    // chain is ~10 links. The AUTH-11 point is precisely that a `did:benten`
+    // composite identity makes each link BYTE-heavy (~9 KB: two ~2762 B
+    // did:benten `iss`/`aud` strings + a 3373 B composite signature), so the
+    // envelope crosses the 64 KiB BYTE cap at only ~8 links — WITHIN the
+    // depth cap. Measured window (throwaway probe): N∈[8,10] both exceeds
+    // 64 KiB (≥ 72 KB) AND decodes (depth ≤ 32); N≥11 trips the depth cap.
+    // 9 links → ~81 KB: comfortably over the 64 KiB base cap (so reverting
+    // the AUTH-11 re-size flips this to EnvelopeTooLarge — the would_fail_on_
+    // revert) at CBOR depth ~28 (under 32).
+    const LINKS: usize = 9;
     let mut token = Ucan {
         claims: UcanClaims {
             iss: did_str.clone(),
@@ -150,7 +162,11 @@ fn eng2_no_engine_local_hardcoded_ucan_envelope_cap() {
         if line.contains("MAX_UCAN_ENVELOPE_BYTES")
             || ((line.contains("64 * 1024") || line.contains("65536")) && line.contains("ucan"))
         {
-            offenders.push(format!("typed_call_dispatch.rs:{}: {}", lineno + 1, line.trim()));
+            offenders.push(format!(
+                "typed_call_dispatch.rs:{}: {}",
+                lineno + 1,
+                line.trim()
+            ));
         }
     }
     assert!(

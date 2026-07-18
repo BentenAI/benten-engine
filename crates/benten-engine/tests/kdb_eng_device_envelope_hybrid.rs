@@ -59,26 +59,26 @@ const WINDOW: u64 = 3600;
 // ─────────────────────────────────────────────────────────────────────────
 
 fn r5_new_signed_did_benten_device(
-    _attestation: DeviceAttestation,
-    _loro_payload: &[u8],
-    _device_kp: &sig::Keypair,
+    attestation: DeviceAttestation,
+    loro_payload: &[u8],
+    device_kp: &sig::Keypair,
 ) -> DeviceAttestationEnvelope {
-    todo!(
-        "RED-PHASE (ENG-1): hybrid DeviceAttestationEnvelope::new_signed for a did:benten \
-         device lands at R5 (composite envelope signature). un-ignore then."
-    )
+    // R5: `new_signed` is generic over `EnvelopeDeviceSigner`; a hybrid
+    // `sig::Keypair` device signs a LAMPS composite envelope signature.
+    DeviceAttestationEnvelope::new_signed(attestation, loro_payload, device_kp)
+        .expect("did:benten device envelope signs")
 }
 
 fn r5_verify_did_benten_device_envelope(
-    _env: &DeviceAttestationEnvelope,
-    _loro_payload: &[u8],
-    _freshness_window_secs: u64,
-    _now_secs: u64,
+    env: &DeviceAttestationEnvelope,
+    loro_payload: &[u8],
+    freshness_window_secs: u64,
+    now_secs: u64,
 ) -> AtriumResult<Option<CapabilityEnvelope>> {
-    todo!(
-        "RED-PHASE (ENG-1): DeviceAttestationEnvelope::verify step-1 codepoint-dispatch for a \
-         did:benten device lands at R5. Body := env.verify(payload, window, now). un-ignore then."
-    )
+    // R5: `verify` step-1 resolves the device DID via `resolve_signing` and
+    // routes through the single benten-id `authority_verify` helper — the
+    // hybrid arm for a did:benten device.
+    env.verify(loro_payload, freshness_window_secs, now_secs)
 }
 
 /// A `did:benten` embedding `signer`'s composite signing key.
@@ -96,7 +96,6 @@ fn benten_did_for(signer: &sig::Keypair, tag: &str) -> Did {
 // ── ENG-1 — did:benten device envelope PQ-strip rejects ───────────────────
 
 #[test]
-#[ignore = "RED-PHASE: ENG-1 DeviceAttestationEnvelope did:benten device PQ-strip rejects — un-ignore at R5"]
 fn eng1_did_benten_device_envelope_pq_stripped_rejects() {
     // Parent is a classical did:key (step-2 link stays Ed25519); the
     // DEVICE is a did:benten whose envelope signature is a composite.

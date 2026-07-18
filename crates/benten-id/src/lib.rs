@@ -75,6 +75,7 @@
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
 
+pub mod authority_verify;
 pub mod canonical_bytes;
 pub mod device_attestation;
 pub mod did;

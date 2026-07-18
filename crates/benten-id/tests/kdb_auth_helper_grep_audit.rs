@@ -39,11 +39,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use std::path::PathBuf;
-
-/// The authority-verify source files whose Ed25519-only `[u8; 64]`
-/// extractions must collapse to a single shared helper.
-const AUTHORITY_VERIFY_FILES: &[&str] = &["ucan.rs", "did_rotation.rs", "device_attestation.rs"];
+use std::path::{Path, PathBuf};
 
 /// The un-migrated Ed25519-only signature-extraction shape — a
 /// `[u8; 64]` (Ed25519 signature length) `try_into` on the verify
@@ -52,13 +48,39 @@ const AUTHORITY_VERIFY_FILES: &[&str] = &["ucan.rs", "did_rotation.rs", "device_
 /// specific.
 const ED25519_ONLY_SIG_EXTRACTION: &str = "[u8; 64]";
 
+/// Recursively collect every `.rs` file under `dir`.
+fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
+    let entries =
+        std::fs::read_dir(dir).unwrap_or_else(|e| panic!("read_dir {}: {e}", dir.display()));
+    for entry in entries {
+        let path = entry.expect("dir entry").path();
+        if path.is_dir() {
+            rs_files(&path, out);
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            out.push(path);
+        }
+    }
+}
+
+/// **AUTH-7 hardening (Fork-A):** scan the WHOLE `benten-id/src` tree, not
+/// a hardcoded 3-file list. The Fork-A migration must consolidate the
+/// Ed25519-only signature extraction across EVERY authority-verify site —
+/// the UCAN chain-walk (`ucan.rs`), rotation-verify (`did_rotation.rs`),
+/// device-attestation (`device_attestation.rs`), AND VC-verify (`vc.rs`,
+/// per D-53). A file-scoped list would false-green an un-migrated site in a
+/// file it does not name (e.g. `vc.rs`), so the net walks the whole tree and
+/// requires the count to collapse to the single shared classical arm in
+/// `authority_verify.rs`.
 fn count_ed25519_only_verify_sites() -> Vec<String> {
     let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    rs_files(&src_dir, &mut files);
+    files.sort();
     let mut sites = Vec::new();
-    for file in AUTHORITY_VERIFY_FILES {
-        let path = src_dir.join(file);
-        let body = std::fs::read_to_string(&path)
+    for path in &files {
+        let body = std::fs::read_to_string(path)
             .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+        let rel = path.strip_prefix(&src_dir).unwrap_or(path);
         for (lineno, line) in body.lines().enumerate() {
             // Skip comment lines (deletion/migration narrative may NAME
             // the old shape) and `_for_test` fixtures.
@@ -72,7 +94,7 @@ fn count_ed25519_only_verify_sites() -> Vec<String> {
             if line.contains(ED25519_ONLY_SIG_EXTRACTION)
                 && (line.contains("sig") || line.contains("signature"))
             {
-                sites.push(format!("{file}:{}: {}", lineno + 1, line.trim()));
+                sites.push(format!("{}:{}: {}", rel.display(), lineno + 1, line.trim()));
             }
         }
     }
@@ -80,35 +102,36 @@ fn count_ed25519_only_verify_sites() -> Vec<String> {
 }
 
 #[test]
-#[ignore = "RED-PHASE: AUTH-7 one-helper grep-audit — no 2nd Ed25519-only verify path — un-ignore at R5"]
 fn auth7_no_second_ed25519_only_verify_path_after_fork_a_migration() {
     let sites = count_ed25519_only_verify_sites();
     assert!(
         sites.len() <= 1,
         "AUTH-7 (Fork-A completeness net): after the authority-path hybrid migration there \
-         must be AT MOST ONE inline Ed25519-only `[u8; 64]` signature extraction (the single \
-         shared classical did:key arm). Found {} — each residual site is a candidate \
-         silent-PQ-strip verify path that re-opens FLAGSHIP-2. Route composite verifies \
-         through SignatureSuite::verify and consolidate the classical arm into ONE helper.\n{}",
+         must be AT MOST ONE inline Ed25519-only `[u8; 64]` signature extraction across the \
+         WHOLE benten-id/src tree (the single shared classical arm in authority_verify.rs). \
+         Found {} — each residual site is a candidate silent-PQ-strip verify path that \
+         re-opens FLAGSHIP-2. Route composite verifies through SignatureSuite::verify and \
+         consolidate the classical arm into the ONE authority_verify helper.\n{}",
         sites.len(),
         sites.join("\n")
     );
 }
 
 /// Baseline coherence control (REAL now, non-ignored): the audit is
-/// scanning the ACTUAL authority-verify source, not an empty set — at
-/// the freeze base the three un-migrated Ed25519-only sites ARE present
-/// (this is what the ignored pin will drive to ≤ 1). If this control
-/// ever finds zero, the file list drifted and the AUTH-7 pin is
+/// scanning the ACTUAL benten-id/src tree, not an empty set. At the freeze
+/// base the FOUR un-migrated Ed25519-only sites are present (ucan.rs,
+/// did_rotation.rs, device_attestation.rs, vc.rs); after the Fork-A
+/// migration exactly ONE remains (the shared classical arm in
+/// authority_verify.rs). Either way the count is ≥ 1 — if this control ever
+/// finds zero, the `[u8; 64]` grep target drifted and the AUTH-7 pin is
 /// scanning nothing (a silent false-green risk per R2 catch-net note).
 #[test]
 fn auth7_baseline_scans_the_real_unmigrated_authority_verify_sites() {
     let sites = count_ed25519_only_verify_sites();
     assert!(
         !sites.is_empty(),
-        "AUTH-7 scan-integrity: expected the authority-verify files ({:?}) to contain the \
-         un-migrated Ed25519-only signature-extraction sites at the freeze base — found none, \
-         so the AUTH-7 grep target drifted (it would false-green). Re-anchor the file list.",
-        AUTHORITY_VERIFY_FILES
+        "AUTH-7 scan-integrity: expected the benten-id/src tree to contain at least one \
+         Ed25519-only `[u8; 64]` signature-extraction site (the shared classical arm) — found \
+         none, so the AUTH-7 grep target drifted (it would false-green). Re-anchor the shape."
     );
 }

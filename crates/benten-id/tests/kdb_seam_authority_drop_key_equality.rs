@@ -41,6 +41,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use benten_crypto_suite::sig;
+use benten_id::errors::DidError;
 use benten_id::kdb_testing as kdb;
 
 /// The hybrid KEM multikey for a scenario tag.
@@ -54,7 +55,6 @@ fn kem_for(tag: &str) -> Vec<u8> {
 // ── SEAM-1 positive — both seams resolve the SAME principal ───────────────
 
 #[test]
-#[ignore = "RED-PHASE: SEAM-1 authority-key == Drop-doc-committed-key (positive) — un-ignore at R5"]
 fn seam1_authority_and_drop_seams_agree_on_one_principal() {
     let signer = kdb::hybrid_keypair();
     let sig_mk = kdb::signing_multikey_of(&signer.public());
@@ -86,24 +86,13 @@ fn seam1_authority_and_drop_seams_agree_on_one_principal() {
     );
 }
 
-// ── SEAM-1 negative — confused-principal reject ───────────────────────────
+// ── SEAM-1 negative — confused-principal reject (step-2 ISOLATED) ─────────
 
 #[test]
-#[ignore = "RED-PHASE: SEAM-1 confused-principal reject (doc.sig != embedded) — un-ignore at R5"]
 fn seam1_confused_principal_doc_sig_mismatch_rejects() {
-    // The DID embeds principal A's signing key + commits A's honest doc.
+    // The DID embeds principal A's signing key (its authority identity).
     let signer_a = kdb::hybrid_keypair();
     let sig_mk_a = kdb::signing_multikey_of(&signer_a.public());
-    let honest_doc = kdb::KeySetDocument::v1_hybrid(sig_mk_a.clone(), kem_for("seam1/A"));
-    let did = kdb::self_committed_did(&honest_doc);
-
-    // Authority seam still authenticates as A.
-    let authority_key = kdb::resolve_signing(&did).expect("resolve_signing recovers A");
-    assert_eq!(
-        authority_key.to_lamps_composite_bytes().unwrap(),
-        signer_a.public().to_lamps_composite_bytes().unwrap(),
-        "precondition: the DID authenticates as principal A"
-    );
 
     // A CONFUSED doc: its `sig` field claims a DIFFERENT principal B, and
     // it carries B's KEM key. Sealing to this doc would attribute the
@@ -112,14 +101,44 @@ fn seam1_confused_principal_doc_sig_mismatch_rejects() {
     let sig_mk_b = kdb::signing_multikey_of(&signer_b.public());
     let confused_doc = kdb::KeySetDocument::v1_hybrid(sig_mk_b, kem_for("seam1/B"));
 
-    // resolve_kem MUST reject: `confused_doc.sig` (B) != the DID's
-    // embedded signing multikey (A) — the step-2 cross-check. (It ALSO
-    // fails the CID check, but the cross-seam property SEAM-1 pins is the
-    // signing-principal equality: authority == Drop-recipient.)
+    // R4b MINOR fix — ISOLATE step-2. The DID embeds A's signing key but
+    // commits `cid(confused_doc)`, so `resolve_kem`'s step-1 (CID
+    // 2nd-preimage) PASSES and the reject can ONLY come from step-2
+    // (`doc.sig == embedded_signing`). (The prior arm rejected at step-1 CID
+    // — the same reason as the honest-vs-confused CID diff — so it did not
+    // actually exercise the cross-seam signing-principal check it claimed.
+    // RK-3 covers the generic step-2 reject with `.is_err()`; SEAM-1 pins
+    // the CROSS-SEAM property by asserting the SPECIFIC step-2 error:
+    // authority-signing-key == the key the confidentiality seam requires the
+    // committed doc to embed.)
+    let confused_cid = confused_doc.cid();
+    let spliced_payload = kdb::did_benten_payload(&sig_mk_a, &confused_cid);
+    let spliced_did = kdb::did_benten_from_payload_for_test(&spliced_payload);
+
+    // Authority seam authenticates as A (its embedded signing key).
+    let authority_key = kdb::resolve_signing(&spliced_did).expect("resolve_signing recovers A");
+    assert_eq!(
+        authority_key.to_lamps_composite_bytes().unwrap(),
+        signer_a.public().to_lamps_composite_bytes().unwrap(),
+        "precondition: the DID authenticates as principal A"
+    );
+
+    // Confidentiality seam: resolve_kem MUST reject at step-2 SPECIFICALLY —
+    // `confused_doc.sig` (B) != the DID's embedded signing multikey (A) —
+    // proving the two seams cannot be made to disagree on the principal
+    // (step-1 CID already passes because the DID commits cid(confused_doc)).
+    // (`RecipientPublic` has no Debug, so match the error explicitly rather
+    // than `{res:?}`.)
+    let is_step2_reject = matches!(
+        kdb::resolve_kem(&spliced_did, &confused_doc),
+        Err(DidError::KeysetEmbeddedSigningMismatch)
+    );
     assert!(
-        kdb::resolve_kem(&did, &confused_doc).is_err(),
-        "SEAM-1: resolve_kem MUST reject a key-set doc whose `sig` field is a DIFFERENT \
-         signing principal than the DID's authority key — a confused-principal seal where \
-         you authenticate as A but receive Drops sealed to B's key-set is unconstructible"
+        is_step2_reject,
+        "SEAM-1: resolve_kem MUST reject at the step-2 doc.sig==embedded cross-check \
+         (KeysetEmbeddedSigningMismatch) when the doc's `sig` field (B) is a DIFFERENT signing \
+         principal than the DID's authority key (A) — a confused-principal seal where you \
+         authenticate as A but receive Drops sealed to B's key-set is unconstructible. Dropping \
+         the step-2 cross-check flips this Err→Ok (step-1 CID passes)."
     );
 }
