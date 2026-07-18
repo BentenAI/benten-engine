@@ -71,9 +71,9 @@ fn build_chain_with_caps(
     exp_per_link: &[u64],
 ) -> Vec<Ucan> {
     let len = caps_per_link.len();
-    assert!(keypairs.len() == len);
-    assert!(nbf_per_link.len() == len);
-    assert!(exp_per_link.len() == len);
+    assert_eq!(keypairs.len(), len);
+    assert_eq!(nbf_per_link.len(), len);
+    assert_eq!(exp_per_link.len(), len);
 
     // Build root-first, then reverse to leaf-first at the end.
     let mut root_first: Vec<Ucan> = Vec::with_capacity(len);

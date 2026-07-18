@@ -261,6 +261,7 @@ pub fn det_signing_multikey(seed: &str) -> Vec<u8> {
 /// assembly following the frozen §1.1 layout; NOT the production encoder
 /// (that is [`encode_did_benten`], the logic-under-test). Openly
 /// `_for_test`.
+#[cfg(any(test, feature = "testing"))]
 pub fn did_benten_from_payload_for_test(payload: &[u8]) -> Did {
     let body = bs58::encode(payload).into_string();
     Did::from_string_for_test_fixture(format!("{DID_BENTEN_PREFIX}{body}"))

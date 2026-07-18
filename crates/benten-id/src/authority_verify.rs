@@ -44,10 +44,10 @@ pub enum AuthorityVerifyError {
     /// The signature wire is the wrong length / shape for the resolved
     /// signing key (e.g. a 64-byte classical wire presented for a composite
     /// issuer — the silent-PQ-strip shape).
-    Malformed,
+    Malformed, // drift-detect: internal-only
     /// The signature did not cryptographically verify against the resolved
     /// signing key (a forged half, a tampered message, or a wrong key).
-    VerifyFailed,
+    VerifyFailed, // drift-detect: internal-only
 }
 
 /// A resolved public-key handle that can be projected to the crypto-suite
