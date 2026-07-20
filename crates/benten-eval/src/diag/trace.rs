@@ -89,6 +89,6 @@ mod tests {
     #[test]
     fn truncate_respects_max_len() {
         assert_eq!(truncate("hello", 10), "hello");
-        assert!(truncate("a_very_long_id", 5).chars().count() == 5);
+        assert_eq!(truncate("a_very_long_id", 5).chars().count(), 5);
     }
 }
