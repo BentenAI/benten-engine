@@ -69,12 +69,14 @@ pub trait GossipTransport {
 /// `iroh::`-concrete type, so if a future edit leaked one into the
 /// [`GossipTransport`] trait signature, this impl would stop compiling — the
 /// load-bearing NQ-D1 fence.
+#[cfg(any(test, feature = "testing"))]
 #[derive(Debug, Default)]
 pub struct MockGossipTransport {
     subscribed: std::collections::BTreeSet<[u8; 32]>,
     notified: std::collections::BTreeSet<[u8; 32]>,
 }
 
+#[cfg(any(test, feature = "testing"))]
 impl MockGossipTransport {
     /// Construct an empty mock transport.
     #[must_use]
@@ -83,6 +85,7 @@ impl MockGossipTransport {
     }
 }
 
+#[cfg(any(test, feature = "testing"))]
 impl GossipTransport for MockGossipTransport {
     fn subscribe(&mut self, topic: [u8; 32]) {
         self.subscribed.insert(topic);

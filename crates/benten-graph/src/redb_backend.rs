@@ -2237,6 +2237,7 @@ impl RedbBackend {
     /// - [`GraphError::TxAborted`] with the closure's inner reason if the
     ///   closure itself returned `Err`.
     /// - [`GraphError::NestedTransactionNotSupported`] on a nested call.
+    #[cfg(any(test, feature = "testing"))]
     pub fn transaction_with_deny_on_commit<F, R>(&self, f: F) -> Result<R, GraphError>
     where
         F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,

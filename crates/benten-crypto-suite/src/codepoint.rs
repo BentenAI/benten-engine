@@ -420,6 +420,7 @@ impl ReservedCodepoint {
 /// `0x01 ‖ band_base_be`; an absent sub-slot pushes `0x00`. Binding it into
 /// the AAD means a relay that strips it fails AEAD-open (it cannot be silently
 /// removed).
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn chained_state_tlv_aad_binding(present: bool) -> Vec<u8> {
     let mut aad = Vec::new();

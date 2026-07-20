@@ -200,10 +200,7 @@ impl core::marker::UnsafeUnpin for benten_membership_set::audit::AuditQueryCompo
 impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AuditQueryComposition
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AuditQueryComposition
 pub fn benten_membership_set::audit::audit_log_query_composition(&[u8; 32]) -> benten_membership_set::audit::AuditQueryComposition
-pub fn benten_membership_set::audit::emit_audit_event_via_bare_put(&[u8; 32], &[u8; 32], benten_membership_set::audit::AdminOp) -> benten_membership_set::audit::AuditEmitResult
 pub fn benten_membership_set::audit::emit_audit_event_via_engine(&[u8; 32], &[u8; 32], &[u8; 32], benten_membership_set::audit::AdminOp) -> benten_membership_set::audit::AuditEmitResult
-pub fn benten_membership_set::audit::parse_audit_scope_added_new_top_level_scope_arm(&str) -> bool
-pub fn benten_membership_set::audit::restricted_audit_scope_contains(&str, &str) -> bool
 pub mod benten_membership_set::codepoints
 pub const benten_membership_set::codepoints::MEMBERSHIP_SET_BAND_HI: u16
 pub const benten_membership_set::codepoints::MEMBERSHIP_SET_BAND_LO: u16
@@ -773,7 +770,6 @@ impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::member::Sig
 pub fn benten_membership_set::member::derive_member_nature(&str, bool) -> benten_membership_set::member::MemberNature
 pub fn benten_membership_set::member::is_ai_operated(&str) -> bool
 pub mod benten_membership_set::privacy
-pub fn benten_membership_set::privacy::admin_can_correlate_members(&[u8]) -> bool
 pub fn benten_membership_set::privacy::network_observer_can_link_stanzas(&[u8], &[u8]) -> bool
 pub mod benten_membership_set::role
 #[repr(u8)] pub enum benten_membership_set::role::RoleId

@@ -268,6 +268,7 @@ pub fn registered_domain_tags() -> Vec<&'static [u8]> {
 /// a signature whose signed bytes begin with `A` could be a truncation/framing
 /// confusion against `B`'s surface. Equality is the degenerate prefix case, so
 /// this single check subsumes the simpler distinctness check.
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn detects_prefix_collision(tags: &[&[u8]]) -> bool {
     for (i, a) in tags.iter().enumerate() {

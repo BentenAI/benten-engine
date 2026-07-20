@@ -195,6 +195,7 @@ pub enum SinkTraceEntry {
 
 impl SinkTraceEntry {
     /// True iff this entry is a `BackpressureDropped` row.
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn is_backpressure_dropped(&self) -> bool {
         matches!(self, SinkTraceEntry::BackpressureDropped { .. })

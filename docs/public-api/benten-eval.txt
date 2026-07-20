@@ -63,8 +63,6 @@ pub benten_eval::chunk_sink::SinkTraceEntry::BackpressureDropped::seq: u64
 pub benten_eval::chunk_sink::SinkTraceEntry::WallclockExceeded
 pub benten_eval::chunk_sink::SinkTraceEntry::WallclockExceeded::budget_ms: u64
 pub benten_eval::chunk_sink::SinkTraceEntry::WallclockExceeded::elapsed_ms: u64
-impl benten_eval::chunk_sink::SinkTraceEntry
-pub fn benten_eval::chunk_sink::SinkTraceEntry::is_backpressure_dropped(&self) -> bool
 impl core::clone::Clone for benten_eval::chunk_sink::SinkTraceEntry
 pub fn benten_eval::chunk_sink::SinkTraceEntry::clone(&self) -> benten_eval::chunk_sink::SinkTraceEntry
 impl core::cmp::Eq for benten_eval::chunk_sink::SinkTraceEntry
@@ -314,8 +312,6 @@ pub benten_eval::exec_state::ExecutionStatePayload::resumption_principal_cid: be
 impl benten_eval::exec_state::ExecutionStatePayload
 pub fn benten_eval::exec_state::ExecutionStatePayload::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
 pub fn benten_eval::exec_state::ExecutionStatePayload::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::CoreError>
-impl benten_eval::exec_state::ExecutionStatePayload
-pub fn benten_eval::exec_state::ExecutionStatePayload::new_with_pinned(alloc::vec::Vec<benten_core::Cid>) -> Self
 impl core::clone::Clone for benten_eval::exec_state::ExecutionStatePayload
 pub fn benten_eval::exec_state::ExecutionStatePayload::clone(&self) -> benten_eval::exec_state::ExecutionStatePayload
 impl core::cmp::Eq for benten_eval::exec_state::ExecutionStatePayload
@@ -1197,7 +1193,6 @@ pub fn benten_eval::primitives::subscribe::register(benten_eval::primitives::sub
 pub fn benten_eval::primitives::subscribe::register_as(alloc::sync::Arc<benten_eval::primitives::subscribe::TestPrincipal>, benten_eval::primitives::subscribe::SubscriptionSpec) -> core::result::Result<benten_eval::primitives::subscribe::ActiveSubscription, benten_eval::primitives::subscribe::SubscribeError>
 pub fn benten_eval::primitives::subscribe::register_on_change(benten_eval::primitives::subscribe::ChangePattern, benten_eval::primitives::subscribe::SubscribeCursor, benten_eval::primitives::subscribe::OnChangeDeliveryCallback, core::option::Option<benten_eval::primitives::subscribe::DeliveryCapRecheck>, alloc::sync::Arc<core::sync::atomic::AtomicBool>, alloc::sync::Arc<core::sync::atomic::AtomicU64>, core::option::Option<benten_eval::primitives::subscribe::TerminationNotifyCallback>, alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<benten_errors::ErrorCode>>>) -> core::result::Result<benten_core::change_stream::SubscriberId, benten_eval::primitives::subscribe::SubscribeError>
 pub fn benten_eval::primitives::subscribe::register_with_store(benten_eval::primitives::subscribe::SubscriptionSpec, alloc::sync::Arc<dyn benten_eval::suspension_store::SuspensionStore>) -> core::result::Result<benten_eval::primitives::subscribe::ActiveSubscription, benten_eval::primitives::subscribe::SubscribeError>
-pub fn benten_eval::primitives::subscribe::subscribe_revoked_mid_stream_count() -> u64
 pub fn benten_eval::primitives::subscribe::subscription_exists(&benten_core::change_stream::SubscriberId) -> bool
 pub fn benten_eval::primitives::subscribe::take_active_handle(&benten_core::change_stream::SubscriberId) -> core::option::Option<benten_eval::primitives::subscribe::ActiveSubscription>
 pub fn benten_eval::primitives::subscribe::unregister_on_change(&benten_core::change_stream::SubscriberId)
@@ -1275,8 +1270,6 @@ impl core::marker::UnsafeUnpin for benten_eval::primitives::wait::SuspendedHandl
 impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::primitives::wait::SuspendedHandle
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::primitives::wait::SuspendedHandle
 pub struct benten_eval::primitives::wait::ZoneWriteCapture
-impl benten_eval::primitives::wait::ZoneWriteCapture
-pub fn benten_eval::primitives::wait::ZoneWriteCapture::zone_writes_for_label(&self, &str) -> alloc::vec::Vec<&(alloc::string::String, benten_core::Cid)>
 impl core::clone::Clone for benten_eval::primitives::wait::ZoneWriteCapture
 pub fn benten_eval::primitives::wait::ZoneWriteCapture::clone(&self) -> benten_eval::primitives::wait::ZoneWriteCapture
 impl core::default::Default for benten_eval::primitives::wait::ZoneWriteCapture
@@ -3039,8 +3032,6 @@ pub benten_eval::ExecutionStatePayload::resumption_principal_cid: benten_core::C
 impl benten_eval::exec_state::ExecutionStatePayload
 pub fn benten_eval::exec_state::ExecutionStatePayload::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
 pub fn benten_eval::exec_state::ExecutionStatePayload::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::CoreError>
-impl benten_eval::exec_state::ExecutionStatePayload
-pub fn benten_eval::exec_state::ExecutionStatePayload::new_with_pinned(alloc::vec::Vec<benten_core::Cid>) -> Self
 impl core::clone::Clone for benten_eval::exec_state::ExecutionStatePayload
 pub fn benten_eval::exec_state::ExecutionStatePayload::clone(&self) -> benten_eval::exec_state::ExecutionStatePayload
 impl core::cmp::Eq for benten_eval::exec_state::ExecutionStatePayload

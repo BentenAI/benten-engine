@@ -306,6 +306,7 @@ impl Outcome {
     }
 
     /// Panics unless the outcome routed through the success edge.
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn assert_success(&self) {
         assert!(
             self.is_ok_edge(),

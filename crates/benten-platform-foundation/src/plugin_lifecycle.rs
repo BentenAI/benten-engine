@@ -446,12 +446,14 @@ impl InMemoryUninstallCascade {
     }
 
     /// Insert a subscription (test fixture surface).
+    #[cfg(any(test, feature = "testing"))]
     pub fn insert_subscription(&mut self, sub: InMemorySubscription) {
         self.subscriptions.push(sub);
     }
 
     /// Insert a private-namespace row (test fixture surface). Scope
     /// MUST start with `private:<plugin_did>:`.
+    #[cfg(any(test, feature = "testing"))]
     pub fn insert_private_row(&mut self, scope: String, body: Vec<u8>) {
         self.private_rows.insert(scope, body);
     }
@@ -468,6 +470,7 @@ impl InMemoryUninstallCascade {
 
     /// Snapshot active grants issued by `issuer` (test observable for
     /// T10-uninstall (b) baseline).
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn active_grants_with_issuer(&self, issuer: &Did) -> Vec<&InMemoryGrant> {
         self.grants
@@ -485,6 +488,7 @@ impl InMemoryUninstallCascade {
 
     /// Snapshot private-namespace rows for a plugin-DID (test
     /// observable for T7 isolation guarantee).
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn private_rows_for(&self, plugin_did: &Did) -> Vec<&String> {
         let prefix = format!("private:{}:", plugin_did.as_str());
@@ -1319,6 +1323,7 @@ impl InMemoryInstallCascade {
     }
 
     /// Snapshot all minted grants `(user_did, plugin_did, scope, grant_cid)`.
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn minted_grants(&self) -> &[(Did, Did, String, Cid)] {
         &self.minted_grants
@@ -1327,6 +1332,7 @@ impl InMemoryInstallCascade {
     /// Count of plugin-DIDs whose private namespace has been provisioned.
     /// Used by no-partial-state-commit pins (e.g. cycle-rejected install)
     /// where no plugin-DID is known at assertion time.
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn provisioned_count(&self) -> usize {
         self.provisioned_namespaces.len()

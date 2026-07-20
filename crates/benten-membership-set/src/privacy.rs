@@ -122,6 +122,7 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 /// `false` only in the degenerate case of an EMPTY snapshot (an admin holding
 /// no members_table has nothing to correlate) — which keeps the predicate a
 /// genuine property of the input rather than a constant.
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn admin_can_correlate_members(members_table_snapshot: &[u8]) -> bool {
     // The members_table snapshot is the recipient↔record mapping by

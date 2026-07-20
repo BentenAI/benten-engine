@@ -281,6 +281,7 @@ pub struct ExecutionStatePayload {
 impl ExecutionStatePayload {
     /// Construct a payload with the `pinned_subgraph_cids` invariant
     /// enforced (sorted + deduped).
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn new_with_pinned(mut cids: Vec<Cid>) -> Self {
         cids.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));

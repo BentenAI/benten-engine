@@ -322,8 +322,6 @@ pub mod benten_platform_foundation::manifest_store
 pub struct benten_platform_foundation::manifest_store::DriftNotification
 pub benten_platform_foundation::manifest_store::DriftNotification::plugin_did: benten_id::did::Did
 pub benten_platform_foundation::manifest_store::DriftNotification::reason: alloc::string::String
-impl benten_platform_foundation::manifest_store::DriftNotification
-pub fn benten_platform_foundation::manifest_store::DriftNotification::is_install_record_drift_warning(&self, &benten_id::did::Did) -> bool
 impl core::clone::Clone for benten_platform_foundation::manifest_store::DriftNotification
 pub fn benten_platform_foundation::manifest_store::DriftNotification::clone(&self) -> benten_platform_foundation::manifest_store::DriftNotification
 impl core::cmp::Eq for benten_platform_foundation::manifest_store::DriftNotification
@@ -345,7 +343,6 @@ pub fn benten_platform_foundation::manifest_store::ManifestStore::captured_user_
 pub fn benten_platform_foundation::manifest_store::ManifestStore::contains(&self, &benten_id::did::Did) -> bool
 pub fn benten_platform_foundation::manifest_store::ManifestStore::load_verified(&mut self, &benten_id::did::Did) -> core::result::Result<benten_platform_foundation::plugin_manifest::InstallRecord, benten_errors::ErrorCode>
 pub fn benten_platform_foundation::manifest_store::ManifestStore::new() -> Self
-pub fn benten_platform_foundation::manifest_store::ManifestStore::simulate_byte_mutation_attack(&mut self, benten_id::did::Did, benten_platform_foundation::plugin_manifest::InstallRecord) -> core::result::Result<(), benten_errors::ErrorCode>
 impl core::default::Default for benten_platform_foundation::manifest_store::ManifestStore
 pub fn benten_platform_foundation::manifest_store::ManifestStore::default() -> benten_platform_foundation::manifest_store::ManifestStore
 impl core::fmt::Debug for benten_platform_foundation::manifest_store::ManifestStore
@@ -707,9 +704,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_platform_foundation::plu
 impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::plugin_lifecycle::InMemoryGrant
 pub struct benten_platform_foundation::plugin_lifecycle::InMemoryInstallCascade
 impl benten_platform_foundation::plugin_lifecycle::InMemoryInstallCascade
-pub fn benten_platform_foundation::plugin_lifecycle::InMemoryInstallCascade::minted_grants(&self) -> &[(benten_id::did::Did, benten_id::did::Did, alloc::string::String, benten_core::Cid)]
 pub fn benten_platform_foundation::plugin_lifecycle::InMemoryInstallCascade::new() -> Self
-pub fn benten_platform_foundation::plugin_lifecycle::InMemoryInstallCascade::provisioned_count(&self) -> usize
 impl benten_platform_foundation::plugin_lifecycle::CapMinter for benten_platform_foundation::plugin_lifecycle::InMemoryInstallCascade
 pub fn benten_platform_foundation::plugin_lifecycle::InMemoryInstallCascade::mint_root_grant(&mut self, &benten_id::did::Did, &benten_id::did::Did, &str) -> core::result::Result<benten_core::Cid, benten_errors::ErrorCode>
 pub fn benten_platform_foundation::plugin_lifecycle::InMemoryInstallCascade::revoke_root_grant(&mut self, &benten_core::Cid) -> core::result::Result<(), benten_errors::ErrorCode>
@@ -748,12 +743,8 @@ impl core::panic::unwind_safe::UnwindSafe for benten_platform_foundation::plugin
 pub struct benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade
 impl benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade
 pub fn benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade::active_grants_for_audience(&self, &benten_id::did::Did) -> alloc::vec::Vec<&benten_platform_foundation::plugin_lifecycle::InMemoryGrant>
-pub fn benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade::active_grants_with_issuer(&self, &benten_id::did::Did) -> alloc::vec::Vec<&benten_platform_foundation::plugin_lifecycle::InMemoryGrant>
 pub fn benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade::insert_grant(&mut self, benten_platform_foundation::plugin_lifecycle::InMemoryGrant)
-pub fn benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade::insert_private_row(&mut self, alloc::string::String, alloc::vec::Vec<u8>)
-pub fn benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade::insert_subscription(&mut self, benten_platform_foundation::plugin_lifecycle::InMemorySubscription)
 pub fn benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade::new() -> Self
-pub fn benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade::private_rows_for(&self, &benten_id::did::Did) -> alloc::vec::Vec<&alloc::string::String>
 pub fn benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade::revocation_log(&self) -> &[benten_platform_foundation::plugin_lifecycle::RevocationLogEntry]
 impl benten_platform_foundation::plugin_lifecycle::CapRevoker for benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade
 pub fn benten_platform_foundation::plugin_lifecycle::InMemoryUninstallCascade::cascade_revoke_grants_with_issuer(&mut self, &benten_id::did::Did) -> core::result::Result<usize, benten_errors::ErrorCode>

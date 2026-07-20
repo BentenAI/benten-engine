@@ -2025,6 +2025,7 @@ pub mod abuse_control {
     /// Was decrypt attempted for the last admission? Admission is a strict
     /// PRE-decrypt gate — a refused (no-token / invalid) envelope never
     /// reaches the KEM — so this is always `false`.
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn decrypt_was_attempted_for_last_admit() -> bool {
         false
@@ -3090,6 +3091,7 @@ pub mod sealed_aad {
     /// The ENUMERABLE field-set of the serialized `0x6510` envelope AAD — the
     /// canonical union (so an impl that adds `sender_did` or re-adds
     /// `coarse_epoch` is caught by an unexpected token).
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn aad_field_set() -> Vec<&'static str> {
         super::vec_static(&[
@@ -3104,6 +3106,7 @@ pub mod sealed_aad {
     /// The residual privacy-metadata subset of the `0x6510` AAD field-set —
     /// EXACTLY `{audience}` (coarse-epoch removed; framing/binding fields are
     /// not privacy metadata).
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn residual_privacy_metadata() -> Vec<&'static str> {
         super::vec_static(&["audience"])
@@ -3113,6 +3116,7 @@ pub mod sealed_aad {
     /// BIG-ENDIAN bytes. DETERMINISTIC. NO sender-DID, NO coarse_epoch.
     /// Layout (BE; M-19): `aad_version u8 | codepoint u16 | aud_len u32 |
     /// audience_did | body_cid (36 B) | recipient_key_gen u32`.
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn serialize_sealed_sender_aad(aad: &SealedSenderAad) -> Vec<u8> {
         let mut out = Vec::new();

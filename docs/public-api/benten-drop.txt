@@ -238,7 +238,6 @@ pub const benten_drop::layer_c::abuse_control::DROP_TO_RECIPIENT_SEALED_SENDER: 
 pub const benten_drop::layer_c::abuse_control::ENVELOPE_FORMAT_VERSION: u8
 pub fn benten_drop::layer_c::abuse_control::admit_sealed_sender(core::option::Option<&benten_drop::layer_c::abuse_control::DeliveryToken>, u64, u32) -> core::result::Result<(), benten_drop::layer_c::abuse_control::AdmitError>
 pub fn benten_drop::layer_c::abuse_control::admit_sealed_sender_bound(&benten_drop::layer_c::abuse_control::DeliveryToken, &benten_drop::layer_c::abuse_control::TokenBindingAad, &[u8], u64, u32) -> core::result::Result<(), benten_drop::layer_c::abuse_control::AdmitError>
-pub fn benten_drop::layer_c::abuse_control::decrypt_was_attempted_for_last_admit() -> bool
 pub fn benten_drop::layer_c::abuse_control::serialize_token_binding_aad(&benten_drop::layer_c::abuse_control::TokenBindingAad) -> alloc::vec::Vec<u8>
 pub mod benten_drop::layer_c::group_posture
 pub use benten_drop::layer_c::group_posture::RecipientPublic
@@ -368,9 +367,6 @@ impl core::panic::unwind_safe::UnwindSafe for benten_drop::layer_c::sealed_aad::
 pub const benten_drop::layer_c::sealed_aad::AAD_VERSION: u8
 pub const benten_drop::layer_c::sealed_aad::DROP_TO_RECIPIENT_SEALED_SENDER: u16
 pub const benten_drop::layer_c::sealed_aad::ENVELOPE_FORMAT_VERSION: u8
-pub fn benten_drop::layer_c::sealed_aad::aad_field_set() -> alloc::vec::Vec<&'static str>
-pub fn benten_drop::layer_c::sealed_aad::residual_privacy_metadata() -> alloc::vec::Vec<&'static str>
-pub fn benten_drop::layer_c::sealed_aad::serialize_sealed_sender_aad(&benten_drop::layer_c::sealed_aad::SealedSenderAad) -> alloc::vec::Vec<u8>
 pub enum benten_drop::layer_c::BindingContext
 pub benten_drop::layer_c::BindingContext::DropPlaintextSender
 pub benten_drop::layer_c::BindingContext::DropPlaintextSender::aad_version: u8

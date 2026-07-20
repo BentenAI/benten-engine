@@ -136,6 +136,7 @@ pub fn iana_hpke_reserved_ranges() -> Vec<RangeInclusive<u16>> {
 
 /// Whether `codepoints` contains a duplicate (a silent wire collision). The
 /// CI scanner (NQ-W2 / Inv-18) is exactly this check over the minted set.
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn detects_collision(codepoints: &[u16]) -> bool {
     let mut seen = std::collections::HashSet::new();

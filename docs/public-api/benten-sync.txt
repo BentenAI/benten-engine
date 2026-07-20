@@ -66,7 +66,6 @@ pub fn benten_sync::crdt::LoroDoc::op_log_targets(&self) -> alloc::vec::Vec<bent
 pub fn benten_sync::crdt::LoroDoc::set_property(&self, &str, impl core::convert::Into<alloc::string::String>, benten_core::hlc::BentenHlc) -> benten_sync::crdt::CrdtResult<()>
 pub fn benten_sync::crdt::LoroDoc::to_canonical_bytes(&self) -> benten_sync::crdt::CrdtResult<alloc::vec::Vec<u8>>
 pub fn benten_sync::crdt::LoroDoc::winning_attribution(&self) -> alloc::collections::btree::set::BTreeSet<u64>
-pub fn benten_sync::crdt::LoroDoc::with_peer_id(u64) -> core::option::Option<Self>
 impl core::clone::Clone for benten_sync::crdt::LoroDoc
 pub fn benten_sync::crdt::LoroDoc::clone(&self) -> Self
 impl core::default::Default for benten_sync::crdt::LoroDoc
@@ -152,32 +151,10 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::errors::AtriumTran
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::errors::AtriumTransportError
 pub type benten_sync::errors::AtriumTransportResult<T> = core::result::Result<T, benten_sync::errors::AtriumTransportError>
 pub mod benten_sync::gossip_transport
-pub struct benten_sync::gossip_transport::MockGossipTransport
-impl benten_sync::gossip_transport::MockGossipTransport
-pub fn benten_sync::gossip_transport::MockGossipTransport::new() -> Self
-impl benten_sync::gossip_transport::GossipTransport for benten_sync::gossip_transport::MockGossipTransport
-pub fn benten_sync::gossip_transport::MockGossipTransport::notify(&mut self, [u8; 32])
-pub fn benten_sync::gossip_transport::MockGossipTransport::subscribe(&mut self, [u8; 32])
-pub fn benten_sync::gossip_transport::MockGossipTransport::would_deliver(&self, [u8; 32]) -> bool
-impl core::default::Default for benten_sync::gossip_transport::MockGossipTransport
-pub fn benten_sync::gossip_transport::MockGossipTransport::default() -> benten_sync::gossip_transport::MockGossipTransport
-impl core::fmt::Debug for benten_sync::gossip_transport::MockGossipTransport
-pub fn benten_sync::gossip_transport::MockGossipTransport::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Freeze for benten_sync::gossip_transport::MockGossipTransport
-impl core::marker::Send for benten_sync::gossip_transport::MockGossipTransport
-impl core::marker::Sync for benten_sync::gossip_transport::MockGossipTransport
-impl core::marker::Unpin for benten_sync::gossip_transport::MockGossipTransport
-impl core::marker::UnsafeUnpin for benten_sync::gossip_transport::MockGossipTransport
-impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::gossip_transport::MockGossipTransport
-impl core::panic::unwind_safe::UnwindSafe for benten_sync::gossip_transport::MockGossipTransport
 pub trait benten_sync::gossip_transport::GossipTransport
 pub fn benten_sync::gossip_transport::GossipTransport::notify(&mut self, [u8; 32])
 pub fn benten_sync::gossip_transport::GossipTransport::subscribe(&mut self, [u8; 32])
 pub fn benten_sync::gossip_transport::GossipTransport::would_deliver(&self, [u8; 32]) -> bool
-impl benten_sync::gossip_transport::GossipTransport for benten_sync::gossip_transport::MockGossipTransport
-pub fn benten_sync::gossip_transport::MockGossipTransport::notify(&mut self, [u8; 32])
-pub fn benten_sync::gossip_transport::MockGossipTransport::subscribe(&mut self, [u8; 32])
-pub fn benten_sync::gossip_transport::MockGossipTransport::would_deliver(&self, [u8; 32]) -> bool
 pub mod benten_sync::handshake
 #[non_exhaustive] pub enum benten_sync::handshake::HandshakeError
 pub benten_sync::handshake::HandshakeError::AudienceMismatch

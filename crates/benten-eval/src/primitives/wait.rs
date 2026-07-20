@@ -183,6 +183,7 @@ pub struct ZoneWriteCapture {
 
 impl ZoneWriteCapture {
     /// Return the writes for a given system-zone label.
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn zone_writes_for_label(&self, label: &str) -> Vec<&(String, Cid)> {
         self.writes.iter().filter(|(l, _)| l == label).collect()

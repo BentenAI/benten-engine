@@ -104,6 +104,7 @@ pub fn emit_audit_event_via_engine(
 /// attribution, so it leaves ALL three triple fields `None`, and the chain does
 /// NOT advance (tamper-evidence is NOT free — it is a property of routing
 /// through the enforced WRITE).
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn emit_audit_event_via_bare_put(
     _set_id: &[u8; 32],
@@ -408,6 +409,7 @@ impl AuditAccessGradation {
 /// Always `false`: an `audit:<set_id>:*` scope routes through the EXISTING
 /// `Scope::RestrictedSelector(RestrictedScope)` arm (m-15 GNC-1) — `Scope`
 /// stays EXACTLY 2 arms. No 3rd top-level arm is introduced.
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn parse_audit_scope_added_new_top_level_scope_arm(scope: &str) -> bool {
     // The audit scope parses into the existing RestrictedSelector arm; even a
@@ -423,6 +425,7 @@ pub fn parse_audit_scope_added_new_top_level_scope_arm(scope: &str) -> bool {
 /// The containment is decidable and SET-SCOPED: the scope for `set-X` contains
 /// any concrete request prefixed by `audit:set-X:`, and does NOT contain a
 /// request scoped to a DIFFERENT set.
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn restricted_audit_scope_contains(scope: &str, concrete_request: &str) -> bool {
     // Parse the `audit:<set_id>:*` scope into its `audit:<set_id>:` prefix.

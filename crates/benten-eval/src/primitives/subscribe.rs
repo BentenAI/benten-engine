@@ -1085,6 +1085,7 @@ static SUBSCRIBE_REVOKED_MID_STREAM_COUNT: std::sync::atomic::AtomicU64 =
 /// terminations fired across the process lifetime. Test pins +
 /// operator dashboards consume this for the typed-error
 /// observability contract closure (cap-r6-r1-1 / r4b-cap-6).
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn subscribe_revoked_mid_stream_count() -> u64 {
     SUBSCRIBE_REVOKED_MID_STREAM_COUNT.load(std::sync::atomic::Ordering::Relaxed)

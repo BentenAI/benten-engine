@@ -413,7 +413,6 @@ impl core::marker::Unpin for benten_crypto_suite::codepoint::SigCodepoint
 impl core::marker::UnsafeUnpin for benten_crypto_suite::codepoint::SigCodepoint
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::codepoint::SigCodepoint
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::codepoint::SigCodepoint
-pub fn benten_crypto_suite::codepoint::chained_state_tlv_aad_binding(bool) -> alloc::vec::Vec<u8>
 pub mod benten_crypto_suite::conformance
 pub mod benten_crypto_suite::conformance::endianness
 pub const fn benten_crypto_suite::conformance::endianness::ascii_label_excluded() -> bool
@@ -473,7 +472,6 @@ pub const benten_crypto_suite::domain_registry::REQUEST_DOMAIN: &[u8]
 pub const benten_crypto_suite::domain_registry::SENDER_AUTH_DOMAIN: &[u8]
 pub const benten_crypto_suite::domain_registry::SETID_COMMITMENT_LABEL: &[u8]
 pub const benten_crypto_suite::domain_registry::VAULT_AAD_DOMAIN: &[u8]
-pub fn benten_crypto_suite::domain_registry::detects_prefix_collision(&[&[u8]]) -> bool
 pub fn benten_crypto_suite::domain_registry::registered_domain_tags() -> alloc::vec::Vec<&'static [u8]>
 pub mod benten_crypto_suite::envelope
 #[non_exhaustive] pub enum benten_crypto_suite::envelope::BindingContext
@@ -690,7 +688,6 @@ pub const benten_crypto_suite::registry::MLS_WELCOME_BASE: u16
 pub const benten_crypto_suite::registry::REMOTE_PERMISSION_BAND_BASE: u16
 pub const benten_crypto_suite::registry::SYMMETRIC_AEAD_12B: u16
 pub const benten_crypto_suite::registry::VAULT_ENVELOPE: u16
-pub fn benten_crypto_suite::registry::detects_collision(&[u16]) -> bool
 pub fn benten_crypto_suite::registry::iana_hpke_reserved_ranges() -> alloc::vec::Vec<core::ops::range::RangeInclusive<u16>>
 pub fn benten_crypto_suite::registry::in_iana_hpke_range(u16) -> bool
 pub fn benten_crypto_suite::registry::registered_envelope_codepoints() -> alloc::vec::Vec<u16>

@@ -2025,7 +2025,6 @@ impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::NestedTx
 #[non_exhaustive] pub struct benten_engine::outcome::Outcome
 impl benten_engine::outcome::Outcome
 pub fn benten_engine::outcome::Outcome::as_list(&self) -> core::option::Option<alloc::vec::Vec<benten_core::Node>>
-pub fn benten_engine::outcome::Outcome::assert_success(&self)
 pub fn benten_engine::outcome::Outcome::completed_iterations(&self) -> core::option::Option<u32>
 pub fn benten_engine::outcome::Outcome::created_cid(&self) -> core::option::Option<benten_core::Cid>
 pub fn benten_engine::outcome::Outcome::edge_taken(&self) -> core::option::Option<alloc::string::String>
@@ -3568,7 +3567,6 @@ impl core::panic::unwind_safe::UnwindSafe for benten_engine::outcome::NestedTx
 #[non_exhaustive] pub struct benten_engine::Outcome
 impl benten_engine::outcome::Outcome
 pub fn benten_engine::outcome::Outcome::as_list(&self) -> core::option::Option<alloc::vec::Vec<benten_core::Node>>
-pub fn benten_engine::outcome::Outcome::assert_success(&self)
 pub fn benten_engine::outcome::Outcome::completed_iterations(&self) -> core::option::Option<u32>
 pub fn benten_engine::outcome::Outcome::created_cid(&self) -> core::option::Option<benten_core::Cid>
 pub fn benten_engine::outcome::Outcome::edge_taken(&self) -> core::option::Option<alloc::string::String>
