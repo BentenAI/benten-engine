@@ -783,7 +783,7 @@ impl LoroDoc {
         // examining the doc's container set.
         let deep = self.inner.get_deep_value();
         if let LoroValue::Map(m) = deep {
-            for (k, _v) in m.iter() {
+            for k in m.keys() {
                 if k.starts_with(RICH_PREFIX) {
                     out.push(OpLogTarget {
                         container_name: k.clone(),
