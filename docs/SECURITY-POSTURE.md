@@ -90,6 +90,16 @@ table narrative.
 > - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-6** — §4.25 sync-hydrate
 >   consumption of `UnresolvedDeny` at handshake.rs not live (§4.36
 >   merge half structurally enforced; §4.25 sync-hydrate half not).
+> - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-88** — module-manifest
+>   signatures are structurally **did:key-only 64-byte Ed25519 by format**
+>   at v1-beta (the `ManifestSignature { ed25519 }` field + the exact-64-byte
+>   decode in `manifest_signing.rs` + the classical `Did::resolve` issuer
+>   path). A hybrid `did:benten` author CANNOT sign a verifiable manifest,
+>   so — unlike the Fork-A authority path (UCAN chain-walk / rotation /
+>   device-attestation / VC) — there is NO composite wire to silent-PQ-strip;
+>   the manifest verify correctly stays classical `PublicKey::verify` and
+>   does NOT route through `benten_id::authority_verify`. Hybrid-manifest-
+>   author support is name-carried to Phase-4-Meta-Composing.
 >
 > The honest disclosure shape: **Layer-1/2/3 is structurally encoded at
 > v1-beta as a frozen substrate; the substantive runtime enforcement

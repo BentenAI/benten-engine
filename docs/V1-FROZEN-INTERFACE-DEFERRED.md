@@ -2878,19 +2878,28 @@ did not resolve unilaterally.
 
 ### Row D-87 — R6-R1 named-carry ledger (consolidated)
 
-- **F-02 — `delegate_capability` attenuation-subset check (SURFACE-TO-BEN).**
-  `crates/benten-engine/src/engine_caps.rs` `delegate_capability` sets
+- ~~**F-02 — `delegate_capability` attenuation-subset check (SURFACE-TO-BEN).**~~
+  **CLOSED (fix-now) at R6-R1 fold-in fix-pass.** Pre-fold-in,
+  `crates/benten-engine/src/engine_caps.rs` `delegate_capability` set
   `effective_scope = attenuated_caps[0]` with NO subset check vs the resolved
-  source-grant scope (in-code comment defers "full attenuation semantics …
-  alongside G27-D"). No reachable untrusted caller (napi/host only; wasm-
-  excluded), and bounding-enforcement is a ratified deferral (Row D-3 + D-24) —
-  but the frozen public method's docstring promises "narrowed-or-identical".
-  **Fork for Ben:** fix-now (cheap+additive — reuse
-  `benten_id::ucan::caps_match_or_subsume` / `attenuation::check_attenuation`,
-  typed-reject a widening) OR accept as a ratified deferral. Either way this row
-  is the honest freeze-registry disclosure (previously only an in-code `G27-D`
-  comment). Destination if deferred: the write-boundary/attenuation wave
-  (Row D-1 / §4.23 / G-COMP-1).
+  source-grant scope (in-code comment deferred "full attenuation semantics …
+  alongside G27-D"), so the frozen public method's docstring promise of
+  "narrowed-or-identical" was not enforced. **Closure:** a new Step-2c
+  attenuation-subset guard requires EVERY `attenuated_caps` entry to be a
+  segment-boundary-safe subset-or-equal of the resolved source scope, using the
+  SAME `/`-/`:`-boundary subsume relation as the UCAN attenuation walk
+  (`benten_id::ucan::caps_match_or_subsume`, the R15/F-01 fix — mirrored as the
+  `scope_subsumes` free fn in `engine_caps.rs` because that helper is
+  module-private to benten-id). A widening entry (sibling-prefix
+  `/zone/posts-secret`, broader `/zone`, or `/zone/*`) is a typed
+  `ErrorCode::CapAttenuation` reject ("outer grant does not subsume …
+  requires"). Would-FAIL-on-revert pins at
+  `crates/benten-engine/tests/r6_r1_foldin_f02_delegate_attenuation_subset.rs`
+  (sibling-prefix + broader + `/zone/*` reject; genuine sub-path + exact +
+  empty-identity admit). This is the STRUCTURAL
+  "cannot-delegate-more-than-you-hold" invariant — distinct from and independent
+  of the (still-deferred) manifest-`shares` bounding-enforcement (Row D-3 + D-24).
+  Row retained for forensic context per pim-13 / §3.12.
 - **F-07 — Layer-D authority sigs are classical-Ed25519-only → Row D-26.** The
   `layer_d/device_link.rs` (`seal/open_provisioning_payload`) +
   `layer_d/remote_permission.rs` (`verify_canonical`) authority-signature sites
@@ -3063,6 +3072,71 @@ did not resolve unilaterally.
   named-carried, collision-scanner structurally covers re-collision); O-14
   (write-side private-NS owner-binding already named `phase-4-backlog §4.28/§4.36`);
   O-24 (already valid HARD-RULE clause-b, `phase-3-backlog §15.3`).
+
+---
+
+## R6-R1 fold-in fix-pass NAMED-CARRY rows
+
+### Row D-88 — hybrid `did:benten` module-manifest-author support
+
+- **Frozen surface (v1-beta):** module-manifest signatures are structurally
+  **did:key-only 64-byte Ed25519 by format**. The carrier is
+  `crates/benten-engine/src/module_manifest.rs::ManifestSignature { ed25519:
+  Option<String> }` (base64 of a signature the
+  `manifest_signing.rs::{decode_signature, signature_from_bytes}` path REQUIRES
+  to be exactly 64 bytes), and the issuer key is recovered via classical
+  `benten_id::did::Did::resolve` (did:key Ed25519-multicodec only — a
+  `did:benten` string returns `InvalidPrefix`, a hybrid did:key body returns
+  `UnknownMulticodec`). This format is FROZEN at v1-beta.
+- **Deferred consumption (Phase-4-Meta-Composing destination):** to admit a
+  hybrid `did:benten` (LAMPS Composite ML-DSA⊕Ed25519) manifest author, (i)
+  extend `ManifestSignature` with a composite/varsig-tagged carrier (additive
+  field; existing did:key manifests verify unchanged) and (ii) route the
+  manifest verify through the Fork-A hybrid chokepoint
+  `benten_id::authority_verify::verify_authority_signature` (dispatch on the
+  resolved signing-key shape), AND (iii) extend the AUTH-7 completeness net
+  (`crates/benten-id/tests/kdb_auth_helper_grep_audit.rs`) to cover
+  `benten-engine/src/manifest_signing.rs` so no authority-verify site is left
+  un-covered. Couples to **Row D-15e / D-26** (binding_sig varsig promotion —
+  same hybrid-carrier structural question).
+- **v1-beta posture:** because the manifest sig FORMAT cannot hold a composite
+  wire, there is NO composite half to silent-PQ-strip (unlike the Fork-A
+  authority path that closes FLAGSHIP-2) — so the classical
+  `PublicKey::verify` at the manifest verify sites is CORRECT at v1-beta, NOT a
+  silent PQ-downgrade. The only gap is that a hybrid-only author cannot publish
+  a v1-beta-verifiable manifest.
+- **Anchor:** R6-R1 fold-in F-03 security-review observation 2; CLAUDE.md
+  baked-in #5 crypto-agility (additive-codepoint, never a wire-break);
+  SECURITY-POSTURE.md substrate-only-posture Reader's-note bullet.
+
+### Row D-89 — G-CORE-3e production revocation key off payload-CID (not sig-inclusive)
+
+- **Frozen surface (v1-beta):** the `benten-sync`
+  `UcanBlobsHandler::validate_request_for_connection` revocation ARM 4
+  (`crates/benten-sync/src/ucan_blobs_protocol.rs`) keys its revocation lookup
+  on `AuthorizationGrant::grant_cid_for_test()` — a `#[doc(hidden)]`
+  **sig-inclusive** CID (BLAKE3 over the grant's FULL canonical bytes,
+  including `binding_sig`). The revocation store is populated ONLY via
+  `record_revocation_for_test` (`#[cfg(any(test, feature="testing"))]`), so in a
+  pure production build the set is always empty and ARM 4 never fires — a
+  G-CORE-3e scaffold. The ARM's shape is frozen; the logic is NOT changed at
+  this fold-in.
+- **Deferred consumption (G-CORE-3e / Phase-4-Meta-Composing destination):** the
+  production G-CORE-3e wire-up MUST re-key revocation off the **semantic-tuple /
+  payload-CID** revocation surface (a benten-caps `ucan_payload_cid` /
+  semantic revocation-tuple), NEVER the sig-inclusive `grant_cid_for_test`. This
+  is the Inv-15 payload-CID discipline: keying a load-bearing revocation
+  identifier off a sig-bundle CID lets a malleated-but-still-verifying
+  re-encoding of the same grant yield a different CID and slip the check. The
+  `ucan_payload_cid` semantic surface itself is a G-CORE-3e deliverable (it does
+  not exist at v1-beta).
+- **v1-beta posture:** no exposure at v1-beta (the arm is dead in production
+  builds); the Inv-15 violation would only materialize if the scaffold were
+  wired as-is. The disclosure comment at ARM 4 records this so the production
+  wire-up cannot inherit the sig-inclusive key.
+- **Anchor:** Inv-15 (`docs/INVARIANT-COVERAGE.md` — sig-bundle CIDs are never
+  load-bearing identifiers); RATIFIED-S&C §R6 revocation reach; R6-R1 fold-in
+  FIX 4.
 
 ---
 

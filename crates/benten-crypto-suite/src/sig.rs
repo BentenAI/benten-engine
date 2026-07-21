@@ -708,11 +708,19 @@ impl SignatureSuite {
             // non-canonical / malleated scalar `S` (S >= L) and small-
             // order keys, so the same signed message cannot be re-encoded
             // into a second byte-distinct-but-still-verifying signature.
-            // This is the authority-verify chokepoint the UCAN chain-walk
-            // (via `benten_id::authority_verify`), rotation, device-
-            // attestation, VC, and drop/governance/manifest origin-auth
-            // all route through. Honest `ed25519_dalek` signatures are
-            // always canonical, so no legitimate signature is rejected.
+            // This is the chokepoint the **Fork-A authority path** routes
+            // through: the UCAN chain-walk (via `benten_id::authority_verify`),
+            // DID rotation, device-attestation, and VC verification — the
+            // callers of `benten_id::authority_verify::verify_authority_signature`.
+            // NOTE (R6-R1 fold-in, F-03 review): the Drop-bundle `envelope_sig`
+            // and the module-`manifest_signing` verifies do NOT route through
+            // here — they call classical Ed25519 `verify` directly.
+            // envelope_sig is INTEGRITY-only (authority is the issuer-anchored
+            // `auth_grant`, whose UCAN chain-walk DOES route through here);
+            // manifest signatures are structurally did:key-only 64-byte
+            // classical by format (no composite wire). Honest `ed25519_dalek`
+            // signatures are always canonical, so no legitimate signature is
+            // rejected.
             return pk
                 .classical
                 .verify_strict(msg, &classical_sig)

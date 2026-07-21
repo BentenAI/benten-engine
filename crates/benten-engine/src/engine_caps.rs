@@ -589,10 +589,45 @@ impl<'eng> EngineCapsHandle<'eng> {
             });
         }
 
+        // **Step 2c — R6-R1 fold-in (F-02 closure): attenuation-subset
+        // guard.** Before minting the delegated grant, REQUIRE every entry
+        // of `attenuated_caps` to be an attenuation (subset-or-equal) of
+        // the resolved source-grant scope — the STRUCTURAL
+        // "cannot-delegate-more-than-you-hold" invariant. This is distinct
+        // from (and always holds regardless of) the Step-2b manifest-
+        // `shares` policy: even a fully-shares-admitted delegation may not
+        // WIDEN authority beyond the delegator's own scope. Uses the SAME
+        // segment-boundary-safe subsume relation as the UCAN attenuation
+        // walk (`benten_id::ucan::caps_match_or_subsume`, the R15 / F-01
+        // fix — mirrored in the `scope_subsumes` free fn below because that
+        // helper is module-private to benten-id), so a plugin holding
+        // `/zone/posts` can delegate the true sub-path `/zone/posts/foo`
+        // but NOT the sibling `/zone/posts-secret` nor the broader
+        // `/zone/*`. Fail-CLOSED: any widening entry is a typed
+        // `CapAttenuation` reject ("outer grant does not subsume …
+        // requires").
+        for cap in attenuated_caps {
+            if !scope_subsumes(resolved_scope.as_str(), cap.as_str()) {
+                return Err(EngineError::Other {
+                    code: benten_errors::ErrorCode::CapAttenuation,
+                    message: format!(
+                        "delegate_capability: attenuated cap `{cap}` widens authority \
+                         beyond the source grant scope `{resolved_scope}` (source grant \
+                         {}) — a delegation cannot grant more than the delegator holds \
+                         (segment-boundary-safe attenuation-subset check)",
+                        source_grant_cid.to_base32()
+                    ),
+                });
+            }
+        }
+
         // Step 3 — pick effective scope for the new delegation grant.
-        // Attenuation here is the simplest "narrowed-or-identical
-        // scope" form per the G24-D-FP-3 brief; full attenuation
-        // semantics (per-segment subset check) land alongside G27-D.
+        // Every `attenuated_caps` entry was verified in Step 2c above to
+        // be a segment-boundary-safe subset-or-equal of the resolved
+        // source scope, so the effective scope is guaranteed
+        // narrowed-or-identical. (The "per-segment subset check" that the
+        // pre-fold-in G24-D-FP-3 comment deferred "alongside G27-D" is now
+        // enforced in Step 2c — R6-R1 fold-in F-02 closure.)
         let effective_scope = if attenuated_caps.is_empty() {
             resolved_scope.clone()
         } else {
@@ -634,6 +669,80 @@ impl<'eng> EngineCapsHandle<'eng> {
         )?;
         self.engine.privileged_put_node(&new_grant)
     }
+}
+
+/// **R6-R1 fold-in (F-02) — segment-boundary-safe capability-scope
+/// attenuation-subset check.** Returns `true` iff `child_scope` is an
+/// attenuation (subset-or-equal) of `parent_scope`, i.e. `parent_scope`
+/// subsumes `child_scope`.
+///
+/// This MIRRORS the EXACT logic of the private
+/// `benten_id::ucan::caps_match_or_subsume` helper (the R15 authority-
+/// widening / F-01 segment-boundary fix). That helper is module-private
+/// to `benten-id` and is not callable cross-crate, so per the fix brief
+/// its logic is reproduced here. Both sites are pinned against regression
+/// (benten-id: `caps_match_or_subsume_rejects_sibling_prefix_confusion`;
+/// benten-engine: the `delegate_capability_rejects_authority_widening`
+/// pins) so the two copies cannot silently drift.
+///
+/// Engine scope strings are parsed into `(resource, ability)` via the
+/// SAME last-`:`-segment split the typed-CALL dispatch uses
+/// (`typed_call_dispatch.rs`). A scope that cannot be parsed into a
+/// non-empty `(resource, ability)` pair FAILS CLOSED (never subsumes)
+/// unless it is byte-identical to the parent (the identity case) — a
+/// fail-closed posture never admits a widening.
+///
+/// The `/`- or `:`-segment-boundary guard is the load-bearing defense: a
+/// bare `starts_with` would widen authority across a segment boundary, so
+/// `/zone/posts` subsumes `/zone/posts/foo` and `/zone/posts:read` (true
+/// sub-paths) but NEVER the sibling `/zone/posts-secret` nor `/zone/postsX`.
+///
+/// (Constant-time equality is a `benten-id`-internal uniformity commitment
+/// scoped to the *non-secret public* cap schema; this mirror uses plain
+/// equality, matching the helper's own documented rationale that the
+/// prefix-shape test is variable-time and leaks no secret because
+/// `resource` / `ability` are public schema.)
+fn scope_subsumes(parent_scope: &str, child_scope: &str) -> bool {
+    // Identity — covers byte-identical scopes (including any abilityless
+    // forms the parse below would otherwise reject).
+    if parent_scope == child_scope {
+        return true;
+    }
+    let (Some((parent_res, parent_ab)), Some((child_res, child_ab))) =
+        (parent_scope.rsplit_once(':'), child_scope.rsplit_once(':'))
+    else {
+        // Not a parseable `<resource>:<ability>` pair on one side and not
+        // byte-identical → cannot verify a subset relation → fail-closed.
+        return false;
+    };
+    if parent_res.is_empty() || parent_ab.is_empty() || child_res.is_empty() || child_ab.is_empty()
+    {
+        return false;
+    }
+    let parent_res_b = parent_res.as_bytes();
+    let child_res_b = child_res.as_bytes();
+    // Exact match.
+    if parent_res == child_res && parent_ab == child_ab {
+        return true;
+    }
+    // Wildcard ability.
+    if parent_ab == "*" && parent_res == child_res {
+        return true;
+    }
+    // Path-prefix resource + matching/wildcard ability, with the
+    // segment-boundary guard (F-01 / R15): parent.resource NON-EMPTY,
+    // child.resource a STRICT extension, and the byte immediately after
+    // the matched prefix a `/` or `:` segment boundary.
+    let ability_ok = parent_ab == child_ab || parent_ab == "*";
+    if !parent_res_b.is_empty()
+        && child_res_b.len() > parent_res_b.len()
+        && child_res_b.starts_with(parent_res_b)
+        && matches!(child_res_b[parent_res_b.len()], b'/' | b':')
+        && ability_ok
+    {
+        return true;
+    }
+    false
 }
 
 impl Engine {
