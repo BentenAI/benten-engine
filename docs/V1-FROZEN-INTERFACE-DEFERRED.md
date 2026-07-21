@@ -1731,7 +1731,7 @@ Row D-15's audit-readiness concern.
 
 ### Row D-41 — C-04: `ExecuteWorkflow.input_node_cids` bound into no signed/AEAD surface (input-READ-scope binding → v1-GM)
 
-- **Observation (NAMED, not fixed this round):** `crates/benten-engine/src/layer_d/remote_permission.rs::ExecuteWorkflow` carries `input_node_cids: Vec<[u8; 32]>` but `constraint_aad()` binds only the frozen 3-field tuple `(executor_did, max_decrypt_count, result_recipient_pubkey)` — the workflow input READ-scope is NOT cryptographically bound at v1-beta. No live exploit (runtime ExecuteWorkflow enforcement is post-v1-beta per NQ-T3; the variant is reserved / typed-rejected at the dispatch boundary). See `docs/THREAT-MODEL.md` §4 NQ-T3-adjacent note.
+- **Observation (NAMED, not fixed this round):** `crates/benten-engine/src/layer_d/remote_permission.rs::ExecuteWorkflow` carries `input_node_cids: Vec<[u8; 32]>` but `constraint_aad()` binds only the frozen 3-field tuple `(executor_did, max_decrypt_count, result_recipient_pubkey)` — the workflow input READ-scope is NOT cryptographically bound at v1-beta. No live exploit (runtime ExecuteWorkflow enforcement is post-v1-beta per NQ-T3; the `ExecuteWorkflow` seal/open path is **unwired at v1-beta** — `exec_workflow_seal` / `exec_workflow_open` have **zero production callers**, and the `0x6320..=0x632F` band-dispatch `dispatch_remote_permission_codepoint` **accepts** the in-band wire shape for forward-compat but routes nothing to an executor, so there is no executable path; out-of-band integers typed-reject fail-closed). See `docs/THREAT-MODEL.md` §4 NQ-T3-adjacent note.
 - **Destination:** input-READ-scope AAD/signature binding → **v1-GM**, co-designed with the NQ-T3 runtime no-egress enforcement it travels with. Freezing the binding shape now is premature.
 
 ### Row D-42 — C-07: `u16` Layer-C sender-lp asymmetry freeze-note
@@ -3005,10 +3005,13 @@ did not resolve unilaterally.
   `benten-membership-set/aad.rs`, `benten-engine/layer_d/*.rs` as in-scope for the
   consolidated LE-survivor scan (all BE today; golden pins catch pinned fields).
 - **O-06 — `docs/CRYPTO-CODEPOINTS.md` RESERVED-table qualify the RemotePermission
-  band.** The RESERVED table lists `0x6320..0x632F RemotePermission — RESERVED`,
-  but §4.0 marks PermissionRequest/PermissionGrant LIVE + only ExecuteWorkflow
-  reserved-typed-reject. Qualify the RESERVED-table row to name only the
-  ExecuteWorkflow slot.
+  band (ADDRESSED at R6-final F-05).** The RESERVED table previously listed
+  `0x6320..0x632F RemotePermission — RESERVED`, but §4.0 marks
+  PermissionRequest/PermissionGrant LIVE + `ExecuteWorkflow` carried-but-unwired
+  (band-dispatch accepts the in-band shape; `exec_workflow_seal`/`exec_workflow_open`
+  have zero production callers → nothing routes to an executor, so it is NOT a
+  typed-reject; out-of-band integers do typed-reject). The RESERVED-table row was
+  qualified to name only the `ExecuteWorkflow` slot with that honest state.
 - **O-08 — `docs/INVARIANT-COVERAGE.md` widen the Inv-20 carve-out.** Inv-20 sits
   in AS-BUILT+ENFORCED with only the RBAC admin-op carve-out, but clauses
   a/b/e/g/h (K_Set/K(N)/gossip keying-glue; `promote_tier` returns

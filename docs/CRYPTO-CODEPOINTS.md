@@ -57,7 +57,7 @@ This is the NQ-A1 conservative-fallback policy:
 | `0x647c`         | Pure-PQ ML-KEM-768-only swap-matrix arm | RESERVED (audit-gated) |
 | `0x0003`         | NF-1 ML-DSA-65⊕SLH-DSA PQ⊕PQ signature | RESERVED |
 | `0x0000`         | No-encryption (plaintext partition) | RESERVED |
-| `0x6320..0x632F` | RemotePermission band (incl. `ExecuteWorkflow` reserve) | RESERVED |
+| `0x6320..0x632F` — `ExecuteWorkflow` slot only | RemotePermission `ExecuteWorkflow` reserve (the band's `PermissionRequest`/`PermissionGrant` slots are **LIVE** / **FREEZE** — see the wire table below) | CARRIED-BUT-UNWIRED at v1-beta (band-dispatch `dispatch_remote_permission_codepoint` **accepts** the in-band wire shape; `exec_workflow_seal`/`exec_workflow_open` have **zero production callers** → nothing routes to an executor — NOT a typed-reject; out-of-band integers do typed-reject; real wiring lands in Composing) |
 | `0x6620`         | `SubsetRef` federation reserve (`MEMBERSHIP_SET_RESERVED_0X6620`) | RESERVED |
 | `0x6380..0x638F` | MLS-Application FS-future bracket (`MLS_APPLICATION_BASE`; NOT MembershipSet) | RESERVED |
 | `0x6390..0x639F` | MLS-Welcome FS-future bracket (`MLS_WELCOME_BASE`; NOT Sealed-Sender) | RESERVED |
@@ -271,7 +271,7 @@ symbol; a prose-only mention does not count):
 | `0x6610` | `MEMBERSHIP_SET_GROUP_MULTI_STANZA` | MembershipSet band | **FREEZE** (group K_Set multi-stanza; R4.6-corrected value) |
 | `0x6520` | `LAYER_C_DROP_MULTI_RECIPIENT` | Layer-C drop / recipient band | **FREEZE** (R0.7-blinded Layer-C group multi-stanza; NOT a MembershipSet) |
 | `0x6310..0x631F` | `DEVICE_LINK_BAND_BASE`/`DEVICE_LINK_BAND_END` | Layer-D DeviceLink (Signal-Provisioning) band | **FREEZE** (R0.7 §4.1; out-of-band integers typed-reject fail-closed) |
-| `0x6320..0x632F` | `REMOTE_PERMISSION_BAND_BASE`/`REMOTE_PERMISSION_BAND_END` | Layer-D RemotePermission band (incl. `ExecuteWorkflow` reserve) | **FREEZE** (R0.7 §4.1 band base; out-of-band integers typed-reject fail-closed; per-slot: `PermissionRequest`/`PermissionGrant` LIVE, `ExecuteWorkflow` reserved-typed-reject at v1-beta) |
+| `0x6320..0x632F` | `REMOTE_PERMISSION_BAND_BASE`/`REMOTE_PERMISSION_BAND_END` | Layer-D RemotePermission band (incl. `ExecuteWorkflow` reserve) | **FREEZE** (R0.7 §4.1 band base; out-of-band integers typed-reject fail-closed; per-slot: `PermissionRequest`/`PermissionGrant` LIVE, `ExecuteWorkflow` carried-but-unwired at v1-beta — band-dispatch accepts the in-band shape, `exec_workflow_seal`/`exec_workflow_open` have zero production callers so nothing routes to an executor (NOT a typed-reject); out-of-band integers typed-reject; real wiring lands in Composing) |
 | `0x6700..0x67FF` | `LIFECYCLE_BAND_BASE` | Lifecycle / revocation band | CODEPOINT-RESERVE (band base registered; per-slot allocation at Composing) |
 | `0xFE00..0xFFFE` | `EXPERIMENTAL_BASE` | Experimental range (out-of-band; NOT a suite selector) | CODEPOINT-RESERVE (deliberately OUTSIDE the `0x6100..0x6FFF` envelope band; value-pinned in `f_cp_codepoint_registry_dispatch.rs`) |
 | `0xFFFF` | `EXTENDED_CODEPOINT_ESCAPE` | Extended-codepoint escape (out-of-band) | CODEPOINT-RESERVE (deliberately OUTSIDE the envelope band; also the IANA AEAD Export-only ID per §above; value-pinned in `f_cp_codepoint_registry_dispatch.rs`) |

@@ -151,7 +151,6 @@ pub fn benten_membership_set::audit::AuditChain::append_op(&mut self, &[u8; 32],
 pub fn benten_membership_set::audit::AuditChain::new(&[u8; 32]) -> Self
 pub fn benten_membership_set::audit::AuditChain::replay_identical_op_emitted_phantom_event(&mut self, &[u8; 32], benten_membership_set::audit::AdminOp) -> bool
 pub fn benten_membership_set::audit::AuditChain::seq(&self) -> u64
-pub fn benten_membership_set::audit::AuditChain::verify_with_tampered_node_at(&self, u64) -> core::result::Result<(), benten_membership_set::audit::AuditChainError>
 impl core::clone::Clone for benten_membership_set::audit::AuditChain
 pub fn benten_membership_set::audit::AuditChain::clone(&self) -> benten_membership_set::audit::AuditChain
 impl core::fmt::Debug for benten_membership_set::audit::AuditChain
@@ -357,7 +356,6 @@ pub benten_membership_set::governance::GovernanceConfig::tier: benten_membership
 impl benten_membership_set::governance::GovernanceConfig
 pub fn benten_membership_set::governance::GovernanceConfig::new_signed(benten_membership_set::governance::GovernanceTier, &str) -> Self
 pub fn benten_membership_set::governance::GovernanceConfig::signature_verifies(&self) -> bool
-pub fn benten_membership_set::governance::GovernanceConfig::signature_verifies_after_tier_tamper(&self) -> bool
 impl core::clone::Clone for benten_membership_set::governance::GovernanceConfig
 pub fn benten_membership_set::governance::GovernanceConfig::clone(&self) -> benten_membership_set::governance::GovernanceConfig
 impl core::marker::Freeze for benten_membership_set::governance::GovernanceConfig
@@ -809,8 +807,6 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::role::Ro
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::role::RoleId
 pub fn benten_membership_set::role::ability_template(benten_membership_set::role::RoleId) -> alloc::collections::btree::set::BTreeSet<&'static str>
 pub fn benten_membership_set::role::derive_member_content_key(benten_membership_set::role::RoleId, &[u8]) -> core::option::Option<alloc::vec::Vec<u8>>
-pub mod benten_membership_set::scaffold
-pub const benten_membership_set::scaffold::CRATE_NAME: &str
 pub mod benten_membership_set::set
 pub mod benten_membership_set::set::crdt
 pub fn benten_membership_set::set::crdt::admitted_at_hlc_lww_keeps_a(benten_core::hlc::BentenHlc, benten_core::hlc::BentenHlc) -> bool

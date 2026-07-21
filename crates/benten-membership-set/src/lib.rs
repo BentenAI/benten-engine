@@ -128,6 +128,12 @@ pub use crate::set::{MembershipSet, wire_cost_ceiling};
 /// workspace graph (the F-CRATE-2 "crate exists" pin floor). Retained from the
 /// R3-W4 scaffold; the authoritative codepoint constants now live in
 /// [`codepoints`].
+///
+/// **R6-final F-04: dead R3-W4 scaffold — gated off the frozen public surface**
+/// (zero code consumers; the F-CRATE-2 boundary pin is a filesystem/grep
+/// assertion, not a `scaffold::CRATE_NAME` consumer). Not frozen into the new
+/// 15th crate's permanent v1 API.
+#[cfg(any(test, feature = "testing"))]
 pub mod scaffold {
     /// The crate's own name, asserted by the F-CRATE-2 boundary pin so the
     /// 15th-crate skeleton is observable.

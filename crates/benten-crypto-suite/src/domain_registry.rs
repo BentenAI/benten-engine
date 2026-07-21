@@ -258,6 +258,12 @@ pub fn registered_domain_tags() -> Vec<&'static [u8]> {
         DAK_HKDF_INFO_TAG,
         // Deterministic recipient-seed expansion label:
         RECIPIENT_SEED_LABEL,
+        // Structural-KDF role-separation HKDF info-tag prefixes (R6-final F-06;
+        // home: `crate::structural_kdf`). Both key SECRET material (K_root /
+        // K(N)); prefix-free against the corpus (neither starts with `benten`
+        // nor is a prefix of the other), so enrolling them is zero-wire-byte.
+        crate::structural_kdf::STRUCTURAL_KDF_ROOT_LABEL,
+        crate::structural_kdf::STRUCTURAL_KDF_STEP_LABEL,
     ]
 }
 
@@ -331,7 +337,7 @@ mod tests {
         assert!(registered_domain_tags().contains(&PROVISIONING_DOMAIN));
     }
 
-    /// The widened corpus enumerates EXACTLY the 19 cross-surface tags the
+    /// The widened corpus enumerates EXACTLY the 21 cross-surface tags the
     /// SECURITY-PROOFS §4.1 / THREAT-MODEL §5 scope names. Locking the count
     /// makes the prefix-free invariant forward-fire on ANY tag change: adding a
     /// tag without updating this count fails the build (forcing a deliberate
@@ -343,7 +349,7 @@ mod tests {
         let tags = registered_domain_tags();
         assert_eq!(
             tags.len(),
-            19,
+            21,
             "registered_domain_tags() count changed — re-confirm the new/removed tag is \
              prefix-free and update SECURITY-PROOFS §4.1 / THREAT-MODEL §5 scope"
         );
@@ -375,6 +381,9 @@ mod tests {
             DAK_HKDF_INFO_TAG,
             // Deterministic recipient-seed expansion label:
             RECIPIENT_SEED_LABEL,
+            // Structural-KDF role-separation HKDF info-tag prefixes (R6-final F-06):
+            crate::structural_kdf::STRUCTURAL_KDF_ROOT_LABEL,
+            crate::structural_kdf::STRUCTURAL_KDF_STEP_LABEL,
         ] {
             assert!(
                 tags.contains(&expected),

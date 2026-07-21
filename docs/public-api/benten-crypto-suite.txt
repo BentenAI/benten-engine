@@ -1269,21 +1269,6 @@ impl core::marker::Unpin for benten_crypto_suite::vault::UnlockedKeyMaterial
 impl core::marker::UnsafeUnpin for benten_crypto_suite::vault::UnlockedKeyMaterial
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::vault::UnlockedKeyMaterial
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::UnlockedKeyMaterial
-pub struct benten_crypto_suite::vault::VaultEngine
-impl benten_crypto_suite::vault::VaultEngine
-pub fn benten_crypto_suite::vault::VaultEngine::encrypt_node(&self, &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_crypto_suite::vault::VaultError>
-pub fn benten_crypto_suite::vault::VaultEngine::new_locked() -> Self
-pub fn benten_crypto_suite::vault::VaultEngine::unlock(&mut self, &benten_crypto_suite::vault::VaultPayload)
-pub fn benten_crypto_suite::vault::VaultEngine::unlocked_handle(&self) -> core::option::Option<&benten_crypto_suite::vault::UnlockedKeyMaterial>
-impl core::default::Default for benten_crypto_suite::vault::VaultEngine
-pub fn benten_crypto_suite::vault::VaultEngine::default() -> Self
-impl core::marker::Freeze for benten_crypto_suite::vault::VaultEngine
-impl core::marker::Send for benten_crypto_suite::vault::VaultEngine
-impl core::marker::Sync for benten_crypto_suite::vault::VaultEngine
-impl core::marker::Unpin for benten_crypto_suite::vault::VaultEngine
-impl core::marker::UnsafeUnpin for benten_crypto_suite::vault::VaultEngine
-impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::vault::VaultEngine
-impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::VaultEngine
 pub struct benten_crypto_suite::vault::VaultPayload
 pub benten_crypto_suite::vault::VaultPayload::k_principal: [u8; 32]
 pub benten_crypto_suite::vault::VaultPayload::user_did_creation_time: u64
@@ -2036,21 +2021,6 @@ impl core::marker::Unpin for benten_crypto_suite::vault::UnlockedKeyMaterial
 impl core::marker::UnsafeUnpin for benten_crypto_suite::vault::UnlockedKeyMaterial
 impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::vault::UnlockedKeyMaterial
 impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::UnlockedKeyMaterial
-pub struct benten_crypto_suite::VaultEngine
-impl benten_crypto_suite::vault::VaultEngine
-pub fn benten_crypto_suite::vault::VaultEngine::encrypt_node(&self, &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, benten_crypto_suite::vault::VaultError>
-pub fn benten_crypto_suite::vault::VaultEngine::new_locked() -> Self
-pub fn benten_crypto_suite::vault::VaultEngine::unlock(&mut self, &benten_crypto_suite::vault::VaultPayload)
-pub fn benten_crypto_suite::vault::VaultEngine::unlocked_handle(&self) -> core::option::Option<&benten_crypto_suite::vault::UnlockedKeyMaterial>
-impl core::default::Default for benten_crypto_suite::vault::VaultEngine
-pub fn benten_crypto_suite::vault::VaultEngine::default() -> Self
-impl core::marker::Freeze for benten_crypto_suite::vault::VaultEngine
-impl core::marker::Send for benten_crypto_suite::vault::VaultEngine
-impl core::marker::Sync for benten_crypto_suite::vault::VaultEngine
-impl core::marker::Unpin for benten_crypto_suite::vault::VaultEngine
-impl core::marker::UnsafeUnpin for benten_crypto_suite::vault::VaultEngine
-impl core::panic::unwind_safe::RefUnwindSafe for benten_crypto_suite::vault::VaultEngine
-impl core::panic::unwind_safe::UnwindSafe for benten_crypto_suite::vault::VaultEngine
 pub struct benten_crypto_suite::VaultPayload
 pub benten_crypto_suite::VaultPayload::k_principal: [u8; 32]
 pub benten_crypto_suite::VaultPayload::user_did_creation_time: u64

@@ -42,6 +42,19 @@ use hkdf::Hkdf;
 use sha2::Sha256;
 use zeroize::Zeroize;
 
+/// The `derive_root` HKDF info-tag cross-role domain separator prefix
+/// (`"root:codepoint:" || codepoint_be || root_cid`). Enrolled in
+/// `crate::domain_registry::registered_domain_tags()` (R6-final F-06) so the
+/// prefix-free forward-fire invariant covers this secret-keying surface. Crate-
+/// visible (not part of the frozen public API).
+pub(crate) const STRUCTURAL_KDF_ROOT_LABEL: &[u8] = b"root:codepoint:";
+
+/// The `derive_step` HKDF info-tag cross-role domain separator prefix
+/// (`"step" || edge_label || node_cid`). Enrolled in
+/// `crate::domain_registry::registered_domain_tags()` (R6-final F-06). Crate-
+/// visible (not part of the frozen public API).
+pub(crate) const STRUCTURAL_KDF_STEP_LABEL: &[u8] = b"step";
+
 /// Structural-KDF key material (32-byte HKDF-SHA256 output) — the
 /// derive_step / derive_root output type. Zeroizes on drop.
 ///
@@ -157,8 +170,10 @@ pub fn derive_root(
     // Wave-0). The structural-KDF info-tag is an internal keying path; the
     // BE migration keeps it consistent with every other wire/AAD integer.
     let codepoint_bytes = cipher_suite_codepoint.to_be_bytes();
-    let mut info = Vec::with_capacity(15 + codepoint_bytes.len() + root_cid.len());
-    info.extend_from_slice(b"root:codepoint:");
+    let mut info = Vec::with_capacity(
+        STRUCTURAL_KDF_ROOT_LABEL.len() + codepoint_bytes.len() + root_cid.len(),
+    );
+    info.extend_from_slice(STRUCTURAL_KDF_ROOT_LABEL);
     info.extend_from_slice(&codepoint_bytes);
     info.extend_from_slice(root_cid);
     hkdf_sha256_32(&k_principal.0, &info)
@@ -191,8 +206,9 @@ pub fn derive_step(
     node_cid: &[u8],
 ) -> StructuralKdfKey {
     // info = "step" || edge_label || node_cid (the cross-role prefix).
-    let mut info = Vec::with_capacity(4 + edge_label.len() + node_cid.len());
-    info.extend_from_slice(b"step");
+    let mut info =
+        Vec::with_capacity(STRUCTURAL_KDF_STEP_LABEL.len() + edge_label.len() + node_cid.len());
+    info.extend_from_slice(STRUCTURAL_KDF_STEP_LABEL);
     info.extend_from_slice(edge_label);
     info.extend_from_slice(node_cid);
     hkdf_sha256_32(&predecessor.0, &info)

@@ -671,16 +671,27 @@ impl Drop for UnlockedKeyMaterial {
 
 /// A minimal lock-state engine modelling the production vault gate (F-VA-5).
 /// Pre-unlock crypto ops are typed-rejected with [`VaultError::EngineLocked`].
+///
+/// **R6-final F-02: test/lock-state harness — gated off the frozen public
+/// surface.** `encrypt_node` is a repeating-key XOR *stand-in* (it demonstrates
+/// the lock-state contract, NOT a real cipher — the production path routes the
+/// structural-KDF + AEAD). It has zero production callers and is consumed only
+/// by the `f_va_5` lock-state pin, so it is gated behind
+/// `#[cfg(any(test, feature = "testing"))]` rather than frozen into the v1
+/// public API where a naive consumer could mistake the XOR output for a seal.
+#[cfg(any(test, feature = "testing"))]
 pub struct VaultEngine {
     unlocked: Option<UnlockedKeyMaterial>,
 }
 
+#[cfg(any(test, feature = "testing"))]
 impl Default for VaultEngine {
     fn default() -> Self {
         Self::new_locked()
     }
 }
 
+#[cfg(any(test, feature = "testing"))]
 impl VaultEngine {
     /// A fresh locked engine (no hydrated handle).
     #[must_use]
@@ -696,9 +707,14 @@ impl VaultEngine {
         ));
     }
 
-    /// A lock-gated production crypto op. Pre-unlock returns
-    /// [`VaultError::EngineLocked`] (fail-CLOSED; never a silent plaintext
-    /// pass-through). Post-unlock seals the plaintext under K_principal.
+    /// A lock-gated op that exercises the lock-state contract. Pre-unlock
+    /// returns [`VaultError::EngineLocked`] (fail-CLOSED; never a silent
+    /// plaintext pass-through). Post-unlock it applies a **repeating-key XOR
+    /// stand-in** over `K_principal` — NOT a real seal (no nonce, no MAC,
+    /// keystream reuse). This method exists ONLY to prove the lock-state gate;
+    /// it is `#[cfg(any(test, feature = "testing"))]` and MUST NOT be used to
+    /// produce real ciphertext. The production seal routes the structural-KDF +
+    /// AEAD via `cipher_suite` — never this fn.
     ///
     /// # Errors
     ///
@@ -706,11 +722,11 @@ impl VaultEngine {
     pub fn encrypt_node(&self, plaintext: &[u8]) -> Result<Vec<u8>, VaultError> {
         match &self.unlocked {
             Some(km) => {
-                // A real keyed transform (XOR keystream stand-in over
-                // K_principal; the observable consequence is ciphertext ≠
-                // plaintext + a non-empty keyed output). The production path
-                // routes the structural-KDF + AEAD; this gate's contract is
-                // the lock-state, not the cipher.
+                // Repeating-key XOR STAND-IN over K_principal (NOT a cipher):
+                // the observable consequence is ciphertext ≠ plaintext + a
+                // non-empty keyed output. The production path routes the
+                // structural-KDF + AEAD; this gate's contract is the
+                // lock-state, not the cipher.
                 let k = km.expose_k_principal();
                 let out: Vec<u8> = plaintext
                     .iter()
@@ -1055,6 +1071,16 @@ mod tests {
             DAK_HKDF_INFO_TAG,
             reg::DAK_HKDF_INFO_TAG,
             "DAK_HKDF_INFO_TAG drifted from the central domain_registry mirror"
+        );
+        // R6-final F-07: ABSOLUTE freeze pin (symmetric to the
+        // `DAK_HKDF_INFO_TAG` absolute pin in `f_va_2_argon2id_dak_derivation`).
+        // The mirror-equality asserts above move together under a coordinated
+        // rename of BOTH mirrors, leaving every round-trip / mirror test green
+        // while silently stranding every previously-sealed v1-beta vault (the
+        // AAD input changes). Pin the exact frozen bytes so a rename fails loud.
+        assert_eq!(
+            VAULT_AAD_DOMAIN, b"benten-vault:",
+            "the frozen vault AEAD AAD domain is exactly `benten-vault:`"
         );
     }
 }

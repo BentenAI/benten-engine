@@ -386,12 +386,12 @@ pub enum AuthorizationGrantError {
 /// under v3 binding-message construction (the domain-separation tag is
 /// the very first segment); this is the intended behavior at v1-beta
 /// freeze (no v2-signed grants outside test fixtures exist yet on the
-/// wire). The 6th segment is encoded as `len_u32_le || pubkey_bytes`
+/// wire). The 6th segment is encoded as `len_u32_be || pubkey_bytes`
 /// so `audience_pubkey: None` (legacy wave-3b envelope fixtures) and
 /// `audience_pubkey: Some(empty)` are unambiguously distinguished:
-/// `None` encodes as `0_u32_le` (zero-length payload); `Some(bytes)`
-/// encodes as `len_u32_le || bytes`.
-const BINDING_SIG_DOMAIN: &[u8] = b"benten/g-core-3b/authorization-grant/v4";
+/// `None` encodes as `0_u32_be` (zero-length payload); `Some(bytes)`
+/// encodes as `len_u32_be || bytes`.
+const BINDING_SIG_DOMAIN: &[u8] = b"benten/g-core-3b/authorization-grant/v5";
 
 impl AuthorizationGrant {
     /// Compute the canonical message the issuer signs / the validator
@@ -445,19 +445,24 @@ impl AuthorizationGrant {
     /// flips the message bytes and `verify_binding` returns
     /// `BindingMismatch`.
     ///
-    /// The scope segment is encoded as `len_u32_le || cbor_bytes` so
+    /// The scope segment is encoded as `len_u32_be || cbor_bytes` so
     /// that `scope: None` (no-scope grants, e.g. wave-3b envelope
     /// fixtures) and `scope: Some(empty)` are unambiguously
-    /// distinguished: `None` encodes as `0_u32_le` (zero-length
-    /// payload); `Some(scope)` encodes as `len_u32_le || cbor(scope)`.
+    /// distinguished: `None` encodes as `0_u32_be` (zero-length
+    /// payload); `Some(scope)` encodes as `len_u32_be || cbor(scope)`.
     /// The audience_pubkey segment uses the same length-prefix
-    /// discipline (`len_u32_le || pubkey_bytes`) for the same
+    /// discipline (`len_u32_be || pubkey_bytes`) for the same
     /// None-vs-Some(empty) disambiguation. The `issuer_verifying_key`
     /// segment is fixed-length Ed25519 (32 bytes — `[u8; 32]` typed
-    /// at construction) so no length-prefix discipline is necessary;
-    /// the BINDING_SIG_DOMAIN v3→v4 bump preserves domain-separation
-    /// for any pre-self-bind v3 fixtures (re-verify under v4
-    /// construction observably fails the BindingMismatch arm).
+    /// at construction) so no length-prefix discipline is necessary.
+    ///
+    /// **R6-final F-01 (M-19 BE migration):** the u32 length prefixes are
+    /// BIG-endian (network byte order), migrated from little-endian to
+    /// satisfy M-19 "no `to_le_bytes` on any wire/AAD/keying path." The
+    /// `BINDING_SIG_DOMAIN` v4→v5 bump domain-separates the encoding
+    /// change (a v4-signed grant re-verified under v5 construction
+    /// observably fails the `BindingMismatch` arm); no v4-signed grants
+    /// exist outside test fixtures at the v1-beta freeze.
     fn binding_message(
         ucan: &UcanEnvelope,
         key_material: &GrantKeyMaterial,
@@ -501,9 +506,12 @@ impl AuthorizationGrant {
         msg.extend_from_slice(&ucan_bytes);
         msg.extend_from_slice(&km_bytes);
         msg.extend_from_slice(audience.as_bytes());
-        msg.extend_from_slice(&scope_len.to_le_bytes());
+        // R6-final F-01: length prefixes are BIG-endian (M-19: BE network-byte-
+        // order on every wire/AAD/keying integer). Migrated from LE; the
+        // BINDING_SIG_DOMAIN v4→v5 bump domain-separates the encoding change.
+        msg.extend_from_slice(&scope_len.to_be_bytes());
         msg.extend_from_slice(&scope_bytes);
-        msg.extend_from_slice(&audience_pk_len.to_le_bytes());
+        msg.extend_from_slice(&audience_pk_len.to_be_bytes());
         msg.extend_from_slice(audience_pk_bytes);
         // R6 R2 batch-A Item 3 — 7th segment: issuer_verifying_key
         // (self-bind invariant). Fixed 32-byte Ed25519 vk; no length

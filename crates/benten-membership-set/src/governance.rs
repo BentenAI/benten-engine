@@ -63,9 +63,9 @@ impl GovernanceTier {
 /// the Garden/Grove labelling as Node CONTENT. NEVER a field inside the sealed
 /// [`MembershipSetPolicy`]. The verifying key + the signed inputs are retained
 /// so [`GovernanceConfig::signature_verifies`] and
-/// [`GovernanceConfig::signature_verifies_after_tier_tamper`] can re-verify the
-/// detached signature against the canonical bytes (and against a tampered
-/// variant of them).
+/// `signature_verifies_after_tier_tamper` (a `#[cfg(any(test, feature =
+/// "testing"))]` tamper-evidence helper) can re-verify the detached signature
+/// against the canonical bytes (and against a tampered variant of them).
 #[derive(Clone)]
 pub struct GovernanceConfig {
     /// The governance tier (a signed field).
@@ -119,6 +119,10 @@ impl GovernanceConfig {
     /// canonical bytes (the `tier` byte flipped). Returns `false` because the
     /// signature was computed over the untampered bytes — tamper-evidence: a
     /// signed governance config cannot drift post-sign.
+    ///
+    /// **R6-final F-04: test-modelling helper — gated off the frozen public
+    /// surface** (zero production callers; consumed only by the `f_gov_1` pin).
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn signature_verifies_after_tier_tamper(&self) -> bool {
         let suite = SignatureSuite::from_config(SuiteConfig::v1_default());

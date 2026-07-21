@@ -183,6 +183,11 @@ pub use crate::swap_matrix::{
 pub use crate::swap_matrix::{KemKatVector, PureKemDec, SignatureKatVector};
 pub use crate::varsig::{UcanVarsigV1Header, VarsigError};
 pub use crate::vault::{
-    Argon2idParams, DAK_HKDF_INFO_TAG, OWASP_DEFAULT, UnlockedKeyMaterial, VaultEngine, VaultError,
+    Argon2idParams, DAK_HKDF_INFO_TAG, OWASP_DEFAULT, UnlockedKeyMaterial, VaultError,
     VaultPayload, derive_dak,
 };
+// R6-final F-02: `VaultEngine` is a test/lock-state harness (its `encrypt_node`
+// is a repeating-key XOR stand-in, not a real seal; zero production callers) —
+// gated off the frozen public surface, consumed only by the `f_va_5` pin.
+#[cfg(any(test, feature = "testing"))]
+pub use crate::vault::VaultEngine;

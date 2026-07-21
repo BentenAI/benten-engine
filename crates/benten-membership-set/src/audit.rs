@@ -253,6 +253,12 @@ impl AuditChain {
     /// exact mid-chain sequence for an in-range `seq`; returns
     /// [`AuditChainError::NonMonotonicAppend`] for `seq == 0` or `seq` beyond
     /// the chain.
+    ///
+    /// **R6-final F-04: return-shape modelling helper — gated off the frozen
+    /// public surface** (zero production callers; the LIVE tamper enforcement is
+    /// `Engine::audit_sequence` + `Node::load_verified`; consumed only by the
+    /// `f_audit_2` pin).
+    #[cfg(any(test, feature = "testing"))]
     pub fn verify_with_tampered_node_at(&self, seq: u64) -> Result<(), AuditChainError> {
         // A `seq` of 0 is the Anchor (no Version Node to tamper). A `seq`
         // beyond the chain length cannot be tampered either. Both are
