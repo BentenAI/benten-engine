@@ -82,7 +82,6 @@ fn membership_set_error_audit_arm_coverage_non_exhaustive() {
             MembershipSetError::MemberRefKindMismatch => "MemberRefKindMismatch",
             MembershipSetError::WireCostCeilingExceeded => "WireCostCeilingExceeded",
             MembershipSetError::AuthorityMissingPubkey => "AuthorityMissingPubkey",
-            MembershipSetError::ReserveTypedReject => "ReserveTypedReject",
             MembershipSetError::RoleStaleAtVerify => "RoleStaleAtVerify",
             _ => "Unknown",
         }

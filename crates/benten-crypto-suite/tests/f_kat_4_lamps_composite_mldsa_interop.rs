@@ -23,8 +23,14 @@
 //! INBOUND FIXTURE" section below; the earlier synthesized-witness scaffold
 //! against the `tf4 load_fips_204_kat_vector_for_test` precedent has been
 //! superseded):
-//!   1. INBOUND ×3: Benten's verifier accepts a `id-MLDSA65-Ed25519-SHA512`
-//!      signature produced by each of {BouncyCastle, OpenSSL-3.5, OpenPGP-PQC};
+//!   1. INBOUND (honest split): Benten's LIVE verifier accepts the ONE REAL
+//!      `id-MLDSA65-Ed25519-SHA512` spec vector — the IETF LAMPS WG spec-KAT
+//!      (`f0627ab3…`), driven through the production verifier. The
+//!      {BouncyCastle, OpenSSL-3.5, OpenPGP-PQC} ecosystem fixtures are
+//!      deterministically SYNTHESIZED shape/OID-binding fixtures
+//!      (`VERIFY_WIRED = false`) — NOT driven through the crypto path.
+//!      Live-binary cross-ecosystem interop against those three is the
+//!      C-GM-AUDIT deliverable (F-12; `docs/V1-FROZEN-INTERFACE.md` item 14);
 //!   2. OUTBOUND shape: a Benten-produced sig carries the LAMPS composite shape
 //!      (Ed25519 half ‖ ML-DSA-65 half) bound to the OID `1.3.6.1.5.5.7.6.48`;
 //!   3. NEGATIVE: a signature presented under a MISMATCHED OID is rejected (the

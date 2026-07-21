@@ -619,11 +619,11 @@ A "yes, complete" answer locks the inventory; a "no, add X" answer adds the miss
 
 - **GCS-16 (R17 F-16) — `ENVELOPE_MAGIC` / `ENVELOPE_FORMAT_VERSION`
   dual-homed with NO cross-home byte-equality pin.** `ENVELOPE_MAGIC = 0xae`
-  is defined in BOTH `crates/benten-crypto-suite/src/envelope.rs:50` AND
-  `crates/benten-crypto-suite/src/aead.rs:64`; `ENVELOPE_FORMAT_VERSION` is
-  likewise multi-homed (`benten-drop/src/layer_c.rs:301` `= 2`,
-  `benten-crypto-suite/src/envelope.rs:43` `_V2 = 0x02`,
-  `benten-crypto-suite/src/aead.rs:60`). Each home is independently
+  is defined in BOTH `crates/benten-crypto-suite/src/envelope.rs` AND
+  `crates/benten-crypto-suite/src/aead.rs`; `ENVELOPE_FORMAT_VERSION` is
+  likewise multi-homed (`benten-drop/src/layer_c.rs` `= 2`,
+  `benten-crypto-suite/src/envelope.rs` `_V2 = 0x02`,
+  `benten-crypto-suite/src/aead.rs`). Each home is independently
   byte-correct at HEAD, but there is NO single cross-home byte-equality
   regression pin asserting the copies stay equal — a future edit to one home
   could silently diverge the magic/version byte across the envelope vs aead
@@ -635,15 +635,16 @@ A "yes, complete" answer locks the inventory; a "no, add X" answer adds the miss
 - **GCS-24 (R17 F-24; extends Row D-9; LC-COV-SENDERTRAILER-1 R18 extension) —
   item 27/§Row-D-9 missing bytes→struct decoder + by-band `sender_len`
   width-pins.** The Layer-C single-recipient plaintext-sender wire trailer
-  `sender_len u16 BE | sender_did` (`benten-drop/src/layer_c.rs:59`/`:452`/`:543`)
+  `sender_len u16 BE | sender_did` (`benten-drop/src/layer_c.rs`, the plaintext-sender encode path)
   is byte-pinned on the ENCODE side
   (`f_lc_09_plaintext_sender_len_is_u16_be_not_u32_frozen_golden`), but there
   is no round-tripping **bytes→struct DECODER** pinned for the trailer, and the
   u16 (not u32) `sender_len` width is asserted only via the encode golden.
   **The GROUP plaintext-sender AAD trailers are ALSO under-pinned by band:** the
   `0x6520` group trailer (`sender_len u16 BE | sender_did`,
-  `layer_c.rs:559-562`) and the `0x6610` MembershipSet group trailer
-  (`sender_len u32 BE | sender_did`, `layer_c.rs:2192-2195`) each need an
+  `layer_c.rs` `plaintext_aad_bytes`) and the `0x6610` MembershipSet group trailer
+  (`sender_len u32 BE | sender_did`, `layer_c.rs` `assemble_group_aad_local`;
+  line-cite resolve-by-grep per the F-04 R20 disclaimer above) each need an
   explicit golden byte-pin on their *plaintext-sender variant's* `sender_len`
   width (the DEFAULT Sealed-Sender path pins already exist; the non-default
   plaintext-sender trailer widths are only exercised structurally). **G-COMP-1
@@ -656,7 +657,7 @@ A "yes, complete" answer locks the inventory; a "no, add X" answer adds the miss
   the Row D-9 hex-byte-pin sweep.
 
 - **GCS-17 (R17 F-17) — `VaultError::WrongPassword` dead variant on the
-  frozen enum.** `crates/benten-crypto-suite/src/vault.rs:637` declares
+  frozen enum.** `crates/benten-crypto-suite/src/vault.rs` declares
   `VaultError::WrongPassword`, but at v1-beta the vault open path surfaces a
   wrong password as an AEAD-open failure (the AEAD tag check), not via this
   named variant — so the variant is currently unconstructed (dead). It is on

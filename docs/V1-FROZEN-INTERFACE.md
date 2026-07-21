@@ -12,9 +12,12 @@
 > >
 > > **⚑ R13 F-16 pre-tag-sweep line — §11 `#[non_exhaustive]` tally
 > > REFRESHED at F-22 (2026-07-03).** §11 (~L1055) now states the
-> > HEAD-verified count "**194 total `pub enum` (130 non_exhaustive) + 444
-> > total `pub struct` (53 non_exhaustive) = 183 of 638 pub types carry the
-> > attribute**", replacing the stale `158 / 148` snapshot. The refresh
+> > HEAD-verified count "**196 total `pub enum` (135 non_exhaustive) + 448
+> > total `pub struct` (53 non_exhaustive) = 188 of 644 pub types carry the
+> > attribute**" (R6-R1c re-count at HEAD `b86dec03` per F-03 — the F-22
+> > `194 / 130 / 444 / 53 / 183 / 638` snapshot drifted +2 `pub enum` /
+> > +5 ne-enum / +4 `pub struct` post-F-22; struct-ne holds at 53), itself
+> > replacing the older stale `158 / 148` snapshot. The refresh
 > > landed alongside the F-22 Row D-17 EXTENSION `#[non_exhaustive]`
 > > application (the same sweep that added ~55 attributes + regenerated the
 > > cargo-public-api baselines). Should further phase-close rounds mutate the
@@ -134,7 +137,7 @@ fail CI on a frozen-surface mutation:
 2. **TS-side public-API parity gate (#1204)** for `@benten/engine`.
    **LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 2 (commit `13322df4`).**
    Workflow at `.github/workflows/ts-public-api.yml`; baseline at
-   `packages/engine/etc/public-api.txt` (415 LOC; extract-from-.d.ts
+   `packages/engine/etc/public-api.txt` (417 LOC; extract-from-.d.ts
    structural diff covering all 15 `dist/**/*.d.ts` files — the recursive
    glob includes the publicly-exported `dist/internal/trace.d.ts` subpath,
    psf-2 R6-round-7). Migration to
@@ -154,14 +157,15 @@ fail CI on a frozen-surface mutation:
    post-freeze additions inherit the gate.
 5. **CATALOG_VARIANT_COUNT exhaustive-match dual-tripwire** at
    `crates/benten-errors/tests/stable_shape.rs::catalog_variant_count_matches_enum`.
-   **CATALOG_VARIANT_COUNT = 199 at HEAD `b93b2efc`** (192 at the
+   **CATALOG_VARIANT_COUNT = 201 at HEAD `b86dec03`** (192 at the
    G-CORE-9 build-out FREEZE milestone → 197 R6-R2-FP G-COMP-1 cohort 8
    → 198 `E_ROLE_STALE_AT_VERIFY` (F-full w-ms-canary) → 199
-   `E_KV_TARGET_NOT_IMMUTABLE` (F-full w-gov-audit; Inv-19)). Adding
-   or removing an `ErrorCode` variant without updating the list fails to
-   compile or fails the runtime length assertion. ⚠️ A parallel F-full
-   CODE wave may mint one more (F-01) → **200**; the strategy-C
-   integrator reconciles at integrate-time.
+   `E_KV_TARGET_NOT_IMMUTABLE` (F-full w-gov-audit; Inv-19) → 200
+   `E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH` → 201
+   `E_RECIPIENT_KEM_NOT_COMMITTED` (GAP-KDB Shape-B recipient-binding;
+   Inv-23)). Adding or removing an `ErrorCode` variant without updating
+   the list fails to compile or fails the runtime length assertion
+   (`stable_shape.rs` pins `CATALOG_VARIANT_COUNT == 201`).
 
 > **NEW pim-N candidate REJECTED at triage** (Planner-A's
 > per-`pub`-declaration `// FROZEN: re-open requires Ben sign-off`
@@ -839,6 +843,19 @@ each codepoint = SWAPPABLE within the framing):**
 - The independent audit DELIVERY date — that's a v1-GM gate
   (C-GM-AUDIT), not a v1-beta freeze item.
 
+**C-GM-AUDIT scope (F-12 — what the independent third-party audit covers,
+so the test-header deferrals back-reference a real destination, HARD-RULE
+clause-b bidirectionality):** (i) the pinned crypto-primitive versions on
+the hybrid trust path — `ml-dsa` (ML-DSA-65) + `libcrux-ml-kem` (ML-KEM-768,
+the pinned production impl) + the classical `ed25519-dalek` / `x25519-dalek`
+halves; (ii) the NIST FIPS-203/204 `.rsp` KAT conformance corpus (beyond the
+current libcrux↔RustCrypto mutual-agreement pin `f_kat_1` + the IETF LAMPS WG
+spec-KAT `f_kat_4`); (iii) live-binary cross-ecosystem LAMPS Composite interop
+{BouncyCastle / OpenSSL-3.5 / OpenPGP-PQC} (the `f_kat_4` INBOUND-live
+deferral); (iv) the 13 accepted-unaudited Cryspen/libcrux exemptions recorded
+in `supply-chain/exemptions.toml` (interim until certified). Cross-ref:
+`docs/SECURITY-POSTURE.md` #30 + the `f_kat_1` / `f_kat_4` test headers.
+
 **Verification mechanism:**
 - `cargo-public-api` baselines for `benten-crypto-suite` + `benten-caps`
   + `benten-graph` lock the codepoint-typed constructors.
@@ -1034,7 +1051,7 @@ tool-generated, never hand-authored) and committed as the canonical v1 baseline
 2026-06-05); the prior G20-A3 11-LOC placeholder stubs are gone. Per
 L12-R3-MIN-1 closure the gate is now structurally REAL (cf. item 1 "drift
 gate is now REAL,
-not a placebo"). Baseline LOC range at HEAD: 110-3509 across the 14
+not a placebo"). Baseline LOC range at HEAD: 110-3992 across the 15
 crates. See build-backlog row 1 for the regeneration procedure.
 
 **What's NOT frozen:**
@@ -1083,7 +1100,7 @@ SURFACE.
 **#1204 JS-side public-API parity gate LANDED at G-CORE-9
 V1-FROZEN-INTERFACE row 2 (commit `13322df4`).** Workflow at
 `.github/workflows/ts-public-api.yml`; baseline at
-`packages/engine/etc/public-api.txt` (415 LOC; extract-from-.d.ts
+`packages/engine/etc/public-api.txt` (417 LOC; extract-from-.d.ts
 structural diff covering all 15 `dist/**/*.d.ts` files — the recursive
 glob includes the publicly-exported `dist/internal/trace.d.ts` subpath,
 psf-2 R6-round-7). Migration to
@@ -1155,9 +1172,10 @@ coherent freeze-wave over the FULL enumerated workspace surface."
 
 The G-CORE-9 wave enumerates EVERY public enum + struct workspace-wide
 and makes a per-item apply-or-D8-carve-out decision. **HEAD-verified count
-refreshed at F-22 pre-tag sweep (2026-07-03, per R13 F-16):** **194 total
-`pub enum` across `crates/`, 130 of which carry `#[non_exhaustive]`; 444
-total `pub struct`, 53 of which carry `#[non_exhaustive]` — 183 of the 638
+refreshed at R6-R1c re-count (HEAD `b86dec03`, per F-03; supersedes the
+F-22 2026-07-03 `194 / 130 / 444 / 53 / 183 / 638` snapshot):** **196 total
+`pub enum` across `crates/`, 135 of which carry `#[non_exhaustive]`; 448
+total `pub struct`, 53 of which carry `#[non_exhaustive]` — 188 of the 644
 total pub enum+struct types carry the attribute at HEAD** (the un-attributed
 remainder is overwhelmingly the documented carve-out set — frozen-cardinality
 wire-keying enums, all-private-field internal structs where the attribute is a
@@ -1849,8 +1867,11 @@ collapses the encryption-class taxonomy (RATIFIED-S&C §R6 + spec item
 **Frozen surfaces:**
 - The HKDF-SHA256 `derive_step` API in
   `crates/benten-crypto-suite/src/structural_kdf.rs`:
-  - `K(root) = HKDF-SHA256(K_principal, info = "root" || root_cid)`
-    (line 150 `derive_root`).
+  - `K(root) = HKDF-SHA256(K_principal, info = "root:codepoint:" ||
+    cipher_codepoint_be(2) || root_cid)` (the as-built 3-arg
+    `derive_root` — the Item-7 cross-codepoint-replay binding folds the
+    2-byte big-endian cipher-suite codepoint into the info-tag, so a
+    different suite = a different K(root)).
   - `K(N) = HKDF-SHA256(K(predecessor), info = "step" || edge_label ||
     N.cid)` (line 176 `derive_step`).
 - `StructuralKdfKey` zeroize-on-drop output type.
@@ -1870,9 +1891,11 @@ collapses the encryption-class taxonomy (RATIFIED-S&C §R6 + spec item
   additions land additively per item 14).
 
 **What "frozen" means here:**
-- The HKDF info-tag convention (`"step"` for step-derivation, `"root"`
-  for root) is wire-permanent (a different tag = different key =
-  decryption failure).
+- The HKDF info-tag convention is wire-permanent (a different tag =
+  different key = decryption failure): `"step"` (variable-length,
+  `edge_label || N.cid`) for step-derivation, and the fixed-width
+  `"root:codepoint:" || cipher_codepoint_be(2)` prefix for
+  root-derivation (the codepoint-bound info-tag).
 - The corrected (per Spike E) derivation formula with the explicit
   info-tags is locked; not the literal-DESIGN-doc formula (which Spike E
   proved doesn't converge).

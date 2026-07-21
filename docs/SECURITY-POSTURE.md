@@ -180,7 +180,7 @@ table narrative.
 | 63 | Sealed-Sender abuse-control trade-off (no plaintext sender ⇒ abuse-control rides recipient-issued delivery tokens) | 4-Meta-Core | **NEW (BR-1; §3.11).** The DEFAULT Sealed-Sender path (`0x6510`) carries no plaintext sender identity, so abuse/spam control cannot use per-sender filtering; it rides recipient-issued short-lived rate-limited UCAN-backed delivery tokens (refused at the receive boundary BEFORE decrypt). Residual: a recipient who over-issues tokens re-admits spam (mitigated by default-conservative token rate-limits + per-token `nbf`/`exp` + revocation). See body section. |
 | 64 | Cross-device best-effort-eventual nonce-rejection window (NQ-T4) | 4-Meta-Core | **NEW (NQ-T4; Ben-ratified 2026-06-02; minted this cascade). `SGD` substrate-guarantee disclosure.** The `jti`-keyed nonce-cache is per-device-durable-GUARANTEED **via the durable-CAS-marker + `from_durable` hydration seam** (`JtiNonceCache`; the engine honors a caller-contract to persist `durable_snapshot()` + re-hydrate on restart — the full disk-persistence wiring is deferred with the remote-permission wiring, Row D-64-adjacent) but user-global only best-effort-eventual-via-sync (NOT synchronous): a nonce consumed on device B is rejected on device C only after the consumed-`jti` set propagates via sync. The pre-sync cross-device window admits a one-time replay of a remote-permission / DeviceLink token across the user's own devices. Mitigated by: durable per-device rejection via the seam (no same-device replay once persisted+hydrated), tight `valid_until` (full-second granularity, strict, no skew window — NQ-T2), and short delivery-token `exp`. **Stays OPEN at v1-beta + v1-GM** — synchronous user-global rejection would require a consensus/online-coordinator the P2P model deliberately avoids. See body section. |
 | 65 | Wave-3e per-Node AEAD publicly-derivable-`K_principal` confidentiality limit at v1-beta (untrusted host CAN read partition plaintext) | 4-Meta-Core | **NEW (R13 F-07; `SGD` substrate-guarantee disclosure; minted to match the THREAT-MODEL untrusted-host honesty retense, R13 F-06).** At v1-beta the per-Node AEAD wrap does NOT provide confidentiality against a malicious *storage host*: the wave-3e `K_principal = blake3::keyed_hash(K_PRINCIPAL_DOMAIN_KEY, namespace_did)` is derived from a **publicly-known** 32-byte domain-tag constant (`K_PRINCIPAL_DOMAIN_KEY`, `crates/benten-graph/src/redb_backend.rs:181`) + the **publicly-known** `namespace_did`, so `K_principal` — and thus `K(N)` + the per-Node AEAD key — is **publicly derivable**: any party holding `(namespace_did, ciphertext_blob)` can derive the key and decrypt. Per CLAUDE.md baked-in #18 the **confidentiality half** of the Principal primitive (per-principal encryption of the storage partition; the #1301 / D-64 substrate) is **DEFERRED — NOT built at v1-beta**; the LIVE protection is the **AUTHORITY half** (capability / namespace isolation) which binds only a **cooperating** engine. So per-Node AEAD is a publicly-derivable-`K_principal` **STAND-IN** keeping the substrate shape stable for the production `K_principal`-store swap-in, NOT real untrusted-host confidentiality. Mitigated in the interim by namespace-isolation at the storage backend (the AUTHORITY half) + the local device's Layer-A vault (Argon2id-DAK-sealed, protecting the *local* vault at rest). **Stays OPEN at v1-beta; CLOSES when the #1301 / D-64 per-DID secret-material `K_principal` backend lands** (the swap-in replaces only the `K_principal` synthesis step — the function signature + AEAD-wrap layer + per-chunk size are all stable). Full narration: the "⚠️ Confidentiality limit at this wave" disclosure in the **Per-Node AEAD wrap layer** section below (`derive_test_seam_key_from_cid_with_namespace`). Cross-linked from `docs/THREAT-MODEL.md` §1 (the untrusted-host row + honesty note). Named carry: `docs/future/phase-4-backlog.md §3.10`. |
-| 66 | Recovered-secret `Debug`-render + freed-heap hygiene across the crypto-suite secret roster | 4-Meta-Core | **MINTED R14 GAP-1; CLOSED-at-v1-beta (hardened in the R19/#3 secret-hygiene sweep; `SGD` substrate-guarantee disclosure — now a positive guarantee, not an open gap).** History: R14 disclosed that `UnwrappedKey` (`crates/benten-crypto-suite/src/cipher_suite.rs`; the recovered `k_root` from `unwrap_key_material`) then carried `#[derive(Debug)]` (a `{:?}` render would print recovered KEY BYTES) with no zeroize-on-drop. The R19/#3 sweep HARDENED the whole recovered-secret roster: `UnwrappedKey` (redacting `impl Debug` → `<redacted>` + zeroizing `impl Drop`, `cipher_suite.rs:1072-1086`), `DecryptedPlaintext` (`cipher_suite.rs:1109-1124`), `VaultPayload` (`k_principal` + `user_did_signing_key` redacted + zeroized, `vault.rs:273-292`), `ProvisioningInnerPayload` (`device_link.rs:120-149`), and `PurePqMlKemKeypair` (zeroize-on-drop landed R18 C3). Enforced by the LIVE meta-test `crates/benten-engine/tests/f_secret_hygiene_roster.rs` (447 LOC, zero `#[ignore]`) — a runtime Debug-does-not-leak assertion over the full roster + a source-anchored zeroize-coverage grep-defense — plus an in-crate `<redacted>`-render assertion at `cipher_suite.rs:1439`. So the recovered-secret `Debug`/heap hygiene is a positive v1-beta guarantee; a revert (e.g. re-deriving `Debug`) re-fires the meta-test. The residual v1-GM nicety is narrower: the still-bare-`Vec<u8>` copy sites (`unwrap_key_from_recipient` return, the `device_link.rs` `recovered` binding, `swap_matrix.rs:563`) — tracked at `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-75. The separate `derive_member_key` raw-`Vec<u8>` hardening rides Row D-76. See body section. |
+| 66 | Recovered-secret `Debug`-render + freed-heap hygiene across the crypto-suite secret roster | 4-Meta-Core | **MINTED R14 GAP-1; CLOSED-at-v1-beta (hardened in the R19/#3 secret-hygiene sweep; `SGD` substrate-guarantee disclosure — now a positive guarantee, not an open gap).** History: R14 disclosed that `UnwrappedKey` (`crates/benten-crypto-suite/src/cipher_suite.rs`; the recovered `k_root` from `unwrap_key_material`) then carried `#[derive(Debug)]` (a `{:?}` render would print recovered KEY BYTES) with no zeroize-on-drop. The R19/#3 sweep HARDENED the whole recovered-secret roster: `UnwrappedKey` (redacting `impl Debug` → `<redacted>` + zeroizing `impl Drop`, `cipher_suite.rs`), `DecryptedPlaintext` (`cipher_suite.rs`), `VaultPayload` (`k_principal` + `user_did_signing_key` redacted + zeroized, `vault.rs`), `ProvisioningInnerPayload` (`device_link.rs:120-149`), and `PurePqMlKemKeypair` (zeroize-on-drop landed R18 C3). Enforced by the LIVE meta-test `crates/benten-engine/tests/f_secret_hygiene_roster.rs` (447 LOC, zero `#[ignore]`) — a runtime Debug-does-not-leak assertion over the full roster + a source-anchored zeroize-coverage grep-defense — plus an in-crate `<redacted>`-render assertion at `cipher_suite.rs`. So the recovered-secret `Debug`/heap hygiene is a positive v1-beta guarantee; a revert (e.g. re-deriving `Debug`) re-fires the meta-test. The residual v1-GM nicety is narrower: the still-bare-`Vec<u8>` copy sites (`unwrap_key_from_recipient` return, the `device_link.rs` `recovered` binding, `swap_matrix.rs:563`) — tracked at `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-75. The separate `derive_member_key` raw-`Vec<u8>` hardening rides Row D-76. See body section. |
 
 **Refinement-audit-2026-05 delta:** Compromise #29 (engine-extension trust model, narrative-only at HEAD; now registry-tracked) + reserved rows #27 / #28 added post-tag to anchor META #669 + META #629 closure mints. The v1-platform-shippable BLOCKER cluster framing lives in the local-only campaign-summary `refinement-audit-2026-05.md §15` (gitignored under `docs/future/*` — internal methodology artifact, not publicly shipped; see `docs/future/phase-4-backlog.md §15.5`).
 
@@ -2503,7 +2503,11 @@ pulls in **13 net-new transitive crates** — of which **10 are Cryspen/libcrux/
 `libcrux-intrinsics` / `libcrux-platform` / `core-models` / `hax-lib` /
 `hax-lib-macros` / `hax-lib-macros-types`) and **3 are general proc-macro support
 crates** (`pastey` / `proc-macro-error2` / `proc-macro-error-attr2`, pulled by the
-hax proc-macro layer; NOT Cryspen-authored). These are added to the v1-GM
+hax proc-macro layer; NOT Cryspen-authored). (The 0.0.10 bump additionally
+pulls `crabgrind 0.2.6` → bindgen/clang-sys as HOST build-tooling via
+libcrux-secrets, but that chain is `cfg(valgrind_ct_test)`-gated and NOT
+compiled in Benten's build — see Compromise #39 for the full accounting.)
+These are added to the v1-GM
 C-GM-AUDIT scope as honest `cargo-vet` exemptions (the exemption-budget
 *cap* was raised **5 → 18** on 2026-06-05 to cover them — a policy decision
 **Ben-RATIFIED** (see the consolidated flag at
@@ -2762,12 +2766,12 @@ That gap is now CLOSED.
 **What landed (R19/#3 secret-hygiene sweep).** The whole recovered-secret roster now has a redacting hand-written
 `impl Debug` (rendering `<redacted>` / `[REDACTED]`, never the raw bytes) + an explicit zeroizing `impl Drop`:
 
-- **`UnwrappedKey`** — redacting `impl Debug` (`cipher_suite.rs:1072-1078`) + zeroizing `impl Drop`
-  (`cipher_suite.rs:1082-1086`). `UnwrappedKey` now MATCHES `RecipientSecret` — no longer an outlier.
-- **`DecryptedPlaintext`** (recovered Node plaintext) — redacting `impl Debug` (`cipher_suite.rs:1109-1115`) +
-  zeroizing `impl Drop` (`cipher_suite.rs:1120-1124`).
+- **`UnwrappedKey`** — redacting `impl Debug` (`cipher_suite.rs`) + zeroizing `impl Drop`
+  (`cipher_suite.rs`). `UnwrappedKey` now MATCHES `RecipientSecret` — no longer an outlier.
+- **`DecryptedPlaintext`** (recovered Node plaintext) — redacting `impl Debug` (`cipher_suite.rs`) +
+  zeroizing `impl Drop` (`cipher_suite.rs`).
 - **`VaultPayload`** — redacting `impl Debug` (`k_principal` + `user_did_signing_key` → `<redacted>`,
-  `vault.rs:273-281`) + zeroizing `impl Drop` (`vault.rs:287-292`); also protects the derived-`Debug` cascade
+  `vault.rs`) + zeroizing `impl Drop` (`vault.rs`); also protects the derived-`Debug` cascade
   through `DecodedVault`.
 - **`ProvisioningInnerPayload`** (Layer-D device-link recovered payload) — redacting `impl Debug`
   (`device_link.rs:120-134`) + zeroizing `impl Drop` (`device_link.rs:143-149`).
@@ -2778,7 +2782,7 @@ That gap is now CLOSED.
 Debug-does-not-leak assertion (constructs each secret type with a distinctive `0xDEADBEEF` marker, `format!`s it,
 asserts the decimal-array rendering a leaking derived `Debug` would emit is ABSENT) + a source-anchored
 zeroize-coverage grep-defense (asserts a `Drop`/`zeroize()`/`ZeroizeOnDrop`/`zeroize`-feature wiring is present in
-source for every roster type). An in-crate assertion at `cipher_suite.rs:1439` additionally asserts the `Debug`
+source for every roster type). An in-crate assertion at `cipher_suite.rs` additionally asserts the `Debug`
 render contains `<redacted>`. A revert (e.g. re-deriving `Debug` on any roster type) re-fires the meta-test.
 
 **Residual (v1-GM nicety, narrower).** The `Debug`-render + freed-heap hygiene is CLOSED. What remains is a
@@ -2881,7 +2885,14 @@ secret-independence; the production impl). **O-1 disclosure:** `secrecy` is a NE
 dependency introduced this arc (wrapping secret bytes), disclosed here as a supply-chain surface. **F-full
 disclosure (2026-06-05):** the production ML-KEM-768 swap to **libcrux-ml-kem** (Compromise #32 mitigation) pulls
 13 net-new transitive crates (the `libcrux-*` / `hax-lib*` / `pastey` / `proc-macro-error2*` / `core-models`
-family — all Cryspen / well-known, all Apache-2.0 / MIT-OR-Apache-2.0). These are **unaudited-by-Benten** and
+family — all Cryspen / well-known, all Apache-2.0 / MIT-OR-Apache-2.0). Separately, the 0.0.9→0.0.10 bump
+(2026-07-18) pulls **`crabgrind 0.2.6`** (a Valgrind constant-time-test C-FFI binding — the least-well-known crate
+in the tree) via **libcrux-secrets 0.0.6**, and crabgrind build-depends on **bindgen + clang-sys** (+ cc /
+pkg-config / …). This entire `crabgrind → bindgen/clang-sys` chain is **`cfg(valgrind_ct_test)`-gated** — a cfg
+Benten NEVER sets — so it is present in `Cargo.lock` but is **NOT compiled** in Benten's build (host build-tooling,
+feature-gated-OFF, non-crypto-trust-path; `cargo tree -i bindgen` on the default target prints nothing). It carries
+no `cargo-vet` exemption entry (nothing compiles it); it is enumerated in the `supply-chain/exemptions.toml` header
+for accounting completeness. The 13 runtime crates are **unaudited-by-Benten** and
 recorded HONESTLY as accepted-unaudited `cargo-vet` exemptions in `supply-chain/exemptions.toml` (the
 exemption-budget raised 5 → 18 on 2026-06-05 — a policy decision now **Ben-RATIFIED**;
 pinned by
@@ -2940,11 +2951,15 @@ class (#56), kept sharply distinct so the audit does not read the two as duplica
 Envelope metadata observable to an untrusted relay is an **accepted trade-off**, materially **IMPROVED** by the
 Sealed-Sender DEFAULT (BR-1). The default Layer-C path (`0x6510`, Sealed-Sender) **removes the plaintext sender-DID**
 from the wire; there is **NO coarse-epoch on the Drop wire** (the 1-hour bucket is Layer-D-only per RULING-1 / M-14);
-and group-AAD set-identifying material is **BLINDED** (`audience_set_commitment` + `membership_set_id_commitment` per
-Compromise #61's BLAKE3-keyed-blinding construction). The **residual** observable on the default Drop wire is the recipient
-DID plus linkable-but-blinded group tags. Full per-send unlinkability is roadmap (U22–U28; **U25 is the v1-GM-reserve**
-for full per-send unlinkability). Disclosed as an honest, scoped residual — not an over-claim of network-observer
-invisibility.
+and group-AAD set-identifying material is **BLINDED** — the `membership_set_id_commitment` is a K_Set-**KEYED** BLAKE3 MAC
+(per Compromise #61) while the `audience_set_commitment` is an **UNKEYED** `BLAKE3` over the sorted roster. The
+**residual** observable on the default Drop wire is the recipient DID plus linkable-but-blinded group tags; and because
+the `audience_set_commitment` is unkeyed it hides only a **high-entropy** roster — for a **guessable / low-entropy**
+roster (the guess space narrowed by the plaintext `member_count`) it is itself a confirmation-oracle + equality-linker
+(recompute `BLAKE3(sorted-roster)` to confirm a guess; identical rosters → identical tags → linkable), the audience-axis
+sibling of the `body_cid` residual disclosed below. Full per-send unlinkability is roadmap (U22–U28; **U25 is the
+v1-GM-reserve** for the linkage half; a keyed `audience_set_commitment` per Row D-36 is the additive guess-confirmation
+half). Disclosed as an honest, scoped residual — not an over-claim of network-observer invisibility.
 
 **`body_cid` low-entropy confirmation/equality-linkability residual (R10 F-01, honest disclosure).** The Layer-C
 AAD carries the wire `body_cid` as an **unsalted** `self_describing_cid(BLAKE3(plaintext))`
@@ -3144,9 +3159,10 @@ Disclosed so operators understand grant lifecycle is issue-and-replace, not edit
 
 An admin (or any insider) holding the audit-log + the `members_table` **CAN correlate members** — the
 per-recipient-unlinkability property is **network-observer-only** (m-7), NOT admin-hidden. The Layer-C / `0x6610`
-group-AAD blinding (`audience_set_commitment` + `membership_set_id_commitment`) hides the roster from a **network
-observer / untrusted relay**, but a member-or-admin who holds `K_Set` + the member list recomputes the commitments
-and sees the correlation. This is a composition-hazard honest disclosure: the unlinkability claim is scoped, not
+group-AAD blinding hides a **high-entropy** roster from a **network observer / untrusted relay** — the
+`membership_set_id_commitment` is K_Set-keyed, but the `audience_set_commitment` is **unkeyed** and therefore
+itself guess-confirmable for a **low-entropy / guessable** roster (Compromise #43 / Row D-36) — while a
+member-or-admin who holds `K_Set` + the member list recomputes the commitments and sees the correlation. This is a composition-hazard honest disclosure: the unlinkability claim is scoped, not
 absolute. The **threshold-admin opt-in** (no single admin sees the full audit-log) closes the insider vector for
 deployments that adopt it. This row is the load-bearing #58 the `THREAT-MODEL.md` network-observer-only scope
 cross-links — the boundary that keeps the unlinkability claim honest, not over-claimed. **Cross-ref:**

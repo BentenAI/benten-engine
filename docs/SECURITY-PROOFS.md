@@ -58,7 +58,15 @@ The **sealed-inner-sender-DID stays INSIDE the ciphertext** (NOT a plaintext AAD
 hold `K_Set` + the member list, so they **recompute + verify** both 32-byte commitments — ALL binding properties
 (cross-stanza substitution U17; inter-member non-forgeability) are PRESERVED; the relay sees only opaque 32-byte
 tags. (Why blinded: the prior raw shape published the roster + raw set-id in plaintext, contradicting the project's
-own §3.9 / Compromise #61 blinding posture; blinding makes the group AAD obey that rule.)
+own §3.9 / Compromise #61 blinding posture; blinding makes the group AAD obey that rule.) **Honest scope of the
+`audience_set_commitment` (metadata-privacy caveat).** It is an **UNKEYED** `BLAKE3` over the sorted roster
+(contrast the K_Set-**keyed** `membership_set_id_commitment`, which is not guess-confirmable), so it hides only a
+**high-entropy** roster: for a **guessable / low-entropy** roster (the guess space narrowed by the plaintext
+`member_count`) a network observer with a candidate-DID pool can **CONFIRM** a guessed roster by recomputing
+`BLAKE3(sorted-roster)`, and identical rosters carry identical tags (equality-linkable) — the audience-axis sibling
+of the deterministic-CEK / `body_cid` confirmation oracle (§4.2). The AEAD confidentiality + binding properties are
+unaffected. The future fixes are additive with no wire-break: U25 per-send-salt (linkage half) + a keyed
+`audience_set_commitment` (guess-confirmation half; Row D-36).
 
 ---
 
@@ -83,7 +91,9 @@ own §3.9 / Compromise #61 blinding posture; blinding makes the group AAD obey t
 `role_assignments_generation`** (those are MembershipSet-only fields). The sealed-inner-sender-DID stays INSIDE the
 ciphertext per stanza (post-decrypt-verified; F-LC-9 / BR-1). Honest scope: identity-HIDING, not unlinkability (the
 commitment recurs for a static recipient set); full per-send unlinkability = U25, CODEPOINT-RESERVE for v1-GM,
-additive with no wire-break.
+additive with no wire-break. The `0x6520` `audience_set_commitment` is the SAME unkeyed `BLAKE3`-over-roster
+construction as `0x6610` and is **structurally unkeyable** here (no `K_Set` on this band), so the low-entropy /
+guessable-roster confirmation-oracle + equality-linker caveat above applies IDENTICALLY (Row D-36).
 
 ---
 
@@ -97,8 +107,9 @@ the recipient secret still carries genuine OS-RNG entropy and is unrecoverable f
 public key is itself bound to the DID, so this premise rests on the binding, not on an honest address book. Every
 claim below stands on the CEK being
 HPKE-key-wrapped to a **REAL hybrid recipient key**: the seal path
-(`benten_drop::layer_c::seal_sealed_sender` / `seal_group_multi`) takes a `&RecipientPublic` (`&[RecipientPublic]`
-for the group) and the open path (`open_single` / `open_group_stanza`) takes a `&RecipientSecret`, both re-exported
+(`benten_drop::layer_c::seal_sealed_sender` / `seal_group_multi`) takes a `&RecipientBinding` (`&[RecipientBinding]`
+for the group — the Inv-23 sole-constructor typestate; the former `&RecipientPublic`-taking seal API is DELETED)
+and the open path (`open_single` / `open_group_stanza`) takes a `&RecipientSecret`, both re-exported
 by `benten-drop` from `benten_crypto_suite::cipher_suite`. The secret is an ML-KEM-768 decapsulation key ‖ X25519
 static secret carrying genuine OS-RNG entropy, **unrecoverable from the public key**. (The pre-fix corpus base wrapped
 to a `[u8; 32]` public *fingerprint* and reconstructed the "secret" from that public via `sk = pk + 0x80` — ZERO

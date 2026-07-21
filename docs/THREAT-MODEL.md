@@ -15,7 +15,7 @@ The trust tiers, from least- to most-trusted relative to a principal's plaintext
 
 | Tier | Who | Sees plaintext? | Sees metadata? |
 |---|---|---|---|
-| **Network observer / untrusted relay** | an iroh relay, a passive network adversary, a storage host holding ciphertext | **NO** (but see the `body_cid` note below — low-entropy bodies are confirmable/linkable) | gossip topic (blinded), Drop envelope sizes + timing, blinded group tags (`audience_set_commitment`, `membership_set_id_commitment`) — **opaque 32-byte tags, NOT the roster** — plus the plaintext **`body_cid`** (unsalted `BLAKE3(body)` CID; a confirmation-oracle + equality-linker for **low-entropy** bodies only) |
+| **Network observer / untrusted relay** | an iroh relay, a passive network adversary, a storage host holding ciphertext | **NO** (but see the `body_cid` note below — low-entropy bodies are confirmable/linkable) | gossip topic (blinded), Drop envelope sizes + timing, blinded group tags — the K_Set-**KEYED** `membership_set_id_commitment` is opaque (never reveals the set-id), but the **UNKEYED** `audience_set_commitment` (`BLAKE3` over the sorted roster) hides only a **HIGH-entropy** roster: for a **guessable / low-entropy** roster (narrowed by the plaintext `member_count`) it is itself a confirmation-oracle + equality-linker (recompute `BLAKE3(sorted-roster)` to confirm a guess; identical rosters → identical tags → linkable), the audience-axis sibling of the `body_cid` residual (Row D-36; U25 per-send-salt reserve is the future linkage-half fix) — plus the plaintext **`body_cid`** (unsalted `BLAKE3(body)` CID; a confirmation-oracle + equality-linker for **low-entropy** bodies only) |
 | **Untrusted host** (peers-hold-ciphertext) | a peer storing a principal's encrypted partition (Phase-7 Garden-Grove) | **NOT YET at v1-beta** — see the honesty note below (the confidentiality half of the Principal primitive is DEFERRED; per-Node AEAD is a publicly-derivable-`K_principal` STAND-IN, so a malicious host CAN read the partition plaintext); the LIVE protection is the AUTHORITY half (capability/namespace isolation) which binds only a COOPERATING engine | blob CIDs + access patterns |
 | **Co-recipient member** | a member of a MembershipSet holding `K_Set` | **YES** for content they are entitled to | the member roster (recomputes the blinded commitments from the member list they hold) |
 | **Admin** | a MembershipSet admin holding the audit log + `members_table` | **YES** for set content + **CAN correlate members** | full audit-log visibility (Compromise #58) |
@@ -160,7 +160,9 @@ The Layer-C group-AAD blinding (`0x6610` MembershipSet group + `0x6520` Layer-C 
 recipient roster + raw set-id with blinded commitments (`audience_set_commitment` = BLAKE3 over the canonical
 sorted DID list; `membership_set_id_commitment` = `blake3::keyed_hash(K_Set, "benten:setid:v1" ‖ id)`). This
 achieves **per-recipient unlinkability** against a **network observer / untrusted relay** — the relay sees only
-opaque 32-byte tags, never the roster.
+opaque 32-byte tags. The K_Set-**keyed** `membership_set_id_commitment` never reveals the set-id; the **unkeyed**
+`audience_set_commitment` hides a **high-entropy** roster but, for a **guessable / low-entropy** roster, is
+guess-confirmable (see the honest-scope note below + Row D-36).
 
 **This unlinkability is explicitly NETWORK-OBSERVER-ONLY. It is NOT admin-proof.** A member-or-admin who holds
 `K_Set` + the member list **recomputes** the commitments and **CAN correlate members** — the property is scoped,
@@ -174,9 +176,16 @@ not absolute:
   sees the full audit-log) closes the insider vector for deployments that adopt it.
 
 Honest scope of the blinding: it achieves **identity-HIDING**, NOT full unlinkability — the same commitment
-recurs for a static recipient set, so a network observer can still link sends to "the same unknown group". Full
-per-send unlinkability (salt/nonce-rotated commitments) is **U25, CODEPOINT-RESERVE for v1-GM**, additive over
-the field with no wire-break. Separately, the plaintext `body_cid` links sends that share the **same body** (a
+recurs for a static recipient set, so a network observer can still link sends to "the same group". And because the
+`audience_set_commitment` is **UNKEYED** (`BLAKE3` over the sorted roster; contrast the K_Set-keyed
+`membership_set_id_commitment`), for a **guessable / low-entropy** roster (the guess space narrowed by the
+plaintext `member_count`) that group is not merely "unknown": a network observer with a candidate-DID pool can
+**CONFIRM** a guessed roster by recomputing `BLAKE3(sorted-roster)` and comparing — the audience-axis sibling of the
+`body_cid` confirmation oracle (§1 Tier-1 note; SECURITY-PROOFS §4.2). This is a metadata-privacy caveat for
+low-entropy rosters only — the AEAD confidentiality + the binding/non-forgeability properties are unaffected, and a
+high-entropy roster keeps the guess space intractable. Full per-send unlinkability (salt/nonce-rotated commitments)
+is **U25, CODEPOINT-RESERVE for v1-GM** (the future linkage-half fix); a keyed `audience_set_commitment` (Row D-36)
+is the additive guess-confirmation-half fix — both additive over the field with no wire-break. Separately, the plaintext `body_cid` links sends that share the **same body** (a
 low-entropy confirmation/equality vector — see §1 Tier-1 note + `docs/SECURITY-PROOFS.md` §4.2; a distinct axis
 from recipient-linkage). Cross-link Compromise #43 (envelope-metadata leakage + `body_cid` residual); Compromise
 #61 (gossip-topic blinding).

@@ -986,8 +986,12 @@ fn seal_inner(
     // HPKE-wrapped (the relay never sees it; the open side recovers it by
     // HPKE-unwrap, NEVER by re-hashing — the CEK derivation is a seal-local
     // source, not a round-trip contract). Being deterministic per (recipient,
-    // send, body), it gives a confirmation oracle only to a party that ALREADY
-    // holds the CEK — documented, not a confidentiality break.
+    // send, body), it gives a confirmation oracle to a party holding the
+    // CEK-derivation INPUTS (incl. a candidate body) — on the 0x6500 plaintext-
+    // sender band sender_did is on the wire and recipient_pub/aad are wire-
+    // derivable, so even a relay that never holds the CEK can confirm a
+    // low-entropy body guess; see SECURITY-PROOFS §4.2. Documented, not a
+    // confidentiality break for high-entropy bodies.
     let mut cek_h = blake3::Hasher::new();
     cek_h.update(LAYER_C_CEK_CONTEXT);
     cek_h.update(&recipient_pub.to_bytes());

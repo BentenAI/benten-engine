@@ -5,12 +5,20 @@
 # `version =` strings below): the libcrux family bumped 0.0.9→0.0.10
 # (+ libcrux-sha3 0.0.10, libcrux-secrets 0.0.6, libcrux-traits/-intrinsics
 # 0.0.8, core-models 0.0.7, hax-lib/-macros/-macros-types 0.3.7) to clear
-# RUSTSEC-2026-0207; wasm32-verified byte-identical. The 0.0.10 bump adds
-# bindgen + clang-sys (+ cexpr/nom/libloading/glob/minimal-lexical/
-# prettyplease) as new HOST build-tooling deps — import-covered by the
-# mozilla/google/bytecode-alliance corpora + [policy.'*'] safe-to-deploy,
-# non-crypto-trust-path; the '13 net-new' Cryspen/hax framing below is
-# unchanged (those are runtime deps; the build-tooling is host-only).
+# RUSTSEC-2026-0207; wasm32-verified byte-identical. The 0.0.10 bump pulls
+# `crabgrind 0.2.6` (a Valgrind constant-time-test C-FFI binding, the
+# least-well-known crate in the tree) as a NEW transitive edge under
+# libcrux-secrets 0.0.6 (libcrux-ml-kem 0.0.10 → libcrux-secrets → crabgrind);
+# crabgrind in turn build-depends on bindgen + clang-sys (+ cc / pkg-config /
+# cexpr/nom/libloading/glob/minimal-lexical/prettyplease). **This entire
+# crabgrind → bindgen/clang-sys chain is `cfg(valgrind_ct_test)`-gated** — a cfg
+# Benten NEVER sets — so it is present in `Cargo.lock` but is NOT compiled in
+# Benten's build (`cargo tree -i bindgen` on the default target prints nothing;
+# the chain surfaces only under `cargo tree --target all`). Host build-tooling,
+# non-crypto-trust-path, feature-gated-OFF, import-covered by the
+# mozilla/google/bytecode-alliance corpora + [policy.'*'] safe-to-deploy; the
+# '13 net-new' Cryspen/hax framing below is unchanged (those are the runtime
+# deps; this build-tooling is host-only and gated-off).
 #
 # Onboarding policy per sec-r1-5: exemption-budget was 5 entries max at
 # Phase-3-close. An audit landing in `audits.toml` is the budget-free

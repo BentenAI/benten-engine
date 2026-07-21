@@ -55,12 +55,6 @@ pub enum MembershipSetError {
     #[error("an authority member must carry a sig_pubkey")]
     AuthorityMissingPubkey,
 
-    /// A reserved keying-Kind (`AtriumWithRotatingGroupKey` /
-    /// `EphemeralLobby`) was selected at v1-beta — typed-reject
-    /// (reserved-not-selectable), never a silent 4th Kind.
-    #[error("a reserved keying-Kind is not selectable at v1-beta")]
-    ReserveTypedReject,
-
     /// A stanza sealed under a stale `role_assignments_generation` was
     /// rejected at verify (BC-5; §3.10). Maps to the
     /// [`E_ROLE_STALE_AT_VERIFY`] catalog code.
@@ -78,7 +72,7 @@ impl MembershipSetError {
     pub fn error_code(&self) -> ErrorCode {
         match self {
             MembershipSetError::RoleStaleAtVerify => ErrorCode::RoleStaleAtVerify,
-            // Construction-time cardinality / coupling / reserve errors are
+            // Construction-time cardinality / coupling errors are
             // registration-time rejections; they share the generic
             // capability-denied disposition until/unless a dedicated catalog
             // code is minted for each (none is required by the R5 corpus).

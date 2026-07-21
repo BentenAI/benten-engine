@@ -79,6 +79,21 @@ required-features = ["testing"]
 # V1-FROZEN-INTERFACE.md §1. Chains through to sibling crates whose
 # `_for_test` items this crate's fixtures (build_5_recipe_bundle_*) +
 # tamper / consume helpers transitively call.
+#
+# PER-PACKAGE TESTING CONTRACT (R6-R1c F-15 — the finding's documented
+# alternative). `cargo test -p benten-drop` and `cargo check -p benten-drop
+# --all-targets` REQUIRE `--features testing`. This is a WORKSPACE-WIDE
+# de-facto contract (not specific to the 27-gate wave, and not a clean-skip
+# gap that `[[test]] required-features` can close): (1) many integration
+# targets consume the F1.b `testing`-gated `*_for_test` fixtures, and (2) the
+# crate's OWN lib `#[cfg(test)]` unit tests in `src/bundle.rs` call
+# CROSS-CRATE `testing`-gated fixtures (`benten_caps::…::synthetic_for_test`
+# / `GrantKeyMaterial::from_bytes_for_test` / `AuthorizationGrant::
+# issue_envelopes_for_test_with_issuer`) — which `required-features` cannot
+# supply to the lib's own test build (that build pulls the deps WITHOUT their
+# `testing` feature). CI runs the full workspace `/testing` set on EVERY lane,
+# so there is no coverage gap. (Sibling crates — benten-graph / benten-eval /
+# benten-crypto-suite — share this same per-package `/testing` contract.)
 [features]
 default = []
 testing = [

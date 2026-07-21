@@ -1,7 +1,10 @@
-//! Stanza verify: the `role_assignments_generation` staleness gate.
+//! Stanza verify: the `role_assignments_generation` staleness gate (data-half
+//! MODEL — [`verify_stanza`] has **zero production callers** at HEAD; the LIVE
+//! staleness enforcement is the `benten_drop::layer_c` open-side recompute per
+//! the crate-root disclosure in `lib.rs`).
 //!
-//! A stanza sealed under a stale `role_assignments_generation` is **rejected
-//! at verify** with the new ErrorCode `E_ROLE_STALE_AT_VERIFY` (R0 §2.5 BC-5 /
+//! In this model a stanza sealed under a stale `role_assignments_generation` is
+//! rejected with the ErrorCode `E_ROLE_STALE_AT_VERIFY` (R0 §2.5 BC-5 /
 //! §3.10 / §3.6.B). The `role_assignments_generation` counter is the 11th
 //! field of the `0x6610` group AAD (the BLINDED 11-field set — F-AAD-2), so a
 //! stanza sealed at generation `G` fails AEAD-open / verify once the set
@@ -10,8 +13,14 @@
 use crate::error::{E_ROLE_STALE_AT_VERIFY, MembershipSetError};
 
 /// A stanza sealed under a particular role-assignments generation (the AAD
-/// field). At v1-beta this is the real sealed-envelope verify path; the canary
-/// surface is the generation comparison.
+/// field). At v1-beta [`verify_stanza`] is a **data-half role-staleness model
+/// with zero production callers** (see the crate-root disclosure at
+/// `lib.rs`); the LIVE role-staleness / generation-freshness enforcement is the
+/// `benten_drop::layer_c` open-side recompute (`open_group_stanza` /
+/// `open_membership_set_group` re-derive the key-epoch generation from the
+/// recipient's INDEPENDENTLY-held set-state and fail-close the hybrid LAMPS
+/// verify), NOT this standalone comparator. The canary surface here is the
+/// generation comparison only.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Stanza {
     /// The `role_assignments_generation` the stanza was sealed under.

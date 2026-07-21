@@ -445,8 +445,13 @@ struct-fence backstops structurally, NOT a live gap; the per-consumer-recompute 
 Composing-wave membership mutation/read wiring (Row D-52-adjacent), matching the Inv-21 register-then-enforce
 precedent. **RBAC admin-op authorization-enforcement carve-out:** membership /
 governance *admin-op authorization enforcement* (admit / kick / promote actually gated on a live role check) is
-Phase-4-Meta-**Composing**-wired; at this freeze `crates/benten-membership-set/src/set.rs` ships only the LWW /
-fork comparators and NO live mutation method that could skip a role check — so there is no bypassable
+Phase-4-Meta-**Composing**-wired. At this freeze the crate DOES ship one live public membership-MUTATING method —
+`member::MembersTable::admit(&mut self, did, entry)` (`crates/benten-membership-set/src/member.rs`), a
+one-DID-one-record upsert gated only on the `is_authority ⟹ sig_pubkey` coupling rule (`entry.validate()`), NOT on
+any role check — but it is a non-bypassable **data-half** primitive: ZERO production callers at HEAD, the real
+membership gates are `K_Set` / `M_auth` (a non-member cannot produce a valid stanza regardless of the members
+table), and the engine-layer UCAN / `CapabilityPolicy` admin-op authz wraps it in Composing. `set.rs` itself ships
+only the LWW / fork comparators (no live mutation method that could skip a role check) — so there is no bypassable
 admin-op-authorization surface to enforce at Core (the same register-then-enforce deferral pattern as Inv-19 /
 Inv-21). The R2 test-landscape
 (`.addl/phase-4-meta/f-full-r2-test-landscape.md` §2.1) mapped every one of Inv-16..22 to a covering red-phase

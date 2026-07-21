@@ -213,7 +213,6 @@ pub benten_membership_set::error::MembershipSetError::AdminCardinality
 pub benten_membership_set::error::MembershipSetError::AuthorityMissingPubkey
 pub benten_membership_set::error::MembershipSetError::MemberCardinality
 pub benten_membership_set::error::MembershipSetError::MemberRefKindMismatch
-pub benten_membership_set::error::MembershipSetError::ReserveTypedReject
 pub benten_membership_set::error::MembershipSetError::RoleStaleAtVerify
 pub benten_membership_set::error::MembershipSetError::WireCostCeilingExceeded
 impl benten_membership_set::error::MembershipSetError
@@ -970,7 +969,6 @@ pub benten_membership_set::MembershipSetError::AdminCardinality
 pub benten_membership_set::MembershipSetError::AuthorityMissingPubkey
 pub benten_membership_set::MembershipSetError::MemberCardinality
 pub benten_membership_set::MembershipSetError::MemberRefKindMismatch
-pub benten_membership_set::MembershipSetError::ReserveTypedReject
 pub benten_membership_set::MembershipSetError::RoleStaleAtVerify
 pub benten_membership_set::MembershipSetError::WireCostCeilingExceeded
 impl benten_membership_set::error::MembershipSetError

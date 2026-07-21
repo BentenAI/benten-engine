@@ -2124,7 +2124,8 @@ Row D-15's audit-readiness concern.
   `RecipientSecret` at rest (Layer-A vault seal), (iii) `benten-id` DID
   encryption-key resolution (resolve a recipient's advertised
   `RecipientPublic` from its `did:key`), and (iv) seal-side recipient-pub
-  sourcing (the engine flow that hands a `&RecipientPublic` to `seal_*`).
+  sourcing (the engine flow that resolves a `&RecipientBinding` — the
+  Inv-23 sole-constructor typestate — for `seal_*`).
 - **v1-beta posture:** encrypt-to-recipient is a frozen, safe, standalone
   primitive with no engine caller. This is **NOT a Compromise** — the frozen
   surface is safe (real keying, fail-closed open); it is a not-yet-wired
@@ -2432,15 +2433,15 @@ Row D-15's audit-readiness concern.
 - **DONE (landed at v1-beta, R19/#3 sweep):** each roster type now has a
   redacting hand-written `impl Debug` (renders `<redacted>` / `[REDACTED]`,
   never the raw bytes) + an explicit zeroizing `impl Drop`:
-  - **`UnwrappedKey`** — redacting `impl Debug` (`cipher_suite.rs:1072-1078`) +
-    zeroizing `impl Drop` (`cipher_suite.rs:1082-1086`). Now MATCHES
+  - **`UnwrappedKey`** — redacting `impl Debug` (`cipher_suite.rs`) +
+    zeroizing `impl Drop` (`cipher_suite.rs`). Now MATCHES
     `RecipientSecret` — no longer an outlier.
   - **`DecryptedPlaintext`** (recovered AEAD plaintext) — redacting `impl Debug`
-    (`cipher_suite.rs:1109-1115`) + zeroizing `impl Drop`
-    (`cipher_suite.rs:1120-1124`).
+    (`cipher_suite.rs`) + zeroizing `impl Drop`
+    (`cipher_suite.rs`).
   - **`VaultPayload`** — redacting `impl Debug` (`k_principal` +
-    `user_did_signing_key` → `<redacted>`, `vault.rs:273-281`) + zeroizing
-    `impl Drop` (`vault.rs:287-292`); also protects the derived-`Debug` cascade
+    `user_did_signing_key` → `<redacted>`, `vault.rs`) + zeroizing
+    `impl Drop` (`vault.rs`); also protects the derived-`Debug` cascade
     through `DecodedVault`.
   - **`ProvisioningInnerPayload`**
     (`crates/benten-engine/src/layer_d/device_link.rs`) — redacting `impl Debug`
@@ -2454,7 +2455,7 @@ Row D-15's audit-readiness concern.
   asserts the leaking decimal-array rendering is ABSENT) + (b) a source-anchored
   zeroize-coverage grep-defense asserting a `Drop`/`zeroize()`/`ZeroizeOnDrop`/
   `zeroize`-feature wiring is present in source for every roster type. An
-  in-crate assertion at `cipher_suite.rs:1439` additionally asserts the `Debug`
+  in-crate assertion at `cipher_suite.rs` additionally asserts the `Debug`
   render contains `<redacted>`. This test ALSO satisfies the "type-level
   zeroize-on-drop meta-assertion" the R18 MEM-H-1 sub-note asked for — the
   source-anchored zeroize-coverage half IS that roster meta-assertion (over
@@ -3137,6 +3138,27 @@ did not resolve unilaterally.
 - **Anchor:** Inv-15 (`docs/INVARIANT-COVERAGE.md` — sig-bundle CIDs are never
   load-bearing identifiers); RATIFIED-S&C §R6 revocation reach; R6-R1 fold-in
   FIX 4.
+
+### Row D-90 — F-10: additive validating `Argon2idParams::new(m, t, p)` constructor → v1-GM hardening
+
+- **Frozen surface (v1-beta):** `Argon2idParams` (`crates/benten-crypto-suite/src/vault.rs`)
+  has fully-`pub` fields and NO validating constructor, so the re-exported public
+  `derive_dak` panics via `.expect()` on caller-supplied invalid params
+  (`p_cost = 0` / `t_cost = 0` / `m_cost < 8 * p_cost`). It is the one frozen
+  public boundary lacking a typed-reject on caller input.
+- **v1-beta posture (NOT freeze-blocking):** the reachable panic path is already
+  CLOSED — the only production entry to DAK derivation is `open_vault` →
+  `parse_vault_frame`, whose floor/ceiling gate validates params before
+  `derive_dak` runs (the R6-1 F-02 floor). No production caller passes
+  unvalidated params, so the panic is a programming-error contract on a
+  direct-`derive_dak` misuse, not attacker-reachable.
+- **Deferred hardening (v1-GM; ADDITIVE + non-breaking):** add
+  `Argon2idParams::new(m, t, p) -> Result<Self, Argon2ParamsOutOfBounds>` reusing
+  the existing floor/ceiling consts (and/or `derive_dak -> Result`). Purely
+  additive — it does not touch the frozen wire format, the codepoint dispatch, or
+  any existing signature; the current fully-`pub`-field construction path stays.
+- **Anchor:** R6-R1c council F-10; the frozen-API-misuse-resistance lens; the
+  parse_vault_frame floor (R6-1 F-02).
 
 ---
 

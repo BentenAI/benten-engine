@@ -70,7 +70,7 @@ Nine typed-error enums, one per public surface module + two specialized sub-erro
 - **`DidRotationError` — 5 variants (up from 3).** `BadSignature` + `PreviousDidMismatch` + `DecodeFailed` from G14-A2, **plus two NEW variants from G24-D-FP-2** (per `docs/future/phase-4-backlog.md §4.10`): `HlcNotStrictlyMonotonic { prev_did, incoming_hlc, latest_hlc }` (errors.rs:312-322) defends against replay-at-same-HLC + nonce-swap attacks; `VerbatimReplay { prev_did, hlc }` (errors.rs:325-332) defends against byte-identical replay.
 - `VcError`, `DidError`, `MultiSigError`, `KeypairError` — narrower surfaces (substantively unchanged from prior revision).
 
-### `keypair.rs` (385 LOC)
+### `keypair.rs` (457 LOC)
 The Ed25519 primitive. Three load-bearing decisions baked into the type design:
 
 1. **`SecretKey` newtype with `Zeroize + ZeroizeOnDrop` derives + no Clone + redacted Debug** (`crypto-blocker-1`). Pinned by three tests — source-grep `ZeroizeOnDrop` derive, source-grep no `Clone`, redaction round-trip.
@@ -88,7 +88,7 @@ The `Did` newtype implements `Serialize`/`Deserialize` as `#[serde(transparent)]
 
 `Did::from_string_unchecked` (did.rs:110-112) is the post-deserialize "trust the string" entry. The W3C-vector test carries 3 pinned hex pubkey → DID-string fixtures + fail-closed wrong-multicodec.
 
-### `ucan.rs` (704 LOC)
+### `ucan.rs` (995 LOC)
 The chain-walk validator. Largest module. Public surface:
 
 - **`Capability { resource, ability }`** — the unit of authority.
@@ -108,7 +108,7 @@ The chain-walk does five things per link inside `validate_chain_inner`:
 
 `validate_chain_for_capability` is the typed-CALL-layer integration AND the single-source-of-truth subsume surface engine-side code queries: it composes audience-bind + chain-walk + leaf-claim check using the SAME private `caps_match_or_subsume` relation the internal attenuation walk uses (Hyg-1 #304: the never-called public `capability_satisfies_requirement` wrapper was removed — `validate_chain_for_capability` is the real engine-consumed surface, so there is no parallel subsume implementation that could drift).
 
-### `vc.rs` (486 LOC)
+### `vc.rs` (550 LOC)
 Verifiable Credential issuance + verification. The single most important docstring fact: **"W3C VC v1.1-INSPIRED field shape over DAG-CBOR + Ed25519. NOT wire-format-compatible with external W3C JSON-LD VC consumers."** Dates are `u64` epoch seconds (not ISO 8601); encoding is DAG-CBOR (not JSON-LD); `proof: Vec<u8>` is a flat 64-byte Ed25519 sig (not the LDP `Ed25519Signature2020` envelope).
 
 The wire-interop layer (full `ssi` integration with JSON-LD / Linked-Data-Proofs) is deferred to G14-B per `docs/future/phase-3-backlog.md §2.1-followup`. The vc.rs module docstring carries an explicit Q3 DISAGREE-WITH-EXPLANATION rationale per HARD RULE rule-12 disposition (c).
@@ -128,7 +128,7 @@ Two architectural pins live here:
 
 The `cag-5` + D-PHASE-3-24 commitment: identity-recovery protocol choice deferred to post-Phase-3 v1-assessment-window. **Per Phase-4-Foundation R1 Ben-ratification #6 (SelfRevocation attestation MVP):** the actual identity-recovery protocol path now lands at the Kith effort (deferred to Phase 5+); MVP recovery uses SelfRevocation attestation. `MultiSigSurface` is positioned to absorb threshold-based protocols when the Kith effort needs them.
 
-### `did_rotation.rs` (276 LOC — **substantially extended at G24-D-FP-2**)
+### `did_rotation.rs` (363 LOC — **substantially extended at G24-D-FP-2**)
 Old-DID → New-DID rotation events. `RotationAttestation` carries `previous_did`, `next_did`, `superseded_at`, and a 64-byte Ed25519 signature **by the OLD keypair**.
 
 `rotate_keypair(did, old_kp, new_kp, superseded_at)` (did_rotation.rs:134-158) is the constructor.
@@ -142,24 +142,17 @@ Old-DID → New-DID rotation events. `RotationAttestation` carries `previous_did
 
 `is_superseded` (did_rotation.rs:259-264) uses `ct_signature_eq` per the uniformity rule, even though DIDs are public.
 
-### `device_attestation.rs` (608 LOC)
-The Phase-3 multi-device-sync (criterion 16) surface plus the runtime-target enforcement layer. **Compromise #23 LIVE at Phase-3 close.** Eight public types, the load-bearing flow:
+### `device_attestation.rs` (468 LOC — post-COLLAPSE)
+The Phase-3 multi-device-sync (criterion 16) surface, **collapsed to a pure data primitive** at refinement-audit-2026-05 COLLAPSE P0–P3 (Compromise #23 SUPERSEDED-BY-COLLAPSE; see `docs/SECURITY-POSTURE.md`). `Acceptor` (the whole acceptance pipe — `Acceptor::new` / `new_with_revocations` / `with_parent_lookup` / `accept_at` / `accept`), `DeviceRevocation`, `RevocationReason`, `FreshnessPolicy`, `revocation_canonical_bytes`, and the chain-walker gate `validate_chain_with_device_revocations` are ALL **DELETED** — the device envelope is no longer a distinct trust-root. Stale-frame replay is now bounded by a plain freshness window at the engine inbound-sync seam, and durable revocation collapses to user-root UCAN revocation (`benten_caps::revoke`). The surviving surface (consistent with the "Device-DID attestation (post-COLLAPSE)" note below):
 
 - **`CapabilityEnvelope`** — 4-dimension declaration: `runs_sandbox: bool`, `holds_zones: ZoneScope` (`Full` / `CacheOnly` / `Specific(Vec<String>)`), `online_uptime: UptimePolicy` (`AlwaysOn` / `SessionBounded`), `runs_atrium_peer: bool`. The thin-client minimum-capability envelope (browser tab per CLAUDE.md baked-in #17) is `runs_sandbox=false, holds_zones=CacheOnly, uptime=SessionBounded, runs_atrium_peer=false` and is preset via `issue_for_browser_target`.
-- **`DeviceAttestation`** — `device_did` + `parent_did` + `envelope` + 32-byte nonce + `issued_at` epoch seconds + 64-byte parent-signed signature. The signature is over DAG-CBOR canonical bytes of `(device_did, parent_did, envelope, nonce, issued_at)`. The `signature: Vec<u8>` field's public visibility is load-bearing (device_attestation.rs:151-163 docstring): the `acceptor_rejects_attestation_with_forged_signature` test mutates `signature[0] ^= 0x01` to drive the bad-signature negative pin; canonical-bytes round-trip also touches it.
-- **Five issuance constructors:** `issue` (zero-init `issued_at`), `issue_at` (caller-controlled epoch), `issue_with_nonce` (caller-controlled epoch + nonce; production callers go through `issue_at`), `issue_for_browser_target` (auto-asserts minimum envelope), `issue_with_runtime_check` (rejects `Browser` target + `runs_sandbox=true` OR `runs_atrium_peer=true` at construction time), `issue_with_authority` (rejects with `EnvelopeWidening` if device claims wider authority than the supplied parent envelope — `cap-r4-7` closure).
-- **`envelope_widens` matrix** (device_attestation.rs:333-361) — exhaustive 3×3 over `(parent, device) holds_zones` per g14-a2-mr-6 fix-pass.
-- **`Acceptor`** — Compromise #23 runtime gate. Five steps in `accept_at(attestation, now)` (device_attestation.rs:524-582):
-  1. Expected-parent pin (if configured via `with_parent_lookup`).
-  2. Revocation check (constant-time eq over device_did).
-  3. Freshness gate (`now - issued_at <= window`).
-  4. **Signature verification against the parent_did's resolved pubkey** (added at g14-a2-mr-1).
-  5. Nonce-store replay defense (`(parent_did, nonce)` tuple insertion; replay = duplicate = `NonceReplay`).
-- **`DeviceRevocation`** — signed by parent, carries `device_did` + `parent_did` + `RevocationReason` (`DeviceLoss` / `Compromise` / `Decommissioned`). *(COLLAPSE-WITH-RESIDUAL refinement-audit-2026-05 S3: its standalone chain-walk consumer `validate_chain_with_device_revocations` was DELETED in P1; the `DeviceRevocation` type itself + the `Acceptor::accept_at` revocation step are RETAINED until P3 — the deletion of `Acceptor`/`DeviceRevocation` is compile-coupled to the deferred `engine_sync::DeviceAttestationEnvelope::verify` rewire. See `docs/SECURITY-POSTURE.md` Compromise #23.)*
+- **`DeviceAttestation`** — `device_did` + `parent_did` + `envelope` + 32-byte nonce + `issued_at` epoch seconds + 64-byte parent-signed signature over the DAG-CBOR canonical bytes of `(device_did, parent_did, envelope, nonce, issued_at)`. The `signature: Vec<u8>` field's public visibility is load-bearing: the forged-signature negative pin mutates `signature[0] ^= 0x01`, and the canonical-bytes round-trip also touches it. Verified via `verify_signature_with(parent_pk)` (the former `Acceptor::accept_at` step-4 signature check now lives at the engine inbound-sync seam per COLLAPSE P2).
+- **Six issuance constructors:** `issue` (zero-init `issued_at`), `issue_at` (caller-controlled epoch), `issue_with_nonce` (caller-controlled epoch + nonce), `issue_for_browser_target` (auto-asserts the minimum envelope), `issue_with_runtime_check` (rejects `Browser` target + `runs_sandbox=true` OR `runs_atrium_peer=true` at construction time), `issue_with_authority` (rejects with `EnvelopeWidening` if the device claims wider authority than the supplied parent envelope — `cap-r4-7` closure).
+- **`envelope_widens` matrix** — exhaustive 3×3 over `(parent, device) holds_zones` per g14-a2-mr-6 fix-pass.
 
-The `generate_fresh_nonce` helper (device_attestation.rs:598-608) composes 4 × `OsRng::next_u64().to_le_bytes()` instead of a `[0u8; 32]` zero-init buffer — works around a CodeQL false-positive.
+The `generate_fresh_nonce` helper composes 4 × `OsRng::next_u64().to_le_bytes()` instead of a `[0u8; 32]` zero-init buffer — works around a CodeQL false-positive.
 
-### `plugin_did.rs` (229 LOC) — **NEW since prior revision; G24-D / Phase-4-Foundation**
+### `plugin_did.rs` (280 LOC) — **NEW since prior revision; G24-D / Phase-4-Foundation**
 
 Phase-4-Foundation G24-D plugin-DID mint + store. Implements the 3rd of CLAUDE.md baked-in #18's four identity concepts:
 
