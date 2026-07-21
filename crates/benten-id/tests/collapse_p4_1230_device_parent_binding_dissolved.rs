@@ -41,7 +41,7 @@
 //!
 //! Pairs with the behavioral benten-caps pin
 //! `collapse_p4_1230_605_707_single_revocation_seam.rs` (the single
-//! self-anchored content-CID-keyed revocation survivor) — defense in
+//! self-anchored payload-CID-keyed revocation survivor) — defense in
 //! depth: behavioral (the one seam works) + structural (the deleted
 //! parallel pipe stays deleted).
 
@@ -156,7 +156,7 @@ fn collapse_p4_no_benten_id_chain_walker_takes_a_device_revocation_list() {
             "COLLAPSE #1230 REGRESSION: benten-id/src/ucan.rs:{} re-introduces a \
              chain-walker taking a device-revocation list — the #1230 \
              bare-device-DID forge surface. Revocation MUST flow only \
-             through the single self-anchored content-CID-keyed seam \
+             through the single self-anchored payload-CID-keyed seam \
              (benten-caps UCANBackend::revoke). Offending line: {}",
             lineno + 1,
             line.trim()

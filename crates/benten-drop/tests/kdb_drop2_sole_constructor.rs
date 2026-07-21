@@ -153,4 +153,34 @@ fn drop2_recipient_binding_has_no_fallback_door() {
              fallback door). would-FAIL-on-revert: a From conversion re-opens GAP-KDB."
         );
     }
+
+    // (4) O-04 name-agnostic PRODUCER net: the sole COMMITTED constructor is
+    // `resolve` (`-> Result<Self, RecipientBindingError>`). Any OTHER function
+    // producing a bare `RecipientBinding` / `Vec<RecipientBinding>` value must
+    // be a `*_for_test` fixture — a renamed NON-test constructor (e.g.
+    // `fn make_binding(&RecipientPublic) -> RecipientBinding`) would evade the
+    // fixed 3-name blocklist above but not this. The `->RecipientBinding` /
+    // `Vec<RecipientBinding>` match excludes the `RecipientBindingError` type
+    // (its `Result<Self, …Error>` return never starts a bare-binding return).
+    let squished: String = source.chars().filter(|c| !c.is_whitespace()).collect();
+    for (idx, _) in squished.match_indices("pubfn") {
+        let sig_end = squished[idx..]
+            .find('{')
+            .map_or(squished.len(), |off| idx + off);
+        let sig = &squished[idx..sig_end];
+        let produces_bare_binding =
+            sig.contains("->RecipientBinding") || sig.contains("Vec<RecipientBinding>");
+        if produces_bare_binding {
+            let after = &sig["pubfn".len()..];
+            let name_end = after.find(['(', '<']).unwrap_or(after.len());
+            let name = &after[..name_end];
+            assert!(
+                name.ends_with("_for_test"),
+                "DROP-2 (C4/O-04): only `resolve` (committed) or a `*_for_test` \
+                 fixture may produce a `RecipientBinding`; found producer `{name}`. \
+                 A renamed non-test constructor re-opens the (kem_pub, audience_did) \
+                 substitution door (Inv-23)."
+            );
+        }
+    }
 }

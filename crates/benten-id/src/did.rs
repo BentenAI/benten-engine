@@ -234,15 +234,33 @@ impl Did {
             .into_vec()
             .map_err(|_| DidError::Base58Decode)?;
 
-        if decoded.len() < 2 + 32 {
+        // Need at least the 2-byte multicodec to discriminate the arm.
+        if decoded.len() < 2 {
             return Err(DidError::BodyTooShort {
                 got: decoded.len(),
                 min: 2 + 32,
             });
         }
 
+        // Multicodec discrimination FIRST — so a non-Ed25519 body (e.g. a
+        // hybrid `0x1211` ML-DSA-first body) surfaces the semantic
+        // `UnknownMulticodec`, not a length error.
         if decoded[0] != ED25519_MULTICODEC[0] || decoded[1] != ED25519_MULTICODEC[1] {
             return Err(DidError::UnknownMulticodec(decoded[0], decoded[1]));
+        }
+
+        // F-04: EXACT length for the Ed25519 arm — reject trailing bytes,
+        // mirroring `resolve_signing` (which exact-consumes). A `< 2+32`
+        // gate silently ignored trailing bytes, making the codec
+        // non-injective (a `did:key:z<base58(0xed01 ‖ pk ‖ junk)>` resolved
+        // to the same key as the canonical form) and diverging from
+        // `resolve_signing`. Rejecting only already-malformed Ed25519 input
+        // changes no legitimate DID's outcome.
+        if decoded.len() != 2 + 32 {
+            return Err(DidError::BodyTooShort {
+                got: decoded.len(),
+                min: 2 + 32,
+            });
         }
 
         let mut pk_bytes = [0u8; 32];

@@ -582,7 +582,7 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 
 This inventory is the wave-time enumeration; Ben signs the freeze decision separately at the V1-FROZEN-INTERFACE.md item 4 P-III decision-point sweep. The decision-point question Ben answers:
 
-> "Are the 29 covered wire-format surfaces + the 1 deferred MerkleRangeProof surface (item 3) — 30 enumerated in total — the COMPLETE v1-beta wire-format inventory (with item 24's suspension_store records noted as crate-private, not in the public freeze scope)? Is there any surface NOT listed above whose bytes the v1-beta lock-in needs to bind?"
+> "Are the 31 covered wire-format surfaces + the 1 deferred MerkleRangeProof surface (item 3) — 32 enumerated in total — the COMPLETE v1-beta wire-format inventory (with item 24's suspension_store records noted as crate-private, not in the public freeze scope)? Is there any surface NOT listed above whose bytes the v1-beta lock-in needs to bind?"
 
 A "yes, complete" answer locks the inventory; a "no, add X" answer adds the missing surface inline + extends the byte-pin coverage at the same wave.
 

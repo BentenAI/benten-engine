@@ -28,8 +28,9 @@
 //! to that pipe (that was the rejected Option-D); it is that the pipe
 //! **no longer exists**. Revocation now flows through exactly ONE
 //! self-anchored seam: `UCANBackend::{revoke,is_revoked}`, keyed on
-//! the **content-CID of a user-root-traced UCAN envelope** (claims +
-//! signature). There is no API anywhere that accepts a bare device-DID
+//! the **signature-EXCLUSIVE payload CID of a user-root-traced UCAN**
+//! (BLAKE3 over its `claims` alone — F-03/Inv-15). There is no API
+//! anywhere that accepts a bare device-DID
 //! revocation, so the forged-parent-against-victim-device-DID attack
 //! is **structurally unconstructible** — not merely defended.
 //!
@@ -73,7 +74,7 @@ fn build_ucan(issuer: &Keypair, audience: &Keypair, cap: Capability, nbf: u64, e
 
 /// **MANDATORY closure-pin #1230 / #605 / #707-trust (would-FAIL-if-no-op'd).**
 ///
-/// The ONLY revocation seam is the self-anchored, content-CID-keyed,
+/// The ONLY revocation seam is the self-anchored, payload-CID-keyed,
 /// user-root-traced `UCANBackend::{revoke,is_revoked}`. A UCAN
 /// installed + validating successfully, once revoked through this one
 /// seam, MUST observably reject at `validate_chain`. This is the
@@ -81,15 +82,16 @@ fn build_ucan(issuer: &Keypair, audience: &Keypair, cap: Capability, nbf: u64, e
 /// `validate_chain_with_device_revocations` parallel pipe.
 ///
 /// **Why this proves #1230 dissolved (not merely defended):** the
-/// revocation identity is `ucan_cid(envelope)` — the BLAKE3
-/// content-address of the full UCAN (claims + signature). To revoke a
-/// victim's authority an attacker would need the victim's own
-/// user-root-traced grant CID *and* the ability to write to the
-/// victim's durable store — i.e. they would already have to be the
-/// victim. There is no bare-device-DID revocation key (the #1230
-/// forge surface) anywhere in the surviving API. The perpetual-victim
-/// DoS is structurally impossible because the pipe that made it
-/// possible was deleted.
+/// revocation identity is the token's **signature-EXCLUSIVE payload
+/// CID** (`ucan_payload_cid`, BLAKE3 over the UCAN `claims` alone —
+/// F-03/Inv-15; NOT the sig-inclusive full-envelope `ucan_cid` used
+/// for the grant store). To revoke a victim's authority an attacker
+/// would need the victim's own user-root-traced grant *and* the
+/// ability to write to the victim's durable store — i.e. they would
+/// already have to be the victim. There is no bare-device-DID
+/// revocation key (the #1230 forge surface) anywhere in the surviving
+/// API. The perpetual-victim DoS is structurally impossible because
+/// the pipe that made it possible was deleted.
 ///
 /// If the `is_revoked` consultation in `validate_chain_at` were
 /// no-op'd (the only remaining revocation enforcement after the
@@ -111,28 +113,28 @@ fn single_self_anchored_revocation_seam_is_the_only_revocation_path() {
     );
 
     // Install + validate: the chain is good through the single seam.
-    let cid = backend.install_proof(&ucan).expect("install_proof");
+    backend.install_proof(&ucan).expect("install_proof");
     backend
         .validate_chain(std::slice::from_ref(&ucan), now)
         .expect("pre-revocation chain-walk MUST pass");
     assert!(
-        !backend.is_revoked(&cid).unwrap(),
+        !backend.is_revoked(&ucan).unwrap(),
         "fresh grant must not be revoked"
     );
 
-    // Revoke through the ONE self-anchored, content-CID-keyed seam.
-    backend.revoke(&cid).expect("revoke via single seam");
+    // Revoke through the ONE self-anchored, payload-CID-keyed seam.
+    backend.revoke(&ucan).expect("revoke via single seam");
 
     // OBSERVABLE consequence: the same UCAN that validated now
     // rejects with the typed `Revoked` — through the single seam,
     // NOT a deleted device-DID-keyed parallel pipe.
     assert!(
-        backend.is_revoked(&cid).unwrap(),
+        backend.is_revoked(&ucan).unwrap(),
         "post-revoke `is_revoked` MUST be true at the single seam"
     );
     let err = backend.validate_chain(&[ucan], now).expect_err(
         "COLLAPSE #1230 REGRESSION: a UCAN revoked through the single \
-             self-anchored content-CID-keyed seam was still admitted — the \
+             self-anchored payload-CID-keyed seam was still admitted — the \
              only post-COLLAPSE revocation enforcement has been no-op'd. \
              #1230's perpetual-victim-DoS was dissolved by deleting the \
              un-anchored device-DID-keyed parallel pipe; this single seam \

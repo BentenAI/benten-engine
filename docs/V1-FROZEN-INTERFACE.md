@@ -47,7 +47,7 @@
 > > `set` / `ucan` / `verify` — every `pub mod` + re-export the cargo-public-api
 > > baseline pins; the baseline additionally enumerates the nested `set::crdt`
 > > submodule + the crate root), NOT only the abstract
-> > "MembershipSet surface." Fold the enumerated 15-pub-mod set into the Ben
+> > "MembershipSet surface." Fold the enumerated 16-pub-mod set into the Ben
 > > sign-off checklist so the freeze decision is against the concrete module
 > > roster the baseline (`docs/public-api/benten-membership-set.txt`) freezes —
 > > preventing an accidental scope gap between "the surface" and the actual
@@ -736,17 +736,27 @@ each codepoint = SWAPPABLE within the framing):**
    types (NOT a `[u8; 32]` placeholder fingerprint). `benten-drop`
    **re-exports** `RecipientPublic` / `RecipientSecret` from
    `benten_crypto_suite::cipher_suite` (`benten_drop::layer_c::{RecipientPublic,
-   RecipientSecret}` + the `group_posture` mirror). The frozen signatures
+   RecipientSecret}` + the `group_posture` mirror). **The seal side keys off
+   `RecipientBinding`, NOT a bare `(&RecipientPublic, &AudienceDid)` pair
+   (GAP-KDB Shape-B / Inv-23).** `RecipientBinding` is a sole-constructor
+   typestate (`benten_drop::layer_c::RecipientBinding`; private fields,
+   `RecipientBinding::resolve` the ONLY constructor) that commits the
+   recipient's KEM key TO its audience `did:benten` by CID — the deleted
+   two-param `(kem_pub, audience_did)` seal door's absence is load-bearing
+   (the anti-downgrade property: no code path can seal to an un-committed
+   `(KEM, DID)` pair, and a `did:benten` recipient cannot be downgraded to
+   the un-cross-checked path). The open side takes `&RecipientSecret` +
+   `&AudienceDid` unchanged. The frozen signatures
    (machine-locked by the `docs/public-api/benten-drop.txt` `cargo-public-api`
    baseline):
 
-   - `seal_sealed_sender(&RecipientPublic, &AudienceDid, &SenderDid, &sig::Keypair, &BodyCidDigest, u32, &[u8]) -> EncryptedEnvelope`
-   - `seal_plaintext_sender(&RecipientPublic, &AudienceDid, &SenderDid, &sig::Keypair, &BodyCidDigest, u32, &[u8]) -> EncryptedEnvelope`
-   - `seal_group_multi(&[RecipientPublic], &SenderDid, &sig::Keypair, &BodyCidDigest, u32, &[u8]) -> EncryptedEnvelope`
-   - `seal_group_multi_plaintext_sender(&[RecipientPublic], &SenderDid, &sig::Keypair, &BodyCidDigest, u32, &[u8]) -> EncryptedEnvelope`
+   - `seal_sealed_sender(&RecipientBinding, &SenderDid, &sig::Keypair, &BodyCidDigest, u32, &[u8]) -> EncryptedEnvelope`
+   - `seal_plaintext_sender(&RecipientBinding, &SenderDid, &sig::Keypair, &BodyCidDigest, u32, &[u8]) -> EncryptedEnvelope`
+   - `seal_group_multi(&[RecipientBinding], &SenderDid, &sig::Keypair, &BodyCidDigest, u32, &[u8]) -> Result<EncryptedEnvelope, LayerCError>`
+   - `seal_group_multi_plaintext_sender(&[RecipientBinding], &SenderDid, &sig::Keypair, &BodyCidDigest, u32, &[u8]) -> Result<EncryptedEnvelope, LayerCError>`
    - `open_single(&RecipientSecret, &AudienceDid, u32, &EncryptedEnvelope) -> Result<(Vec<u8>, SenderDid), LayerCError>`
    - `open_group_stanza(&RecipientSecret, usize, &[RecipientDid], u32, &EncryptedEnvelope) -> Result<(Vec<u8>, SenderDid), LayerCError>`
-   - `group_posture::seal_membership_set_group(&[RecipientPublic], &SenderDid, &sig::Keypair, &[u8; 32], &GroupSealParams, &[u8]) -> GroupSealedEnvelope`
+   - `group_posture::seal_membership_set_group(&[RecipientBinding], &SenderDid, &sig::Keypair, &[u8; 32], &GroupSealParams, &[u8]) -> Result<GroupSealedEnvelope, LayerCError>`
    - `group_posture::open_membership_set_group(&RecipientSecret, usize, &GroupVerifyContext, &GroupSealedEnvelope) -> Result<(Vec<u8>, SenderDid), GroupError>`
 
    The recipient secret carries genuine OS-RNG entropy (ML-KEM-768

@@ -226,7 +226,7 @@ pub const RECIPIENT_SEED_LABEL: &[u8] = b"benten-crypto-suite:recipient-seed";
 /// The complete corpus of domain-separation tags (the single enumerable table).
 ///
 /// The cross-surface prefix-free / no-collision invariant
-/// ([`detects_prefix_collision`]) is checked over EXACTLY this set. Every new
+/// (`detects_prefix_collision`, test/`testing`-gated) is checked over EXACTLY this set. Every new
 /// signing/AAD domain tag minted anywhere in the corpus MUST be added here, so
 /// the build-time test forces the prefix-free property corpus-wide.
 #[must_use]

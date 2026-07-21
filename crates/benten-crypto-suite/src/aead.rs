@@ -15,7 +15,7 @@
 //! - [`AeadError`] — typed error envelope: `AeadAuthFailed` +
 //!   `MalformedEnvelope` + `Unsupported` (codepoint-mismatch).
 //!
-//! # Wire format (G-CORE-9 freezes; canonical at G-CORE-3a)
+//! # Wire format (FROZEN at G-CORE-9 phase-close; canonical at G-CORE-3a)
 //!
 //! ```text
 //! byte 0   : magic 0xae        (envelope identifier; Varsig sibling)
@@ -55,8 +55,12 @@ pub const IROH_BLOCK_SIZE: usize = 16 * 1024;
 /// per-chunk AEAD ≥ 64 KiB.
 pub const WHOLE_CONTENT_AEAD_THRESHOLD: usize = 64 * 1024;
 
-/// The AEAD envelope's format-version discriminator (G-CORE-9 may
-/// re-numerate at the wire-freeze pass; until then v1-beta = 0x01).
+/// The AEAD envelope's format-version discriminator. **FROZEN at 0x01**:
+/// the phase-close freeze (this tag) IS the wire-freeze, and 0x01 is
+/// byte-pinned by the drop-bundle golden vector, so it must NEVER be
+/// re-numerated — a bump would break forever-decodability of every
+/// persisted `AeadEnvelope` blob. A future format is a NEW additive
+/// version discriminator, never a renumber of 0x01.
 pub const ENVELOPE_FORMAT_VERSION_V1: u8 = 0x01;
 
 /// Magic byte identifying a Benten AEAD envelope (Varsig-style

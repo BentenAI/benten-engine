@@ -46,7 +46,10 @@
 //!     2. split wire into (mldsaSig, tradSig) — codepoint dispatches dims; NO hardcoded sizes.
 //!     3. fail-closed if either half is missing/stripped.
 //!     4. fail-closed if ML-DSA-65.verify_with_context(M', Label, mldsaSig) rejects.
-//!     5. fail-closed if Ed25519.verify(M', tradSig) rejects.
+//!     5. fail-closed if Ed25519.verify_strict(M', tradSig) rejects
+//!        (STRICT — a non-canonical / malleated `S` component is
+//!        rejected, so the composite signature is non-malleable; see
+//!        the `verify_strict` note on the classical arm below).
 //!     6. else Ok(()).
 //! ```
 //!
@@ -701,9 +704,18 @@ impl SignatureSuite {
                 .try_into()
                 .map_err(|_| VerifyError::MalformedSignature("classical sig length"))?;
             let classical_sig = ed25519_dalek::Signature::from_bytes(&sig_bytes);
+            // STRICT verify (F-03 fix b): `verify_strict` rejects a
+            // non-canonical / malleated scalar `S` (S >= L) and small-
+            // order keys, so the same signed message cannot be re-encoded
+            // into a second byte-distinct-but-still-verifying signature.
+            // This is the authority-verify chokepoint the UCAN chain-walk
+            // (via `benten_id::authority_verify`), rotation, device-
+            // attestation, VC, and drop/governance/manifest origin-auth
+            // all route through. Honest `ed25519_dalek` signatures are
+            // always canonical, so no legitimate signature is rejected.
             return pk
                 .classical
-                .verify(msg, &classical_sig)
+                .verify_strict(msg, &classical_sig)
                 .map_err(|_| VerifyError::ClassicalVerifyFailed);
         }
 
@@ -740,8 +752,11 @@ impl SignatureSuite {
             .try_into()
             .map_err(|_| VerifyError::MalformedSignature("classical sig length"))?;
         let classical_sig = ed25519_dalek::Signature::from_bytes(&classical_bytes);
+        // STRICT verify (F-03 fix b): reject a non-canonical / malleated
+        // `S` on the Ed25519 half of the LAMPS composite too, so neither
+        // half of a hybrid authority signature is malleable.
         pk.classical
-            .verify(&m_prime, &classical_sig)
+            .verify_strict(&m_prime, &classical_sig)
             .map_err(|_| VerifyError::ClassicalVerifyFailed)?;
 
         // Cryptographically verify the ML-DSA-65 (PQ) half over M' WITH

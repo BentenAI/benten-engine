@@ -45,6 +45,7 @@ fn squished_layer_c() -> String {
 #[test]
 fn drop3_two_param_single_seal_door_is_retired() {
     let squished = squished_layer_c();
+    // Specific known-bad adjacency (the historical two-param door).
     assert!(
         !squished.contains("recipient_pub:&RecipientPublic,audience_did:&AudienceDid"),
         "DROP-3: the two-independent-param seal door \
@@ -53,6 +54,28 @@ fn drop3_two_param_single_seal_door_is_retired() {
          restoring it lets an attacker downgrade a did:benten recipient back to the \
          un-cross-checked path (GAP-KDB re-opens)."
     );
+    // O-04 — NAME-AGNOSTIC net: NO public `seal*` fn signature may consume a
+    // raw `&RecipientPublic` under ANY parameter name. A re-introduced
+    // raw-recipient seal door with renamed params would evade the exact
+    // adjacency above but not this. The internal, non-`pub` `seal_inner`
+    // legitimately handles `&RecipientPublic` and is excluded (it is not a
+    // `pub fn` → the `pubfnseal` marker never matches it). We scan the
+    // SIGNATURE slice only (from the `pub fn seal` keyword up to the body
+    // `{`), never the body.
+    for (idx, _) in squished.match_indices("pubfnseal") {
+        let sig_end = squished[idx..]
+            .find('{')
+            .map_or(squished.len(), |off| idx + off);
+        let sig = &squished[idx..sig_end];
+        assert!(
+            !sig.contains("&RecipientPublic"),
+            "DROP-3 (O-04): a public `seal*` fn signature consumes a raw \
+             `&RecipientPublic` — every public seal door MUST take \
+             `&RecipientBinding` / `&[RecipientBinding]` (Inv-23, the \
+             KEM-key-committed-by-audience-DID typestate). Offending \
+             signature: `{sig}`"
+        );
+    }
 }
 
 /// DROP-3 — the replacement binding-typed seal door EXISTS (single +/or group).

@@ -14,7 +14,7 @@
 //!
 //! # WIRED 2026-06-05 — the real cross-impl KAT (libcrux is now production)
 //!
-//! `libcrux-ml-kem 0.0.9` is the PRODUCTION ML-KEM-768 impl (swapped from
+//! `libcrux-ml-kem 0.0.10` is the PRODUCTION ML-KEM-768 impl (swapped from
 //! RustCrypto `ml-kem 0.2.3`, now retained as a `[dev-dependencies]`
 //! cross-impl witness for exactly this KAT). The HARD-GATE `#[ignore]` is
 //! REMOVED: both real impls are driven from the SAME FIPS-203 deterministic
@@ -80,7 +80,7 @@ mod rustcrypto_impl {
     }
 }
 
-/// REAL libcrux-ml-kem `0.0.9` FIPS-203 witness (the PRODUCTION impl).
+/// REAL libcrux-ml-kem `0.0.10` FIPS-203 witness (the PRODUCTION impl).
 mod libcrux_impl {
     use libcrux_ml_kem::mlkem768;
 

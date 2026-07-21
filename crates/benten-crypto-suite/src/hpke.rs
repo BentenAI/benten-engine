@@ -62,8 +62,12 @@ pub fn unwrap_key_from_recipient(
     Ok(unwrapped.as_bytes().to_vec())
 }
 
-/// Whether Layer-C drops and Layer-D wraps share ONE HPKE primitive (Inv-16
-/// C-2). TRUE — both route through [`wrap_key_to_recipient`].
+/// Whether Layer-C drops and Layer-D wraps share ONE KEM-DEM primitive
+/// (Inv-16 C-2). TRUE — both bottom out at
+/// [`CipherSuite::wrap_key_material`](crate::cipher_suite::CipherSuite): Layer-D
+/// device-link routes through the [`wrap_key_to_recipient`] wrapper, while
+/// Layer-C drops (and the swap-matrix) call `CipherSuite::wrap_key_material`
+/// directly via `hybrid_suite()`. One KEM-DEM impl either way.
 #[must_use]
 pub const fn one_primitive_across_layers() -> bool {
     true

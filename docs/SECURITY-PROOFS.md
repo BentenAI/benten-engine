@@ -131,8 +131,10 @@ own AAD field-set under its own HPKE-derived AEAD key, so **each stanza independ
   `id-MLDSA65-Ed25519-SHA512` (`0x0001`) signature over a domain-separated binding `M_auth`
   (`SENDER_AUTH_DOMAIN` ‖ sig/envelope codepoints ‖ sender-DID ‖ `body_cid` ‖ audience commitment ‖ key-epoch
   generations ‖ `stanza_count` ‖ body-AAD digest). Each recipient resolves the recovered sender-DID to its
-  **hybrid** verifying key (self-certifying `did:key`, two-component multikey; `Did::resolve_hybrid`) and
-  cryptographically verifies **both halves** post-decrypt, fail-closed (`SenderOriginAuthFailed`). **Soundness
+  verifying key via the method-aware `Did::resolve_signing` (a `did:key` sender → the classical Ed25519 handle;
+  a `did:benten` sender → the composite hybrid key — the shipped origin-auth path `verify_m_auth` →
+  `parse_validated_signing`), then cryptographically verifies **both halves** of a hybrid sender post-decrypt,
+  fail-closed (`SenderOriginAuthFailed`). **Soundness
   (F-2):** the recipient re-derives the audience commitment + the key-epoch generations from the set-state it
   INDEPENDENTLY HOLDS (its own roster / `K_Set` / held generations), NEVER the attacker-controllable wire value —
   so a re-target (re-wrap to a new set) flips the commitment and a stale-generation replay (revoked-member

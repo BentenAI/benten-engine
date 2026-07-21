@@ -179,8 +179,11 @@ impl HeadlessDeviceAuth {
                 // hybrid signing key via `mem::take` (leaves an empty Vec the
                 // dropped payload harmlessly re-zeroizes) and copy the
                 // `[u8; 32]` `k_principal`; both flow straight into the
-                // zeroizing `UnlockedKeyMaterial`. No secret is cloned onto an
-                // un-wiped stack copy, and the residual `k_principal` copy left
+                // zeroizing `UnlockedKeyMaterial`. NOTE: `k_principal` is a
+                // `Copy` `[u8; 32]`, so the `let k_principal = ...` bind + the
+                // arg-pass each leave a transient un-zeroized stack copy (Copy
+                // types carry no Drop glue) — the same RAM-residency class
+                // Compromise #36 discloses OUT-OF-SCOPE. The residual copy left
                 // in `decoded.payload` is wiped by the payload's `Drop`.
                 let k_principal = decoded.payload.k_principal;
                 let user_did_signing_key =

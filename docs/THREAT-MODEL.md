@@ -36,8 +36,9 @@ Per CLAUDE.md baked-in #18 the Principal primitive has TWO isolation halves, and
   **NOT built at v1-beta.**
 
 Consequently, per-Node AEAD is a **publicly-derivable-`K_principal` STAND-IN** at v1-beta, **not** real untrusted-host
-confidentiality: `K_principal = BLAKE3-keyed-hash(domain_tag, namespace_did)` where BOTH the `domain_tag` (a public
-registered constant in `domain_registry.rs`) AND the `namespace_did` are **PUBLIC**, so `K_principal` — and thus `K(N)`
+confidentiality: `K_principal = BLAKE3-keyed-hash(domain_tag, namespace_did)` where BOTH the `domain_tag` (the public
+function-local constant `K_PRINCIPAL_DOMAIN_KEY` in `benten-graph/src/redb_backend.rs` — NOT one of the 19
+`registered_domain_tags()`, consistent with Compromise #65) AND the `namespace_did` are **PUBLIC**, so `K_principal` — and thus `K(N)`
 and the per-Node AEAD key — is **publicly derivable**: any party holding `(namespace_did, ciphertext_blob)` can derive
 the key and decrypt. An **untrusted host CAN therefore currently read the partition plaintext.** This is disclosed
 honestly + tracked as a **numbered Compromise** in `docs/SECURITY-POSTURE.md` (Compromise #65 — "wave-3e per-Node AEAD

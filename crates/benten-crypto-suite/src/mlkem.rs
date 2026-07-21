@@ -15,7 +15,7 @@
 //! # The 2026-06-05 libcrux swap (Compromise #32 → mitigated-live)
 //!
 //! The production ML-KEM-768 impl moved from RustCrypto `ml-kem 0.2.3` to
-//! `libcrux-ml-kem 0.0.9`. libcrux's portable + AVX2 field arithmetic / NTT
+//! `libcrux-ml-kem 0.0.10`. libcrux's portable + AVX2 field arithmetic / NTT
 //! / serialization / generic high-level code is formally verified via hax +
 //! F\* — this is the constant-time mitigation for Compromise #32 (the
 //! ML-KEM-768 Decap side-channel / Tempo-SampleNTT-timing concern). The

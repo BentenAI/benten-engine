@@ -8,7 +8,8 @@
 //! `[u8; 32]`, exactly like the in-tree [`crate::transport_trait`] boundary
 //! keeps the iroh connection layer behind an abstract `trait`. The pre-v1
 //! concrete iroh-gossip impl (post-canary) implements this trait; the
-//! channel-backed [`MockGossipTransport`] proves the surface is iroh-free.
+//! channel-backed `MockGossipTransport` (test/`testing`-gated) proves the
+//! surface is iroh-free.
 //!
 //! ## gossip = liveness ONLY (M-10)
 //!

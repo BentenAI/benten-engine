@@ -12,11 +12,14 @@
 //!
 //! # `SubsetRef` refused at v1-beta (Inv-20 clause-k/l / §4.2)
 //!
-//! [`MemberRef::SubsetRef`](crate::member::MemberRef) is reserved-and-REFUSED at
-//! v1-beta — a typed-reject at codepoint `0x6620`
-//! ([`crate::codepoints::MEMBERSHIP_SET_RESERVED_0X6620`]). The default
-//! federation model is **Model-B** (independent-`K_Set`-per-set); Model-A is
-//! opt-in post-v1-beta additive (NOT selectable at v1-beta).
+//! The reserved `SubsetRef` federation member-ref (tag 3 — NO variant minted at
+//! v1-beta; [`MemberRef`](crate::member::MemberRef) ships only `UserDid` /
+//! `DeviceDid` / `LocalDevice`) is reserved-and-REFUSED at v1-beta: a
+//! typed-reject at codepoint `0x6620`
+//! ([`crate::codepoints::MEMBERSHIP_SET_RESERVED_0X6620`]), enforced by the
+//! standalone `admit_subset_ref_at_v1_beta` (never a `MemberRef` enum arm). The
+//! default federation model is **Model-B** (independent-`K_Set`-per-set);
+//! Model-A is opt-in post-v1-beta additive (NOT selectable at v1-beta).
 
 /// `MEMBERSHIP_RECURSION_MAX_DEPTH = 4` (Inv-20 clause-k). Accept a `hop_path`
 /// of length ≤ 4; reject 5.

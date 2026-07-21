@@ -365,7 +365,7 @@ impl CipherSuiteCodepoint {
 ///   (`CGKA_COMMIT_BASE == 0x63A0`; §4.0).
 /// - [`Self::ChainedStateTlv`] — the per-stanza `Option<ChainedStateTlv>`
 ///   codepoint-reserve sub-slot (GAP-6b), AAD-bound when present (see
-///   [`chained_state_tlv_aad_binding`]).
+///   `chained_state_tlv_aad_binding`, test/`testing`-gated).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ReservedCodepoint {

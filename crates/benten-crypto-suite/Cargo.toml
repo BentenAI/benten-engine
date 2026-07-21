@@ -27,18 +27,20 @@ testing = []
 # leak a secret-dependent timing path — the genuine build-level gate the
 # `check-secret-independence` CI step would run.
 #
-# ⚠️ FLAG-FOR-BEN (2026-06-05): at the pinned `libcrux-ml-kem =0.0.9` this
-# feature DOES NOT COMPILE — libcrux-ml-kem 0.0.9's `impl_kem_trait!` macro
-# does not propagate the secret-typed signatures to its `keygen`/`encaps`/
-# `decaps` trait methods (E0053 incompatible-type, reproduced 2026-06-05;
-# this is an UPSTREAM 0.0.9 defect, independent of Benten's usage). So the
-# runnable CI secret-independence gate is NOT honestly wireable at 0.0.9.
-# This feature is kept as the one-flag-away seam (and intent record) for when
-# libcrux ships a 0.0.x/0.1 that compiles cleanly under it; it is NOT enabled
-# by default and is NOT exercised in CI yet. f_kat_2 pins the REAL assurance
-# that IS available at 0.0.9 (the production impl is the verified libcrux; the
-# portable backend is hax/F*-verified constant-time) and leaves the
-# CI-gate-specific arm #[ignore]'d with this same flag. Honesty over green.
+# ⚠️ FLAG-FOR-BEN (2026-06-05; re-verified at =0.0.10 on 2026-07-20): at the
+# pinned `libcrux-ml-kem =0.0.10` this feature STILL DOES NOT COMPILE —
+# libcrux-ml-kem's `impl_kem_trait!` macro does not propagate the secret-typed
+# signatures to its `keygen`/`encaps`/`decaps` trait methods (E0053
+# incompatible-type: `expected Secret<u8>, found u8` at
+# `libcrux-ml-kem-0.0.10/src/mlkem768.rs`; first reproduced 2026-06-05 at 0.0.9,
+# E0053 PERSISTS at 0.0.10, re-verified 2026-07-20 — an UPSTREAM defect,
+# independent of Benten's usage). So the runnable CI secret-independence gate is
+# NOT honestly wireable at 0.0.10. This feature is kept as the one-flag-away seam
+# (and intent record) for when libcrux ships a version that compiles cleanly
+# under it; it is NOT enabled by default and is NOT exercised in CI yet. f_kat_2
+# pins the REAL assurance that IS available at 0.0.10 (the production impl is the
+# verified libcrux; the portable backend is hax/F*-verified constant-time) and
+# leaves the CI-gate-specific arm #[ignore]'d with this same flag. Honesty over green.
 mlkem-ct-check = ["libcrux-ml-kem/check-secret-independence"]
 
 # G-CORE-2 (#1300) — the integration crate is the ONE crypto-primitive
@@ -166,7 +168,7 @@ x25519-dalek = { version = "2", default-features = false, features = ["alloc", "
 #
 # The swap is BYTE-SAFE (proven by the canary spike at
 # `.addl/phase-4-meta/libcrux-canary-spike.md`): for a fixed FIPS-203
-# deterministic seed `libcrux-ml-kem 0.0.9` produces byte-identical
+# deterministic seed `libcrux-ml-kem 0.0.10` produces byte-identical
 # ek(1184)/ct(1088)/dk(2400)/ss(32) vs RustCrypto `ml-kem 0.2.3` and
 # cross-decapsulates both directions. Every on-wire ML-KEM-768 byte + every
 # frozen golden survives unchanged. `f_kat_1` asserts this cross-impl

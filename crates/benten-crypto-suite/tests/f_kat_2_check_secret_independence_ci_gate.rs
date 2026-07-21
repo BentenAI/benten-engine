@@ -11,9 +11,9 @@
 //!     #32 (ML-KEM-768 Decap CT side-channel — the libcrux CT-mitigation this
 //!     witnesses).
 //!
-//! # WIRED 2026-06-05 — what is REAL at libcrux-ml-kem 0.0.9 (honesty over green)
+//! # WIRED 2026-06-05 — what is REAL at libcrux-ml-kem 0.0.10 (honesty over green)
 //!
-//! `libcrux-ml-kem 0.0.9` is now the PRODUCTION ML-KEM-768 impl. Compromise
+//! `libcrux-ml-kem 0.0.10` is now the PRODUCTION ML-KEM-768 impl. Compromise
 //! #32 (ML-KEM-768 Decap side-channel / Tempo-SampleNTT-timing) is moved from
 //! deferred → mitigated-live by the swap: libcrux's portable + AVX2 field
 //! arithmetic / NTT / serialization / generic high-level code is FORMALLY
@@ -30,15 +30,16 @@
 //!
 //! # ⚠️ FLAG-FOR-BEN — the runnable check-secret-independence CI gate
 //!
-//! libcrux 0.0.9's `check-secret-independence` feature EXISTS (verified in
-//! `libcrux-secrets 0.0.5`) and is a genuine COMPILE-TIME gate: with it on,
+//! libcrux's `check-secret-independence` feature EXISTS (verified in
+//! `libcrux-secrets 0.0.6`) and is a genuine COMPILE-TIME gate: with it on,
 //! ML-KEM secret integers become opaque secret-typed values that lack
 //! branch/index/non-CT ops, so the crate fails to compile if it would leak.
-//! BUT at the pinned `=0.0.9`, building `libcrux-ml-kem` with that feature on
-//! FAILS TO COMPILE (E0053 — its `impl_kem_trait!` macro does not propagate
-//! the secret-typed `keygen`/`encaps`/`decaps` signatures; reproduced
-//! 2026-06-05; an upstream 0.0.9 defect, NOT Benten's usage). So a green
-//! `check-secret-independence` CI step is NOT honestly wireable at 0.0.9 —
+//! BUT at the pinned `=0.0.10`, building `libcrux-ml-kem` with that feature on
+//! STILL FAILS TO COMPILE (E0053 — its `impl_kem_trait!` macro does not propagate
+//! the secret-typed `keygen`/`encaps`/`decaps` signatures; first reproduced
+//! 2026-06-05 at 0.0.9, E0053 PERSISTS at 0.0.10, re-verified 2026-07-20; an
+//! upstream defect, NOT Benten's usage). So a green
+//! `check-secret-independence` CI step is NOT honestly wireable at 0.0.10 —
 //! reporting it as enabled+green would be a fake-green sentinel. The
 //! `mlkem-ct-check` feature on `benten-crypto-suite` is the one-flag-away
 //! seam for when libcrux ships a version that compiles cleanly under it.
@@ -122,33 +123,37 @@ fn production_impl_is_verified_libcrux_ml_kem() {
 
 /// F-KAT-2 (c) — the RUNNABLE `check-secret-independence` CI BUILD-gate.
 ///
-/// ⚠️ FLAG-FOR-BEN / #[ignore]'d: see the module FLAG. libcrux-ml-kem 0.0.9
-/// FAILS TO COMPILE under its own `check-secret-independence` feature (E0053
-/// upstream macro defect, reproduced 2026-06-05), so a green runnable CI gate
+/// ⚠️ FLAG-FOR-BEN / #[ignore]'d: see the module FLAG. libcrux-ml-kem =0.0.10
+/// STILL FAILS TO COMPILE under its own `check-secret-independence` feature
+/// (E0053 upstream macro defect; first reproduced 2026-06-05 at 0.0.9, E0053
+/// PERSISTS at 0.0.10, re-verified 2026-07-20), so a green runnable CI gate
 /// is not honestly wireable at the pinned version. This test asserts the
 /// build SUCCEEDS under the `mlkem-ct-check` feature — which it does NOT at
-/// 0.0.9 — so it stays #[ignore]'d (not faked-green) until libcrux ships a
+/// 0.0.10 — so it stays #[ignore]'d (not faked-green) until libcrux ships a
 /// version that compiles cleanly under the feature. Un-ignore + wire the
 /// `.github/workflows` build step at that version.
 #[test]
-#[ignore = "FLAG-FOR-BEN: libcrux-ml-kem =0.0.9 does NOT compile under its own \
+#[ignore = "FLAG-FOR-BEN: libcrux-ml-kem =0.0.10 does NOT compile under its own \
             `check-secret-independence` feature (E0053 — upstream impl_kem_trait! \
-            macro defect on keygen/encaps/decaps, reproduced 2026-06-05). A green \
+            macro defect on keygen/encaps/decaps; first reproduced 2026-06-05 at \
+            0.0.9, E0053 PERSISTS at 0.0.10, re-verified 2026-07-20). A green \
             runnable CI secret-independence gate is therefore not honestly wireable \
-            at 0.0.9. The `mlkem-ct-check` feature is the one-flag-away seam for \
+            at 0.0.10. The `mlkem-ct-check` feature is the one-flag-away seam for \
             the libcrux version that fixes this. Verified-backend assurance is \
             pinned by tests (a)+(b); the runnable gate carries to that version \
             (Compromise #32 residual). Kept #[ignore]'d per no-fake-green."]
 fn check_secret_independence_build_gate_compiles() {
     // This body is intentionally a documentation anchor for the gate's INTENT.
     // The REAL gate is a build under `--features mlkem-ct-check`, which at
-    // 0.0.9 fails to compile (so the gate cannot pass honestly). When libcrux
-    // ships a fix, the CI step `cargo build -p benten-crypto-suite --features
-    // mlkem-ct-check` becomes the runnable gate and this #[ignore] is removed.
+    // 0.0.10 still fails to compile (so the gate cannot pass honestly). When
+    // libcrux ships a fix, the CI step `cargo build -p benten-crypto-suite
+    // --features mlkem-ct-check` becomes the runnable gate and this #[ignore]
+    // is removed.
     panic!(
         "runnable check-secret-independence gate not honestly wireable at \
-         libcrux-ml-kem 0.0.9 — see FLAG-FOR-BEN. This #[ignore]'d test must \
-         not be force-passed; it un-ignores only when `cargo build --features \
-         mlkem-ct-check` compiles against a fixed libcrux version."
+         libcrux-ml-kem 0.0.10 — see FLAG-FOR-BEN (E0053 persists at 0.0.10). \
+         This #[ignore]'d test must not be force-passed; it un-ignores only when \
+         `cargo build --features mlkem-ct-check` compiles against a fixed libcrux \
+         version."
     );
 }

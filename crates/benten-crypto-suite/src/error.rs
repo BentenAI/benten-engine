@@ -33,8 +33,9 @@ pub enum UnsupportedAlgorithm {
         codepoint: u64,
     },
     /// Unknown / reserved-unimplemented cipher-suite codepoint. (G-CORE-3
-    /// `#1301` lights the live impls; this wave reserves the typed-reject
-    /// surface ahead.)
+    /// `#1301` lit the live impls — `0x647a` / `0x6400` / `0x647c` resolve
+    /// at HEAD; this variant is the typed-reject surface for any codepoint
+    /// outside that set.)
     #[error("unsupported cipher-suite codepoint 0x{codepoint:04x}")]
     CipherSuite {
         /// The raw cipher-suite codepoint value the dispatch did not know.

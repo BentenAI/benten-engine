@@ -9,7 +9,7 @@
 //!   (Node canonical bytes ≥ threshold) carrying a [`ChunkedCiphertext`].
 //! - [`ChunkedCiphertext`] — N-chunk per-chunk-AEAD container; each
 //!   chunk is a `benten_crypto_suite::AeadEnvelope` with
-//!   `aad = aad_per_chunk(plaintext_cid, chunk_index)`. Chunk size =
+//!   `aad = aad_per_chunk(plaintext_cid, chunk_index, total_chunks)`. Chunk size =
 //!   [`IROH_BLOCK_SIZE`] (16 KiB) — alignment with iroh's wire layer is
 //!   load-bearing per §1.A.FROZEN item 15(g) ("different chunk size =
 //!   double-chunking overhead").
@@ -25,7 +25,7 @@
 //! cryptographically binds:
 //! - whole-content: `aad_whole_content(plaintext_cid)` — relocating a
 //!   ciphertext under a different plaintext CID fails AEAD authentication.
-//! - per-chunk: `aad_per_chunk(plaintext_cid, chunk_index)` — shuffling
+//! - per-chunk: `aad_per_chunk(plaintext_cid, chunk_index, total_chunks)` — shuffling
 //!   chunks within a Node fails AEAD authentication (cross-chunk
 //!   rebinding defeated).
 //!
@@ -94,7 +94,7 @@ pub enum EncryptedNode {
     /// per Spike H+1.2).
     Chunked {
         /// Plaintext CID — bound into every chunk's AAD via
-        /// `aad_per_chunk(plaintext_cid, chunk_index)`.
+        /// `aad_per_chunk(plaintext_cid, chunk_index, total_chunks)`.
         plaintext_cid: Cid,
         /// The chunked-AEAD container.
         chunked: ChunkedCiphertext,
@@ -230,7 +230,7 @@ impl EncryptedNode {
 /// Each chunk is exactly [`IROH_BLOCK_SIZE`] bytes of plaintext (the
 /// final chunk may be smaller). The plaintext is sliced
 /// `bytes.chunks(IROH_BLOCK_SIZE)` and each slice is AEAD-sealed
-/// independently under `aad_per_chunk(plaintext_cid, chunk_index)`.
+/// independently under `aad_per_chunk(plaintext_cid, chunk_index, total_chunks)`.
 ///
 /// Two load-bearing invariants:
 /// 1. Chunk-size = [`IROH_BLOCK_SIZE`] (alignment with iroh's wire

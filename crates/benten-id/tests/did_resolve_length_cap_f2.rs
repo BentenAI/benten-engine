@@ -156,3 +156,49 @@ fn ucan_chain_with_oversized_iss_rejects_fast_not_multi_second_hang() {
          took {elapsed:?}"
     );
 }
+
+#[test]
+fn resolve_rejects_trailing_bytes_after_ed25519_key_f04() {
+    // F-04: the classical `did:key` codec must EXACT-consume. A body of
+    // `0xed01 ‖ pk ‖ <trailing>` must be REJECTED — NOT silently
+    // truncated to the same key as the canonical form (that made the
+    // codec non-injective and diverged `resolve` from the exact-consuming
+    // `resolve_signing`). Would-FAIL-on-revert of the `!= 2+32` gate.
+    let kp = Keypair::generate();
+    let canonical = kp.public_key().to_did();
+
+    // Control: the canonical did:key resolves fine.
+    canonical.resolve().expect("canonical did:key must resolve");
+
+    // Rebuild the body with ONE trailing junk byte appended.
+    let body = canonical
+        .as_str()
+        .strip_prefix("did:key:z")
+        .expect("did:key:z prefix");
+    let mut decoded = bs58::decode(body).into_vec().expect("valid base58 body");
+    assert_eq!(
+        decoded.len(),
+        2 + 32,
+        "canonical ed25519 did:key body is 0xed01 ‖ 32-byte pk"
+    );
+    decoded.push(0xFF);
+    let tampered = Did::from_string_for_test_fixture(format!(
+        "did:key:z{}",
+        bs58::encode(&decoded).into_string()
+    ));
+
+    match tampered.resolve() {
+        Err(DidError::BodyTooShort { got, min }) => {
+            assert_eq!(min, 2 + 32, "expected-length const");
+            assert_eq!(
+                got,
+                2 + 32 + 1,
+                "the trailing byte must be COUNTED, not ignored"
+            );
+        }
+        other => panic!(
+            "F-04 REGRESSION: trailing bytes after the ed25519 key must be \
+             rejected (exact-consume), got {other:?}"
+        ),
+    }
+}

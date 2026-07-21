@@ -328,6 +328,23 @@ fn crypto_suite_vault_payload_secret_hygiene_present() {
         "VaultPayload",
         "frozen Serialize/Deserialize preserved (no wire change)",
     );
+    // N-17: UnlockedKeyMaterial — the hydrated user-DID hybrid signing key
+    // (a long-lived at-rest secret) MUST wipe on drop, symmetric with
+    // K_principal (Compromise #36/#39). The roster previously omitted this
+    // type; a revert of vault.rs:629 `impl Drop` would leave the recovered
+    // signing key un-wiped and this fires.
+    assert_source_has(
+        &body,
+        "impl Drop for UnlockedKeyMaterial",
+        "UnlockedKeyMaterial",
+        "zeroize-on-drop",
+    );
+    assert_source_has(
+        &body,
+        "impl core::fmt::Debug for UnlockedKeyMaterial",
+        "UnlockedKeyMaterial",
+        "redacted-Debug",
+    );
 }
 
 #[test]

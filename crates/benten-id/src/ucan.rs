@@ -545,6 +545,11 @@ pub(crate) fn ct_signature_eq(a: &[u8], b: &[u8]) -> bool {
 /// older parents. Equivalent to [`validate_chain_at`] with `now =
 /// u64::MAX` (which never trips `exp`). Use the timed variant for
 /// production paths.
+///
+/// **Caveat (O-23):** this `_no_time_check` entry point has NO production
+/// caller — every production chain-walk goes through the timed
+/// [`validate_chain_at`] / [`validate_chain_for_capability`]. It exists
+/// only for tests that construct time-agnostic fixtures.
 pub fn validate_chain_no_time_check(chain: &[Ucan]) -> Result<(), UcanError> {
     // For "no time check", we still want `nbf` / `exp` consistency
     // checks to be skipped — pass `now = 0` to skip nbf only if all

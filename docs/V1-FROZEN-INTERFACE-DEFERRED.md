@@ -2865,6 +2865,207 @@ Row D-15's audit-readiness concern.
 
 ---
 
+## R6-R1 (freeze-base phase-close, round 1 @ `baa4e777`) NAMED-CARRY rows
+
+These land the R6-R1 council's named-carry findings NOW (HARD-RULE-12
+clause-(b): the freeze-deferred registry receives each entry with its real
+destination). The two convergence-blocking MAJORs (F-01 spec-drift, F-03
+UCAN-revocation-bypass) were FIXED in the R6-R1 fix-pass (F-03 = payload-CID
+re-key + `verify_strict`, both Ben-ratified); the fix-now doc/cite/code items
+were closed in that pass. The items below are the deferred-to-a-named-wave
+residuals. `SURFACE-TO-BEN` marks the freeze/security forks the consolidator
+did not resolve unilaterally.
+
+### Row D-87 — R6-R1 named-carry ledger (consolidated)
+
+- **F-02 — `delegate_capability` attenuation-subset check (SURFACE-TO-BEN).**
+  `crates/benten-engine/src/engine_caps.rs` `delegate_capability` sets
+  `effective_scope = attenuated_caps[0]` with NO subset check vs the resolved
+  source-grant scope (in-code comment defers "full attenuation semantics …
+  alongside G27-D"). No reachable untrusted caller (napi/host only; wasm-
+  excluded), and bounding-enforcement is a ratified deferral (Row D-3 + D-24) —
+  but the frozen public method's docstring promises "narrowed-or-identical".
+  **Fork for Ben:** fix-now (cheap+additive — reuse
+  `benten_id::ucan::caps_match_or_subsume` / `attenuation::check_attenuation`,
+  typed-reject a widening) OR accept as a ratified deferral. Either way this row
+  is the honest freeze-registry disclosure (previously only an in-code `G27-D`
+  comment). Destination if deferred: the write-boundary/attenuation wave
+  (Row D-1 / §4.23 / G-COMP-1).
+- **F-07 — Layer-D authority sigs are classical-Ed25519-only → Row D-26.** The
+  `layer_d/device_link.rs` (`seal/open_provisioning_payload`) +
+  `layer_d/remote_permission.rs` (`verify_canonical`) authority-signature sites
+  are classical-Ed25519-only and OUTSIDE the Fork-A hybrid-dispatch net (they do
+  not route through `benten_id::authority_verify::verify_authority_signature`), so
+  a hybrid `did:benten` user-DID cannot be device-linked/remote-authed at
+  v1-beta. This is the ratified classical-floor posture (Row D-26 "ALL
+  identity-bearing surfaces" + Compromise #30); no HNDL exposure (sig-forgery ≠
+  harvest-now). **Enumerate these 2 Layer-D signing sites into the Row D-26 /
+  G-CORE-PQ-WIRE-1 site list** so the hybrid device-link/remote-auth additive
+  wire-in is not lost.
+- **F-08 — dead test-scaffolding frozen onto the public surface (SURFACE-TO-BEN)
+  → Row D-74.** `benten-membership-set/src/lib.rs` `pub mod scaffold{…}` (dead,
+  zero consumers) + verb-named test-only helpers (`verify_with_tampered_node_at`,
+  `signature_verifies_after_tier_tamper`, `synthesize_revocation_for_embedded_ucan`
+  + sentinel `RevocationRecord`) are captured in the cargo-public-api baselines,
+  invisible to the `is_for_test_pattern` scanner (keys only on
+  `_for_test`/`_test_`/`mock_`/`inject_`). **Fork for Ben:** cfg-gate the module +
+  4 symbols behind `#[cfg(any(test, feature="testing"))]` + regen the 2 baselines
+  NOW (the clean-removal window is pre-tag) — a semver-breaking change post-tag.
+  Couples to **Row D-74** (widen the scanner to verb-named / zero-non-test-caller
+  scaffolding).
+- **N-04 — `DropBundleVersion::Synthetic` dual-accept wart (SURFACE-TO-BEN) →
+  `docs/V1-WIRE-FORMAT-INVENTORY.md` §7.** `benten-drop/src/bundle.rs` `Synthetic(u16)`
+  is documented "test-only" but is NOT `#[cfg]`-gated — a live variant of the
+  `#[derive(Deserialize)]` frozen wire enum, and `is_v1()` returns true for
+  `Synthetic(1)`, so `parse_cbor_bytes` accepts `{tag:Synthetic,value:1}` as a
+  SECOND on-wire encoding of logical-v1. Record the dual-accept + frozen-but-
+  test-only status in wire-inventory §7; **fork:** tighten `is_v1()` / gate
+  `Synthetic` (touches the frozen public enum) vs freeze the wart.
+- **N-10 — `docs/CRYPTO-CODEPOINTS.md` split the 0xf0-KEM paragraph.** The
+  "fallback-only interim values" para claims BOTH `HYBRID_SIG_MULTICODEC=[0xef,01]`
+  AND `HYBRID_KEM_MULTICODEC=[0xf0,01]` are "retained fallback-only", but the
+  Shape-B section says `0xf0` is RETIRED. Split: `0xf0`-KEM = RETIRED-per-Shape-B
+  (superseded by `0x120c`/`0xec`); only `0xef`-SIG = "retained fallback-only".
+- **N-11 — `atrium_api.rs::for_test` → `EXEMPT_PUB_ITEMS` + Row D-74.**
+  `AtriumConfig::for_test()` is production-reachable (`impl Default`→`for_test()`),
+  frozen on the public surface, untracked in `EXEMPT_PUB_ITEMS`, and invisible to
+  the scanner (bare `for_test`, no leading underscore). Add
+  `('atrium_api.rs','for_test')` to `EXEMPT_PUB_ITEMS` as a v1-GM rename target;
+  couples to **Row D-74** (widen scanner to bare `for_test`).
+- **N-12 — crypto-suite `sizes` module self-referential exemption (SURFACE-TO-BEN)
+  → V1-FROZEN pre-tag surface confirm.** `pub mod sizes` (SyntheticVector /
+  SizeTouchingSurfaces / RedbSigHandle + the three `*_for_test` fixtures) is frozen
+  public API with zero consumers outside `sizes.rs` + tests; the allowlist keeps
+  the fixtures public via callers that live inside the same test-support module
+  (circular exemption). **Fork for Ben:** intentional public conformance-vector API
+  (then document + drop the `for_test` naming) OR test-support (then gate behind
+  `testing`).
+- **N-14 — `docs/ERROR-CATALOG.md` pre-tag trajectory retense.** The top table +
+  headline assert 201 throwable, but the mint trajectory ends at "199 … may mint
+  one more (F-01)→200" (framing the final two mints as pending) and cites
+  `b93b2efc` (a 199-era ancestor) as HEAD. Refresh the trajectory to a landed 201,
+  drop the "may mint" speculation, retense the `b93b2efc` HEAD label to the tag SHA
+  at pre-tag sweep. CI-enforced counts (`CATALOG_VARIANT_COUNT==201`) already correct.
+- **N-16 — §11 `non_exhaustive` denominators post-D-34 → the already-registered
+  R13 F-16 final-pre-tag count re-run.** `docs/V1-FROZEN-INTERFACE.md` §11's
+  "194 pub enum / 444 pub struct = 183 of 638" label drifted after the D-34 wave
+  cfg-gated MockGossipTransport + 26 items (now 443/637); the load-bearing 183
+  `non_exhaustive` figure is unaffected. Folds into the registered R13 F-16
+  final-pre-tag count re-run.
+- **N-18 — Row D-75 enumeration completeness.** Add the same-class bare-`Vec<u8>`
+  copy sites omitted from Row D-75's "three still-bare" roster:
+  `benten-crypto-suite/src/vault.rs` `serialize_vault` (raw `k_principal` as
+  DAG-CBOR) + `decode_vault` (pt from `cipher.decrypt`), and
+  `benten-engine/.../remote_permission.rs` `exec_workflow_open` (returns
+  `aead::unwrap`'s bare `Vec<u8>` pt). No security-posture change (#36 blanket-
+  discloses RAM-residency OUT-OF-SCOPE); v1-GM tidy.
+- **N-19 — wasm forbidden-symbol blocklist widening → V1-WIRE-FORMAT-INVENTORY
+  CI-FU-1.** `.github/workflows/wasm-browser.yml`'s `forbidden=(loro iroh redb
+  wasmtime)` does not assert the 3 new native-only crypto crates
+  (`benten_crypto_suite`/`benten_drop`/`benten_membership_set`, nor prefixes
+  `ml_kem`/`libcrux`/`ml_dsa`/`argon2`/`x25519`/`chacha20`) are absent from the
+  wasm32-unknown-unknown bundle. Exclusion holds today (engine cfg-gate +
+  getrandom compile-error); this is defense-in-depth completeness, not a live hole.
+  Deferred to CI-FU-1 rather than added this pass because the forbidden-symbol
+  outcome is only verifiable against a real wasm bundle build (a wrong entry would
+  red the wasm CI), which this fix-pass cannot exercise locally.
+- **N-20 — `grant_backed.rs` `check_write` stale "Phase-3 tightens" promise →
+  Row D-1 / §4.23 / G-COMP-1.** The write-side cap check is scope-only
+  (`has_unrevoked_grant_matching(scope, None)`) whereas the read side is
+  actor-bound; the module doc still promises "Phase-3 … tightens to actor-scoped
+  lookups". Not exploitable on the single-user cooperating-engine guarantee;
+  re-home the promise to the WriteBoundaryChainValidator production wave.
+- **O-01 — DropBundle `parse_cbor_bytes` struct-shape-stability precondition →
+  `docs/V1-WIRE-FORMAT-INVENTORY.md` §7.** `bundle.rs::parse_cbor_bytes` full-decodes
+  `from_slice::<Self>` (the V1 struct shape) BEFORE the `is_v1()` check, so the
+  advertised typed-`UnsupportedDropVersion` guarantee holds only for a same-top-level-
+  shape version bump; a future shape-changing version read by a stale v1-beta reader
+  surfaces a generic `CodecError` (still fail-closed, no silent-skip). Name the
+  precondition + the probe-decode-version-first hardening (deferrable — no V2 exists).
+- **O-02 — vault frame codepoint↔info-tag binding is convention-enforced →
+  `docs/V1-WIRE-FORMAT-INVENTORY.md` item 30.** The MC-6 vault frame persists salt +
+  Argon2id params but NOT the DAK HKDF info-tag (nor a derivation-version
+  discriminator); `open_vault` threads the info-tag as a caller-supplied parameter.
+  Self-containment holds only because there is exactly one info-tag the sole
+  production caller hardcodes (fail-closed on mis-pairing). Note that a future second
+  info-tag must re-version via the frame codepoint.
+- **O-05 — M-19 LE-survivor scanner under-scopes the F-full surface → M-19-widening
+  row.** `benten-crypto-suite/src/conformance.rs` `WIRE_PATH_SOURCES` embeds only
+  the 8 crypto-suite modules; enumerate `benten-drop/layer_c.rs`,
+  `benten-membership-set/aad.rs`, `benten-engine/layer_d/*.rs` as in-scope for the
+  consolidated LE-survivor scan (all BE today; golden pins catch pinned fields).
+- **O-06 — `docs/CRYPTO-CODEPOINTS.md` RESERVED-table qualify the RemotePermission
+  band.** The RESERVED table lists `0x6320..0x632F RemotePermission — RESERVED`,
+  but §4.0 marks PermissionRequest/PermissionGrant LIVE + only ExecuteWorkflow
+  reserved-typed-reject. Qualify the RESERVED-table row to name only the
+  ExecuteWorkflow slot.
+- **O-08 — `docs/INVARIANT-COVERAGE.md` widen the Inv-20 carve-out.** Inv-20 sits
+  in AS-BUILT+ENFORCED with only the RBAC admin-op carve-out, but clauses
+  a/b/e/g/h (K_Set/K(N)/gossip keying-glue; `promote_tier` returns
+  `k_set_rotated:false`; `gossip_topic` zero live callers) are golden-pinned-not-
+  live — the same disclosure Inv-19/Inv-21 get. Name the a/b/e/g/h substrate
+  golden-pinned-not-live.
+- **O-09 — DropBundle declared-length-bomb pin → THREAT-MODEL §6 allocation-ceiling
+  sweep (G-COMP-1).** The 4 KiB bundle byte-cap does not bound the declared-length-
+  bomb subclass (rests on `cbor4ii` not pre-allocating); the keyset path pins this
+  with a live <2s test, the `bundle.rs::parse_cbor_bytes` path carries no equivalent.
+  The scheduled allocation-ceiling audit should add a DropBundle pin mirroring the
+  keyset one.
+- **O-10 — THREAT-MODEL §1 Tier-1 recipient-cardinality clause.** The Tier-1 "Sees
+  metadata?" cell should add "+ recipient cardinality via the countable
+  per-recipient wrapped-CEK stanzas (`layer_c.rs` `0x6610/0x6520` wire)"; cross-link
+  Compromise #48 (the observable format itself is deferred transport, Row D-64).
+- **O-11 — `created_at_hlc` provenance freeze note → Row D-52 / wire-inventory item
+  25.** The Inv-21 comparator consumes `created_at_hlc` + `fork_event_version_node_cid`,
+  but neither is a field on any frozen benten-membership-set wire struct (it rides
+  the frozen Phase-1 Anchor/Version graph HLC). One-line note: `created_at_hlc` rides
+  the graph Version-Node HLC stamp (data-half) — MUST NOT be added to the `0x6600`
+  wire (would break the additive-only freeze).
+- **O-15 — SECURITY-PROOFS §4.2 `0x6610` CEK precision.** The `0x6610` K_Set-derived
+  CEK is per-`(K_Set, sender, plaintext)`-unique (CEK = BLAKE3(ctx‖k_set‖sender_did‖
+  cid), cid over the plaintext), NOT "per-message-unique"; the fresh-random 12 B nonce
+  keeps it inside the NIST SP800-38D ≤2^32 safe-random-nonce model. Restate the
+  precise property + note the intentional `0x6520`(fresh-random-CEK)-vs-`0x6610`
+  asymmetry.
+- **O-16 — `cek_aead_nonce` redundant-frozen-field note → V1-WIRE-FORMAT-INVENTORY
+  §26.** The `0x6520` group envelope carries a standalone `cek_aead_nonce:[u8;12]`
+  that duplicates the nonce embedded inside `cek_aead_ciphertext`; decrypt-unused +
+  unauthenticated (mutating it is a no-op). Record it as redundant-with-embedded-
+  nonce (authoritative nonce is inside the ciphertext).
+- **O-19 — SECURITY-POSTURE key-rotation scope clarifier.** The offline-Drop
+  "periodic key rotation … per-DID wrapped-key seed" mitigation predates the #65
+  untrusted-host retense: the per-Node AEAD at-rest stand-in has NO secret per-DID
+  seed to rotate (`K_principal` = `blake3::keyed_hash(public domain key, public
+  namespace_did)`, publicly derivable). Scope "key rotation" to the recipient-KEM /
+  grant-key axis (or note the at-rest stand-in carries no rotatable secret seed at
+  v1-beta per #65).
+- **O-25 — deferred Layer-D group-seal roster clamp → G-COMP-1 / #46.** The deferred
+  layer_d group-seal row should clamp the roster to Compromise #46's
+  `wire_cost_ceiling`.
+
+**DISAGREE-with-explanation (recorded; no doc/code change):**
+- **O-13** — the enforced-WRITE audit path is advisory-not-gating at v1-beta-core
+  (NoopWriteBoundaryChainValidator returns NotApplicable), but this is WAI +
+  freeze-safe + honestly disclosed (SECURITY-POSTURE "Layer-1 user-as-root NOT live
+  at WRITE admission at v1-beta") + HARD-RULE-b named (Row D-1); the mint-root-grant
+  attack is independently blocked by the system-zone guard.
+- **O-21** — the class-4/5 comparisons in `grant_acceptance.rs::accept_grant` use
+  `!=` not `ConstantTimeEq`, but the values (audience DIDs, summary hashes over
+  public content) are non-secret; no fix required.
+- **O-22** — `StanzaCountMismatch` is a pre-decrypt structural branch over two public
+  wire integers, secret-independent (SECURITY-PROOFS:286); it is a truncation
+  detector, not a decryption oracle.
+- **O-26** — regression clearance: no defect; confirms no silent weakening across
+  `d0ccf606..baa4e777`.
+- **O-03 / O-07 / O-14 / O-24** — already-dispositioned / out-of-scope: O-03
+  (wrong-constructor-door smell → authority/call-site-hygiene surface, fix lives in
+  benten-engine/benten-caps); O-07 (F-12 discrete-value regression-pin already
+  named-carried, collision-scanner structurally covers re-collision); O-14
+  (write-side private-NS owner-binding already named `phase-4-backlog §4.28/§4.36`);
+  O-24 (already valid HARD-RULE clause-b, `phase-3-backlog §15.3`).
+
+---
+
 ## Update discipline
 
 This document updates via PR:

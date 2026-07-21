@@ -5,7 +5,7 @@
 //! refinement (2) + `00-implementation-plan.md` §1.A.FROZEN item 15(f))
 //!
 //! ```text
-//! K(root) = HKDF-SHA256(K_principal, info = "root" || root_cid)
+//! K(root) = HKDF-SHA256(K_principal, info = "root:codepoint:" || cipher_codepoint_be || root_cid)
 //! K(N)    = HKDF-SHA256(K(predecessor), info = "step" || edge_label || N.cid)
 //! ```
 //!
@@ -34,9 +34,9 @@
 //! Per §1.A.FROZEN item 15(f): "KDF = HKDF-SHA256 v1-beta default
 //! (textbook domain-separation slot for variable-length material; the
 //! `"step"`/`"root"` info-tags use the slot for role-separation)." The
-//! codepoint dispatch here is implicit at this wave (single arm);
-//! G-CORE-9 freezes the explicit codepoint per the additive-codepoint
-//! discipline.
+//! codepoint dispatch here is implicit (single arm) and FROZEN at
+//! G-CORE-9 (this phase-close); a second KDF arm is a NEW additive
+//! codepoint, never a renumber.
 
 use hkdf::Hkdf;
 use sha2::Sha256;
