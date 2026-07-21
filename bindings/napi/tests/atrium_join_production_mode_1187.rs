@@ -48,13 +48,11 @@ fn join_engine_bound_path_uses_production_not_loopback() {
 
     // Negative half: prove the two configs are observably distinct
     // so the pin actually catches a regression back to Loopback.
-    // Construct the Loopback config via the pub `mode` field directly —
-    // `AtriumConfig::for_test()` is now `test-helpers`-gated OFF the
-    // default surface (freeze-hygiene), and this pin needs only the pub
-    // field + variant, not the gated fixture constructor.
-    let loopback = AtriumConfig {
-        mode: AtriumMode::Loopback,
-    };
+    // `AtriumConfig::default()` yields the Loopback config (identical to
+    // the now-`test-helpers`-gated `for_test()`); it's the honest public
+    // API and — unlike a struct literal — works across the crate boundary
+    // (`AtriumConfig` is `#[non_exhaustive]`).
+    let loopback = AtriumConfig::default();
     assert_eq!(loopback.mode, AtriumMode::Loopback);
     assert_ne!(
         prod.mode, loopback.mode,
