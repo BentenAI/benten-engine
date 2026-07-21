@@ -225,8 +225,11 @@ scope now is what makes the post-v1-beta enforcement non-wire-breaking.
 (and `workflow_cid`) are **NOT** bound into the AAD or any signature. Consequence: the executor's **input
 READ-scope is not cryptographically bound** at v1-beta. **Disposition (no live exploit at v1-beta):** runtime
 ExecuteWorkflow enforcement is post-v1-beta to begin with (NQ-T3 above); the field is carried for forward-compat
-and the variant is reserved / typed-rejected at the dispatch boundary at v1-beta, so there is no executable
-exfiltration path through an unbound `input_node_cids` today. **Input-READ-scope AAD/signature binding is
+and the ExecuteWorkflow seal/open path is **unwired at v1-beta** — `exec_workflow_seal` / `exec_workflow_open`
+(`crates/benten-engine/src/layer_d/remote_permission.rs`) have **zero production callers** (the
+`0x6320..=0x632F` band-dispatch `dispatch_remote_permission_codepoint` accepts the wire shape for forward-compat,
+but nothing routes an `ExecuteWorkflow` to an actual executor), so there is no executable exfiltration path
+through an unbound `input_node_cids` today. **Input-READ-scope AAD/signature binding is
 NAMED-DEFERRED to v1-GM** (alongside the NQ-T3 runtime no-egress enforcement it travels with); the deferral is
 recorded in `docs/V1-FROZEN-INTERFACE-DEFERRED.md`. Freezing it now would be premature because the read-scope
 binding shape co-designs with the post-v1-beta runtime enforcement.
