@@ -334,9 +334,24 @@ fn in_pub_trait_block(lines: &[&str], idx: usize) -> bool {
 /// [`EXEMPT_PUB_ITEMS`]; genuinely test-only symbols must carry a
 /// `#[cfg(any(test, feature = "testing"|"test-helpers"))]` gate (per-fn or
 /// on an enclosing gated module/impl).
+///
+/// R6-R1-refix WIDENING: also flag a bare/prefix `for_test` name (e.g.
+/// `AtriumConfig::for_test`). The suffix-only + `_test_`-interior guards let
+/// a fn named exactly `for_test` (no leading `_`, no trailing char after
+/// `test`) slip past, which is how `AtriumConfig::for_test` sat ungated on
+/// the frozen surface until this fix-pass.
+///
+/// LIMIT (honest): this is a NAME-pattern audit. A fixture-shaped
+/// constructor with a production-sounding name — e.g.
+/// `HeadlessDeviceAuth::seal_and_build`, which bakes a sentinel signing key —
+/// carries no test-token and CANNOT be name-caught here. The
+/// public-api-baseline review (`docs/public-api/*.txt` diff at every
+/// surface change) is the real backstop for that class; this pin only holds
+/// the `*test*`-named line.
 fn is_for_test_pattern(name: &str) -> bool {
     name.contains("_for_test")
         || name.contains("_for_testing")
+        || name.starts_with("for_test")
         || name.starts_with("test_")
         || name.contains("_test_")
         || name.contains("mock_")

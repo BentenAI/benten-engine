@@ -128,10 +128,21 @@ impl HeadlessDeviceAuth {
     /// password source supplies `password_source`. The real Argon2id +
     /// XChaCha20-Poly1305 stack is used.
     ///
+    /// This constructor bakes a **constant sentinel** `user_did_signing_key`
+    /// (`[0x22; 64]`) into the sealed payload — it is a test/fixture builder,
+    /// NOT a production device-provisioning path (a real provisioning path
+    /// takes the caller's actual signing key and lands additively in
+    /// Phase-4-Meta-Composing). It is therefore `#[cfg(any(test, feature =
+    /// "test-helpers"))]`-gated OFF the default-feature public surface — the
+    /// same freeze-hygiene as `expose_unlocked_key` (a fixture-shaped
+    /// constructor that would freeze a sentinel key onto the v1 interface must
+    /// not sit on the production surface). Row D-55.
+    ///
     /// # Panics
     ///
     /// Panics only on an internal AEAD seal error (the OWASP params are valid).
     #[must_use]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn seal_and_build(
         k_principal: [u8; 32],
         password: &[u8],

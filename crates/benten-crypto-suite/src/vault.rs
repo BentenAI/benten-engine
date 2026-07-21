@@ -133,6 +133,28 @@ pub const VAULT_ARGON2_MAX_T_COST: u32 = 10;
 /// Fail-closed ceiling on the frame-supplied Argon2id parallelism.
 pub const VAULT_ARGON2_MAX_P_COST: u32 = 4;
 
+// --- Fail-closed FLOORS on the frame-supplied Argon2id cost params
+// (R6-R1-refix F-02: the META #629 sweep added the ceilings above but not the
+// floor). `parse_vault_frame` previously validated the UPPER bound ONLY, so a
+// sub-RFC-9106 header (`t_cost = 0`, `p_cost = 0`, or `m_cost < 8 * p_cost`)
+// PASSED the guard and reached `derive_dak` → `Params::new(...).expect(...)`,
+// which REJECTS those params → **panic** = a reachable crash-DoS from an
+// attacker-controlled `vault.cbor` header on the FROZEN forever-decode path.
+// These floors mirror the `argon2` crate's own RFC-9106 minimums so
+// `parse_vault_frame` fails closed with a typed `Argon2ParamsOutOfBounds`
+// BEFORE `derive_dak` runs (keeping `derive_dak`'s infallible signature — its
+// `.expect()` precondition now always holds). `OWASP_DEFAULT` (19456 / 2 / 1)
+// clears every floor, so valid frames still decode byte-identically.
+// (Private — no new frozen public surface; the behavior is pinned by
+// `f_va_*` regression tests, not by exporting the consts.)
+/// Fail-closed floor on the frame-supplied Argon2id memory cost (KiB); also
+/// enforces the `m_cost >= 8 * p_cost` RFC-9106 relation below.
+const VAULT_ARGON2_MIN_M_COST: u32 = 8;
+/// Fail-closed floor on the frame-supplied Argon2id time cost (passes).
+const VAULT_ARGON2_MIN_T_COST: u32 = 1;
+/// Fail-closed floor on the frame-supplied Argon2id parallelism.
+const VAULT_ARGON2_MIN_P_COST: u32 = 1;
+
 /// The Device-Authentication Key — a zeroize-on-drop 32-byte secret.
 ///
 /// Wraps a [`secrecy::SecretBox<[u8; 32]>`] so the DAK Debug-redacts and its
@@ -424,16 +446,25 @@ fn parse_vault_frame(bytes: &[u8]) -> Result<VaultFrame<'_>, VaultError> {
     let m_cost = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
     let t_cost = u32::from_be_bytes([bytes[24], bytes[25], bytes[26], bytes[27]]);
     let p_cost = u32::from_be_bytes([bytes[28], bytes[29], bytes[30], bytes[31]]);
-    // Fail-closed: reject a header whose Argon2id cost params exceed the
-    // safe ceilings BEFORE they can drive `derive_dak`'s memory/CPU budget
-    // (Compromise #28 / META #629). This single choke point covers both the
-    // self-contained `open_vault` and the DAK-supplied `decode_vault` entry
-    // points, and fires ahead of the AEAD/password gate so a hostile blob can
-    // no longer dictate the victim's KDF cost. All valid frames use
-    // `OWASP_DEFAULT`, which is well under every ceiling.
+    // Fail-closed: reject a header whose Argon2id cost params are outside the
+    // safe band BEFORE they can drive `derive_dak` (Compromise #28 / META
+    // #629). This single choke point covers both the self-contained
+    // `open_vault` and the DAK-supplied `decode_vault` entry points, and fires
+    // ahead of the AEAD/password gate so a hostile blob can neither dictate the
+    // victim's KDF cost (CEILINGS) nor drive an out-of-RFC-9106 param set into
+    // `derive_dak`'s `Params::new(...).expect(...)` — a reachable PANIC-DoS
+    // (FLOORS, R6-R1-refix F-02). All valid frames use `OWASP_DEFAULT`
+    // (19456 / 2 / 1), which clears every ceiling AND every floor.
+    let below_floor = m_cost < VAULT_ARGON2_MIN_M_COST
+        || t_cost < VAULT_ARGON2_MIN_T_COST
+        || p_cost < VAULT_ARGON2_MIN_P_COST
+        // RFC-9106 §3.1 / `argon2::Params::new`: memory cost must be at least
+        // 8× the parallelism (else `Params::new` errors → `derive_dak` panics).
+        || m_cost < p_cost.saturating_mul(8);
     if m_cost > VAULT_ARGON2_MAX_M_COST
         || t_cost > VAULT_ARGON2_MAX_T_COST
         || p_cost > VAULT_ARGON2_MAX_P_COST
+        || below_floor
     {
         return Err(VaultError::Argon2ParamsOutOfBounds {
             m_cost,
@@ -858,6 +889,72 @@ mod tests {
         // at the SAME gate before ever calling derive_dak.
         let err2 = open_vault(&bytes, b"pw", DAK_HKDF_INFO_TAG).unwrap_err();
         assert!(matches!(err2, VaultError::Argon2ParamsOutOfBounds { .. }));
+    }
+
+    /// R6-R1-refix F-02 — the FLOOR half of the same DoS choke-point. A
+    /// `vault.cbor` HEADER whose attacker-controlled Argon2id params fall
+    /// BELOW the RFC-9106 minimums (`t_cost = 0`, `p_cost = 0`, or
+    /// `m_cost < 8 * p_cost`) is rejected FAST with a typed
+    /// [`VaultError::Argon2ParamsOutOfBounds`] at the header-parse gate.
+    /// would-FAIL-on-revert: without the floor, `parse_vault_frame` waves such
+    /// a header through (it exceeds no ceiling) into `derive_dak` →
+    /// `Params::new(...).expect(...)`, which REJECTS the sub-minimum params and
+    /// **panics** — a reachable crash-DoS on the frozen forever-decode path.
+    /// Reverting the floor turns each sub-case below into a panic inside
+    /// `decode_vault` (a test failure), proving the pin is non-vacuous.
+    #[test]
+    fn sub_minimum_argon2_params_reject_fast_not_panic() {
+        let payload = VaultPayload {
+            k_principal: [0x11u8; 32],
+            user_did_signing_key: vec![0x22u8; 64],
+            user_did_creation_time: 0,
+        };
+        let salt = [0x77u8; 16];
+        let dak = [0x33u8; 32];
+        let base = serialize_vault(&payload, &salt, OWASP_DEFAULT, &dak).unwrap();
+        // Header (big-endian): m_cost@[20..24] t_cost@[24..28] p_cost@[28..32].
+
+        // Sub-case A: t_cost = 0 (below the MIN_T_COST floor).
+        let mut a = base.clone();
+        a[24..28].copy_from_slice(&0u32.to_be_bytes());
+        assert!(
+            matches!(
+                decode_vault(&a, &dak),
+                Err(VaultError::Argon2ParamsOutOfBounds { t_cost: 0, .. })
+            ),
+            "t_cost=0 must reject at the parse gate, not panic in derive_dak"
+        );
+
+        // Sub-case B: p_cost = 0 (below the MIN_P_COST floor).
+        let mut b = base.clone();
+        b[28..32].copy_from_slice(&0u32.to_be_bytes());
+        assert!(
+            matches!(
+                decode_vault(&b, &dak),
+                Err(VaultError::Argon2ParamsOutOfBounds { p_cost: 0, .. })
+            ),
+            "p_cost=0 must reject at the parse gate"
+        );
+
+        // Sub-case C: m_cost < 8 * p_cost (RFC-9106 relation): m=8, p=4 → 8 < 32.
+        let mut c = base.clone();
+        c[20..24].copy_from_slice(&8u32.to_be_bytes());
+        c[28..32].copy_from_slice(&4u32.to_be_bytes());
+        assert!(
+            matches!(
+                decode_vault(&c, &dak),
+                Err(VaultError::Argon2ParamsOutOfBounds { .. })
+            ),
+            "m_cost < 8*p_cost must reject at the parse gate"
+        );
+
+        // The self-contained open path rejects at the SAME gate before derive_dak.
+        let mut o = base;
+        o[24..28].copy_from_slice(&0u32.to_be_bytes());
+        assert!(matches!(
+            open_vault(&o, b"pw", DAK_HKDF_INFO_TAG),
+            Err(VaultError::Argon2ParamsOutOfBounds { .. })
+        ));
     }
 
     /// R11 MC-6 — the self-containment property: `vault.cbor` bytes + password

@@ -47,12 +47,18 @@ fn join_engine_bound_path_uses_production_not_loopback() {
     );
 
     // Negative half: prove the two configs are observably distinct
-    // so the pin actually catches a regression back to `for_test()`.
-    let test_cfg = AtriumConfig::for_test();
-    assert_eq!(test_cfg.mode, AtriumMode::Loopback);
+    // so the pin actually catches a regression back to Loopback.
+    // Construct the Loopback config via the pub `mode` field directly —
+    // `AtriumConfig::for_test()` is now `test-helpers`-gated OFF the
+    // default surface (freeze-hygiene), and this pin needs only the pub
+    // field + variant, not the gated fixture constructor.
+    let loopback = AtriumConfig {
+        mode: AtriumMode::Loopback,
+    };
+    assert_eq!(loopback.mode, AtriumMode::Loopback);
     assert_ne!(
-        prod.mode, test_cfg.mode,
-        "production() and for_test() must yield distinct modes — \
+        prod.mode, loopback.mode,
+        "production() and a Loopback config must yield distinct modes — \
          otherwise the #1187 mis-wire would be invisible"
     );
 }

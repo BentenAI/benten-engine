@@ -105,7 +105,6 @@ impl core::panic::unwind_safe::UnwindSafe for benten_engine::atrium_api::AtriumM
 #[non_exhaustive] pub struct benten_engine::atrium_api::AtriumConfig
 pub benten_engine::atrium_api::AtriumConfig::mode: benten_engine::atrium_api::AtriumMode
 impl benten_engine::atrium_api::AtriumConfig
-pub fn benten_engine::atrium_api::AtriumConfig::for_test() -> Self
 pub fn benten_engine::atrium_api::AtriumConfig::production() -> Self
 impl core::clone::Clone for benten_engine::atrium_api::AtriumConfig
 pub fn benten_engine::atrium_api::AtriumConfig::clone(&self) -> benten_engine::atrium_api::AtriumConfig
@@ -1150,8 +1149,6 @@ impl core::marker::UnsafeUnpin for benten_engine::layer_d::device_auth::DeviceAu
 impl core::panic::unwind_safe::RefUnwindSafe for benten_engine::layer_d::device_auth::DeviceAuthError
 impl core::panic::unwind_safe::UnwindSafe for benten_engine::layer_d::device_auth::DeviceAuthError
 pub struct benten_engine::layer_d::device_auth::HeadlessDeviceAuth
-impl benten_engine::layer_d::device_auth::HeadlessDeviceAuth
-pub fn benten_engine::layer_d::device_auth::HeadlessDeviceAuth::seal_and_build([u8; 32], &[u8], [u8; 16], core::option::Option<&[u8]>) -> Self
 impl benten_engine::layer_d::device_auth::DeviceAuthBackend for benten_engine::layer_d::device_auth::HeadlessDeviceAuth
 pub fn benten_engine::layer_d::device_auth::HeadlessDeviceAuth::is_unlocked(&self) -> bool
 pub fn benten_engine::layer_d::device_auth::HeadlessDeviceAuth::lock(&mut self)
