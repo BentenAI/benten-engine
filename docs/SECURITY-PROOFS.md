@@ -198,15 +198,20 @@ envelope-signature binding domains (`SENDER_AUTH_DOMAIN` / `ENVELOPE_SIG_DOMAIN`
 remote-grant / remote-request / exec-workflow AAD domains, the MembershipSet set-id (`benten:setid:v1`),
 the `K(V)` / `K(N)` keying-glue contexts, the Layer-A vault AAD label
 (`benten-vault:`) and DAK HKDF info-tag (`benten-dak-v1`), the deterministic recipient-seed expansion label
-(`benten-crypto-suite:recipient-seed`), and the structural-KDF role-separation HKDF info-tag prefixes
-(`root:codepoint:` for `derive_root` / `step` for `derive_step`; R6-final F-06). **Permanence:** the prefix-free property is the
+(`benten-crypto-suite:recipient-seed`), the structural-KDF role-separation HKDF info-tag prefixes
+(`root:codepoint:` for `derive_root` / `step` for `derive_step`; R6-final F-06), and the swap-matrix
+sign-and-seal AAD-commit prefix (`sm-aad:` for `sign_and_seal` → `compose_aad`; R6-final F-06 follow-up).
+**Scope note:** the registry is scoped to surfaces that **key, sign, or AAD-commit**; a blake3 **hash-CID domain**
+(e.g. `benten/hybrid-sig-cid/v1\0` for the deliberately-non-load-bearing sig-bundle CID per Inv-15) is a
+distinct category — a content-hash domain separator, not a keying/signing/AAD tag — and is intentionally NOT
+enrolled. **Permanence:** the prefix-free property is the
 PERMANENT v1-beta commitment; the registry contents are additive (a new surface registers a new tag, which MUST
 clear the prefix-free check — a colliding or prefixing tag fails the build). A workspace regression test asserts
 mutual prefix-freedom over the whole registered set, so a future tag mint that would prefix an existing tag
 (e.g. minting `"benten-drop:layer-c:cek-v2"` while `"benten-drop:layer-c:cek"` exists) fails CI rather than
 silently opening a cross-surface confusion path. (Cross-ref: `docs/THREAT-MODEL.md` §5 T-DOMSEP / T-DOMSEP-MIT
 for the threat statement. The centralizing registry CODE + its prefix-free regression test have SHIPPED at
-`crates/benten-crypto-suite/src/domain_registry.rs` — a 21-tag corpus enumerated by `registered_domain_tags()`
+`crates/benten-crypto-suite/src/domain_registry.rs` — a 22-tag corpus enumerated by `registered_domain_tags()`
 with the `all_domain_tags_are_prefix_free` regression; this property records the structural shape that code
 realizes. **The §3.9 gossip-topic derivation is deliberately NOT a registered tag** — it is
 `blake3::keyed_hash(K_Set, membership_set_id ‖ BE(generation))` with NO domain-separation label (R0.7 §3.9

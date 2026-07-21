@@ -264,6 +264,10 @@ pub fn registered_domain_tags() -> Vec<&'static [u8]> {
         // nor is a prefix of the other), so enrolling them is zero-wire-byte.
         crate::structural_kdf::STRUCTURAL_KDF_ROOT_LABEL,
         crate::structural_kdf::STRUCTURAL_KDF_STEP_LABEL,
+        // Swap-matrix sign-and-seal AAD-commit prefix (R6-final F-06 follow-up;
+        // home: `crate::swap_matrix`; production surface `sign_and_seal` →
+        // `compose_aad`). Prefix-free against the corpus.
+        crate::swap_matrix::SWAP_MATRIX_AAD_DOMAIN,
     ]
 }
 
@@ -337,7 +341,7 @@ mod tests {
         assert!(registered_domain_tags().contains(&PROVISIONING_DOMAIN));
     }
 
-    /// The widened corpus enumerates EXACTLY the 21 cross-surface tags the
+    /// The widened corpus enumerates EXACTLY the 22 cross-surface tags the
     /// SECURITY-PROOFS §4.1 / THREAT-MODEL §5 scope names. Locking the count
     /// makes the prefix-free invariant forward-fire on ANY tag change: adding a
     /// tag without updating this count fails the build (forcing a deliberate
@@ -349,7 +353,7 @@ mod tests {
         let tags = registered_domain_tags();
         assert_eq!(
             tags.len(),
-            21,
+            22,
             "registered_domain_tags() count changed — re-confirm the new/removed tag is \
              prefix-free and update SECURITY-PROOFS §4.1 / THREAT-MODEL §5 scope"
         );
@@ -384,6 +388,8 @@ mod tests {
             // Structural-KDF role-separation HKDF info-tag prefixes (R6-final F-06):
             crate::structural_kdf::STRUCTURAL_KDF_ROOT_LABEL,
             crate::structural_kdf::STRUCTURAL_KDF_STEP_LABEL,
+            // Swap-matrix sign-and-seal AAD-commit prefix (R6-final F-06 follow-up):
+            crate::swap_matrix::SWAP_MATRIX_AAD_DOMAIN,
         ] {
             assert!(
                 tags.contains(&expected),

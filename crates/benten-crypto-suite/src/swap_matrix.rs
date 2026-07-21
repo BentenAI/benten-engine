@@ -1611,13 +1611,21 @@ impl SwapMatrix {
 // HELPERS
 // =====================================================================
 
+/// The swap-matrix sign-and-seal AEAD associated-data domain-separation prefix
+/// (`"sm-aad:" || sig_cp_be || cipher_cp_be || signature_bytes`). Enrolled in
+/// `crate::domain_registry::registered_domain_tags()` (R6-final F-06 follow-up)
+/// so the prefix-free forward-fire invariant covers this production AAD-commit
+/// surface (`compose_aad` ← `sign_and_seal`). Crate-visible (not part of the
+/// frozen public API).
+pub(crate) const SWAP_MATRIX_AAD_DOMAIN: &[u8] = b"sm-aad:";
+
 fn compose_aad(
     sig_cp: SigCodepoint,
     cipher_cp: CipherSuiteCodepoint,
     signature_bytes: &[u8],
 ) -> Vec<u8> {
-    let mut aad = Vec::with_capacity(8 + signature_bytes.len() + 32);
-    aad.extend_from_slice(b"sm-aad:");
+    let mut aad = Vec::with_capacity(SWAP_MATRIX_AAD_DOMAIN.len() + 4 + signature_bytes.len());
+    aad.extend_from_slice(SWAP_MATRIX_AAD_DOMAIN);
     // M-19: codepoints BIG-ENDIAN (migrated from LE at F-full Wave-0).
     aad.extend_from_slice(&sig_cp.raw().to_be_bytes());
     aad.extend_from_slice(&cipher_cp.raw().to_be_bytes());
