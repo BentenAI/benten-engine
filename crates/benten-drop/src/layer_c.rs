@@ -97,6 +97,7 @@ use benten_id::keyset::KeySetDocument;
 // group CEK). `rand_core` is the workspace CSPRNG crate (see
 // `benten_crypto_suite::cipher_suite` `rand_core::OsRng`).
 use rand_core::RngCore as _;
+use zeroize::Zeroizing;
 
 /// Fail-closed length-prefix range end (F-12).
 ///
@@ -998,7 +999,10 @@ fn seal_inner(
     cek_h.update(sender_did);
     cek_h.update(aad);
     cek_h.update(body);
-    let cek = *cek_h.finalize().as_bytes();
+    // R6-reround secret-hygiene: the derived CEK is a symmetric secret; wrap it
+    // in `Zeroizing` so the raw `[u8; 32]` stack copy is wiped on drop / unwind
+    // (the load-bearing copy inside `cek_key` already zeroizes). Non-wire.
+    let cek = Zeroizing::new(*cek_h.finalize().as_bytes());
 
     // B2 ORIGIN-AUTH: compute M_auth + sign ONCE per message. The single
     // recipient send binds the recipient's audience-DID as the audience
@@ -1030,15 +1034,17 @@ fn seal_inner(
     inner.extend_from_slice(&sig_len.to_be_bytes());
     inner.extend_from_slice(&sender_sig);
     inner.extend_from_slice(body);
-    let cek_key =
-        AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &cek);
+    let cek_key = AeadKeyMaterial::from_raw_bytes(
+        CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+        cek.as_slice(),
+    );
     let body_env = benten_crypto_suite::aead::wrap(&inner, &cek_key, aad)
         .expect("ChaCha20-Poly1305 seal of the Layer-C inner payload must succeed");
     let ciphertext = body_env.to_wire_bytes();
 
     // HPKE-wrap the CEK to the recipient's REAL public key (R9 GAP-1).
     let wrapped = suite
-        .wrap_key_material(recipient_pub, &cek)
+        .wrap_key_material(recipient_pub, cek.as_slice())
         .expect("X-Wing wrap of the Layer-C CEK must succeed");
     let enc = encode_wrapped_key(&wrapped);
     (enc, ciphertext)
@@ -1533,18 +1539,19 @@ fn seal_group_impl(
     // exact same wrap + body-seal + stanza code, and `open_group_stanza`
     // already UNWRAPS the CEK from `stanza.wrapped_cek` (never recomputes from
     // public inputs), so no decode path changes.
-    let mut cek = [0u8; 32];
-    rand_core::OsRng.fill_bytes(&mut cek);
-    let cek_key =
-        AeadKeyMaterial::from_raw_bytes(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768, &cek);
-    // Defense-in-depth (R11 adversarial-review observation — benign, not
-    // soundness-bearing): the raw `cek` stack local is not explicitly zeroized
-    // on drop — `benten-drop` carries no `zeroize` dependency. The load-bearing
-    // copy inside `AeadKeyMaterial` (`cek_key`) IS zeroized on drop, the CEK
-    // never leaves the process un-wrapped, and this matches the pre-R11 pattern
-    // (the old derived CEK was an identical un-zeroized `[u8; 32]`). A future
-    // hygiene sweep adopting `zeroize` in `benten-drop` can wrap this local for
-    // symmetry with the R11 MC-13 `user_did_signing_key` zeroize.
+    // R6-reround secret-hygiene: the fresh-random group CEK is a symmetric
+    // secret shared (HPKE-wrapped) across all recipient stanzas; wrap it in
+    // `Zeroizing` so the raw `[u8; 32]` stack copy is wiped on drop / unwind
+    // (the load-bearing copy inside `AeadKeyMaterial`/`cek_key` already
+    // zeroizes on drop; `benten-drop` carries the `zeroize` dep since R19).
+    // Non-wire — drop-behavior only; the CEK still flows through the exact same
+    // wrap + body-seal + stanza code below.
+    let mut cek = Zeroizing::new([0u8; 32]);
+    rand_core::OsRng.fill_bytes(cek.as_mut_slice());
+    let cek_key = AeadKeyMaterial::from_raw_bytes(
+        CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+        cek.as_slice(),
+    );
     // The bulk body AAD binds the body-CID + group codepoint (shared across
     // stanzas; the per-stanza AAD adds the index/count binding).
     let mut body_aad = Vec::new();
@@ -1618,7 +1625,7 @@ fn seal_group_impl(
 
         // HPKE-wrap the shared CEK to THIS recipient's REAL public key (R9 GAP-1).
         let wrapped = suite
-            .wrap_key_material(pk, &cek)
+            .wrap_key_material(pk, cek.as_slice())
             .expect("per-stanza CEK wrap must succeed");
         let wrapped_cek = encode_wrapped_key(&wrapped);
 

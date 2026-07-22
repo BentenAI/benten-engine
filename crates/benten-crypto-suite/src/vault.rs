@@ -60,7 +60,7 @@ use hkdf::Hkdf;
 use secrecy::{ExposeSecret, SecretBox};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::structural_kdf::StructuralKdfKey;
 
@@ -370,7 +370,11 @@ pub fn serialize_vault(
     use chacha20poly1305::aead::{Aead, AeadCore, KeyInit, OsRng};
     use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 
-    let pt = payload.to_canonical_cbor();
+    // R6-reround: the transient plaintext buffer holds the full VaultPayload
+    // canonical bytes (incl. the SECRET `k_principal` + `user_did_signing_key`)
+    // before AEAD-seal. Wrap in `Zeroizing` so the copy is wiped on drop /
+    // unwind, not left lingering on the freed heap (Compromise #66 residual).
+    let pt = Zeroizing::new(payload.to_canonical_cbor());
     let key = Key::from_slice(dak);
     let cipher = XChaCha20Poly1305::new(key);
     let nonce_bytes = XChaCha20Poly1305::generate_nonce(&mut OsRng);
@@ -380,7 +384,7 @@ pub fn serialize_vault(
         .encrypt(
             nonce,
             chacha20poly1305::aead::Payload {
-                msg: &pt,
+                msg: pt.as_slice(),
                 aad: &aad,
             },
         )
@@ -537,15 +541,22 @@ pub fn decode_vault(bytes: &[u8], dak: &[u8; 32]) -> Result<DecodedVault, VaultE
     let cipher = XChaCha20Poly1305::new(key);
     let nonce = XNonce::from_slice(frame.nonce);
     let aad = vault_aad();
-    let pt = cipher
-        .decrypt(
-            nonce,
-            chacha20poly1305::aead::Payload {
-                msg: frame.ct,
-                aad: &aad,
-            },
-        )
-        .map_err(|_| VaultError::AeadFailed)?;
+    // R6-reround: the decrypted plaintext buffer holds the full VaultPayload
+    // canonical bytes (incl. the SECRET `k_principal` + `user_did_signing_key`)
+    // BEFORE it is parsed into the zeroize-on-drop `VaultPayload`. Wrap the
+    // transient buffer in `Zeroizing` so it is wiped on drop / unwind rather
+    // than lingering on the freed heap (Compromise #66 residual).
+    let pt = Zeroizing::new(
+        cipher
+            .decrypt(
+                nonce,
+                chacha20poly1305::aead::Payload {
+                    msg: frame.ct,
+                    aad: &aad,
+                },
+            )
+            .map_err(|_| VaultError::AeadFailed)?,
+    );
     let payload = VaultPayload::from_canonical_cbor(&pt)?;
     Ok(DecodedVault {
         codepoint: VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT,

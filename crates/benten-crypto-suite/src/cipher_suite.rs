@@ -322,8 +322,13 @@ impl CipherSuite {
                     },
                 }
             }
-            // Classical-only `0x6400`: X25519 half only.
-            _ => RecipientKeypair {
+            // Classical-only `0x6400`: X25519 half only. Explicit codepoint
+            // arm + `unreachable!` tail (no silent downgrade-to-classical on an
+            // unknown codepoint — CLAUDE.md #5 typed-reject-never-silent-fallback;
+            // matches `generate_recipient_keypair_for_test`). `CipherSuite`
+            // instances only exist via `resolve`, which rejects any other
+            // codepoint before construction.
+            0x6400 => RecipientKeypair {
                 codepoint: self.codepoint,
                 public: RecipientPublic {
                     codepoint: self.codepoint,
@@ -336,6 +341,7 @@ impl CipherSuite {
                     mlkem768_dk: None,
                 },
             },
+            _ => unreachable!("CipherSuite::resolve guards against unsupported codepoints"),
         }
     }
 
@@ -383,8 +389,10 @@ impl CipherSuite {
                 }
             }
             // Classical-only `0x6400`: X25519 half only (resolve() already
-            // rejected every other codepoint).
-            _ => RecipientKeypair {
+            // rejected every other codepoint). Explicit arm + `unreachable!`
+            // tail — no silent downgrade-to-classical on an unknown codepoint
+            // (CLAUDE.md #5 typed-reject-never-silent-fallback).
+            0x6400 => RecipientKeypair {
                 codepoint: self.codepoint,
                 public: RecipientPublic {
                     codepoint: self.codepoint,
@@ -397,6 +405,7 @@ impl CipherSuite {
                     mlkem768_dk: None,
                 },
             },
+            _ => unreachable!("CipherSuite::resolve guards against unsupported codepoints"),
         }
     }
 

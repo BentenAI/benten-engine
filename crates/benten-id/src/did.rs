@@ -742,16 +742,20 @@ impl Did {
             });
         }
 
-        // Step 4 — decode the X25519-first kem multikey + reconstruct. The
-        // decode requires BOTH registered components (0xec01 then 0x120c) at
-        // exact lengths, so a hybrid-cp ⊕ classical-only-components confusion
-        // fails closed here (C2 kem_cp⟺components cross-check).
-        let (x25519, mlkem_ek) = decode_kem_multikey_x25519_first(keyset_doc.kem())?;
-        let mut raw = Vec::with_capacity(x25519.len() + mlkem_ek.len());
-        raw.extend_from_slice(&x25519);
-        raw.extend_from_slice(&mlkem_ek);
-        benten_crypto_suite::cipher_suite::RecipientPublic::from_bytes(kem_cp, &raw)
-            .map_err(|_| DidError::MalformedKemMultikey)
+        // Step 4 — decode the X25519-first kem multikey + reconstruct via the
+        // crypto-suite's SOLE kem-multikey decoder
+        // ([`benten_crypto_suite::cipher_suite::RecipientPublic::from_kem_multikey`]
+        // — the ONLY place the component codecs are cross-checked against
+        // `kem_cp`, C2). It requires BOTH registered components (0xec01 then
+        // 0x120c) at exact lengths, so a hybrid-cp ⊕ classical-only-components
+        // confusion fails closed there. `kem_cp` is HYBRID (step-3), so the
+        // hybrid arm is taken; this is byte-for-byte the prior local
+        // decode-reassemble-`from_bytes`, with no second decoder to drift.
+        benten_crypto_suite::cipher_suite::RecipientPublic::from_kem_multikey(
+            kem_cp,
+            keyset_doc.kem(),
+        )
+        .map_err(|_| DidError::MalformedKemMultikey)
     }
 
     /// The raw signing-multikey bytes embedded in a `did:benten` string
@@ -846,37 +850,4 @@ fn decode_composite_signing_multikey(
     let pk = benten_crypto_suite::sig::PublicKey::from_lamps_composite_bytes(&composite)
         .map_err(|_| DidError::InvalidHybridPublicKey("LAMPS composite half not a valid key"))?;
     Ok((pk, cursor))
-}
-
-/// Decode an X25519-first GAP-KDB Shape-B key-set `kem` multikey (design C2):
-/// `varint(0xec) ‖ x25519(32) ‖ varint(0x120c) ‖ mlkem768_ek(1184)`,
-/// returning `(x25519_pub, mlkem768_ek)`. Fail-closed typed-reject
-/// ([`DidError::MalformedKemMultikey`]) on wrong total length, a wrong
-/// component multicodec, or a component of the wrong length — this is where a
-/// `kem_cp`-claims-hybrid ⊕ classical-only-components confusion (RK-4) and a
-/// wrong-length / wrong-codec kem field (KSD-8) fail. All sizes flow from the
-/// upstream crypto-suite constants — never hardcoded (CLAUDE.md #5).
-fn decode_kem_multikey_x25519_first(kem: &[u8]) -> Result<([u8; 32], Vec<u8>), DidError> {
-    use benten_crypto_suite::cipher_suite::{ML_KEM_768_EK_LEN, X25519_PUBLIC_LEN};
-
-    let expected = X25519_PUB_MULTICODEC.len()
-        + X25519_PUBLIC_LEN
-        + MLKEM768_PUB_MULTICODEC.len()
-        + ML_KEM_768_EK_LEN;
-    if kem.len() != expected {
-        return Err(DidError::MalformedKemMultikey);
-    }
-    // Component 1: x25519-pub (0xec01) ‖ x25519(32).
-    if kem[0] != X25519_PUB_MULTICODEC[0] || kem[1] != X25519_PUB_MULTICODEC[1] {
-        return Err(DidError::MalformedKemMultikey);
-    }
-    let mut x25519 = [0u8; 32];
-    x25519.copy_from_slice(&kem[2..2 + X25519_PUBLIC_LEN]);
-    // Component 2: mlkem-768-pub (0x120c → varint 0x8c24) ‖ mlkem768_ek(1184).
-    let ml_off = X25519_PUB_MULTICODEC.len() + X25519_PUBLIC_LEN;
-    if kem[ml_off] != MLKEM768_PUB_MULTICODEC[0] || kem[ml_off + 1] != MLKEM768_PUB_MULTICODEC[1] {
-        return Err(DidError::MalformedKemMultikey);
-    }
-    let mlkem_ek = kem[ml_off + MLKEM768_PUB_MULTICODEC.len()..].to_vec();
-    Ok((x25519, mlkem_ek))
 }

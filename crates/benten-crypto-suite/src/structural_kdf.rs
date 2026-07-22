@@ -226,7 +226,12 @@ fn hkdf_sha256_32(ikm: &[u8], info: &[u8]) -> StructuralKdfKey {
     // is infallible at runtime. `.expect` documents the invariant.
     hk.expand(info, &mut okm)
         .expect("HKDF-SHA256 expand to 32 B is infallible (output << 8160 B max)");
-    StructuralKdfKey::from_bytes(okm)
+    // Move the derived key into the zeroize-on-drop newtype, then wipe the
+    // transient stack copy (`okm` is `Copy`, so `from_bytes` took a copy) —
+    // consistent with `vault.rs::derive_dak` hygiene on the frozen KDF path.
+    let key = StructuralKdfKey::from_bytes(okm);
+    okm.zeroize();
+    key
 }
 
 #[cfg(test)]

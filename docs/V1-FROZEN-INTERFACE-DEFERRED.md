@@ -2488,6 +2488,20 @@ Row D-15's audit-readiness concern.
     three sites above), left un-zeroized after `from_bytes` consumes them; the
     same v1-GM tidy applies — zeroize the `secret_bytes` binding after use
     (e.g. `zeroize::Zeroizing<[u8; 32]>` or an explicit `.zeroize()`).
+- **CLOSED at R6-reround (benten-drop Layer-C seal-side CEKs + vault transient
+  plaintext buffers) — the destination for R6-reround council F02/F01:** the
+  single-recipient BLAKE3-derived CEK (`seal_inner`) and the fresh-random
+  `0x6520` group CEK (`seal_group_impl`) in `crates/benten-drop/src/layer_c.rs`
+  are now `Zeroizing<[u8; 32]>`-wrapped. This DISCHARGES the former phantom
+  "a future hygiene sweep adopting `zeroize` in `benten-drop`" comment (F02 —
+  HARD-RULE clause-b: this Row IS the named destination, now closed; the
+  `zeroize` dep has been present since R19). In the SAME pass the vault
+  seal/open transient plaintext `pt` buffers (`serialize_vault` +
+  `decode_vault`/`open_vault`, `crates/benten-crypto-suite/src/vault.rs`), which
+  briefly hold the full `k_principal` + `user_did_signing_key` payload
+  before/after the redacting `VaultPayload` parse, are now
+  `Zeroizing<Vec<u8>>`-wrapped (F01). Non-wire — drop-behavior only; byte-identical
+  seal/open output. See `docs/SECURITY-POSTURE.md` Compromise #66 residual.
 - **Anchor:** R14-council GAP-1 (mint); R15 F-03/F-05/F-08 + R16 F-11 sibling
   enumeration; R18 C3 + MEM-H-1; **R19/#3 secret-hygiene sweep (per-type
   redact+zeroize + `f_secret_hygiene_roster` meta-test LANDED at v1-beta);**

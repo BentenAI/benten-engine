@@ -1671,8 +1671,17 @@ fn split_payload_from_plaintext_with_sig(
         plaintext_with_sig[6],
         plaintext_with_sig[7],
     ]) as usize;
-    let payload_start = 8 + sig_len;
-    let payload_end = payload_start + payload_len;
+    // F-12-style overflow-safe bound: `payload_len` is read from the
+    // (authenticated) plaintext header and added to a running `usize` offset.
+    // On a 32-bit target (wasm32 — a first-class deployment shape) a naive
+    // `payload_start + payload_len` could WRAP and spuriously pass the length
+    // guard, then panic on the slice. `checked_add` fails closed instead.
+    let payload_start = 8usize
+        .checked_add(sig_len)
+        .ok_or(SwapMatrixError::Signature("payload offset overflow"))?;
+    let payload_end = payload_start
+        .checked_add(payload_len)
+        .ok_or(SwapMatrixError::Signature("payload range overflow"))?;
     if plaintext_with_sig.len() < payload_end {
         return Err(SwapMatrixError::Signature("plaintext_with_sig truncated"));
     }
