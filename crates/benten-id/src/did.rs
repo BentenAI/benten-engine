@@ -23,7 +23,11 @@
 //! [`Did::from_hybrid_public_key`] / [`Did::resolve_hybrid`]. The single-byte
 //! [`HYBRID_SIG_MULTICODEC`] / [`HYBRID_KEM_MULTICODEC`] private values
 //! (the G-CORE-9 NQ-C4 interim, reserved before registered codes existed) are
-//! retained as documented fallback-only and are #5-risky.
+//! both #5-risky single-byte squats, with DIFFERENT v1-beta statuses:
+//! [`HYBRID_SIG_MULTICODEC`] is retained as documented fallback-only, while
+//! [`HYBRID_KEM_MULTICODEC`] is RETIRED (superseded on every KEM path by the
+//! registered `0x120c`/`0xec` components that GAP-KDB Shape-B wired into the
+//! key-set `kem` multikey).
 
 use core::fmt;
 
@@ -87,13 +91,17 @@ pub const HYBRID_SIG_MULTICODEC: [u8; 2] = [0xef, 0x01];
 /// Multicodec varint prefix for the **PQ-hybrid KEM** public key
 /// (X25519⊕ML-KEM-768).
 ///
-/// **FALLBACK-ONLY interim (NQ-C4 / §5.D-9 — RESOLVED).** Same status as
-/// [`HYBRID_SIG_MULTICODEC`]: the single-byte private value (`0xf0`, varint
-/// `[0xf0, 0x01]`) was the G-CORE-9 reserved-private interim. The KEM hybrid
-/// `did:key` (when wired) uses the two-registered-component-multikey form
-/// (the registered multiformats `mlkem-768-pub` = `0x120c` component code +
-/// `x25519-pub`), so this const is RETAINED as documented fallback-only and is
-/// #5-RISKY (single-byte squat). See `docs/CRYPTO-CODEPOINTS.md` NQ-C4.
+/// **RETIRED interim (NQ-C4 / §5.D-9 — RESOLVED; GAP-KDB Shape-B).** The
+/// single-byte private value (`0xf0`, varint `[0xf0, 0x01]`) was the G-CORE-9
+/// reserved-private interim and is #5-RISKY (single-byte squat). Unlike
+/// [`HYBRID_SIG_MULTICODEC`] — which is RETAINED as documented fallback-only —
+/// this const is **RETIRED**: GAP-KDB Shape-B WIRED the
+/// two-registered-component-multikey form (the registered multiformats
+/// `mlkem-768-pub` = `0x120c` component code + `x25519-pub` = `0xec`) into the
+/// `KeySetDocument` `kem` field, so `0xf0` is the KEM encoding on NO path. The
+/// const is kept declared (not deleted) so the NQ-C4 reservation stays visible
+/// and is never re-minted for another purpose. See
+/// `docs/CRYPTO-CODEPOINTS.md` NQ-C4 + the GAP-KDB Shape-B section.
 pub const HYBRID_KEM_MULTICODEC: [u8; 2] = [0xf0, 0x01];
 
 /// Multicodec varint prefix for the **X25519** KEM public-key COMPONENT —

@@ -199,7 +199,7 @@ The crate is large (~27k LOC across 41 files). Files group naturally by responsi
 ### 4m. Thin-client surface (browser-backend or wasm32)
 
 - `ThinClientConnection::connect / connect_unauthenticated / subscribe / try_next_event / delivered_count / revoke_device_did / is_device_did_revoked` + `Engine::thin_client_metrics()` / `Engine::thin_client_publish_event(...)`.
-- **Phase-4-Foundation G24-F session protocol** (native-only, full-peer-side): `DidKeyedSession::emit_challenge(claimed_origin) -> Challenge` at `thin_client.rs:360`, `establish_session(...) -> SessionToken` at `thin_client.rs:390`, `resolve(token)` at `thin_client.rs:499`. 4 new ErrorCodes minted at R5 G24-F: HandshakeInvalid / ChallengeReplay / OriginMismatch / SessionExpired.
+- **Phase-4-Foundation G24-F session protocol** (native-only, full-peer-side): `DidKeyedSession::emit_challenge(claimed_origin) -> Challenge` at `thin_client.rs:361`, `establish_session(...) -> SessionToken` at `thin_client.rs:391`, `resolve(token)` at `thin_client.rs:500`. 4 new ErrorCodes minted at R5 G24-F: HandshakeInvalid / ChallengeReplay / OriginMismatch / SessionExpired.
 
 ### 4n. Plugin-engine integration seam (Phase-4-Foundation; engine-side surface only)
 

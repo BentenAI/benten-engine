@@ -14,7 +14,9 @@
 //! Per Ben's D1 (2026-05-05), the call shape is:
 //!
 //! ```ignore
-//! let atrium = engine.open_atrium(AtriumConfig::for_test()).await?;
+//! // `AtriumConfig::default()` is the default-surface constructor (Loopback
+//! // mode); `AtriumConfig::for_test()` is `test-helpers`-gated.
+//! let atrium = engine.open_atrium(AtriumConfig::default()).await?;
 //! atrium.sync_subgraph("/zone/posts", remote_peer).await?;
 //! ```
 //!

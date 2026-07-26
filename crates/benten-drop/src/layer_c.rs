@@ -278,8 +278,8 @@ fn sign_m_auth(sender_kp: &benten_crypto_suite::sig::Keypair, m_auth: &[u8]) -> 
 /// NEVER accepts on a parse alone — both LAMPS halves must verify.
 ///
 /// `sender_did` is the recovered sealed sender-DID bytes; it MUST be a valid
-/// UTF-8 hybrid `did:key` string (every legitimate sender's DID is). The
-/// resolve + verify both fail-close.
+/// UTF-8 hybrid `did:key` OR `did:benten` string (every legitimate sender's
+/// DID is one of the two). The resolve + verify both fail-close.
 fn verify_m_auth(
     sig_codepoint: u16,
     sender_did: &[u8],

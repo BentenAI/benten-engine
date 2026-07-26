@@ -23,7 +23,7 @@
 mod common;
 
 #[test]
-#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. G24-F shipped DidKeyedSession::resolve at thin_client.rs:497-525 returning Principal from token only; the admin_ui_v0 thin-client BRIDGE surface that consumes Principal (per CLAUDE.md #17 shape (b)) is NOT YET BUILT. Named destination: docs/future/phase-4-backlog.md §4.22 (Phase-4-Meta thin-client bridge surface). T2 defense 3 second clause; substantive shape preserved in body comment."]
+#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. G24-F shipped DidKeyedSession::resolve at thin_client.rs:498-526 returning Principal from token only; the admin_ui_v0 thin-client BRIDGE surface that consumes Principal (per CLAUDE.md #17 shape (b)) is NOT YET BUILT. Named destination: docs/future/phase-4-backlog.md §4.22 (Phase-4-Meta thin-client bridge surface). T2 defense 3 second clause; substantive shape preserved in body comment."]
 fn admin_ui_v0_thin_client_bridge_resolves_principal_from_session_not_client() {
     // G24-F wave wires this. Substantive shape:
     //

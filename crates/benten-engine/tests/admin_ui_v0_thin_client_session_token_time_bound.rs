@@ -19,7 +19,7 @@
 mod common;
 
 #[test]
-#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. G24-F shipped DidKeyedSession TTL enforcement at thin_client.rs:484-491 (the primitive); the composed-engine + Atrium bridge harness that exercises TTL end-to-end is part of the thin-client bridge surface NOT YET BUILT. Named destination: docs/future/phase-4-backlog.md §4.22. T2 defense 2; substantive shape preserved in body comment."]
+#[ignore = "DESTINATION-REMAPPED at R6-FP-BF per HARD RULE rule-12 clause-(b) BELONGS-NAMED-NOW. G24-F shipped DidKeyedSession TTL enforcement at thin_client.rs:485-492 (the primitive); the composed-engine + Atrium bridge harness that exercises TTL end-to-end is part of the thin-client bridge surface NOT YET BUILT. Named destination: docs/future/phase-4-backlog.md §4.22. T2 defense 2; substantive shape preserved in body comment."]
 fn admin_ui_v0_thin_client_session_token_time_bound() {
     // G24-F wave wires this. Substantive shape:
     //

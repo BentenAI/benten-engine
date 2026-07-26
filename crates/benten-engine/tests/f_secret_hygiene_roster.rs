@@ -84,10 +84,13 @@ fn vault_payload_debug_redacts_k_principal_and_user_did_signing_key() {
          (D-74/75/76). A derived Debug leaks the raw [u8; 32] as `{LEAK_DECIMAL}`; \
          rendered=`{rendered}`"
     );
+    // Field-exact: BOTH secret fields must be replaced wholesale, not merely
+    // have a marker somewhere in the render (R6-tail F-41 convention).
     assert!(
-        rendered.contains("<redacted>"),
-        "VaultPayload Debug MUST render `<redacted>` for the secret fields; \
-         rendered=`{rendered}`"
+        rendered.contains("k_principal: \"<redacted>\"")
+            && rendered.contains("user_did_signing_key: \"<redacted>\""),
+        "VaultPayload Debug MUST replace BOTH k_principal and \
+         user_did_signing_key wholesale with `<redacted>`; rendered=`{rendered}`"
     );
 }
 
@@ -136,10 +139,13 @@ fn permission_request_debug_redacts_ephemeral_signing_key() {
          A derived Debug leaks the raw [u8; 32] as `{LEAK_DECIMAL}`; \
          rendered=`{rendered}`"
     );
+    // Field-exact: PermissionRequest renders eleven fields and redacts exactly
+    // one, so a whole-render marker scan does not prove WHICH field is redacted
+    // (R6-tail F-41 convention).
     assert!(
-        rendered.contains("<redacted>"),
-        "PermissionRequest Debug MUST render `<redacted>` for ephemeral_signing_key; \
-         rendered=`{rendered}`"
+        rendered.contains("ephemeral_signing_key: \"<redacted>\""),
+        "PermissionRequest Debug MUST replace ephemeral_signing_key wholesale \
+         with `<redacted>`; rendered=`{rendered}`"
     );
     // Positive: a NON-secret field still renders (Debug isn't a blanket-redact).
     assert!(

@@ -56,7 +56,7 @@ This is the NQ-A1 conservative-fallback policy:
 | `0x647b`         | NF-1 ML-KEM-768⊕HQC PQ⊕PQ end-state | RESERVED (build-trigger = FIPS 207 final) |
 | `0x647c`         | Pure-PQ ML-KEM-768-only swap-matrix arm | RESERVED (audit-gated) |
 | `0x0003`         | NF-1 ML-DSA-65⊕SLH-DSA PQ⊕PQ signature | RESERVED |
-| `0x0000`         | No-encryption (plaintext partition) | RESERVED |
+| `0x0000`         | No-encryption (plaintext partition) — the swap-matrix no-encryption ARM, **not** a future-additive reserve | TYPED-REJECTED-BY-DESIGN at `CipherSuiteCodepoint::resolve` (never becomes a resolvable default); reachable ONLY via `SwapMatrix::no_encryption_public_class()` / `sign_only` |
 | `0x6320..0x632F` — `ExecuteWorkflow` slot only | RemotePermission `ExecuteWorkflow` reserve (the band's `PermissionRequest`/`PermissionGrant` slots are **LIVE** / **FREEZE** — see the wire table below) | CARRIED-BUT-UNWIRED at v1-beta (band-dispatch `dispatch_remote_permission_codepoint` **accepts** the in-band wire shape; `exec_workflow_seal`/`exec_workflow_open` have **zero production callers** → nothing routes to an executor — NOT a typed-reject; out-of-band integers do typed-reject; real wiring lands in Composing) |
 | `0x6620`         | `SubsetRef` federation reserve (`MEMBERSHIP_SET_RESERVED_0X6620`) | RESERVED |
 | `0x6380..0x638F` | MLS-Application FS-future bracket (`MLS_APPLICATION_BASE`; NOT MembershipSet) | RESERVED |
@@ -170,8 +170,9 @@ registered COMPOSITE multicodec** for the hybrid pubkey shapes, but registered
 **KEM-component note (R10-council F-21).** The hybrid **KEM** `did:key`
 (X25519⊕ML-KEM-768) uses the registered component code **`mlkem-768-pub = 0x120c`**
 (varint `[0x8c, 0x24]`) + `x25519-pub = 0xec`. The `HYBRID_KEM_MULTICODEC =
-[0xf0, 0x01]` const in `crates/benten-id/src/did.rs` is the fallback-only
-reserved-private interim (single-byte-squat, #5-RISKY); new content uses the
+[0xf0, 0x01]` const in `crates/benten-id/src/did.rs` was the reserved-private
+interim (single-byte-squat, #5-RISKY) and is now **RETIRED** — superseded by the
+registered components; see the GAP-KDB Shape-B section below. All content uses the
 two-registered-component-multikey form with the exact `0x120c` code recorded
 above (the earlier `ml-kem-768-pub` spelling was non-verbatim — the registered
 multiformats name is `mlkem-768-pub`).
@@ -190,15 +191,25 @@ This is **#5-clean** (no invented number). Implemented at
 component-codec dispatch is typed-reject (`DidError::UnknownMulticodec` /
 `HybridBodyTooShort` / `HybridTrailingBytes` / `InvalidHybridPublicKey`) — never
 a silent fallback. (The hybrid **KEM** pubkey, X25519⊕ML-KEM-768, follows the
-same two-registered-component-multikey discipline when wired.)
+same two-registered-component-multikey discipline — WIRED as of GAP-KDB
+Shape-B; see the section below.)
 
-**Fallback-only interim values.** The single-byte private prefixes
-`HYBRID_SIG_MULTICODEC = [0xef, 0x01]` + `HYBRID_KEM_MULTICODEC = [0xf0, 0x01]`
-in `crates/benten-id/src/did.rs` were the G-CORE-9 NQ-C4 reserved-private
-interim, held when no registered code was known. They are **NOT the v1 wire
-encoding** — they are retained as **documented fallback-only** and are
-**#5-RISKY** (single-byte private values that squat the registered single-byte
-multicodec range). New content uses the two-component-multikey form above.
+**Interim single-byte values — split status (R6-R1 N-10).** The single-byte
+private prefixes `HYBRID_SIG_MULTICODEC = [0xef, 0x01]` +
+`HYBRID_KEM_MULTICODEC = [0xf0, 0x01]` in `crates/benten-id/src/did.rs` were
+both the G-CORE-9 NQ-C4 reserved-private interim, held when no registered code
+was known. Neither is the v1 wire encoding, and both are **#5-RISKY**
+(single-byte private values that squat the registered single-byte multicodec
+range) — but their v1-beta statuses now DIFFER:
+
+- **`HYBRID_SIG_MULTICODEC = [0xef, 0x01]` — retained fallback-only.** The
+  registered ML-DSA-65 component `0x1211` is the v1 SIG encoding (the
+  two-registered-component-multikey form above); `0xef` survives as the
+  documented fallback and is not used by any encoder.
+- **`HYBRID_KEM_MULTICODEC = [0xf0, 0x01]` — RETIRED, not fallback.** GAP-KDB
+  Shape-B wired the registered `0x120c`/`0xec` components into the
+  `KeySetDocument` `kem` field, so `0xf0` is superseded on every KEM path and is
+  no longer a fallback encoding at all. See the Shape-B section below.
 
 **GAP-KDB Shape-B — `0x120c`/`0xec` NOW WIRED + `did:benten` method registered + `0xf0` RETIRED (Phase-4-Meta-Core).**
 The GAP-KDB Shape-B recipient-binding closure discharges the "when wired" hedge above: the registered KEM

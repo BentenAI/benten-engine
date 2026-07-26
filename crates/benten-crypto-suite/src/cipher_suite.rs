@@ -148,10 +148,13 @@ pub const X_WING_LABEL: [u8; 6] = [0x5c, 0x2e, 0x2f, 0x2f, 0x5e, 0x5c];
 /// Classical-only `0x6400` combiner domain-separation info string. ASCII;
 /// NOT an integer wire/AAD field (m-1: not flagged by the BE scanner).
 ///
-/// NAMED CARVE-OUT (R17 F-09): this is the sole keying-surface domain tag that
-/// applies the domain-separation idiom over key material WITHOUT a
-/// `domain_registry` corpus entry / prefix-free enrollment (unlike the hybrid
-/// [`X_WING_LABEL`] and the recipient-seed label, both enrolled). Because it
+/// NAMED CARVE-OUT (R17 F-09): this is the sole BENTEN-MINTED keying-surface
+/// domain tag that applies the domain-separation idiom over key material
+/// WITHOUT a `domain_registry` corpus entry / prefix-free enrollment (unlike
+/// the recipient-seed label, which IS enrolled; the sibling [`X_WING_LABEL`] is
+/// likewise un-enrolled but is NOT Benten-minted — its bytes are fixed by
+/// `draft-connolly-cfrg-xwing-kem-10` §5.3 and it lives inside the single
+/// `0x647a` combiner preimage, so it is not a cross-surface separator). Because it
 /// folds only into the `0x6400` classical combiner preimage (a single
 /// self-contained keying surface, not a cross-surface separator), it is left
 /// UN-enrolled at v1-beta. The hardening — enroll it in
@@ -697,7 +700,7 @@ pub fn x_wing_combiner_preimage(ss_m: &[u8], ss_x: &[u8], ct_x: &[u8], pk_x: &[u
 /// The real draft-connolly X-Wing combiner:
 /// `SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel)`.
 ///
-/// This replaces the prior HKDF-SHA256 mislabel (`cipher_suite.rs:404` at
+/// This replaces the prior HKDF-SHA256 mislabel (`cipher_suite.rs:407` at
 /// the corpus base) with the IETF-faithful construction at the IETF-reserved
 /// codepoint `0x647A`. Per CLAUDE.md baked-in #5 the SHA3-256 primitive is
 /// wrapped from the vetted upstream `sha3` crate — no reimplementation.

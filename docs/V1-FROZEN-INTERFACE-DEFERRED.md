@@ -428,7 +428,9 @@ enforce at v1-beta), (iv) Compromise / spec anchor.
 
 - **Closure:** `structural_kdf::derive_root` extended to take
   `cipher_suite_codepoint: u16` AND fold it into the HKDF info-tag
-  (`info = "root:codepoint:" || codepoint_le_bytes || root_cid`).
+  (`info = "root:codepoint:" || codepoint_be_bytes || root_cid`; the
+  codepoint is 2 bytes **BIG-endian** per M-19 — migrated from LE at
+  F-full Wave-0, matching `docs/V1-FROZEN-INTERFACE.md` §15.f).
   Cross-codepoint key reuse class structurally closed: same
   `(K_principal, root_cid)` inputs derived under different codepoints
   produce different K_root values. Wire-format-coupled (K_root feeds
@@ -1409,7 +1411,7 @@ Row D-15's audit-readiness concern.
 
 - **Frozen surface (v1-beta):** the typed error variant
   `DeviceLinkError::SessionIdReplayed` exists at
-  `crates/benten-engine/src/layer_d/device_link.rs:185` (the Signal-Provisioning
+  `crates/benten-engine/src/layer_d/device_link.rs:236` (the Signal-Provisioning
   device-link replay-defense arm).
 - **Replay defense is DEFERRED — NOT exercised on the production path (R9-council
   F-06 correction).** `open_provisioning_payload`
@@ -1623,7 +1625,10 @@ Row D-15's audit-readiness concern.
   freeze-record sweep that immediately precedes the tag.
 - **v1-beta posture:** no functional impact — the AS-BUILT claims are TRUE
   (the substrate shipped + is green); only the snapshot-SHA token is stale. The
-  count narratives (199 throwable / 201 catalog) remain accurate at HEAD.
+  count narratives are 201 throwable / 203 catalog at HEAD (the row's original
+  "199 throwable / 201 catalog" reading was accurate at `b93b2efc` and was
+  superseded by the `E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH` +
+  `E_RECIPIENT_KEM_NOT_COMMITTED` mints).
 - **Anchor:** R6-R2 council finding F-26; `docs/ERROR-CATALOG.md` +
   `docs/V1-FROZEN-INTERFACE.md` + `docs/INVARIANT-COVERAGE.md` `84280d31`
   cites; R6-R1 `2172cb6d` → `84280d31` re-pin precedent (#1365).
@@ -1995,9 +2000,9 @@ Row D-15's audit-readiness concern.
 ### Row D-55 — LD-AUTH-1: `HeadlessDeviceAuth::seal_and_build` sentinel `user_did_signing_key` undisclosed (doc FLAG)
 
 - **Observation (NAMED, not fixed this round):**
-  `crates/benten-engine/src/layer_d/device_auth.rs:135` `seal_and_build` seals
+  `crates/benten-engine/src/layer_d/device_auth.rs::seal_and_build` seals
   the vault with a HARDCODED sentinel `user_did_signing_key: vec![0x22u8; 64]`
-  (device_auth.rs:145) — a placeholder, NOT a real DID signing key — but the
+  (device_auth.rs:156) — a placeholder, NOT a real DID signing key — but the
   docstring discloses only `k_principal` + `password` and does not flag that the
   signing-key slot is a sentinel. A caller could mistake the headless backend's
   unlocked key material for a usable signing key. Disposition = **named-carry →
@@ -2012,8 +2017,8 @@ Row D-15's audit-readiness concern.
 - **Observation (NAMED, FIXED this round):** Row D-30 cited
   `crates/benten-engine/src/layer_d/device_link.rs:147` for the
   `DeviceLinkError::SessionIdReplayed` variant; the variant has drifted to
-  `device_link.rs:185`. Disposition = **named-carry (cite-currency)** — the cite
-  in Row D-30 has been corrected to `:185` in this same shard. Recorded here so
+  `device_link.rs:236`. Disposition = **named-carry (cite-currency)** — the cite
+  in Row D-30 has been corrected to `:236` in this same shard. Recorded here so
   the drift + its fix are forensically visible. (cite-drift did not flag it: the
   file is 308 lines so `:147` still resolves to a line — content-drift, not a
   missing-line, which the detector does not catch.)
@@ -2252,7 +2257,8 @@ Row D-15's audit-readiness concern.
 ### Row D-67 — MC-11: `DropBundle::parse_cbor_bytes` uncapped decode → v1-GM decode-cap hardening (bundled with remote-permission wiring)
 
 - **Uncapped-decode disclosure (v1-beta):** `benten_drop::bundle::DropBundle::parse_cbor_bytes`
-  (`crates/benten-drop/src/bundle.rs:354`) calls `serde_ipld_dagcbor::from_slice(bytes)`
+  (`crates/benten-drop/src/bundle.rs::parse_cbor_bytes`) calls
+  `serde_ipld_dagcbor::from_slice(bytes)`
   with **NO byte-length ceiling** before decoding — an unbounded-decode surface.
   There is **no live production caller** at v1-beta (only the `tf3f_*` offline-consume
   test pins drive it — `crates/benten-drop/tests/tf3f_drop_bundle_offline_consume.rs`
@@ -2334,9 +2340,9 @@ Row D-15's audit-readiness concern.
   length-prefixed encode form (`ek_x_len u32 BE ‖ ek_x ‖ ek_mlkem_len u32 BE ‖
   ek_mlkem ‖ aead_envelope.to_wire_bytes()`, BE per M-19) is **hand-rolled in 3
   sites**: the production `benten_drop::layer_c::encode_wrapped_key`
-  (`crates/benten-drop/src/layer_c.rs:656`, called at `:778` single-recipient
-  and `:1315` group), plus a duplicated in-test copy
-  `layer_c::group_posture::tests::encode_wrapped` (`:1953`). Each site re-derives
+  (`crates/benten-drop/src/layer_c.rs::encode_wrapped_key`, called at `:1049`
+  single-recipient and `:1630` group), plus a duplicated in-test copy
+  `layer_c::group_posture::tests::encode_wrapped` (`:2292`). Each site re-derives
   the same framing by hand; a future field-order / width / endianness edit must
   be mirrored across all copies (drift surface — currently guarded only by
   round-trip tests, not by a single canonical encoder).
@@ -2410,24 +2416,32 @@ Row D-15's audit-readiness concern.
   (device_link / remote_permission assembly); the Layer-C
   `u32::try_from(..).expect(..)` precedent in `benten_drop::layer_c`.
 
-### Row D-74 — F-02: widen `is_for_test_pattern` to catch the bare `for_test` form → v1-GM backstop-completeness hardening
+### Row D-74 — F-02: `is_for_test_pattern` completeness — bare-`for_test` arm LANDED at v1-beta; the `pub mod testing` / no-token reachability gap → v1-GM backstop hardening
 
-- **Observation (NAMED, not fixed this round):** the workspace guard
+- **Observation (R14 mint) — bare-`for_test` half CLOSED at v1-beta; re-tensed
+  at the freeze base:** the row was minted because the workspace guard
   `is_for_test_pattern` in
-  `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs` matches
+  `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs` matched
   `_for_test` (with the leading underscore) but NOT the bare `for_test` form (a
-  `pub fn` literally named `for_test`, no leading underscore). This is a
-  backstop-completeness gap in the scanner, NOT a live frozen-surface leak at
-  v1-beta: the ONLY bare-`for_test` public fns at HEAD are the documented,
-  intentionally-public `AtriumConfig::for_test`
-  (`crates/benten-engine/src/atrium_api.rs:80` — a fixture constructor, not a
-  gated test helper) + the exempt `benten_ivm` `with_budget_for_testing`
-  helpers (which the `_for_testing` arm already catches). No ungated
-  `_for_test`-class symbol slips through at v1-beta.
-- **Deferred (destination):** v1-GM hardening — widen `is_for_test_pattern` to
-  also match a bare `for_test` / `for_testing` token (word-boundary aware so it
-  does not over-match unrelated identifiers), and add an explicit allowlist
-  entry for `AtriumConfig::for_test` so the widened scanner stays green.
+  `pub fn` literally named `for_test`, no leading underscore). **Both ends of
+  that gap are now closed.** (i) The scanner carries the bare arm —
+  `name.starts_with("for_test")` at
+  `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs:354`, which
+  catches the bare `for_test` and `for_testing` forms alike. (ii) The single
+  bare-`for_test` public fn the row named, `AtriumConfig::for_test`, is no
+  longer on the frozen surface at all: it is
+  `#[cfg(any(test, feature = "test-helpers"))]`-gated at
+  `crates/benten-engine/src/atrium_api.rs:89` and is absent from
+  `docs/public-api/benten-engine.txt` (the production `impl Default` was
+  rewritten to inline the `Loopback` construction rather than call it). No
+  allowlist entry was needed or added — a cfg-gated item is skipped by
+  `has_test_cfg_attr` before `EXEMPT_PUB_ITEMS` is consulted. The exempt
+  `benten_ivm` `with_budget_for_testing` helpers remain ungated + baselined and
+  are caught by the `_for_testing` arm. No ungated `_for_test`-class symbol
+  slips through at v1-beta.
+- **Deferred (destination):** v1-GM hardening — the RESIDUAL is the
+  no-token-at-all / `pub mod testing` reachability gap enumerated immediately
+  below (F51 + F63), NOT the bare-`for_test` token arm (landed above).
 - **Widened (R6 tail fold-in F51 + F63) — the scanner also misses the
   NO-TOKEN-AT-ALL form, and two `pub mod testing` modules are un-gated:** beyond the
   bare-`for_test` gap above, `is_for_test_pattern` keys only on
@@ -2458,11 +2472,11 @@ Row D-15's audit-readiness concern.
     (`crates/benten-id/src/keyset.rs:119`) is a non-cfg-gated public constructor
     documented "for reject-matrix fixtures" that builds docs with arbitrary
     `v` / `sig_cp` / below-PQ-floor `kem_cp`. Its only callers are tests
-    (`crates/benten-id/tests/kdb_resolve_kem_fail_closed.rs:132` + `:155`,
+    (`crates/benten-id/tests/kdb_resolve_kem_fail_closed.rs:169` + `:201`,
     `crates/benten-drop/tests/kdb_drop2_sole_constructor.rs:66`); zero production
     callers. **NOT exploitable and NOT a freeze-blocker** — the consuming
     chokepoints are verified fail-closed: `Did::resolve_kem`
-    (`crates/benten-id/src/did.rs:718-759`) rejects any `kem_cp` below the hybrid
+    (`crates/benten-id/src/did.rs:726-767`) rejects any `kem_cp` below the hybrid
     floor at step-3 (`KeysetBelowPqFloor`) and rejects mismatched components at
     step-4 (`MalformedKemMultikey`), and `KeySetDocument::from_canonical_bytes`
     (`keyset.rs:175`) rejects `v != KEYSET_DOC_VERSION` at `:213`. So a hand-built
@@ -2477,8 +2491,9 @@ Row D-15's audit-readiness concern.
     membership-set `scaffold` entry and the N-11 / N-12 entries in the R6-R1 section.
 - **Anchor:** R14-council F-02;
   `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs`
-  (`is_for_test_pattern`); `crates/benten-engine/src/atrium_api.rs:80`
-  (`AtriumConfig::for_test`); R6 tail fold-in F51 + F63
+  (`is_for_test_pattern`, bare arm at `:354`);
+  `crates/benten-engine/src/atrium_api.rs:89`
+  (`AtriumConfig::for_test`, now `test-helpers`-gated); R6 tail fold-in F51 + F63
   (`crates/benten-caps/src/lib.rs::testing`, `crates/benten-ivm/src/lib.rs::testing`,
   `crates/benten-id/src/keyset.rs:119`).
 
@@ -2515,7 +2530,7 @@ Row D-15's audit-readiness concern.
   - **`PurePqMlKemKeypair`** — zeroize-on-drop landed earlier at R18 C3
     (`crates/benten-crypto-suite/src/swap_matrix.rs`).
 - **DONE (enforcement, landed at v1-beta):** the secret-`Debug` meta-test is LIVE
-  at `crates/benten-engine/tests/f_secret_hygiene_roster.rs` (447 LOC, ZERO
+  at `crates/benten-engine/tests/f_secret_hygiene_roster.rs` (470 LOC, ZERO
   `#[ignore]`): (a) a runtime Debug-does-not-leak assertion over the full roster
   (constructs each type with a distinctive `0xDEADBEEF` marker, `format!`s it,
   asserts the leaking decimal-array rendering is ABSENT) + (b) a source-anchored
@@ -2666,7 +2681,7 @@ Row D-15's audit-readiness concern.
 ### Row D-77 — F-09: `check_schema_version` → `ensure_tables` read-only-ordering hardening → v1-Composing
 
 - **Observation (NAMED, not fixed this round):** in `RedbBackend` open
-  (`crates/benten-graph/src/redb_backend.rs:612-613`) `ensure_tables()` runs
+  (`crates/benten-graph/src/redb_backend.rs:601-602`) `ensure_tables()` runs
   BEFORE `check_schema_version(write_if_absent)`. A defensive ordering tweak
   would perform the schema-version READ (and its compatibility check) before any
   table-creating write side-effect, so an incompatible-version store is rejected
@@ -2779,7 +2794,7 @@ Row D-15's audit-readiness concern.
 
 - **Signed-scope disclosure (v1-beta):** at the frozen wire format,
   `benten_engine::layer_d::remote_permission::PermissionGrant::signing_bytes`
-  (`crates/benten-engine/src/layer_d/remote_permission.rs:242-254`) binds
+  (`crates/benten-engine/src/layer_d/remote_permission.rs:281`) binds
   exactly `GRANT_DOMAIN` + `aad_version` + `version` + `request_id` +
   `granted_at_bucket` + `valid_until` + `audit_node_cid` + `operation_result`.
   It does **NOT** bind `operation`, does **NOT** bind `audience`, and does
@@ -2809,7 +2824,7 @@ Row D-15's audit-readiness concern.
   remote-permission acceptance wiring → Phase-4-Meta-Composing) + the R10
   F-15 caller-contract note (Row D-1/D-64-adjacent).
 - **Anchor:** R17-council F-04;
-  `crates/benten-engine/src/layer_d/remote_permission.rs:242-254`
+  `crates/benten-engine/src/layer_d/remote_permission.rs:281`
   (`PermissionGrant::signing_bytes`) + `:194-210`
   (`PermissionRequest::signing_bytes`) +
   `crates/benten-engine/src/layer_d/grant_acceptance.rs:146-150`
@@ -3031,16 +3046,44 @@ did not resolve unilaterally.
   G-CORE-PQ-WIRE-1 site list** so the hybrid device-link/remote-auth additive
   wire-in is not lost.
 - **F-08 — dead test-scaffolding frozen onto the public surface (SURFACE-TO-BEN)
-  → Row D-74.** `benten-membership-set/src/lib.rs` `pub mod scaffold{…}` (dead,
-  zero consumers) + verb-named test-only helpers (`verify_with_tampered_node_at`,
-  `signature_verifies_after_tier_tamper`, `synthesize_revocation_for_embedded_ucan`
-  + sentinel `RevocationRecord`) are captured in the cargo-public-api baselines,
-  invisible to the `is_for_test_pattern` scanner (keys only on
-  `_for_test`/`_test_`/`mock_`/`inject_`). **Fork for Ben:** cfg-gate the module +
-  4 symbols behind `#[cfg(any(test, feature="testing"))]` + regen the 2 baselines
-  NOW (the clean-removal window is pre-tag) — a semver-breaking change post-tag.
-  Couples to **Row D-74** (widen the scanner to verb-named / zero-non-test-caller
-  scaffolding).
+  → Row D-74. 3 of 5 CLOSED in-wave; 2 residual — re-tensed at the freeze base.**
+  As minted this named `benten-membership-set/src/lib.rs` `pub mod scaffold{…}`
+  (dead, zero consumers) + the verb-named test-only helpers
+  (`verify_with_tampered_node_at`, `signature_verifies_after_tier_tamper`,
+  `synthesize_revocation_for_embedded_ucan` + sentinel `RevocationRecord`) as
+  ALL captured in the cargo-public-api baselines and invisible to the
+  `is_for_test_pattern` scanner (which keys only on
+  `_for_test`/`_test_`/`mock_`/`inject_`).
+  **CLOSED — the `benten-membership-set` three.** `pub mod scaffold`
+  (`crates/benten-membership-set/src/lib.rs::scaffold`),
+  `AuditChain::verify_with_tampered_node_at`
+  (`crates/benten-membership-set/src/audit.rs::verify_with_tampered_node_at`)
+  and `GovernanceConfig::signature_verifies_after_tier_tamper`
+  (`crates/benten-membership-set/src/governance.rs::signature_verifies_after_tier_tamper`)
+  are all `#[cfg(any(test, feature = "testing"))]`-gated and are OFF
+  `docs/public-api/benten-membership-set.txt`; the `scaffold` gate also removed
+  its `CRATE_NAME` / `MEMBERSHIP_SET_BAND_HI` / `MEMBERSHIP_SET_BAND_LO` consts
+  from the baseline.
+  **STILL OPEN — the `benten-drop` two, and note the row's original crate
+  attribution was wrong.** `synthesize_revocation_for_embedded_ucan` is NOT in
+  `benten-membership-set`: it is
+  `crates/benten-drop/src/bundle.rs::synthesize_revocation_for_embedded_ucan`
+  with its `RevocationRecord` sentinel alongside it, and both are still un-gated
+  `pub` on the frozen `benten-drop` surface despite the "Test-only" docstring.
+  Their three siblings in the SAME `impl` — `tamper_envelope_signature_for_test`,
+  `synthesize_future_version_for_test`, `synthesize_inline_tiny_cbor_for_test` —
+  ARE `#[cfg(any(test, feature = "testing"))]`-gated and are reached from this
+  crate's own `tests/` tree under `--features benten-drop/testing`, so the gate
+  is mechanically proven in-file and the pair is a visible odd-one-out rather
+  than a policy. It was simply not carried; it is NOT blocked.
+  **Benign at v1-beta:** the fn returns an opaque 16-byte sentinel
+  (`RevocationRecord { opaque: vec![0xDE; 16] }`), its sole caller is the
+  `crates/benten-drop/tests/tf3f_revocation_reach_forever_valid_documented.rs`
+  pin, and no production path consults either symbol.
+  **Residual fork for Ben:** cfg-gate the remaining 2 symbols + regen the
+  `benten-drop` baseline (the clean-removal window is pre-tag) — a
+  semver-breaking change post-tag. Couples to **Row D-74** (widen the scanner to
+  verb-named / zero-non-test-caller scaffolding).
 - **N-04 — `DropBundleVersion::Synthetic` dual-accept wart (SURFACE-TO-BEN) →
   `docs/V1-WIRE-FORMAT-INVENTORY.md` §7.** `benten-drop/src/bundle.rs` `Synthetic(u16)`
   is documented "test-only" but is NOT `#[cfg]`-gated — a live variant of the
@@ -3049,17 +3092,33 @@ did not resolve unilaterally.
   SECOND on-wire encoding of logical-v1. Record the dual-accept + frozen-but-
   test-only status in wire-inventory §7; **fork:** tighten `is_v1()` / gate
   `Synthetic` (touches the frozen public enum) vs freeze the wart.
-- **N-10 — `docs/CRYPTO-CODEPOINTS.md` split the 0xf0-KEM paragraph.** The
-  "fallback-only interim values" para claims BOTH `HYBRID_SIG_MULTICODEC=[0xef,01]`
-  AND `HYBRID_KEM_MULTICODEC=[0xf0,01]` are "retained fallback-only", but the
-  Shape-B section says `0xf0` is RETIRED. Split: `0xf0`-KEM = RETIRED-per-Shape-B
-  (superseded by `0x120c`/`0xec`); only `0xef`-SIG = "retained fallback-only".
-- **N-11 — `atrium_api.rs::for_test` → `EXEMPT_PUB_ITEMS` + Row D-74.**
-  `AtriumConfig::for_test()` is production-reachable (`impl Default`→`for_test()`),
-  frozen on the public surface, untracked in `EXEMPT_PUB_ITEMS`, and invisible to
-  the scanner (bare `for_test`, no leading underscore). Add
-  `('atrium_api.rs','for_test')` to `EXEMPT_PUB_ITEMS` as a v1-GM rename target;
-  couples to **Row D-74** (widen scanner to bare `for_test`).
+- ~~**N-10 — `docs/CRYPTO-CODEPOINTS.md` split the 0xf0-KEM paragraph.**~~
+  **CLOSED (fix-now) at the R6-R1 fold-in doc-coupling sweep.** Pre-sweep, the
+  "fallback-only interim values" para claimed BOTH `HYBRID_SIG_MULTICODEC=[0xef,01]`
+  AND `HYBRID_KEM_MULTICODEC=[0xf0,01]` were "retained fallback-only", while the
+  Shape-B section said `0xf0` is RETIRED. **Closure:** the paragraph is now split
+  by status (`0xf0`-KEM = RETIRED-per-Shape-B, superseded by `0x120c`/`0xec`;
+  only `0xef`-SIG = "retained fallback-only"), and the same split was swept into
+  the two stale mirrors the original row did not name — the
+  `crates/benten-id/src/did.rs` module doc and the `HYBRID_KEM_MULTICODEC` const
+  rustdoc (which still carried the pre-Shape-B "when wired" hedge) — plus the
+  KEM-component note earlier in `docs/CRYPTO-CODEPOINTS.md`. Prose only; the
+  const values and every wire byte are unchanged.
+- ~~**N-11 — `atrium_api.rs::for_test` → `EXEMPT_PUB_ITEMS` + Row D-74.**~~
+  **CLOSED (superseded) at the R6 fix-pass wave.** As minted, this read
+  "`AtriumConfig::for_test()` is production-reachable (`impl Default`→
+  `for_test()`), frozen on the public surface, … and invisible to the scanner",
+  and proposed adding `('atrium_api.rs','for_test')` to `EXEMPT_PUB_ITEMS`. All
+  three premises were closed instead of allowlisted: the fn is
+  `#[cfg(any(test, feature = "test-helpers"))]`-gated
+  (`crates/benten-engine/src/atrium_api.rs:89`) and off
+  `docs/public-api/benten-engine.txt`; the production `impl Default`
+  (`:109-117`) now inlines the `Loopback` construction rather than calling it;
+  and the scanner sees the bare form via `starts_with("for_test")`
+  (`tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs:354`). NO
+  `EXEMPT_PUB_ITEMS` entry was added — a cfg-gated item is skipped before the
+  allowlist is consulted, so adding one would be dead. Row retained for forensic
+  context per pim-13 / §3.12. See **Row D-74**.
 - **N-12 — crypto-suite `sizes` module self-referential exemption (SURFACE-TO-BEN)
   → V1-FROZEN pre-tag surface confirm.** `pub mod sizes` (SyntheticVector /
   SizeTouchingSurfaces / RedbSigHandle + the three `*_for_test` fixtures) is frozen
@@ -3294,7 +3353,7 @@ did not resolve unilaterally.
   `DidError::HybridTrailingBytes { extra: 0 }` — literally "0 extra trailing
   bytes" for an input that is too SHORT. Both use a `saturating_sub` that floors
   to zero on the short side:
-  `crates/benten-id/src/did.rs:604-610` (`Did::resolve_signing` —
+  `crates/benten-id/src/did.rs:612-618` (`Did::resolve_signing` —
   `decoded.len().saturating_sub(consumed + CID_LEN)`) and `:683-687`
   (`Did::keyset_cid` — `tail.len().saturating_sub(CID_LEN)`).
 - **NOT a security gap:** the reject itself is correct and fail-closed in both
@@ -3302,8 +3361,8 @@ did not resolve unilaterally.
   operator-facing count is misleading; no admit path is affected.
 - **Why deferred, not fixed at v1-beta:** the fix re-points the truncation branch
   at `DidError::HybridBodyTooShort` (`crates/benten-id/src/errors.rs:186` — already
-  the truncation diagnostic at `did.rs:809` / `:830`), which changes the TYPED
-  ERROR IDENTITY returned by two frozen public methods. `did.rs:667` documents the
+  the truncation diagnostic at `did.rs:817` / `:838`), which changes the TYPED
+  ERROR IDENTITY returned by two frozen public methods. `did.rs:675` documents the
   `HybridTrailingBytes` / `HybridBodyTooShort` pair as this method's contract, and
   `crates/benten-drop/tests/f_nqc4_1_did_key_hybrid_pubkey_multicodec.rs:217`
   matches specific `DidError` variants on adjacent inputs. Re-pointing a variant at
@@ -3312,7 +3371,7 @@ did not resolve unilaterally.
   truncation-vs-overrun into distinct diagnostics (short ⇒ `HybridBodyTooShort`,
   long ⇒ `HybridTrailingBytes { extra }` with a genuine non-zero count) at BOTH
   sites together, and add a reject-matrix pin per branch. Low priority.
-- **Anchor:** R6 tail fold-in F35; `crates/benten-id/src/did.rs:604-610` +
+- **Anchor:** R6 tail fold-in F35; `crates/benten-id/src/did.rs:612-618` +
   `:683-687`; `crates/benten-id/src/errors.rs:186` (`HybridBodyTooShort`) + `:199`
   (`HybridTrailingBytes`).
 
@@ -3369,13 +3428,15 @@ did not resolve unilaterally.
     helper feeding `PermissionRequest` / `PermissionGrant::signing_bytes`)
   - `crates/benten-membership-set/src/federation.rs:130` (the local `lp()` helper in
     `FederationEnvelope::to_wire_v2_be`)
-  - `crates/benten-membership-set/src/governance.rs:204` (`label.len() as u64`)
-  (`crates/benten-membership-set/src/audit.rs:194` also matches a naive grep but is
+  - `crates/benten-membership-set/src/governance.rs::canonical_governance_bytes`
+    (`label.len() as u64`)
+  (`crates/benten-membership-set/src/audit.rs::seq` also matches a naive grep but is
   a `seq()` COUNT accessor, not a wire prefix — excluded.)
 - **No security impact:** all seven are encode-side over bounded fields, and each
   length is recomputed symmetrically on the verify side, so there is no injectivity
   or truncation risk on any reachable input. Not a fix-gate.
-- **⚠️ FROZEN-WIDTH WARNING — `governance.rs:204` must keep its `u64`.** It is the
+- **⚠️ FROZEN-WIDTH WARNING — the `label.len() as u64` in
+  `governance.rs::canonical_governance_bytes` must keep its `u64`.** It is the
   one width outlier (every peer field uses a 4-byte `u32` prefix). **Do NOT
   "harmonize" it to `u32`:** that changes the encoded prefix from 8 bytes to 4,
   which is a WIRE BREAK and a signature-preimage change on a frozen surface. The
@@ -3387,10 +3448,86 @@ did not resolve unilaterally.
   **byte-identical** for every length below 4 GiB (it only changes panic behaviour
   on an unreachable input), so it is wire-neutral; it was NOT taken at v1-beta
   because it is a purely cosmetic edit across six frozen signature-preimage
-  constructions with zero behavioural gain. Leave `governance.rs:204` alone per the
+  constructions with zero behavioural gain. Leave
+  `governance.rs::canonical_governance_bytes` alone per the
   warning above.
 - **Anchor:** R6 tail fold-in F74; `crates/benten-graph/src/indexes.rs:85-98`
   (house-style rationale); the seven sites enumerated above.
+
+### Row D-94 — `det_signing_multikey` fixture validity is a per-seed coin flip (the RK-4/RK-5 test-vacuity root cause) → v1-GM fixture hygiene
+
+- **Observation (NAMED, not fixed this round):** `benten_id::kdb_testing::det_signing_multikey`
+  builds a signing multikey from pseudo-random `det_bytes` under the correct frozen
+  multicodec framing. Whether the result PARSES as a LAMPS composite public key is a
+  **per-seed ~50% coin flip**: `benten_crypto_suite::sig::PublicKey::from_lamps_composite_bytes`
+  checks the ML-DSA half by length only (`MlDsaVerifyingKey::decode` is infallible) and
+  then calls `ed25519_dalek::VerifyingKey::from_bytes` on the Ed25519 half, which
+  decompresses an Edwards point and fails for roughly half of all random 32-byte
+  strings. Validity is decided entirely by whether `det_bytes("{seed}/ed25519", 32)`
+  lands on the curve.
+- **Why this is recorded:** it is the ROOT CAUSE of the RK-4 / RK-5 test-vacuity finding
+  closed at the R6 tail — both arms built their `did:benten` from this fixture, so
+  `Did::resolve_kem` short-circuited at step-2 with `DidError::InvalidHybridPublicKey`
+  and NEITHER arm ever reached the gate it named (RK-4 the kem_cp⟺components
+  algorithm-confusion cross-check, RK-5 the PQ floor), while both still "passed" under
+  a bare `is_err()`. The symptom is recorded in the
+  `crates/benten-id/tests/kdb_resolve_kem_fail_closed.rs` header; the mechanism was
+  recorded nowhere until this row.
+- **Current exposure: none live.** RK-4/RK-5 now use a real hybrid keypair
+  (`signing_multikey_of(&hybrid_keypair().public())`). The remaining six consumers
+  (`kdb_drop9_group_commitment_golden.rs`, `kdb_drop11_audience_aad_golden.rs`,
+  `kdb_canonical_bytes_v1_keyset.rs`, `kdb_f_inj_keyset_strict_canonical.rs` ×2,
+  `kdb_dos_keyset_bounded_decode.rs`) are golden-LAYOUT pins that never parse the
+  signing key, so the coin flip is inert for them. The risk is LATENT — a future
+  parse-path fixture that reaches for this helper.
+- **Interim defense (landed this round):** an explicit LAYOUT-ONLY warning on
+  `crates/benten-id/src/kdb_testing.rs::det_signing_multikey` naming the mechanism, the
+  correct alternative, and the RK-4/RK-5 precedent.
+- **Deferred (destination):** v1-GM fixture hygiene — either make the helper's
+  Ed25519 half a real on-curve point (rejection-sample the `det_bytes` seed until
+  `VerifyingKey::from_bytes` succeeds, keeping determinism per seed), or rename it to
+  make the layout-only contract unmissable at the call site. Test-fixture-only; no
+  wire bytes, no golden hex, and no production surface is involved either way.
+- **Anchor:** R6 tail verify-closure sweep;
+  `crates/benten-id/src/kdb_testing.rs::det_signing_multikey`;
+  `crates/benten-crypto-suite/src/sig.rs::PublicKey::from_lamps_composite_bytes`
+  (the Ed25519 decompression step that decides validity);
+  `crates/benten-id/tests/kdb_resolve_kem_fail_closed.rs` header (the RK-4/RK-5
+  fixture note).
+
+### Row D-95 — R17 F-09: `X25519_CLASSICAL_INFO_V1` is a keying domain tag left OUT of the prefix-free registry → v1-GM enroll-or-exempt
+
+- **Observation (NAMED, not fixed this round):**
+  `cipher_suite::X25519_CLASSICAL_INFO_V1`
+  (`b"x25519-classical-v1-benten-0x6400"`,
+  `crates/benten-crypto-suite/src/cipher_suite.rs`) is a domain-separation info
+  string folded into the `0x6400` classical-combiner preimage — it DOES key
+  material — yet it carries no
+  `benten_crypto_suite::domain_registry::registered_domain_tags()` corpus entry,
+  so it is not covered by the `all_domain_tags_are_prefix_free` gate. It is left
+  out at v1-beta because it is a single self-contained combiner surface rather
+  than a cross-surface separator, and because enrolling it now would add a
+  23rd corpus entry the frozen surface does not yet carry.
+- **No security impact at v1-beta:** the tag is folded into exactly one
+  preimage (the non-default classical `0x6400` combiner) and is not reused on
+  any other keying, signing, or AEAD-AAD surface, so there is no cross-surface
+  pair for it to collide with. Not a fix-gate. (The sibling
+  `cipher_suite::X_WING_LABEL` is also un-enrolled, but its bytes are fixed by
+  `draft-connolly-cfrg-xwing-kem-10` §5.3 — a spec-mandated constant inside the
+  `0x647a` combiner preimage, not a Benten-minted separator.)
+- **Deferred (destination + shape):** v1-GM hardening — EITHER enroll it in
+  `registered_domain_tags()` (bumping the `registry_spans_the_full_corpus_wide_scope`
+  count assertion and adding a `domain_registry`-equality drift-assert at its
+  home const, the idiom every other mirrored tag uses) OR promote the
+  `domain_registry` module's "NAMED UN-ENROLLED tag" paragraph to a permanent
+  documented exemption with a stated class rule. Either direction is
+  **wire-neutral** — enrollment adds a corpus entry and a test assertion; it
+  does not change the tag bytes or any preimage.
+- **Anchor:** R17 F-09; `crates/benten-crypto-suite/src/cipher_suite.rs`
+  (`X25519_CLASSICAL_INFO_V1` + its carve-out rustdoc);
+  `crates/benten-crypto-suite/src/domain_registry.rs` (the "NAMED UN-ENROLLED
+  tag" section + `registered_domain_tags()`); `docs/SECURITY-PROOFS.md` §4.1 +
+  `docs/THREAT-MODEL.md` §5 (the 22-tag corpus scope statements).
 
 ---
 

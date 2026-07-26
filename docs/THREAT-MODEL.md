@@ -293,7 +293,11 @@ the single-vs-group instance this generalizes. **Status:** the registry + its pr
 (F-full / R6-R4 structural shape) — the centralizing registry CODE is at
 `crates/benten-crypto-suite/src/domain_registry.rs` (a 22-tag corpus via `registered_domain_tags()` plus the
 `all_domain_tags_are_prefix_free` regression); this row + the SECURITY-PROOFS property record the v1-beta
-commitment the code realizes.
+commitment the code realizes. **Documented carve-out:** the §3.9 gossip-topic derivation is deliberately NOT a
+registered tag — it is `blake3::keyed_hash(K_Set, membership_set_id ‖ BE(generation))` with NO
+domain-separation label, so its keyed-preimage shape (not a label string) is the separator and there is no tag
+to enroll. Likewise `K_PRINCIPAL_DOMAIN_KEY` (the Compromise #65 stand-in constant) is not one of the 22. See
+`docs/SECURITY-PROOFS.md` §4.1 + `crates/benten-crypto-suite/INTERNALS.md`.
 
 ---
 

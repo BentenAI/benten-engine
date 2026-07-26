@@ -359,7 +359,7 @@ All 12 primitives have live executors as of tag `phase-2b-close` (2026-05-03). T
 
 Phase-1 storage was forward-compatible with Phase-2 primitives: subgraphs containing WAIT / SANDBOX / SUBSCRIBE / STREAM Nodes passed structural validation under Phase 1 and round-tripped through storage, even though their executors were stubbed. That binary-compatibility property still holds — older serialised subgraphs continue to load — but the executor stubs are gone; every PrimitiveKind dispatch arm wires to a live runtime.
 
-## The 14 structural invariants
+## The 14 structural invariants (Inv-1..Inv-14)
 
 Validated at registration time or fired at runtime, depending on invariant:
 
@@ -378,7 +378,9 @@ Validated at registration time or fired at runtime, depending on invariant:
 13. **Immutability — registered subgraphs are not rewritable.** (Phase 2a 5-row firing matrix)
 14. **Causal attribution — every evaluation step carries a principal / handler / grant chain.** (Phase 2a threading)
 
-All 14 invariants are enforced as of `phase-2b-close`. Invariants 1–3, 5–6, 9–10, 12 landed in Phase 1; Invariants 8, 11, 13, 14 in Phase 2a; Invariants 4, 7 in Phase 2b alongside the SANDBOX runtime. See [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md) for per-invariant enforcer + test pins.
+All 14 structural invariants are enforced as of `phase-2b-close`. Invariants 1–3, 5–6, 9–10, 12 landed in Phase 1; Invariants 8, 11, 13, 14 in Phase 2a; Invariants 4, 7 in Phase 2b alongside the SANDBOX runtime. See [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md) for per-invariant enforcer + test pins.
+
+**The list above is the *structural* set only.** Phase-4-Meta-Core adds nine more, so the committed set at v1-beta spans **Inv-1..Inv-23**: Inv-15 (sig-bundle CIDs are never load-bearing identifiers), Inv-16 (envelope-layer unification — ONE codepoint-dispatched envelope across Layers A/B/C/D), Inv-17 (hybrid-cryptography-mandatory floor — no pure-PQ codepoint is LIVE or selectable), Inv-18 (codepoint-registry discipline + metadata-disclosure + `CodepointLifecycle` typed-state), Inv-19 (encryption-substrate keying-function CRDT-input discipline), Inv-20 (the MembershipSet 12-clause primitive invariant), Inv-21 (MembershipSet fork-tie-break HARD partition), Inv-22 (member-nature is derived, never stored), Inv-23 (a Layer-C seal's KEM key is committed by its audience DID). These are cryptographic / substrate invariants rather than graph-structural ones, and they are enforced outside `benten-eval` (in `benten-crypto-suite`, `benten-membership-set`, `benten-id` and `benten-drop`). Three carry honest register-then-enforce carve-outs at v1-beta — Inv-15 (enforcement-completion at G-CORE-PQ-WIRE-1), Inv-19 and Inv-21 (comparator / keying-glue AS-BUILT + property-pinned, zero production callers at HEAD). Per-invariant enforcement state, enforcing crate and test pins for all 23 are in [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md).
 
 ## How a request flows
 

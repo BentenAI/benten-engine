@@ -123,7 +123,7 @@ fn noop_replay_check_admits_every_hash() {
 ///
 /// **Would-FAIL-on-revert (pim-18 §3.6f):** delete the
 /// `(ports.install_record_replay_check)(&payload_hash)?` call at
-/// plugin_lifecycle.rs:949 → closure never fires → counter stays at 0
+/// plugin_lifecycle.rs:950 → closure never fires → counter stays at 0
 /// → assertion fires.
 #[test]
 fn counting_replay_check_consulted_via_install_plugin_end_to_end() {

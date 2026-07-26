@@ -56,6 +56,12 @@ pub enum AdminOp {
 /// the ENFORCED engine WRITE populates all three (`benten-graph/src/store.rs`
 /// `ChangeEvent` attribution fields — "an engine-API write fills the triple
 /// in").
+/// **R6-tail: gated off the frozen public surface.** Both producers
+/// ([`emit_audit_event_via_engine`] / [`emit_audit_event_via_bare_put`]) are
+/// `#[cfg(any(test, feature = "testing"))]`-gated (F11), so under default
+/// features this type has no reachable producer and no consumer; it is gated
+/// with them rather than frozen as an orphan on the v1-beta surface.
+#[cfg(any(test, feature = "testing"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AuditEmitResult {
     /// The actor that authorized the op (`None` on the bare-put path).

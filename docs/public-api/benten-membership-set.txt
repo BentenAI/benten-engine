@@ -162,27 +162,6 @@ impl core::marker::Unpin for benten_membership_set::audit::AuditChain
 impl core::marker::UnsafeUnpin for benten_membership_set::audit::AuditChain
 impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AuditChain
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AuditChain
-pub struct benten_membership_set::audit::AuditEmitResult
-pub benten_membership_set::audit::AuditEmitResult::actor_cid: core::option::Option<[u8; 32]>
-pub benten_membership_set::audit::AuditEmitResult::capability_grant_cid: core::option::Option<[u8; 32]>
-pub benten_membership_set::audit::AuditEmitResult::chain_advanced: bool
-pub benten_membership_set::audit::AuditEmitResult::handler_cid: core::option::Option<[u8; 32]>
-impl core::clone::Clone for benten_membership_set::audit::AuditEmitResult
-pub fn benten_membership_set::audit::AuditEmitResult::clone(&self) -> benten_membership_set::audit::AuditEmitResult
-impl core::cmp::Eq for benten_membership_set::audit::AuditEmitResult
-impl core::cmp::PartialEq for benten_membership_set::audit::AuditEmitResult
-pub fn benten_membership_set::audit::AuditEmitResult::eq(&self, &benten_membership_set::audit::AuditEmitResult) -> bool
-impl core::fmt::Debug for benten_membership_set::audit::AuditEmitResult
-pub fn benten_membership_set::audit::AuditEmitResult::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Copy for benten_membership_set::audit::AuditEmitResult
-impl core::marker::StructuralPartialEq for benten_membership_set::audit::AuditEmitResult
-impl core::marker::Freeze for benten_membership_set::audit::AuditEmitResult
-impl core::marker::Send for benten_membership_set::audit::AuditEmitResult
-impl core::marker::Sync for benten_membership_set::audit::AuditEmitResult
-impl core::marker::Unpin for benten_membership_set::audit::AuditEmitResult
-impl core::marker::UnsafeUnpin for benten_membership_set::audit::AuditEmitResult
-impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AuditEmitResult
-impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AuditEmitResult
 pub struct benten_membership_set::audit::AuditQueryComposition
 pub benten_membership_set::audit::AuditQueryComposition::gating_scope: alloc::string::String
 pub benten_membership_set::audit::AuditQueryComposition::is_a_new_primitive_kind_variant: bool

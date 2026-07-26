@@ -45,6 +45,17 @@
 //!   AEAD AAD label), [`DAK_HKDF_INFO_TAG`] (the DAK HKDF info-tag).
 //! - **Deterministic recipient-seed expansion** — [`RECIPIENT_SEED_LABEL`]
 //!   (the Layer-C deterministic-keypair BLAKE3 expansion label).
+//! - **Structural-KDF role-separation HKDF info-tag prefixes** (R6-final
+//!   F-06; home `crate::structural_kdf`) — `STRUCTURAL_KDF_ROOT_LABEL`,
+//!   `STRUCTURAL_KDF_STEP_LABEL`. Both key SECRET material (`K_root` /
+//!   `K(N)`).
+//! - **Swap-matrix sign-and-seal AAD-commit prefix** (R6-final F-06
+//!   follow-up; home `crate::swap_matrix`) — `SWAP_MATRIX_AAD_DOMAIN`,
+//!   reached from the production `sign_and_seal` → `compose_aad` path.
+//!
+//! The nine families above enumerate all **22** tags
+//! [`registered_domain_tags`] returns; a new family added to the vec without
+//! a bullet here is a doc-vs-code drift.
 //!
 //! # Scope carve-out — public content-hash namespaces are NOT registered tags
 //!

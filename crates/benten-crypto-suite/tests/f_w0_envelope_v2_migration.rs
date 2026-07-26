@@ -48,7 +48,7 @@ const DRAFT_CONNOLLY_X_WING_KAT: [u8; 32] = [
 /// The legacy in-tree HKDF-SHA256 combiner output for the SAME inputs — the
 /// `assert_ne!` "construction changed" reference. Computed via the real
 /// upstream `hkdf` crate (the shape the corpus base shipped at
-/// `cipher_suite.rs:404`).
+/// `cipher_suite.rs:407`).
 fn legacy_hkdf_combine(ss_mlkem: &[u8], ss_x: &[u8], ek_x: &[u8], pub_x: &[u8]) -> [u8; 32] {
     use hkdf::Hkdf;
     use sha2::Sha256;

@@ -656,11 +656,16 @@ export interface ViewDef {
  *
  * `codepoint` selects the dispatch arm:
  * - `0x0001` (`HYBRID_ED25519_MLDSA65`, v1-beta DEFAULT) — `ed25519` +
- *   `mlDsa65` + `commitment` MUST all be present (NF-4
- *   concatenated/committing/strip-resistant; both halves required to
- *   verify).
+ *   `mlDsa65` MUST both be present. The construction is the byte-faithful
+ *   IETF LAMPS composite `id-MLDSA65-Ed25519-SHA512`: both halves sign the
+ *   SAME message representative `M'` (the ML-DSA half with
+ *   `mldsa_ctx = Label`), the wire is the raw concat
+ *   `mldsaSig || tradSig` (ML-DSA FIRST) with **NO commitment trailer**,
+ *   and BOTH halves must verify or the verify fails closed.
+ *   Strip-resistance rests on the shared-`M'` / `mldsa_ctx=Label` binding
+ *   + both-halves-required — NOT on a commitment.
  * - `0x0002` (`CLASSICAL_ED25519`, non-default downgrade) — `ed25519`
- *   MUST be present; `mlDsa65` + `commitment` MUST be absent.
+ *   MUST be present; `mlDsa65` MUST be absent.
  *
  * **No silent fallback on unknown codepoints** — the napi/Rust dispatch
  * surfaces typed `E_CRYPTO_UNSUPPORTED_ALGORITHM` per the CLAUDE.md #5
@@ -693,11 +698,17 @@ export interface ManifestSignature {
    */
   mlDsa65?: string;
   /**
-   * NF-4 commitment binding both halves + message — base64 (32 B raw
-   * = SHA3-256 output, ~44 base64 chars). Present iff `codepoint=0x0001`.
-   * The committing construction is what makes the hybrid
-   * strip-resistant: neither half can be stripped, truncated, or
-   * cross-message-substituted without the verify failing closed.
+   * **VESTIGIAL — never emitted at v1-beta; mirrors no Rust field.**
+   *
+   * This slot named the prior Benten-own "NF-4" SHA3-256 commitment
+   * trailer. That construction was REPLACED by the byte-faithful IETF
+   * LAMPS composite `id-MLDSA65-Ed25519-SHA512`, whose wire
+   * (`mldsaSig || tradSig`) has no slot for a commitment — see
+   * `benten_crypto_suite::HybridSignature` (fields: codepoint /
+   * classical / pq) and `docs/SECURITY-POSTURE.md` Compromise #31.
+   * Strip-resistance comes from the shared-`M'` / `mldsa_ctx=Label`
+   * binding + both-halves-required, not from a commitment.
+   * Encoders MUST NOT populate this field; decoders MUST ignore it.
    */
   commitment?: string;
 }

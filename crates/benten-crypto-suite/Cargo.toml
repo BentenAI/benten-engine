@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "The ONE thin Benten-owned signature/hash/cipher-suite-agility integration crate — a codepoint-dispatched seam wrapping vetted upstream RustCrypto primitives. v1-beta signature default = hybrid Ed25519⊕ML-DSA-65 (NF-4 concatenated/committing/strip-resistant; both must verify); classical-only Ed25519 = non-default downgrade; typed unsupported-algorithm arm (never silent fallback); no hardcoded sizes (a v1-PRODUCTION-correctness property). The ONLY crypto-primitive call site per crypto-agility-contract:6."
+description = "The ONE thin Benten-owned signature/hash/cipher-suite-agility integration crate — a codepoint-dispatched seam wrapping vetted upstream RustCrypto primitives. v1-beta signature default = hybrid Ed25519⊕ML-DSA-65 (byte-faithful IETF LAMPS composite id-MLDSA65-Ed25519-SHA512; wire mldsaSig || tradSig, NO commitment trailer; both must verify); classical-only Ed25519 = non-default downgrade; typed unsupported-algorithm arm (never silent fallback); no hardcoded sizes (a v1-PRODUCTION-correctness property). The ONLY crypto-primitive call site per crypto-agility-contract:6."
 
 [lints]
 workspace = true

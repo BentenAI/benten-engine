@@ -1060,9 +1060,33 @@ mod tests {
 
     #[test]
     fn debug_does_not_leak_key() {
-        let km = UnlockedKeyMaterial::new([0xDEu8; 32], vec![0x11u8; 64]);
+        // R6-tail F-41 sweep: distinct-byte fixture (an all-same-byte foil is
+        // weak — a single coincidental decimal decides the assertion), and the
+        // scan is the CONTIGUOUS decimal SEQUENCE a derived Debug would emit,
+        // matching the `LEAK_DECIMAL` convention in
+        // `crates/benten-engine/tests/f_secret_hygiene_roster.rs`.
+        let mut k = [0u8; 32];
+        k[..8].copy_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xD0]);
+        let km = UnlockedKeyMaterial::new(k, vec![0x11u8; 64]);
         let rendered = format!("{km:?}");
-        assert!(!rendered.contains("222")); // 0xDE decimal
+        const LEAK_DECIMAL: &str = "222, 173, 190, 239, 202, 254, 186, 208";
+        assert!(
+            !rendered.contains(LEAK_DECIMAL),
+            "UnlockedKeyMaterial Debug MUST NOT render the K_principal bytes \
+             (Compromise #36); a derived Debug leaks them as `{LEAK_DECIMAL}`; \
+             rendered=`{rendered}`"
+        );
+        // Positive guards: BOTH secret fields are replaced wholesale.
+        assert!(
+            rendered.contains("k_principal: \"SecretBox<[u8; 32]>\""),
+            "k_principal MUST be replaced wholesale by the SecretBox \
+             placeholder; rendered=`{rendered}`"
+        );
+        assert!(
+            rendered.contains("user_did_signing_key: \"<redacted>\""),
+            "user_did_signing_key MUST be replaced wholesale by the redaction \
+             marker; rendered=`{rendered}`"
+        );
     }
 
     /// Drift defense: the vault at-rest domain tags are registered

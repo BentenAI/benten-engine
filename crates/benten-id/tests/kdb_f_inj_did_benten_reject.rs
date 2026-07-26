@@ -2,7 +2,7 @@
 //! DoS cap (DID-7). W0-canary RED-PHASE.
 //!
 //! Ref `3bea1294`: `GAP-KDB-B-DESIGN-R1.md` §1.1 injectivity (Row-D-13,
-//! `HybridTrailingBytes` posture at `did.rs:376-380`) + C7 (F2 DoS cap
+//! `HybridTrailingBytes` posture at `did.rs:384-388`) + C7 (F2 DoS cap
 //! wired for did:benten; keep `MAX_DID_KEY_STRING_LEN = 4096`).
 //! `GAP-KDB-B-R2-LANDSCAPE.md` DID-3 / DID-7.
 //!

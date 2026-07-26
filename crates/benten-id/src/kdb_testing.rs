@@ -11,40 +11,40 @@
 //! benten_id::kdb_testing::*` cross-crate (enable `benten-id`'s `testing`
 //! feature in their dev-deps).
 //!
-//! # RED-PHASE stub-shim discipline (how this becomes real at R5)
+//! # RED-PHASE stub-shim discipline — DISCHARGED at R5 (historical note)
 //!
-//! The real GAP-KDB types do NOT exist at the freeze base
-//! (`phase-4-meta-core/r9-base`). This module supplies the **expected API
-//! shape** so the red-phase test files COMPILE green at baseline while
-//! staying `#[ignore]`d. Two disjoint categories live here:
+//! At the freeze base (`phase-4-meta-core/r9-base`) the real GAP-KDB types did
+//! NOT yet exist, and this module supplied the **expected API shape** so the
+//! red-phase test files compiled green while staying `#[ignore]`d. That phase
+//! is over: at HEAD the real types are minted and every entry below delegates
+//! to them. Two disjoint categories live here:
 //!
-//! - **Fixture DATA + FROZEN-spec serialization (REAL now).** The
+//! - **Fixture DATA + FROZEN-spec serialization (REAL).** The
 //!   multicodec framing constants, [`KeySetDocument::to_canonical_bytes`]
 //!   (canonical DAG-CBOR), [`KeySetDocument::cid`] (BLAKE3-256 →
 //!   self-describing CIDv1), and the raw `did:benten` string assembler
 //!   [`did_benten_from_payload_for_test`] implement the FROZEN spec
-//!   directly (deterministic; the same bytes the R5 encoder must emit).
+//!   directly (deterministic; the same bytes the encoder emits).
 //!   These give stable golden pins + coupled test scenarios.
-//! - **LOGIC-UNDER-TEST (STUB `todo!()` now → real entry at R5).** The
+//! - **LOGIC-UNDER-TEST — REAL at HEAD (was `todo!()` at R3).** The
 //!   codec encoder [`encode_did_benten`], resolvers [`resolve_signing`] /
-//!   [`resolve_kem`] / [`committed_keyset_cid`], strict decode
-//!   [`KeySetDocument::from_canonical_bytes`], and
-//!   [`RecipientBinding::resolve`] are the GAP-KDB security surface. They
-//!   are `todo!()` stubs at R3. At R5 each stub body is replaced by a
-//!   delegation to the minted real entry (e.g. `did.resolve_kem(doc)`),
-//!   and the red-phase tests un-ignore. Because a `todo!()` panics, no
-//!   red-phase test can pass against the stub — the ONLY way each pin goes
-//!   green is against a real, non-no-op implementation (substance by
-//!   construction).
+//!   [`resolve_kem`] / [`committed_keyset_cid`], and strict decode
+//!   [`KeySetDocument::from_canonical_bytes`] are the GAP-KDB security
+//!   surface. Each was a `todo!()` stub during the R3 red phase; the R5 swap
+//!   replaced every body with a delegation to the minted real entry (e.g.
+//!   `did.resolve_kem(doc)`), so at HEAD there is NO `todo!()` in this file
+//!   and every pin runs against the real, non-no-op implementation (substance
+//!   by construction). `RecipientBinding::resolve` left this module entirely —
+//!   see the relocation note below.
 //!
-//! **R5 handoff (single-file swap):** mint the real
+//! **R5 handoff — COMPLETE.** The real
 //! `benten_id::keyset::KeySetDocument` + `Did::{from_benten_keyset,
 //! resolve_signing, resolve_kem, keyset_cid}` + benten-drop
-//! `RecipientBinding`; then in THIS file (a) replace the stub
-//! `KeySetDocument` with `pub use crate::keyset::KeySetDocument;`, (b)
-//! replace each `todo!()` free-fn body with the real-method delegation,
-//! (c) drop `for_test` escape hatches that the real sole-constructor
-//! subsumes. Test call sites do not change — they only un-ignore.
+//! `RecipientBinding` are minted; in THIS file (a) the stub `KeySetDocument`
+//! is now `pub use crate::keyset::KeySetDocument;`, (b) each free fn delegates
+//! to the real method, and (c) the `for_test` escape hatches the real
+//! sole-constructor subsumes are gone. Test call sites never changed — they
+//! only un-ignored.
 
 #![allow(
     // RED-PHASE fixtures: never-constructed stub fields, todo!() stubs,
@@ -240,6 +240,26 @@ pub fn det_mlkem768_ek(seed: &str) -> Vec<u8> {
 /// A deterministic signing multikey with the FROZEN framing over opaque
 /// (`det_bytes`) component payloads — for golden-LAYOUT pins that must be
 /// byte-stable (KSD-1 / DID-1 golden-hex capture).
+///
+/// # ⚠️ LAYOUT-ONLY — do NOT use where the key is PARSED
+///
+/// The component payloads are pseudo-random `det_bytes`, so whether the result
+/// parses as a real LAMPS composite public key is a **per-seed ~50% coin flip**.
+/// `benten_crypto_suite::sig::PublicKey::from_lamps_composite_bytes` validates
+/// the ML-DSA half by length only (its `decode` is infallible) but calls
+/// `ed25519_dalek::VerifyingKey::from_bytes` on the Ed25519 half, which
+/// decompresses an Edwards point and FAILS for roughly half of all random
+/// 32-byte strings. Validity therefore depends entirely on whether
+/// `det_bytes("{seed}/ed25519", 32)` happens to land on the curve.
+///
+/// Any fixture on a path that PARSES the embedded signing key (e.g.
+/// `Did::resolve_kem` step-2 `benten_embedded_signing_multikey`) must use a REAL
+/// key — `signing_multikey_of(&hybrid_keypair().public())` — or it risks
+/// short-circuiting with `DidError::InvalidHybridPublicKey` and never reaching
+/// the gate it means to exercise, while still "passing" under a bare
+/// `is_err()`. That is exactly what happened to the RK-4 / RK-5 arms of
+/// `crates/benten-id/tests/kdb_resolve_kem_fail_closed.rs` (corrected at the R6
+/// tail). Tracked as Row D-94 in `docs/V1-FROZEN-INTERFACE-DEFERRED.md`.
 pub fn det_signing_multikey(seed: &str) -> Vec<u8> {
     let mldsa = det_bytes(
         &format!("{seed}/mldsa"),

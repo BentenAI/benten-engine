@@ -82,11 +82,11 @@ Notable test-only escape hatches (`#[doc(hidden)]`):
 - `secret_bytes_unprotected` on `Keypair` — the sanctioned PRODUCTION raw-seed alias (NOT `_for_test`-named). It reads through the `pub(crate)` `SecretKey::bytes_unprotected` accessor (never the cfg-gated `_for_test` one). Documented use sites: `typed_call_dispatch.rs::keypair_generate` + `keypair_from_seed` (typed-CALL output schema today surfaces raw bytes in `Value::Bytes`; phase-3-backlog §2.5 (e) tracks the `Value::SensitiveBytes` extension); `benten-caps` authorization-grant issuer key; and `benten-sync` transport + peer-discovery for iroh keypair construction (D-74/75/76 migrated these two off the former `secret_bytes_for_test` call sites). **The doc comment warns the caller is responsible for wrapping in `Zeroizing` if the value lives past the immediate dispatch.**
 
 ### `did.rs` (125 LOC)
-W3C did-method-key encode/decode. Three constants pin the spec compliance (did.rs:26-29): `ED25519_MULTICODEC = [0xed, 0x01]`, `DID_KEY_PREFIX = "did:key:z"`, multibase prefix `z` = base58btc. Encoded shape: `"did:key:z" + base58btc(0xed01 || <32 pubkey bytes>)`.
+W3C did-method-key encode/decode. Three constants pin the spec compliance (did.rs:26-33): `ED25519_MULTICODEC = [0xed, 0x01]`, `DID_KEY_PREFIX = "did:key:z"`, multibase prefix `z` = base58btc. Encoded shape: `"did:key:z" + base58btc(0xed01 || <32 pubkey bytes>)`.
 
-The `Did` newtype implements `Serialize`/`Deserialize` as `#[serde(transparent)]` (did.rs:47-49) — round-trips the string form, **does NOT validate on deserialize**. Callers needing validate-on-deserialize call `Did::resolve` explicitly. Used by `benten-sync`'s `HandshakeFrame` wire format (`net-blocker-4`).
+The `Did` newtype implements `Serialize`/`Deserialize` as `#[serde(transparent)]` (did.rs:51-53) — round-trips the string form, **does NOT validate on deserialize**. Callers needing validate-on-deserialize call `Did::resolve` explicitly. Used by `benten-sync`'s `HandshakeFrame` wire format (`net-blocker-4`).
 
-`Did::from_string_unchecked` (did.rs:110-112) is the post-deserialize "trust the string" entry. The W3C-vector test carries 3 pinned hex pubkey → DID-string fixtures + fail-closed wrong-multicodec.
+`Did::from_string_unchecked` (did.rs:118-120) is the post-deserialize "trust the string" entry. The W3C-vector test carries 3 pinned hex pubkey → DID-string fixtures + fail-closed wrong-multicodec.
 
 ### `ucan.rs` (995 LOC)
 The chain-walk validator. Largest module. Public surface:

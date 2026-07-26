@@ -144,10 +144,6 @@ DidError::NoKemCommitment
 DidRotationError::HlcNotStrictlyMonotonic
 DidRotationError::PreviousDidMismatch
 DidRotationError::VerbatimReplay
-DropBundleError::AuthorizationGrantFailed
-DropBundleError::CodecError
-DropBundleError::PerNodeAeadAuthenticationFailed
-DropBundleError::UnsupportedDropVersion
 EngineConfigError::Io
 EngineConfigError::Parse
 EngineError::Backend

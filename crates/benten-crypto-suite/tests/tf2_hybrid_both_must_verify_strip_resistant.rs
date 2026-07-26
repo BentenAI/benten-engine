@@ -1,5 +1,7 @@
 //! TF-2 pin (a) + S3 — hybrid Ed25519⊕ML-DSA-65: BOTH must verify;
-//! concatenated / committing / strip-resistant (NF-4).
+//! strip-resistant. (The NF-4 requirement — hybrid-by-default — stands;
+//! its original concatenated/committing CONSTRUCTION was replaced by the
+//! byte-faithful IETF LAMPS composite, which has NO commitment trailer.)
 //!
 //! ADDL R3 (TDD RED-phase) test-writer — Phase-4-Meta-Core Wave R3-A,
 //! agent R3-A2, family TF-2 (#1300 signature-agility integration crate
@@ -25,8 +27,9 @@
 //!
 //! These pins exercise the **production** sign/verify path of the
 //! integration crate — NOT a sentinel "a type is constructible". The
-//! load-bearing safety property is **strip-resistance**: the hybrid
-//! signature is concatenated/committing so neither the Ed25519 half nor
+//! load-bearing safety property is **strip-resistance**: both halves sign
+//! the SAME LAMPS message representative `M'` (ML-DSA half bound to
+//! `mldsa_ctx = Label`) and both MUST verify, so neither the Ed25519 half nor
 //! the ML-DSA-65 half can be stripped, zeroed, truncated, or substituted
 //! without the verify failing **closed** (a typed error, never a silent
 //! single-half accept, never a silent fallback). A single-half-accepting
@@ -78,7 +81,7 @@ fn tf2_stripping_ml_dsa_half_fails_closed() {
     let sig = suite.sign(&kp, msg);
 
     // Adversary removes the ML-DSA-65 component, presenting only the
-    // Ed25519 half. The committing/strip-resistant construction MUST
+    // Ed25519 half. The both-must-verify / strip-resistant construction MUST
     // reject — a typed error, NOT Ok, NOT a silent classical-only accept.
     let stripped = sig.without_pq_half_for_test();
     let outcome = suite.verify(kp.public(), msg, &stripped);

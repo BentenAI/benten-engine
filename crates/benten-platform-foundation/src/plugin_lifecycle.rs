@@ -912,7 +912,8 @@ pub struct InstallOutcome {
 ///    a manifest, `verify_upgrade_author_continuity` rejects an
 ///    upgrade whose new `peer_did` differs from the prior
 ///    (`PluginAuthorNotTrusted`). T10-(a) + T10-(b) are co-defensive
-///    per `docs/admin-ui-v0-threat-model.md` §T10; both gates fire on
+///    per `.addl/_archive/phase-4-foundation/admin-ui-v0-threat-model.md`
+///    §T10; both gates fire on
 ///    every upgrade attempt.
 /// 7b. **Fresh-consent gap at upgrade time** — if the new manifest
 ///    `requires` a capability the prior did NOT, reject with

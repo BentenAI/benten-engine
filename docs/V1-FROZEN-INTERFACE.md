@@ -691,7 +691,7 @@ each codepoint = SWAPPABLE within the framing):**
    | Sig | `SigCodepoint::HYBRID_MLDSA65_SLHDSA` | `0x0003` | reserved swap-matrix arm (NF-1 end-state; **typed-rejected by default** at `SigCodepoint::resolve` + `SignatureSuite::resolve_codepoint` + `varsig.rs::decode_payload`; reachable only via `SwapMatrix::try_pure_pq_sole_trust_path()` audit-gated constructor per C11b safety gate; mirrors 0x647c framing) |
    | Cipher | `CipherSuiteCodepoint::HYBRID_X25519_MLKEM768` | `0x647a` | LIVE, **default (X-Wing-style combiner vendored ~30 LOC; ChaCha20-Poly1305 bulk)** |
    | Cipher | `CipherSuiteCodepoint::CLASSICAL_X25519` | `0x6400` | LIVE, non-default classical-only downgrade |
-   | Cipher | `CipherSuiteCodepoint::NONE_PLAINTEXT` | `0x0000` | LIVE, non-default plaintext-partition downgrade |
+   | Cipher | `CipherSuiteCodepoint::NONE_PLAINTEXT` | `0x0000` | non-default plaintext-partition (public-class) arm — **typed-REJECTED at `CipherSuiteCodepoint::resolve` by design** (not a resolvable default, never a silent fallback); reachable ONLY via the explicit `SwapMatrix::no_encryption_public_class()` / `sign_only` path |
    | Cipher | `CipherSuiteCodepoint::HYBRID_MLKEM768_HQC` | `0x647b` | reserved-unimplemented (NF-1 KEM end-state; FIPS 207-final build-gated) |
    | Cipher | `CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY` | `0x647c` | reserved swap-matrix arm (NOT default; pre-FREEZE bundle #1342 mint per Ben morning queue item 1; **typed-rejected by default — gated by `AUDIT_LANDED_PURE_PQ_FLAG` per the C11b safety gate**) |
 
@@ -1262,7 +1262,7 @@ verification at HEAD):
 | `benten-engine` (layer_d) | `device_auth::DeviceAuthError` / `device_link::DeviceLinkError` / `secret_store::SecretStoreError` / `remote_permission::PermissionOperation` | NO at HEAD (new frozen-v1 layer_d enums) | **APPLY** (R6-R3 fix-b comprehensive sweep). `PermissionOperation`'s same-crate `to_wire_be` match stays exhaustive (forces a wire-tag for any new variant); cross-crate consumers get additive forward-compat. |
 | `benten-engine` (layer_d) | **`grant_acceptance::GrantRejection`** | NO (deliberate) | **DO NOT APPLY** — explicit carve-out (R6-R3): the frozen M-12 six-pass-class roster; the non-wildcard `roster_index` match IS the structural roster-drift guard (a 7th class HALT-AND-SURFACEs at every consumer). Mirrors `Strategy` / `MembershipSetKind`. |
 | `benten-core` | `WriteAuthority`, `ChangeEvent`, `ChangeKind`, `subgraph_spec::Spec`+`SpecError`, `version_dag::*`, `Subgraph::PrimitiveKind` | YES (except `Spec` which uses private-fields-plus-builder pattern for equivalent SemVer-safety per L17-r2-1) | KEEP |
-| `benten-core` | new `RestrictedSpec` enum variants (`subgraph_spec/spec.rs:126`) | TBD | APPLY |
+| `benten-core` | new `SubgraphSpecRestriction` enum variants (`subgraph_spec/spec.rs:115`) | TBD | APPLY |
 | **F-22 Row D-17 EXTENSION set** (pre-tag) | `benten-core`: `Mode` / `VersionError` / `VersionDagError` / `Anchor` / `VersionDag` / `DagVersionChain` / `Subgraph` / `SubgraphBuilder` / `NodeHandle`. `benten-ivm`: `SubgraphSpec` / `KernelInput` / `ViewState` / `ViewBudget` / `ViewQuery` / `ViewResult` / `ViewDefinition` / `LabelPattern` / `Subscriber` / `CanonicalViewEntry` / `AlgorithmBView` / `Projection` / `EffectiveRules` + the 5 view-instance structs. `benten-platform-foundation`: `VocabLabel` / `VocabEdge` / `Scalar` / `RenderError` / `MaterializerError` / `MaterializerDenialFrame` / `MaterializerWalkInputs` / `MaterializerOutput` / `SubscribeAttachToken`. `benten-engine`: `UserViewSpec` / `UserViewSpecBuilder` / `ReadViewOptions` / `Outcome` / `Trace` / `TerminalError` / `BudgetExhaustedView` / `AnchorHandle` / `RegisterReplaceOutcome` / `HandlerPredecessors` / `DiagnosticInfo` / `NestedTx` / `EngineViewsHandle` / `AtriumConfig` / `SyncStatus` | **YES — `#[non_exhaustive]` APPLIED at HEAD (F-22 pre-tag sweep)** (each carries a `// §11 SemVer-readiness (F-22 pre-tag)` doc-block) | **APPLIED (KEEP)** — closes `V1-FROZEN-INTERFACE-DEFERRED.md` Row D-17 EXTENSION set. Cross-crate cascade closed via minted constructors (`Subgraph::from_parts` / `NodeHandle::new` / `ViewDefinition::new` / `MaterializerWalkInputs::new`) + `default()`+field-mutation for FRU structs + `_` wildcard match arms (in-crate exhaustive matches unaffected). NO carve-outs in this set. Audit pins: 12 `f22_*` tests in `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs`. |
 | `benten-ivm` | `AlgorithmError` | per spec item 11 | AUDIT + APPLY |
 | `benten-sync` | §4.71 5-enum cluster | per spec item 11 | AUDIT + APPLY |
@@ -1370,7 +1370,7 @@ SHIPPED per #1338 G-CORE-8 fix-pass + the wave-2 batch #1340):**
 - `pub trait ManifestEnvelopeRechecker` (`crates/benten-engine/src/manifest_envelope_recheck.rs::ManifestEnvelopeRechecker`) — the port interface; method
   signatures frozen.
 - `NoopManifestEnvelopeRechecker` is the v1-beta **shipped default**
-  (`crates/benten-engine/src/engine.rs::Engine::new_with_engine_caps_handle` always installs
+  (`crates/benten-engine/src/engine.rs::Engine::from_parts_with_clocks` always installs
   `Some(Arc::new(NoopManifestEnvelopeRechecker))` per the
   `manifest_envelope_rechecker: Some(Arc::new(...NoopManifestEnvelopeRechecker))` initializer). At HEAD its
   `recheck_row` impl returns `NotApplicable` for every input
@@ -1647,10 +1647,10 @@ CLAUDE.md baked-in #18 (Principal primitive + plugin trust model).
 ### 15.a — SubgraphSpec primitive
 
 **Frozen surfaces:**
-- `crates/benten-core/src/subgraph_spec/spec.rs:190` `pub struct Spec` —
+- `crates/benten-core/src/subgraph_spec/spec.rs::Spec` `pub struct Spec` —
   the 4-thing thin core (Roots / Expansion / Inclusion / Termination).
   **Equivalent SemVer-safety via private fields + builder pattern**
-  (`pub fn builder() -> SpecBuilder` at `spec.rs:216`; all four fields are
+  (`pub fn builder() -> SpecBuilder` at `spec.rs:205`; all four fields are
   private). External direct-struct-literal construction is already blocked
   by field visibility — `#[non_exhaustive]` is NOT required for the
   SemVer-additive-field-extension property `Spec` needs. Per G-CORE-9 R2
@@ -1673,7 +1673,7 @@ CLAUDE.md baked-in #18 (Principal primitive + plugin trust model).
 **ARCHITECTURAL CONCERN — type-name collision (orchestrator-decided per
 distinctive-angle).** Two `RestrictedSpec` types existed at HEAD: (i)
 `crates/benten-caps/src/restricted_spec.rs:103` (the 6-dimension product
-per (b)); (ii) `crates/benten-core/src/subgraph_spec/spec.rs:126` (a
+per (b)); (ii) `crates/benten-core/src/subgraph_spec/spec.rs::SubgraphSpecRestriction` (a
 different enum). **Renames LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 7
 (commit `dd12f394`):** `subgraph_spec::RestrictedSpec` →
 `SubgraphSpecRestriction`; `caps::RestrictedSpec` → `RestrictedScope`.

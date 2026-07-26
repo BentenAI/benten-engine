@@ -679,7 +679,8 @@ pub enum ErrorCode {
     /// thin-client device-attestation auth boundary at G14-D
     /// wave-5a). Surfaces at
     /// `crates/benten-engine/src/thin_client.rs::DidKeyedSession::establish_session`
-    /// per `docs/admin-ui-v0-threat-model.md` §T2 defense 1 + br-r1-1.
+    /// per `.addl/_archive/phase-4-foundation/admin-ui-v0-threat-model.md`
+    /// §T2 defense 1 + br-r1-1.
     /// Routes to `ON_DENIED`.
     ThinClientHandshakeInvalid,
     /// Phase-4-Foundation G24-F wave: DID-keyed handshake replayed a
@@ -699,7 +700,8 @@ pub enum ErrorCode {
     /// Family F1 gap #2 closure — token-leak attack class). Surfaces
     /// at
     /// `crates/benten-engine/src/thin_client.rs::DidKeyedSession::resolve`
-    /// + `establish_session` per `docs/admin-ui-v0-threat-model.md`
+    /// + `establish_session` per
+    /// `.addl/_archive/phase-4-foundation/admin-ui-v0-threat-model.md`
     /// §T2 defense 3 + sec-4f-r1-5. Routes to `ON_DENIED`.
     ThinClientOriginMismatch,
     /// Phase-4-Foundation G24-F wave: session token's wallclock

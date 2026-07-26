@@ -184,7 +184,7 @@ Per br-r1-3: admin UI v0 bundle ≤600KB gzipped with code-splitting strategy:
 - View creator (sub-feature; dynamic-import boundary)
 - Plugin browser (sub-feature; dynamic-import boundary)
 
-CI workflow `admin-ui-v0-bundle-size.yml` at G26-B enforces.
+CI workflow `.github/workflows/bundle-size.yml` measures the browser bundle against this budget. It is INFORMATIONAL ONLY — it reports current size + delta from baseline as a PR comment / step summary and is NOT a member of the required-check set, so a regression surfaces for reviewer judgement rather than blocking the merge.
 
 ### §4.2 CSP directives
 

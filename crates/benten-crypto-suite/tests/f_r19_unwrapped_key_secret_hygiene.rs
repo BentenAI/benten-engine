@@ -31,22 +31,29 @@ fn unwrapped_key_debug_redacts_the_recovered_k_root() {
     // The recovered bytes are correct (sanity: the surface still works).
     assert_eq!(recovered.as_bytes(), &k_root, "unwrap must recover k_root");
 
-    // But Debug must redact. `{:?}` on a leaking Vec<u8> renders decimals
-    // (0xDE=222, 0xAD=173, 0xBE=190, 0xEF=239, ...); a redacted render omits them.
+    // But Debug must redact. R6-tail F-41 sweep: assert the CONTIGUOUS decimal
+    // SEQUENCE a leaking (derived) `Debug` would emit for the distinctive
+    // prefix — NOT the individual decimals. A bare `222` / `173` could
+    // false-positively collide with an unrelated integer field's rendering,
+    // making the old scan both fragile and imprecise. This matches the
+    // `LEAK_DECIMAL` convention in
+    // `crates/benten-engine/tests/f_secret_hygiene_roster.rs` and the sibling
+    // `crates/benten-membership-set/tests/f_r19_group_aad_inputs_secret_hygiene.rs`.
+    // `UnwrappedKey.bytes` is a `Vec<u8>`, so a derived Debug renders
+    // `[222, 173, 190, 239, 202, 254, 186, 208, 0, 0, ...]`.
     let rendered = format!("{recovered:?}");
-    let leaked = rendered.contains("222")
-        || rendered.contains("173")
-        || rendered.contains("190")
-        || rendered.contains("239")
-        || rendered.contains("202")
-        || rendered.contains("254");
+    const LEAK_DECIMAL: &str = "222, 173, 190, 239, 202, 254, 186, 208";
     assert!(
-        !leaked,
+        !rendered.contains(LEAK_DECIMAL),
         "UnwrappedKey Debug MUST redact the recovered k_root (Compromise #66) — \
-         a coredump / log line MUST NOT contain the key; rendered=`{rendered}`"
+         a coredump / log line MUST NOT contain the key; a derived Debug leaks \
+         it as `{LEAK_DECIMAL}`; rendered=`{rendered}`"
     );
+    // Positive guard: the marker must replace the `bytes` FIELD wholesale, not
+    // merely appear somewhere in the render.
     assert!(
-        rendered.contains("<redacted>"),
-        "UnwrappedKey Debug MUST render a redaction marker; rendered=`{rendered}`"
+        rendered.contains("bytes: \"<redacted>\""),
+        "UnwrappedKey Debug MUST replace the bytes field wholesale with the \
+         redaction marker; rendered=`{rendered}`"
     );
 }

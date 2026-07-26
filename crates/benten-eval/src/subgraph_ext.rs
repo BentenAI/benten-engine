@@ -12,11 +12,16 @@
 //! - [`SubgraphBuilderExt`] — `build_validated`, `build_validated_with_max_depth`,
 //!   `build_validated_aggregate_all`. Re-runs the invariants validator against
 //!   the builder's snapshot before returning the finalized [`Subgraph`].
-//! - [`SubgraphExt`] — `validate`, `cumulative_budget_for_root_for_test`,
-//!   `cumulative_budget_for_handle_for_test`,
-//!   `has_multiplicative_budget_tracked_for_test`, `to_mermaid`,
-//!   `load_verified` (RegistrationError-typed). Backed by the same `invariants/`
-//!   module that the pre-relocation inherent methods called into.
+//! - [`SubgraphExt`] — `validate`, `to_mermaid`, `load_verified`
+//!   (RegistrationError-typed) on the default surface, plus the
+//!   `#[cfg(any(test, feature = "testing"))]`-gated budget-introspection trio
+//!   `cumulative_budget_for_root_for_test`,
+//!   `cumulative_budget_for_handle_for_test` and
+//!   `has_multiplicative_budget_tracked_for_test` (gated off the frozen v1
+//!   surface per the pre-freeze gating wave — they are NOT present in
+//!   `docs/public-api/benten-eval.txt` and are unavailable without the
+//!   `testing` feature). Backed by the same `invariants/` module that the
+//!   pre-relocation inherent methods called into.
 //!
 //! Existing callsites import the eval-side surface (`use benten_eval::{Subgraph,
 //! SubgraphBuilder};`); to keep `b.build_validated()?` / `sg.validate(&cfg)?`

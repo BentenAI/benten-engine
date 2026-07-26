@@ -16,34 +16,31 @@
 //! it on. It is a **library** module so the W2 `tests/kdb_drop*.rs` red-phase
 //! files can `use benten_drop::kdb_seal_testing::*`.
 //!
-//! # RED-PHASE stub-shim discipline (how this becomes real at R5)
+//! # RED-PHASE stub-shim discipline — DISCHARGED at R5 (historical note)
 //!
 //! Two disjoint categories live here, mirroring the W0 canary split:
 //!
-//! - **Fixture DATA + FROZEN-spec assembly (REAL now).** Real hybrid recipient
+//! - **Fixture DATA + FROZEN-spec assembly (REAL).** Real hybrid recipient
 //!   keypairs ([`real_recipient_kp`]), [`KeySetDocument`] builders that commit a
 //!   REAL KEM public key ([`keyset_doc_committing_real_kem`]), and the honest /
 //!   substituted scenario builders ([`real_recipient`], [`substitution_scenario`],
 //!   [`did_benten_sender`]). These give stable coupled scenarios + round-trip
 //!   inputs whose KEM keypairs actually open.
-//! - **LOGIC-UNDER-TEST (STUB `todo!()` now → real entry at R5).** The *new*
+//! - **LOGIC-UNDER-TEST — REAL at HEAD (was `todo!()` at R3).** The
 //!   binding-based seal entries [`seal_to_binding`] (single `0x6510`),
 //!   [`seal_group_to_bindings`] (group `0x6520`), and
 //!   [`seal_membership_set_to_bindings`] (MembershipSet `0x6610`) are the
-//!   GAP-KDB seal surface. They are `todo!()` stubs at R3. At R5 each body is
-//!   replaced by a delegation to the minted real entry (e.g. the
-//!   `RecipientBinding`-typed `seal_sealed_sender`), and the red-phase tests
-//!   un-ignore. Because `todo!()` panics, no red-phase test can pass against a
-//!   stub — the ONLY way each pin goes green is against a real, non-no-op
-//!   implementation (substance by construction).
+//!   GAP-KDB seal surface. Each was a `todo!()` stub during the R3 red phase;
+//!   the R5 swap replaced every body with a delegation to the minted real
+//!   entry, so at HEAD there is NO `todo!()` in this file and every pin runs
+//!   against the real, non-no-op implementation (substance by construction).
 //!
-//! **R5 handoff (single-file swap):** mint benten-drop's real `RecipientBinding`
-//! (sole `resolve` constructor, no fallback door — C4) + the binding-typed seal
-//! API (single + group `&[RecipientBinding]`, C9 roster-replacement); then in
-//! THIS file (a) replace each `todo!()` seal body with the real-entry
-//! delegation, (b) drop the `benten_id::kdb_testing::RecipientBinding` stub
-//! import in favor of the benten-drop type. Test call sites do not change —
-//! they only un-ignore.
+//! **R5 handoff — COMPLETE.** benten-drop's real `RecipientBinding` (sole
+//! `resolve` constructor, no fallback door — C4) + the binding-typed seal API
+//! (single + group `&[RecipientBinding]`, C9 roster-replacement) are minted;
+//! each seal body here delegates to the real entry, and the
+//! `benten_id::kdb_testing::RecipientBinding` stub import is gone in favor of
+//! the benten-drop type. Test call sites never changed — they only un-ignored.
 
 #![allow(
     // RED-PHASE fixtures: todo!() stubs + never-used-in-a-given-binary helpers
@@ -86,8 +83,8 @@ pub fn hybrid_kem_codepoint() -> CipherSuiteCodepoint {
 /// NEW single-recipient Sealed-Sender seal (`0x6510`, design §5). The recipient
 /// is a [`RecipientBinding`] whose KEM key is PROVEN committed by its audience
 /// DID — there is NO `(recipient_pub: &RecipientPublic, audience_did:
-/// &AudienceDid)` two-param door (design C4 / DROP-3). STUB `todo!()` → R5
-/// `layer_c::seal_sealed_sender(recipient: &RecipientBinding, …)`.
+/// &AudienceDid)` two-param door (design C4 / DROP-3). Delegates to the real
+/// `layer_c::seal_sealed_sender(recipient: &RecipientBinding, …)` (R5-landed).
 pub fn seal_to_binding(
     recipient: &RecipientBinding,
     sender_did: &SenderDid,
@@ -110,8 +107,9 @@ pub fn seal_to_binding(
 /// `audience_set_commitment` roster AND the per-stanza wrap-targets are derived
 /// from the ONE `&[RecipientBinding]` slice — retiring the fabricated-DID
 /// placeholder roster (`layer_c.rs:1093`, `group_roster` hashing KEM keys into
-/// `did:key:z…`). An empty slice is a typed-reject (DROP-10). STUB `todo!()` →
-/// R5 `layer_c::seal_group_multi(recipients: &[RecipientBinding], …)`.
+/// `did:key:z…`). An empty slice is a typed-reject (DROP-10). Delegates to the
+/// real `layer_c::seal_group_multi(recipients: &[RecipientBinding], …)`
+/// (R5-landed).
 pub fn seal_group_to_bindings(
     recipients: &[RecipientBinding],
     sender_did: &SenderDid,
@@ -132,9 +130,9 @@ pub fn seal_group_to_bindings(
 
 /// NEW MembershipSet K_Set group seal (`0x6610`, design §5 / C9). Same
 /// roster-replacement as [`seal_group_to_bindings`] — the member roster is the
-/// ONE `&[RecipientBinding]` slice, not a KEM-key-hashed placeholder. STUB
-/// `todo!()` → R5 `layer_c::group_posture::seal_membership_set_group(recipients:
-/// &[RecipientBinding], …)`.
+/// ONE `&[RecipientBinding]` slice, not a KEM-key-hashed placeholder. Delegates
+/// to the real `layer_c::group_posture::seal_membership_set_group(recipients:
+/// &[RecipientBinding], …)` (R5-landed).
 pub fn seal_membership_set_to_bindings(
     recipients: &[RecipientBinding],
     sender_did: &SenderDid,

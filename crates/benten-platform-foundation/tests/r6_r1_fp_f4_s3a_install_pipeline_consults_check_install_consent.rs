@@ -156,7 +156,7 @@ fn install_with_policy<P: InstallConsentPolicy>(
 ///
 /// **Would-FAIL-on-revert (pim-18 §3.6f):** delete the
 /// `ports.policy.check_install_consent(&payload_hash, plugin_did_str)`
-/// wire-in at plugin_lifecycle.rs:967-973 → counter stays at 0 →
+/// wire-in at plugin_lifecycle.rs:968-974 → counter stays at 0 →
 /// assertion fires.
 #[test]
 fn check_install_consent_observes_invocation_count_via_install_plugin() {
@@ -200,7 +200,7 @@ fn check_install_consent_observes_invocation_count_via_install_plugin() {
 /// install at step 3c with typed `PluginInstallConsentDenied`.**
 ///
 /// **Would-FAIL-on-revert (pim-18 §3.6f):** delete the step-3c wire-in
-/// at plugin_lifecycle.rs:967-973 → DenyAll never consulted → install
+/// at plugin_lifecycle.rs:968-974 → DenyAll never consulted → install
 /// proceeds (Ok or other error) → `expect_err(... PluginInstallConsentDenied)`
 /// fails.
 #[test]

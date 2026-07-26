@@ -474,13 +474,13 @@ INTERNALS.md update).
 ## Row 7 — Name-collision rename (RestrictedSpec + KeyMaterial)
 
 **Target files/symbols:**
-- `crates/benten-core/src/subgraph_spec/spec.rs:126` — rename
+- `crates/benten-core/src/subgraph_spec/spec.rs:115` — rename
   `pub enum RestrictedSpec` → `pub enum SubgraphSpecRestriction`.
 - `crates/benten-caps/src/restricted_spec.rs:103` — rename
   `pub struct RestrictedSpec` → `pub struct RestrictedScope`.
-- `crates/benten-crypto-suite/src/aead.rs:85` — rename
+- `crates/benten-crypto-suite/src/aead.rs:91` — rename
   `pub struct KeyMaterial` → `pub struct AeadKeyMaterial`.
-- `crates/benten-caps/src/authorization_grant.rs:166` — rename
+- `crates/benten-caps/src/authorization_grant.rs:178` — rename
   `pub struct KeyMaterial` → `pub struct GrantKeyMaterial`.
 
 **What to build:**
