@@ -128,6 +128,14 @@ Then Phases 5–8 (First Reference Application → Personal AI Assistant MVP →
 
 ## 5. Open decisions for Ben
 
+> **★ RATIFIED 2026-07-26 (Ben, AskUserQuestion):**
+> - **§5.1 SPLIT SHAPE = 3-WAY.** Composing-Substrate (A) → Composing-Admin (B) → Composing-Surface (C+D). Each sub-phase gets a coherent lens set for its R1/R6 councils. Honest calibration retained from §0: unlike the Core/Composing split (a hard wire-freeze boundary, P-III), these fault lines are **lens-coherence + sequencing only** — every cluster is additive post-freeze, so there is no wire gate between them and the sub-phase boundaries are right-sizing, not correctness gates.
+> - **§5.5 FULL-ROADMAP refresh is now UNBLOCKED** — its content was gated on §5.1 and §5.1 is decided. The tracked roadmap still shows a single "Phase 4-Meta" and predates the Core/Composing split entirely; the refresh must fold in the 3-way Composing split **and** the `phase-4-meta-core-close → phase-4-meta-close → v1-beta → v1-GM` sequence with the C-GM-AUDIT gate. Scheduled to ride the pre-review doc-coupling closure sweep.
+>
+> **STILL OPEN (orchestrator recommendation noted; not yet explicitly ratified):** §5.2 fold Composing-Substrate into the Admin tag rather than giving A its own · §5.3 run the confidentiality/DAK-ratcheting spike + the two UI R1 spikes (taxonomy stress-test, CSP-strict interpreter) early, since they are cheap and de-risk load-bearing unknowns before R1 locks scope · §5.4 take all three Cluster-A membership calls (Inv-21 production-caller wiring, D-90 Argon2id constructor, G-COMP-1 light-client mode-(b)/(c) scope) into Cluster A.
+
+### Original open-decision list (retained)
+
 1. **Split shape:** 3-way (recommended) / 2-way / no-split-staged-waves.
 2. **Sub-phase tag granularity:** does Composing-Substrate (A) warrant its own tag, or fold into the Admin tag? (A is small-ish; a fold is reasonable.)
 3. **Spike timing:** run Spike 1 (meta-circular admin R0) and/or Spike 2 (identity-recovery survey) *now/early* as pre-work, or wait until Composing opens? (Both can start immediately; Spike 2's survey especially benefits from lead time.)
