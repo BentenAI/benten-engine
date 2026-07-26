@@ -98,7 +98,6 @@ impl benten_drop::bundle::DropBundle
 pub fn benten_drop::bundle::DropBundle::consume_offline(&self, &benten_id::keypair::Keypair) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<u8>>, benten_drop::bundle::DropBundleError>
 pub fn benten_drop::bundle::DropBundle::content_count(&self) -> usize
 pub fn benten_drop::bundle::DropBundle::parse_cbor_bytes(&[u8]) -> core::result::Result<Self, benten_drop::bundle::DropBundleError>
-pub fn benten_drop::bundle::DropBundle::synthesize_revocation_for_embedded_ucan(&Self, &benten_id::keypair::Keypair) -> benten_drop::bundle::RevocationRecord
 pub fn benten_drop::bundle::DropBundle::to_cbor_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_drop::bundle::DropBundleError>
 pub fn benten_drop::bundle::DropBundle::verify_envelope_signature(&self) -> core::result::Result<(), benten_drop::bundle::DropBundleError>
 impl core::clone::Clone for benten_drop::bundle::DropBundle
@@ -136,20 +135,6 @@ impl core::marker::Unpin for benten_drop::bundle::EncryptedContent
 impl core::marker::UnsafeUnpin for benten_drop::bundle::EncryptedContent
 impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::bundle::EncryptedContent
 impl core::panic::unwind_safe::UnwindSafe for benten_drop::bundle::EncryptedContent
-pub struct benten_drop::bundle::RevocationRecord
-impl benten_drop::bundle::RevocationRecord
-pub fn benten_drop::bundle::RevocationRecord::opaque_len(&self) -> usize
-impl core::clone::Clone for benten_drop::bundle::RevocationRecord
-pub fn benten_drop::bundle::RevocationRecord::clone(&self) -> benten_drop::bundle::RevocationRecord
-impl core::fmt::Debug for benten_drop::bundle::RevocationRecord
-pub fn benten_drop::bundle::RevocationRecord::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Freeze for benten_drop::bundle::RevocationRecord
-impl core::marker::Send for benten_drop::bundle::RevocationRecord
-impl core::marker::Sync for benten_drop::bundle::RevocationRecord
-impl core::marker::Unpin for benten_drop::bundle::RevocationRecord
-impl core::marker::UnsafeUnpin for benten_drop::bundle::RevocationRecord
-impl core::panic::unwind_safe::RefUnwindSafe for benten_drop::bundle::RevocationRecord
-impl core::panic::unwind_safe::UnwindSafe for benten_drop::bundle::RevocationRecord
 pub const benten_drop::bundle::DROP_BUNDLE_MAX_SIZE_BYTES: usize
 pub const benten_drop::bundle::DROP_BUNDLE_VERSION_V1: u16
 pub mod benten_drop::envelope_sig
@@ -649,7 +634,6 @@ impl benten_drop::bundle::DropBundle
 pub fn benten_drop::bundle::DropBundle::consume_offline(&self, &benten_id::keypair::Keypair) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<u8>>, benten_drop::bundle::DropBundleError>
 pub fn benten_drop::bundle::DropBundle::content_count(&self) -> usize
 pub fn benten_drop::bundle::DropBundle::parse_cbor_bytes(&[u8]) -> core::result::Result<Self, benten_drop::bundle::DropBundleError>
-pub fn benten_drop::bundle::DropBundle::synthesize_revocation_for_embedded_ucan(&Self, &benten_id::keypair::Keypair) -> benten_drop::bundle::RevocationRecord
 pub fn benten_drop::bundle::DropBundle::to_cbor_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_drop::bundle::DropBundleError>
 pub fn benten_drop::bundle::DropBundle::verify_envelope_signature(&self) -> core::result::Result<(), benten_drop::bundle::DropBundleError>
 impl core::clone::Clone for benten_drop::bundle::DropBundle

@@ -697,20 +697,6 @@ export interface ManifestSignature {
    * chars); the JS surface does NOT bound this length.
    */
   mlDsa65?: string;
-  /**
-   * **VESTIGIAL — never emitted at v1-beta; mirrors no Rust field.**
-   *
-   * This slot named the prior Benten-own "NF-4" SHA3-256 commitment
-   * trailer. That construction was REPLACED by the byte-faithful IETF
-   * LAMPS composite `id-MLDSA65-Ed25519-SHA512`, whose wire
-   * (`mldsaSig || tradSig`) has no slot for a commitment — see
-   * `benten_crypto_suite::HybridSignature` (fields: codepoint /
-   * classical / pq) and `docs/SECURITY-POSTURE.md` Compromise #31.
-   * Strip-resistance comes from the shared-`M'` / `mldsa_ctx=Label`
-   * binding + both-halves-required, not from a commitment.
-   * Encoders MUST NOT populate this field; decoders MUST ignore it.
-   */
-  commitment?: string;
 }
 
 /**

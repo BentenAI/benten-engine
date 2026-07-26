@@ -826,6 +826,7 @@ impl DropBundle {
     /// fixture exists so the `tf3f_drop_bundle_decrypts_after_ucan_revocation_forever_valid`
     /// pin can demonstrate that the revocation record's existence
     /// does NOT prevent the offline decrypt (the R6 reality).
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn synthesize_revocation_for_embedded_ucan(
         _bundle: &Self,
@@ -845,12 +846,17 @@ impl DropBundle {
 // ---------------------------------------------------------------------------
 
 /// Opaque revocation-record sentinel — see
-/// [`DropBundle::synthesize_revocation_for_embedded_ucan`].
+/// `DropBundle::synthesize_revocation_for_embedded_ucan`.
+///
+/// `cfg(any(test, feature = "testing"))` because it exists solely to carry the
+/// sentinel that fixture returns; it is not part of the frozen v1-beta surface.
+#[cfg(any(test, feature = "testing"))]
 #[derive(Debug, Clone)]
 pub struct RevocationRecord {
     opaque: Vec<u8>,
 }
 
+#[cfg(any(test, feature = "testing"))]
 impl RevocationRecord {
     /// Number of opaque bytes carried (so the type isn't trivially
     /// optimizable away by clippy::dead_code).
