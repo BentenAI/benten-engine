@@ -702,8 +702,11 @@ pub fn x_wing_combiner_preimage(ss_m: &[u8], ss_x: &[u8], ct_x: &[u8], pk_x: &[u
 ///
 /// This replaces the prior HKDF-SHA256 mislabel — the
 /// `HKDF-SHA256(… info = "x-wing-v1-benten-0x647a")` combiner this file
-/// shipped at the corpus base. **No line cite is given: that combiner does
-/// not exist anywhere at HEAD**, so any HEAD line number would be wrong.
+/// shipped at the corpus base. **No line cite is given: that combiner no longer exists in
+/// production code at HEAD** — the only HEAD occurrence is the deliberate
+/// `legacy_hkdf_combine` reference fixture in
+/// `tests/f_w0_envelope_v2_migration.rs`, so any production line number
+/// would be wrong.
 /// The replacement is the IETF-faithful construction at the IETF-reserved
 /// codepoint `0x647A`. Per CLAUDE.md baked-in #5 the SHA3-256 primitive is
 /// wrapped from the vetted upstream `sha3` crate — no reimplementation.

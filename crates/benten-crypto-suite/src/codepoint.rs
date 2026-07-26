@@ -378,7 +378,11 @@ pub enum ReservedCodepoint {
     /// `RotatingGroupKeyChainedMode` reserve (CGKA-Commit FS-future bracket,
     /// `CGKA_COMMIT_BASE == 0x63A0`).
     RotatingGroupKeyChainedMode,
-    /// `ChainedStateTlv` per-stanza sub-slot reserve (GAP-6b; AAD-bound).
+    /// `ChainedStateTlv` per-stanza sub-slot reserve (GAP-6b; AAD-BINDABLE,
+    /// not enforced at v1-beta — the binding helper
+    /// `ReservedCodepoint::chained_state_tlv_aad_binding` is `testing`-gated
+    /// with zero production callers, and the sub-slot is never emitted because
+    /// `resolve()` always typed-rejects this reserve).
     ChainedStateTlv,
 }
 
@@ -413,9 +417,13 @@ impl ReservedCodepoint {
     }
 }
 
-/// GAP-6b — the per-stanza `Option<ChainedStateTlv>` sub-slot is AAD-BOUND
-/// when present, so a present-vs-absent flip is detectable at decrypt (not
-/// advisory). This helper appends the optional `ChainedStateTlv` codepoint
+/// GAP-6b — the per-stanza `Option<ChainedStateTlv>` sub-slot is AAD-BINDABLE
+/// when present. NOT enforced at v1-beta: this helper is `testing`-gated and
+/// has ZERO production callers, so no shipped path composes it into any AAD
+/// and no present-vs-absent flip is detectable at decrypt today. The
+/// construction is GOLDEN-PINNED (`f_nqa1_1_frozen_surface_additive_extensibility.rs`),
+/// which is vacuous rather than exploitable because the sub-slot is never
+/// emitted (`resolve()` always typed-rejects the reserve). This helper appends the optional `ChainedStateTlv` codepoint
 /// reserve into the AAD byte string (big-endian): a present sub-slot pushes
 /// `0x01 ‖ band_base_be`; an absent sub-slot pushes `0x00`. Binding it into
 /// the AAD means a relay that strips it fails AEAD-open (it cannot be silently
