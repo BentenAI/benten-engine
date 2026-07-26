@@ -451,7 +451,7 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 
 **Byte-pin test coverage:**
 - `crates/benten-crypto-suite/tests/f_cp_codepoint_registry_dispatch.rs` (`MEMBERSHIP_SET_GROUP_MULTI_STANZA == 0x6610` integer pin).
-- `crates/benten-membership-set/tests/f_aad_1_members_table_canonical_cbor_length_injective.rs` + `f_aad_2_nine_tuple_injectivity_opaque_boundary.rs` (the 11-field AAD injectivity + canonical-CBOR length-injectivity).
+- `crates/benten-membership-set/tests/f_aad_1_members_table_canonical_cbor_length_injective.rs` + `f_aad_2_nine_tuple_injectivity_opaque_boundary.rs` (the 11-field AAD injectivity + canonical-CBOR length-injectivity; the `nine_tuple` FILENAME is stale — rename tracked at `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-32).
 - `crates/benten-membership-set/tests/f_fed_1_2_subset_ref_federation.rs` (`0x6620` reserved-and-refused typed-reject at v1-beta).
 - `crates/benten-drop/tests/f_02_group_aad_11field_and_f_01_truncation.rs` (the `F_02_LIVE_SEAL_STANZA0_AAD_HEX` golden). **R9 GAP-1 fixture refresh (NOT a format change):** the golden's 32-byte `audience_set_commitment` component was **regenerated** because the recipient-key representation went placeholder→real — the roster DIDs the commitment hashes over derive from the recipient public-key bytes (`RecipientPublic::to_bytes` = `x25519_pub(32) ‖ mlkem768_ek(1184)`), which changed when the `[u8; 32]` placeholder fingerprint became a real hybrid public key. The AAD **SHAPE / field-set / blinding construction / `aad_version` (`0x01`)** and the cross-engine byte-equality + sign→verify round-trip goldens are **UNCHANGED** — this is a fixture-value refresh, not a wire-format change.
 

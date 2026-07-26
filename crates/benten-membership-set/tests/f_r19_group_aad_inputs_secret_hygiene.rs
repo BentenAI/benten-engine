@@ -33,21 +33,28 @@ fn group_aad_inputs_debug_redacts_k_set() {
     };
 
     let rendered = format!("{inputs:?}");
-    // `{:?}` on a leaking [u8;32] renders decimals (0xDE=222, 0xAD=173, ...).
-    let leaked = rendered.contains("222")
-        || rendered.contains("173")
-        || rendered.contains("190")
-        || rendered.contains("239")
-        || rendered.contains("202")
-        || rendered.contains("254");
+    // R6-tail F-41: assert the CONTIGUOUS decimal SEQUENCE a leaking (derived)
+    // `Debug` would emit for the distinctive prefix — NOT the individual
+    // decimals. A bare `222` / `173` could false-positively collide with an
+    // unrelated integer field's rendering (`codepoint`, `membership_set_id`,
+    // the HLC/generation counters), making the old scan both fragile and
+    // imprecise. This matches the `LEAK_DECIMAL` convention in
+    // `crates/benten-engine/tests/f_secret_hygiene_roster.rs`.
+    // `#[derive(Debug)]` on a `[u8; 32]` renders `[222, 173, 190, 239, 202,
+    // 254, 186, 208, 0, 0, ...]`, so this needle fires on the exact regression.
+    const LEAK_DECIMAL: &str = "222, 173, 190, 239, 202, 254, 186, 208";
     assert!(
-        !leaked,
+        !rendered.contains(LEAK_DECIMAL),
         "GroupAadInputs Debug MUST redact k_set (the group key) — a coredump / \
-         log line MUST NOT contain it; rendered=`{rendered}`"
+         log line MUST NOT contain it; a derived Debug leaks it as \
+         `{LEAK_DECIMAL}`; rendered=`{rendered}`"
     );
+    // Positive guard: the marker must replace the `k_set` FIELD wholesale, not
+    // merely appear somewhere in the render.
     assert!(
-        rendered.contains("<redacted>"),
-        "GroupAadInputs Debug MUST render a k_set redaction marker; rendered=`{rendered}`"
+        rendered.contains("k_set: \"<redacted>\""),
+        "GroupAadInputs Debug MUST replace the k_set field wholesale with the \
+         redaction marker; rendered=`{rendered}`"
     );
     // Non-secret fields still render (Debug is a redaction, not a blackout).
     assert!(

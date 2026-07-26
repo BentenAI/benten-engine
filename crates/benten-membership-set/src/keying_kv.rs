@@ -9,7 +9,22 @@
 //! set-identity is Inv-21-stable).
 //!
 //! This module is the **type-restriction front-door**: the
-//! [`CidTarget`]-typed [`derive_kv`] is the only public way to derive `K(V)`.
+//! [`CidTarget`]-typed [`derive_kv`] is the sole SUPPORTED `K(V)` derivation
+//! API.
+//!
+//! **Honest scope of the Inv-19 guarantee (R6-tail F-06).** The rejection is a
+//! RUNTIME typed-reject (`Err(`[`KvError::TargetNotImmutable`]`)`), NOT a
+//! compile-time / type-level impossibility: [`CidTarget::MutableAnchor`] is a
+//! publicly constructible variant, and the BLAKE3-KDF context label
+//! `crate::keying::KV_DERIVE_CONTEXT` is public (and deliberately mirrored as
+//! `benten_crypto_suite::domain_registry::KV_DERIVE_CONTEXT` for the
+//! prefix-free domain-tag corpus), so a caller that bypasses this front-door
+//! can reproduce `K(V)` bytes for a forbidden target. The invariant is held by
+//! the discipline of going through [`derive_kv`] plus its runtime check — do
+//! NOT read this module as a structural impossibility. (Not a live bypass at
+//! HEAD: `derive_kv` has zero production callers; the production keying-path
+//! wiring is Row D-64 in `docs/V1-FROZEN-INTERFACE-DEFERRED.md`.)
+//!
 //! It lives in a NEW submodule (re-exported from [`crate::keying`]) so the
 //! `K(V)` type-restriction concern stays disjoint from the gossip keyed-MAC
 //! routing that also lives in `keying`. The actual KDF primitive is the BLAKE3

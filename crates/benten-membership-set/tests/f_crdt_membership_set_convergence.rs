@@ -42,9 +42,16 @@
 //! ## Wiring (history: pim-12 §3.6e)
 //!
 //! LIVE and un-ignored — runs every CI cycle against the REAL
-//! `benten_membership_set` + the real Loro/CRDT merge. (History: this
-//! started as a RED-PHASE self-contained stub-shim for parallel-safe R3;
-//! R5 wired it to the production surfaces and un-ignored it.)
+//! `benten_membership_set` production comparators
+//! (`set::crdt::admitted_at_hlc_lww_keeps_a` + `set::crdt::fork_a_wins`).
+//! **NOT against a real Loro document** (R6-tail F-43: the earlier wording
+//! here claimed "the real Loro/CRDT merge", contradicting the scoping at the
+//! top of this file — this crate carries no `loro` dependency and constructs
+//! no Loro document). Real-Loro convergence is owned by `benten-sync`; the
+//! real MST anti-entropy backstop half is driven by the sibling
+//! `f_mst_membership_anti_entropy_backstop.rs`. (History: this started as a
+//! RED-PHASE self-contained stub-shim for parallel-safe R3; R5 wired it to
+//! the production comparators and un-ignored it.)
 
 #![allow(clippy::unwrap_used)]
 

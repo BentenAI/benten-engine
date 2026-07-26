@@ -177,13 +177,20 @@ pub struct UcanGroundedPolicy<B: GraphBackend> {
     inner: GrantBackedPolicy,
     ucan: Arc<UCANBackend<B>>,
     /// `now` (epoch seconds) sourced for chain-walker time-window
-    /// validation. Phase-3-G21-T2-pre-real-clock: a static fixture
-    /// "now" so the chain-walker has SOMETHING to compare against; a
-    /// real clock injection lands at the `CapWriteContext::now`
-    /// threading work named in phase-3-backlog §2.3 (i). This default
-    /// is far in the future (year 9999) so present-day proofs with
-    /// reasonable `exp` accept; tests inject custom values via the
-    /// `with_now_secs` builder.
+    /// validation. Phase-3-G21-T2-pre-real-clock: a construction-time
+    /// value, NOT a live per-check wallclock; a real per-call clock
+    /// lands at the `CapWriteContext::now` threading work named in
+    /// phase-3-backlog §2.3 (i).
+    ///
+    /// The default is [`DEFAULT_NOW_SECS`] `= 0` — a **fail-CLOSED
+    /// sentinel**, not a permissive far-future value. Against a chain
+    /// carrying any time-bounded delegation (`nbf > 0` OR `exp > 0`)
+    /// the walker REJECTS with [`CapError::UcanClockNotInjected`]
+    /// rather than accepting (the G16-B-B-rest sub-item D inversion —
+    /// see the `DEFAULT_NOW_SECS` doc-block below). Callers MUST inject
+    /// a positive epoch-seconds value via
+    /// [`UcanGroundedPolicy::with_now_secs`]; a chain with NO time
+    /// bounds still walks cleanly at the sentinel.
     now_secs: u64,
 }
 

@@ -96,6 +96,16 @@ pub struct GroupAadInputs {
     /// Member-DID list (canonicalized — sorted — by the assembler; a reorder
     /// is byte-neutral because only the COMMITMENT over the sorted list and
     /// the count are bound). NOT published in the clear (BLINDED).
+    ///
+    /// **CALLER CONTRACT (R6-tail F-38): this MUST be the DEDUPED members-table
+    /// key set** — i.e. the keys of the `BTreeMap<Did, MemberEntry>`
+    /// `members_table` (Inv-20 clause-i, one-DID-one-record), which are unique
+    /// by construction. The assembler SORTS but does **NOT** dedup: a repeated
+    /// DID is hashed twice into `audience_set_commitment` AND counted twice in
+    /// `member_count`, so two engines that disagree about duplicates produce
+    /// DIFFERENT AAD for the SAME logical membership and cross-engine AEAD-open
+    /// fails (the NQ-W4 divergence mode). This precondition is NOT checked at
+    /// the assembly seam; it is a caller obligation.
     pub member_dids: Vec<String>,
     /// The group key `K_Set` (keys the `membership_set_id_commitment` keyed MAC).
     pub k_set: [u8; 32],
@@ -216,6 +226,18 @@ pub fn membership_set_id_commitment(k_set: &[u8; 32], membership_set_id: &[u8]) 
 ///
 /// On the DEFAULT (Sealed-Sender) path the sender-DID is NOT bound here — it is
 /// sealed inside `sealed_inner`, recovered post-decrypt (F4-001 / F-LC-9).
+///
+/// # Caller contract — `member_dids` MUST be deduped (R6-tail F-38)
+///
+/// The assembler CANONICALIZES `t.member_dids` by SORTING it (inside
+/// [`audience_set_commitment`]) but does **NOT** dedup it. A duplicate DID is
+/// therefore hashed twice into `audience_set_commitment` and counted twice in
+/// `member_count`. Callers MUST pass the DEDUPED members-table key set (the
+/// keys of the `BTreeMap<Did, MemberEntry>` snapshot — unique by Inv-20
+/// clause-i); passing a duplicate-bearing list yields AAD that a peer deriving
+/// its roster from the members-table will not reproduce, and the group stanza
+/// fails to open. Unchecked here by design (the assembler is byte-frozen); see
+/// the [`GroupAadInputs::member_dids`] field doc.
 ///
 /// # Panics
 ///

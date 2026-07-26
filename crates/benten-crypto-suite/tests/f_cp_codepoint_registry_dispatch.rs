@@ -213,6 +213,33 @@ fn new_codepoint_integers_wire_locked() {
          locked here so a single-const drift fails THIS registry test directly, not only via the \
          cross-file f_lc_hpke golden)"
     );
+    // Layer-D band bases — the TWO codepoints that are DUPLICATED across crates
+    // (the wire producers live in `benten_engine::layer_d::{device_link,
+    // remote_permission}`; these registry copies are the SSOT allocation map).
+    // Neither registry copy carried a value-lock: the only registry-side
+    // reference was the self-satisfying presence loop below (the consts are put
+    // INTO `registered_envelope_codepoints()` by `registry.rs`, so `present(cp)`
+    // passes for ANY value), and `f_disc_2_codepoint_ssot_cross_crate_const_
+    // equality` covers only the MembershipSet + Layer-C bands. Pin both literals
+    // HERE so a one-sided edit to the registry fails this test directly; the
+    // engine-side producers are literal-locked in their own crate
+    // (`f_ld_4_device_link_band_base_pinned` in
+    // `f_ld_4_multi_device_key_wrap_provisioning.rs` +
+    // `f_ld_2_out_of_band_codepoint_typed_rejects` in
+    // `f_ld_2_remote_permission_wire_freeze.rs`), so a one-sided edit to
+    // EITHER home now fails the build.
+    assert_eq!(
+        f_cp_stub::DEVICE_LINK_BAND_BASE,
+        0x6310,
+        "Layer-D DeviceLink band base wire-locked at 0x6310 (R0.7 §4.1 FREEZE); the \
+         registry copy MUST equal the `benten_engine::layer_d::device_link` producer"
+    );
+    assert_eq!(
+        f_cp_stub::REMOTE_PERMISSION_BAND_BASE,
+        0x6320,
+        "Layer-D RemotePermission band base wire-locked at 0x6320 (R0.7 §4.1 FREEZE); the \
+         registry copy MUST equal the `benten_engine::layer_d::remote_permission` producer"
+    );
     // Experimental-range base + extended-codepoint escape — the F-CP-1 family
     // doc claims to wire-lock "experimental/escape" but these two consts were
     // imported (see the `f_cp_stub` shim) and never value-pinned (R21 F-04).

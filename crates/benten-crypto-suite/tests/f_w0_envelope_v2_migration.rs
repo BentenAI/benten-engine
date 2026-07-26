@@ -21,7 +21,7 @@ use benten_crypto_suite::conformance::endianness::{
 };
 use benten_crypto_suite::envelope::{
     BindingContext, ENVELOPE_FORMAT_VERSION_V1, ENVELOPE_FORMAT_VERSION_V2, ENVELOPE_MAGIC,
-    EncryptedEnvelope, MAX_NONCE_LEN,
+    EncryptedEnvelope, EnvelopeError, MAX_NONCE_LEN,
 };
 use sha3::{Digest, Sha3_256};
 
@@ -265,9 +265,29 @@ fn single_v1_to_v2_bump_and_v1_typed_rejected() {
         b.push(0);
         b
     };
+    // R6-final F-61: assert the TYPED variant, not merely `is_err()`. A truncated
+    // or bad-magic frame is ALSO `is_err()`, so the bare rejection check proved
+    // only "something failed" — it could not distinguish a correct
+    // version-byte reject from an unrelated one, and a regression that rejected
+    // V1 for the WRONG reason would have passed. Assert
+    // `UnsupportedVersion { got }` and that `got` is the V1 byte, so the pin
+    // proves the decoder read the FORMAT-VERSION byte specifically.
+    let v1_err = EncryptedEnvelope::from_wire_bytes(&v1_bytes)
+        .expect_err("a V1-framed byte stream must be typed-rejected post-V2-freeze");
     assert!(
-        EncryptedEnvelope::from_wire_bytes(&v1_bytes).is_err(),
-        "a V1-framed byte stream must be typed-rejected post-V2-freeze"
+        matches!(v1_err, EnvelopeError::UnsupportedVersion { .. }),
+        "a V1-framed byte stream must be rejected with the TYPED \
+         `EnvelopeError::UnsupportedVersion` (never a silent accept, and never a \
+         different error class that would mask a version-check regression); got \
+         {v1_err:?}"
+    );
+    let EnvelopeError::UnsupportedVersion { got } = v1_err else {
+        unreachable!("variant asserted immediately above")
+    };
+    assert_eq!(
+        got, ENVELOPE_FORMAT_VERSION_V1,
+        "the rejected version byte MUST be the V1 byte actually framed — proves the \
+         decoder read the format-version byte, not an adjacent field"
     );
 }
 

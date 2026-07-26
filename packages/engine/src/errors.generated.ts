@@ -2329,7 +2329,7 @@ export class ETypedCallDispatchError extends BentenError {
  * E_UCAN_CLOCK_NOT_INJECTED
  *
  * Thrown at: `crates/benten-caps/src/ucan_grounded.rs::UcanGroundedPolicy::typed_cap_permitted_by_proof` (Phase-3 G16-B-B-rest sub-item D). The fail-closed branch is the load-bearing assertion at the policy boundary; the `chain_has_time_bounds` helper at the same site distinguishes "chain depends on wallclock" from "chain is unbounded."
- * Message template: "UCAN chain-walker invoked with no clock injected (now_secs=0 sentinel) against a chain with time-bounded delegations; inject a real clock via with_now_for_test (or wait for WriteContext::now threading per phase-3-backlog §2.3 (i))"
+ * Message template: "UCAN chain-walker invoked with no clock injected (now_secs=0 sentinel) against a chain with time-bounded delegations; inject a real clock via with_now_secs (or wait for CapWriteContext::now threading per phase-3-backlog §2.3 (i))"
  */
 export class EUcanClockNotInjected extends BentenError {
   static readonly code = "E_UCAN_CLOCK_NOT_INJECTED";

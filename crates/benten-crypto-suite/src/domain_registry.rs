@@ -52,7 +52,7 @@
 //! content-hash namespaces are deliberately OUTSIDE the registered set** — they
 //! are not domain-separation tags in the cross-context-confusion sense (they
 //! address public content, they do not key/sign/AAD-bind secret material), so
-//! there is nothing to prefix-free-check against the tag corpus. Two instances:
+//! there is nothing to prefix-free-check against the tag corpus. Three classes:
 //!
 //! - **BLAKE3 CIDv1 content addressing** — the multiformats content-hash
 //!   framing (`0x01 0x71 0x1e 0x20 || BLAKE3`) is an un-labelled hash over
@@ -63,6 +63,29 @@
 //!   its keyed preimage SHAPE, not a label string, is the separator, so there
 //!   is no tag to register (mirrors the content-hash carve-out — a preimage /
 //!   framing acts as the separator, not a registered label).
+//! - **LABELLED public-content-hash namespaces** (R6-final F-75) — an
+//!   *unkeyed* `blake3::Hasher` that absorbs a `b"benten…"` label followed by
+//!   PUBLIC content, producing a deterministic public identifier. These DO
+//!   carry a label string (unlike the two classes above), which is why they are
+//!   called out explicitly rather than left implicit. They are still outside the
+//!   registered corpus by the same test: they neither key, sign, nor AAD-bind
+//!   secret material, so a prefix collision against a registered tag could not
+//!   confuse a signature or a key derivation — the label exists only to keep two
+//!   PUBLIC identifier namespaces from colliding with each other. **Class rule:
+//!   an unkeyed BLAKE3 label over public-only input is NOT a registered tag; an
+//!   unkeyed label over input that includes secret material, or any label folded
+//!   into a signing/KDF/AEAD-AAD preimage, IS.** Instances at HEAD (five, from a
+//!   workspace-wide `b"benten…"` literal sweep):
+//!   `b"benten:cap_snapshot_hash:v2"` (`benten-engine/src/cap_snapshot_hash.rs`),
+//!   `b"benten:audit:emit-handler:v1"` + `b"benten:audit:version-node:v1"`
+//!   (`benten-membership-set/src/audit.rs`),
+//!   `b"benten/hybrid-sig-cid/v1\0"` (`benten-crypto-suite/src/sizes.rs`,
+//!   `cid_over_signed_bytes` — a CID over public signature bytes), and
+//!   `b"benten-anchor-seed:"` (`benten-engine/src/engine_diagnostics.rs`,
+//!   the deterministic anchor-seed CID). The instance list is illustrative of
+//!   the class, NOT a corpus the build gate enforces — the class rule above is
+//!   the load-bearing statement, so a future public-content-hash namespace is
+//!   already covered without editing this note.
 //!
 //! # NAMED UN-ENROLLED tag — `X25519_CLASSICAL_INFO_V1` (R17 F-09)
 //!

@@ -364,6 +364,18 @@ fn f_ld_2_full_struct_signing_bytes_golden_pin() {
 /// NEVER silent acceptance (CLAUDE.md #5).
 #[test]
 fn f_ld_2_out_of_band_codepoint_typed_rejects() {
+    // Band base literal wire-lock. `dispatch_remote_permission_codepoint` derives
+    // its range FROM this const, so the dispatch arms below are self-satisfying
+    // for the base value itself — assert the integer directly (mirrors
+    // `f_ld_4_device_link_band_base_pinned`). Paired with the registry-side
+    // literal lock in
+    // `crates/benten-crypto-suite/tests/f_cp_codepoint_registry_dispatch.rs`
+    // (`new_codepoint_integers_wire_locked`), a one-sided edit to EITHER of the
+    // two independent homes of 0x6320 now fails the build.
+    assert_eq!(
+        REMOTE_PERMISSION_BAND_BASE, 0x6320,
+        "RemotePermission band base is wire-locked at 0x6320 (R0.7 §4.1 FREEZE)"
+    );
     // In-band base accepts.
     dispatch_remote_permission_codepoint(REMOTE_PERMISSION_BAND_BASE)
         .expect("in-band remote-permission codepoint MUST dispatch");

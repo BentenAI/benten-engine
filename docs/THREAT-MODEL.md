@@ -37,7 +37,7 @@ Per CLAUDE.md baked-in #18 the Principal primitive has TWO isolation halves, and
 
 Consequently, per-Node AEAD is a **publicly-derivable-`K_principal` STAND-IN** at v1-beta, **not** real untrusted-host
 confidentiality: `K_principal = BLAKE3-keyed-hash(domain_tag, namespace_did)` where BOTH the `domain_tag` (the public
-function-local constant `K_PRINCIPAL_DOMAIN_KEY` in `benten-graph/src/redb_backend.rs` — NOT one of the 19
+function-local constant `K_PRINCIPAL_DOMAIN_KEY` in `benten-graph/src/redb_backend.rs` — NOT one of the 22
 `registered_domain_tags()`, consistent with Compromise #65) AND the `namespace_did` are **PUBLIC**, so `K_principal` — and thus `K(N)`
 and the per-Node AEAD key — is **publicly derivable**: any party holding `(namespace_did, ciphertext_blob)` can derive
 the key and decrypt. An **untrusted host CAN therefore currently read the partition plaintext.** This is disclosed
@@ -291,7 +291,7 @@ clear the same prefix-free check). See `docs/SECURITY-PROOFS.md` §4.1 "Cross-su
 (prefix-free)" for the property statement and the §4.1 "Inner-format domain-separation (single vs group)" note for
 the single-vs-group instance this generalizes. **Status:** the registry + its prefix-free regression test SHIPPED
 (F-full / R6-R4 structural shape) — the centralizing registry CODE is at
-`crates/benten-crypto-suite/src/domain_registry.rs` (a 19-tag corpus via `registered_domain_tags()` plus the
+`crates/benten-crypto-suite/src/domain_registry.rs` (a 22-tag corpus via `registered_domain_tags()` plus the
 `all_domain_tags_are_prefix_free` regression); this row + the SECURITY-PROOFS property record the v1-beta
 commitment the code realizes.
 

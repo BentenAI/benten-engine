@@ -2297,6 +2297,23 @@ Row D-15's audit-readiness concern.
   (`OsRng` / `getrandom`), **unique per vault**. The salt+params are self-authenticating
   through the DAK derivation (tampering → wrong DAK → fail-closed `AeadFailed`),
   so they are intentionally not AEAD-AAD-covered (standard PBKDF-header posture).
+- **Caller contract — the `k_principal` half (R6-final F-56; BOTH values, not just
+  the salt).** The same production vault-creation wiring MUST also originate the
+  32-byte **`VaultPayload::k_principal`** (the principal's at-rest
+  content-encryption ROOT key) from an OS CSPRNG (`OsRng` / `getrandom`), fresh
+  per principal. This half was NOT previously written down anywhere — a sweep of
+  the tracked docs for a `k_principal` origination contract returned zero hits, and
+  `crates/benten-crypto-suite/src/vault.rs`'s `VaultPayload::k_principal`
+  docstring covers only the frozen DAG-CBOR byte-string encoding and the
+  redacted-`Debug`/zeroize hygiene (D-74/75/76), not entropy origination. Unlike
+  the salt (non-secret, self-authenticating through the DAK derivation), a
+  low-entropy or predictable `k_principal` is an **unrecoverable confidentiality
+  break** for every Node it ever wraps — it is the strictly more critical of the
+  two values, so the CSPRNG contract on it is the load-bearing half of this row.
+  At HEAD there is no exposure: the only construction path is
+  `HeadlessDeviceAuth::seal_and_build`, which is
+  `#[cfg(any(test, feature = "test-helpers"))]`-gated and bakes a constant
+  sentinel signing key, so no production vault is created at all.
 - **Deferred (destination):** vault-creation-from-OS-entropy is deferred with the
   device-auth / keyring surface (co-routes with Row D-64 engine encrypt-to-recipient
   + Row D-65 keyring/Tauri IPC). When it lands, the salt-origination CSPRNG contract
@@ -2411,10 +2428,59 @@ Row D-15's audit-readiness concern.
   also match a bare `for_test` / `for_testing` token (word-boundary aware so it
   does not over-match unrelated identifiers), and add an explicit allowlist
   entry for `AtriumConfig::for_test` so the widened scanner stays green.
+- **Widened (R6 tail fold-in F51 + F63) — the scanner also misses the
+  NO-TOKEN-AT-ALL form, and two `pub mod testing` modules are un-gated:** beyond the
+  bare-`for_test` gap above, `is_for_test_pattern` keys only on
+  `_for_test` / `_test_` / `mock_` / `inject_` / `_for_testing`, so a test-support
+  helper with NO test token in its name is invisible to it. At HEAD two `pub mod
+  testing` modules are NOT cfg-gated — `crates/benten-caps/src/lib.rs::testing`
+  (bare `pub mod testing {`) and `crates/benten-ivm/src/lib.rs::testing`
+  (bare `pub mod testing;`) — so their contents sit on the DEFAULT frozen surface.
+  The pin-evading members, all baseline-locked and all benign at v1-beta:
+  - `benten_ivm::testing::criterion_estimates_mean_ns`
+    (`docs/public-api/benten-ivm.txt:321`),
+    `testing_construct_view_with_strategy` (`:322`),
+    `try_construct_view_with_strategy` (`:323`) — true test-support; gate behind
+    `#[cfg(any(test, feature = "testing"))]` at v1-GM.
+  - `benten_caps::testing::wallclock_refresh_probe_expired`
+    (`docs/public-api/benten-caps.txt:799`) + `wallclock_refresh_probe_fresh`
+    (`:800`) + the `WallclockProbe` type — true test-support, but note these retire
+    with the production wire-up already registered at
+    `docs/future/phase-4-backlog.md:1424` (Qual-1 #683, co-routed with
+    `phase-3-backlog §2.3 (i)+(ii)`); cross-referenced, NOT re-homed.
+  - `benten_caps::testing::check_attenuation`
+    (`docs/public-api/benten-caps.txt:798`) is **not** test-support — it is a
+    back-compat `pub use super::attenuation::check_attenuation;`
+    (`crates/benten-caps/src/lib.rs::testing::check_attenuation`) aliasing the genuinely-production fn (also
+    baselined at `:14` / `:1677`). The v1-GM action here is to DELETE the alias and
+    repoint `crates/benten-caps/tests/call_attenuation.rs`, not to gate it.
+  - **F63 — `benten_id::keyset::KeySetDocument::v1_with`**
+    (`crates/benten-id/src/keyset.rs:119`) is a non-cfg-gated public constructor
+    documented "for reject-matrix fixtures" that builds docs with arbitrary
+    `v` / `sig_cp` / below-PQ-floor `kem_cp`. Its only callers are tests
+    (`crates/benten-id/tests/kdb_resolve_kem_fail_closed.rs:132` + `:155`,
+    `crates/benten-drop/tests/kdb_drop2_sole_constructor.rs:66`); zero production
+    callers. **NOT exploitable and NOT a freeze-blocker** — the consuming
+    chokepoints are verified fail-closed: `Did::resolve_kem`
+    (`crates/benten-id/src/did.rs:718-759`) rejects any `kem_cp` below the hybrid
+    floor at step-3 (`KeysetBelowPqFloor`) and rejects mismatched components at
+    step-4 (`MalformedKemMultikey`), and `KeySetDocument::from_canonical_bytes`
+    (`keyset.rs:175`) rejects `v != KEYSET_DOC_VERSION` at `:213`. So a hand-built
+    weird doc fail-closes at USE. This is freeze-hygiene (a "build any codepoint"
+    door on the frozen surface), sequenced with the gating sweep above; the
+    cross-crate `benten-drop` test caller means gating it requires the
+    `benten-id/testing` feature reach that crate's dev-deps.
+  - **Scanner widening implied by all of the above:** at v1-GM, extend
+    `is_for_test_pattern` (or add a companion check) to flag `pub` items reachable
+    from a `pub mod testing` / `pub mod scaffold` module and `pub` items with zero
+    non-test callers, not merely name-token matches. Couples to the R6-reround F-08
+    membership-set `scaffold` entry and the N-11 / N-12 entries in the R6-R1 section.
 - **Anchor:** R14-council F-02;
   `tests/phase_3_workspace/for_test_symbols_are_feature_gated.rs`
   (`is_for_test_pattern`); `crates/benten-engine/src/atrium_api.rs:80`
-  (`AtriumConfig::for_test`).
+  (`AtriumConfig::for_test`); R6 tail fold-in F51 + F63
+  (`crates/benten-caps/src/lib.rs::testing`, `crates/benten-ivm/src/lib.rs::testing`,
+  `crates/benten-id/src/keyset.rs:119`).
 
 ### Row D-75 — GAP-1: recovered-secret `Debug`-render + freed-heap hygiene → per-type redact+zeroize + meta-test LANDED at v1-beta (R19/#3); only bare-`Vec<u8>` copy-site tidy remains for v1-GM
 
@@ -2488,6 +2554,21 @@ Row D-15's audit-readiness concern.
     three sites above), left un-zeroized after `from_bytes` consumes them; the
     same v1-GM tidy applies — zeroize the `secret_bytes` binding after use
     (e.g. `zeroize::Zeroizing<[u8; 32]>` or an explicit `.zeroize()`).
+  - **The two `SecretStore::retrieve` returns** (R6 tail fold-in F17;
+    `crates/benten-engine/src/layer_d/secret_store.rs` — `KeyringCoreStore::retrieve`
+    at `:108-121` and `FileVaultStore::retrieve` at `:152-157`, both
+    `self.items.get(key).cloned()`) hand the DAK-wrap secret back as a bare
+    `Vec<u8>`, so the returned clone escapes the stores' own zeroize governance
+    (each store DOES zeroize its internal map on drop — `:93-98` / `:139-147`).
+    Inconsistent with the crate's `RecipientSecret::to_bytes → Zeroizing` pattern.
+    **Freeze-coupled — this is why it is deferred, not fixed:** the fix changes the
+    FROZEN public trait signature `SecretStore::retrieve(&self, &str) ->
+    Result<Vec<u8>, SecretStoreError>` (`secret_store.rs:57`) to return
+    `Zeroizing<Vec<u8>>`, exactly the same freeze-coupling as the
+    `unwrap_key_from_recipient` return bullet above. **Needs Ben's ruling on
+    v1-GM acceptability** (a trait-method return-type change is semver-breaking
+    post-tag; the clean window is pre-tag). No exposure at v1-beta beyond the
+    transient un-zeroized heap copy the other bullets in this list share.
 - **CLOSED at R6-reround (benten-drop Layer-C seal-side CEKs + vault transient
   plaintext buffers) — the destination for R6-reround council F02/F01:** the
   single-recipient BLAKE3-derived CEK (`seal_inner`) and the fresh-random
@@ -2533,6 +2614,29 @@ Row D-15's audit-readiness concern.
   return type to `Zeroizing<Vec<u8>>` (or return a `[u8; 32]` that callers
   wipe), matching the `RecipientSecret::to_bytes` discipline. No wire change
   (the derived key bytes are identical; only the drop-time wipe is added).
+- **Sibling site — the `benten-graph` structural-KDF AEAD key (R6-tail F-16;
+  NAMED here, not fixed this round):** the production per-Node `K(V)`/`K(N)`
+  keying path holds its structural-KDF-derived AEAD key as a bare `Vec<u8>` at
+  three coupled sites in `crates/benten-graph/src/redb_backend.rs` —
+  (i) `derive_test_seam_key_from_cid_with_namespace` (`:160`) returns
+  `k_root.as_bytes().to_vec()` as a raw `Vec<u8>`; (ii) the LIVE namespaced
+  seal binding `let aead_key = …` in `put_node_with_context` (`:1681`); and
+  (iii) the LIVE namespaced unseal binding `let aead_key = …` in the two-CID
+  unseal path (`:2685`). Each drops un-zeroized. **Severity is near-nil at
+  v1-beta** because the wave's `K_principal` is derived from the PUBLIC
+  `namespace_did` (`blake3::keyed_hash(K_PRINCIPAL_DOMAIN_KEY, did_bytes)`) and
+  is therefore publicly re-derivable anyway — the disclosed Compromise #65
+  limit. **It becomes a real secret at the swap:** the `#989` / `#1301` per-DID
+  `K_principal` secret-material backend (named at `docs/future/phase-4-backlog.md`
+  §3.10 G-CORE-3e "K_principal-per-DID secret-material backend") lands at
+  exactly these sites, at which point the bare `Vec<u8>` holds genuine
+  per-principal key material. **Deferred consumption:** fold the
+  `Zeroizing<Vec<u8>>` conversion (return type + both call-site bindings) into
+  that K_principal-store swap wave — it is the same edit surface, and doing it
+  now would add a `zeroize` dependency to `benten-graph` and change a frozen
+  `pub fn` return type (a public-api ADDITION, out of envelope for the
+  pre-tag hygiene pass). No wire change either way (the derived key bytes are
+  identical; only the drop-time wipe is added).
 - **Anchor:** R14-council GAP-1;
   `crates/benten-membership-set/src/keying.rs` (`derive_member_key`); the
   `RecipientSecret::to_bytes` → `Zeroizing` precedent in
@@ -2964,12 +3068,18 @@ did not resolve unilaterally.
   (circular exemption). **Fork for Ben:** intentional public conformance-vector API
   (then document + drop the `for_test` naming) OR test-support (then gate behind
   `testing`).
-- **N-14 — `docs/ERROR-CATALOG.md` pre-tag trajectory retense.** The top table +
-  headline assert 201 throwable, but the mint trajectory ends at "199 … may mint
-  one more (F-01)→200" (framing the final two mints as pending) and cites
-  `b93b2efc` (a 199-era ancestor) as HEAD. Refresh the trajectory to a landed 201,
-  drop the "may mint" speculation, retense the `b93b2efc` HEAD label to the tag SHA
-  at pre-tag sweep. CI-enforced counts (`CATALOG_VARIANT_COUNT==201`) already correct.
+- **N-14 — error-count SHA-anchor retense (pre-tag sweep).** *Numeric half DISCHARGED
+  at the R6-tail close-out pass (base `53e27088`):* the `docs/ERROR-CATALOG.md` mint
+  trajectory now reads a landed **201** (the "may mint one more (F-01)→200"
+  speculation is resolved — both `E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH` and
+  `E_RECIPIENT_KEM_NOT_COMMITTED` have landed), and the stale 199/201 counts in
+  `docs/V1-FROZEN-INTERFACE.md` (item-8 mirror-table row + row 8a narrative) were
+  corrected to 201 throwable / 203 catalog+TS. *Residual, genuinely tag-coupled:* the
+  `b93b2efc` HEAD labels remain — `docs/ERROR-CATALOG.md` (preamble narrative + the
+  four-count table header, ~L5 / L7) — because the correct replacement is the
+  `phase-4-meta-core-close` tag SHA, which does not exist until the tag lands.
+  Retense them at the pre-tag sweep. CI-enforced counts
+  (`CATALOG_VARIANT_COUNT==201`) were already correct throughout.
 - **N-16 — §11 `non_exhaustive` denominators post-D-34 → the already-registered
   R13 F-16 final-pre-tag count re-run.** `docs/V1-FROZEN-INTERFACE.md` §11's
   "194 pub enum / 444 pub struct = 183 of 638" label drifted after the D-34 wave
@@ -3176,6 +3286,111 @@ did not resolve unilaterally.
   any existing signature; the current fully-`pub`-field construction path stays.
 - **Anchor:** R6-R1c council F-10; the frozen-API-misuse-resistance lens; the
   parse_vault_frame floor (R6-1 F-02).
+
+### Row D-91 — F35: truncation-vs-overrun conflated in `HybridTrailingBytes { extra }` → v1-GM diagnostic split
+
+- **Observation (NAMED, not fixed this round):** two `did:benten` exact-consume
+  checks report a TRUNCATED committed key-set CID as
+  `DidError::HybridTrailingBytes { extra: 0 }` — literally "0 extra trailing
+  bytes" for an input that is too SHORT. Both use a `saturating_sub` that floors
+  to zero on the short side:
+  `crates/benten-id/src/did.rs:604-610` (`Did::resolve_signing` —
+  `decoded.len().saturating_sub(consumed + CID_LEN)`) and `:683-687`
+  (`Did::keyset_cid` — `tail.len().saturating_sub(CID_LEN)`).
+- **NOT a security gap:** the reject itself is correct and fail-closed in both
+  cases — a truncated or over-long committed component never resolves. Only the
+  operator-facing count is misleading; no admit path is affected.
+- **Why deferred, not fixed at v1-beta:** the fix re-points the truncation branch
+  at `DidError::HybridBodyTooShort` (`crates/benten-id/src/errors.rs:186` — already
+  the truncation diagnostic at `did.rs:809` / `:830`), which changes the TYPED
+  ERROR IDENTITY returned by two frozen public methods. `did.rs:667` documents the
+  `HybridTrailingBytes` / `HybridBodyTooShort` pair as this method's contract, and
+  `crates/benten-drop/tests/f_nqc4_1_did_key_hybrid_pubkey_multicodec.rs:217`
+  matches specific `DidError` variants on adjacent inputs. Re-pointing a variant at
+  the freeze for a cosmetic count is the wrong trade.
+- **Deferred (destination):** v1-GM diagnostic hardening — branch
+  truncation-vs-overrun into distinct diagnostics (short ⇒ `HybridBodyTooShort`,
+  long ⇒ `HybridTrailingBytes { extra }` with a genuine non-zero count) at BOTH
+  sites together, and add a reject-matrix pin per branch. Low priority.
+- **Anchor:** R6 tail fold-in F35; `crates/benten-id/src/did.rs:604-610` +
+  `:683-687`; `crates/benten-id/src/errors.rs:186` (`HybridBodyTooShort`) + `:199`
+  (`HybridTrailingBytes`).
+
+### Row D-92 — F73: `benten-engine` module gating splits target-vs-feature; the wasm32⇒browser-backend convention is implicit → v1-GM `compile_error!` guard
+
+- **Observation (NAMED, not fixed this round):** `crates/benten-engine`'s
+  native-only DEPENDENCIES are target-gated —
+  `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]` opens at
+  `crates/benten-engine/Cargo.toml:154` and carries `benten-id` at `:200` (its
+  `:188-199` comment explains: `benten-id` pulls `getrandom`, which rejects
+  `wasm32-unknown-unknown` without the `js` feature). But several CONSUMING modules
+  that reference those deps are gated on the browser-backend **FEATURE**, not the
+  target — e.g. `pub mod manifest_signing` at
+  `crates/benten-engine/src/lib.rs::manifest_signing` is `#[cfg(not(feature = "browser-backend"))]`
+  and calls into `benten_id`. The two axes only coincide because of the IMPLICIT
+  convention that a wasm32 build always passes `--features browser-backend`. A
+  wasm32 build WITHOUT `browser-backend` would compile `manifest_signing` against an
+  absent `benten-id`. Roughly 22 module gates in that file use the feature axis vs
+  8 on the target axis.
+- **NOT a live defect — all three SHIPPED configs are CI-verified clean:** native
+  (`ci.yml` clippy/build/nextest + the four native legs of
+  `multi-arch-cargo-check.yml:61-64`), wasm32-unknown-unknown WITH `browser-backend`
+  (`ci.yml:275`), and wasm32-wasip1 (`ci.yml:278` / `determinism.yml:167`, which
+  build `-p benten-core` only). No shipped wasm32 build breaks and no native-only
+  dependency leaks into the thin-client surface. The un-shipped combination is
+  simply not built anywhere.
+- **Deferred (destination):** v1-GM defense-in-depth — add
+  `#[cfg(all(target_arch = "wasm32", not(feature = "browser-backend")))] compile_error!(…)`
+  at the `benten-engine` crate root so the unsupported combination fails with a
+  named message instead of a confusing missing-crate cascade, AND add a CI cell that
+  actually exercises the guard (otherwise it is dead). **Deliberately not added at
+  v1-beta:** no existing lane builds that configuration, so the guard would ship
+  unverified — an untested compile-time guard added to a crate root at the interface
+  freeze is a worse trade than this recorded row. Freeze-additive when it lands
+  (a `compile_error!` on an un-built config changes no shipped artifact and no
+  public-api baseline).
+- **Anchor:** R6 tail fold-in F73; `crates/benten-engine/Cargo.toml:154` +
+  `:188-200`; `crates/benten-engine/src/lib.rs::manifest_signing`; CLAUDE.md baked-in #17
+  (three deployment shapes).
+
+### Row D-93 — F74: length-prefix encoding convention split (checked vs unchecked casts) → v1-GM hygiene, **with a frozen-width DO-NOT-CHANGE warning**
+
+- **Observation (NAMED, not fixed this round):** the workspace house style for wire
+  length prefixes is the CHECKED `u32::try_from(x.len()).expect(…)` form (~70 sites
+  in non-test source; rationale documented at
+  `crates/benten-graph/src/indexes.rs:85-98` — the prior unchecked cast silently
+  truncated ≥4 GiB inputs and aliased distinct index keys). Seven non-test sites
+  still use the UNCHECKED form:
+  - `crates/benten-engine/src/layer_d/device_link.rs:160` (`atrium_memberships` count,
+    `ProvisioningInnerPayload` canonical bytes), `:207` (`ek_x`), `:210` (`ek_mlkem`)
+    — the latter two inside `provisioning_signing_bytes`
+  - `crates/benten-engine/src/layer_d/drop_timestamp.rs:46` (`hpke_ciphertext`)
+  - `crates/benten-engine/src/layer_d/remote_permission.rs:73` (the `be_u32_len`
+    helper feeding `PermissionRequest` / `PermissionGrant::signing_bytes`)
+  - `crates/benten-membership-set/src/federation.rs:130` (the local `lp()` helper in
+    `FederationEnvelope::to_wire_v2_be`)
+  - `crates/benten-membership-set/src/governance.rs:204` (`label.len() as u64`)
+  (`crates/benten-membership-set/src/audit.rs:194` also matches a naive grep but is
+  a `seq()` COUNT accessor, not a wire prefix — excluded.)
+- **No security impact:** all seven are encode-side over bounded fields, and each
+  length is recomputed symmetrically on the verify side, so there is no injectivity
+  or truncation risk on any reachable input. Not a fix-gate.
+- **⚠️ FROZEN-WIDTH WARNING — `governance.rs:204` must keep its `u64`.** It is the
+  one width outlier (every peer field uses a 4-byte `u32` prefix). **Do NOT
+  "harmonize" it to `u32`:** that changes the encoded prefix from 8 bytes to 4,
+  which is a WIRE BREAK and a signature-preimage change on a frozen surface. The
+  inconsistency is frozen as-is. Any change to this width is a Ben-gated freeze fork
+  requiring a new codepoint/version per the CLAUDE.md #5 additive-only rule, never
+  an in-place edit.
+- **Deferred (destination):** v1-GM hygiene — convert the six `as u32` sites to the
+  checked `u32::try_from(…).expect(…)` house form. That conversion is
+  **byte-identical** for every length below 4 GiB (it only changes panic behaviour
+  on an unreachable input), so it is wire-neutral; it was NOT taken at v1-beta
+  because it is a purely cosmetic edit across six frozen signature-preimage
+  constructions with zero behavioural gain. Leave `governance.rs:204` alone per the
+  warning above.
+- **Anchor:** R6 tail fold-in F74; `crates/benten-graph/src/indexes.rs:85-98`
+  (house-style rationale); the seven sites enumerated above.
 
 ---
 

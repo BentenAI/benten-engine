@@ -15,6 +15,24 @@
 //! bytes to the crypto-suite). Tampering the signed `tier` field mutates the
 //! canonical bytes, so the original signature no longer verifies (tamper-
 //! evidence: the config cannot drift post-sign).
+//!
+//! ## INTEGRITY here, AUTHORITY at the engine layer (R6-tail F-67)
+//!
+//! What [`GovernanceConfig::new_signed`] delivers is **integrity /
+//! tamper-evidence ONLY**: it mints a FRESH ephemeral hybrid keypair inside the
+//! constructor and retains that keypair's verifying key alongside the
+//! signature, so [`GovernanceConfig::signature_verifies`] is structurally
+//! always true for an untampered value — it proves the `(tier, content_label)`
+//! bytes have not drifted since signing, and nothing more.
+//!
+//! It does **NOT** bind AUTHORITY. No user-DID, set-identity key, or other
+//! external trust anchor signs here, so a verifying `GovernanceConfig` is NOT
+//! evidence that anyone was ENTITLED to set that tier — do not read "signed
+//! Node" as an authorization check. The InstallRecord precedent named above is
+//! cited for the top-level-signed-Node SHAPE (governance decoupled from the
+//! sealed policy), not for its user-DID authority binding. The LIVE governance
+//! authority is engine + capability-policy driven (see the crate-root
+//! register-then-enforce disclosure in `lib.rs`).
 
 use benten_crypto_suite::sig::PublicKey;
 use benten_crypto_suite::{HybridSignature, SignatureSuite, SuiteConfig};
@@ -88,6 +106,15 @@ impl GovernanceConfig {
     ///
     /// The signature is a REAL hybrid Ed25519⊕ML-DSA-65 signature (routed
     /// through the crypto-suite — never forked).
+    ///
+    /// **INTEGRITY, not AUTHORITY (R6-tail F-67).** The keypair is minted
+    /// FRESH inside this constructor and its verifying key is stored on the
+    /// returned value, so [`GovernanceConfig::signature_verifies`] is
+    /// structurally always true for an untampered config. The property this
+    /// delivers is tamper-evidence over `(tier, content_label)` — NOT a binding
+    /// to any user-DID / set-identity authority. Callers MUST NOT treat a
+    /// verifying `GovernanceConfig` as authorization to have set that tier; the
+    /// LIVE governance authority is engine + capability-policy driven.
     #[must_use]
     pub fn new_signed(tier: GovernanceTier, content_label: &str) -> Self {
         let suite = SignatureSuite::from_config(SuiteConfig::v1_default());

@@ -61,7 +61,7 @@ use benten_sync::mst_proto::{MessageKind, MstDiffMessage, MstDiffSession};
 /// API boundary, so a round-bound assertion proves nothing against the real
 /// driver). The MAX_ROUNDS typed-error surface is exercised below.
 #[test]
-fn f_mst_1_membership_event_set_converges_log_n() {
+fn f_mst_1_membership_event_set_converges_via_real_mst_backstop() {
     let event_count = 4096usize;
     let mut peer_a = Mst::new();
     let mut peer_b = Mst::new();

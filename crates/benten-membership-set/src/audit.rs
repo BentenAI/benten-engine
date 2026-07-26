@@ -70,14 +70,30 @@ pub struct AuditEmitResult {
     pub chain_advanced: bool,
 }
 
-/// Emit an audit event through the `is_actor_active`-gated ENFORCED engine
-/// WRITE path. Populates the full `(actor_cid, handler_cid,
-/// capability_grant_cid)` attribution triple AND advances the audit
-/// version-chain.
+/// MODEL the `AuditEmitResult` SHAPE an audit event emitted through the
+/// `is_actor_active`-gated ENFORCED engine WRITE path would carry: the full
+/// `(actor_cid, handler_cid, capability_grant_cid)` attribution triple SET,
+/// and `chain_advanced == true`.
 ///
-/// The `handler_cid` is the canonical audit-emit handler subgraph CID — the
-/// enforced WRITE attributes the event to the handler that performed it; that
-/// is precisely the attribution a bare `put_node` cannot supply.
+/// **This function performs NO enforcement.** It constructs the result
+/// directly from its own arguments — it does not touch the engine, the
+/// `is_actor_active` gate, the capability policy, or the audit version-chain.
+/// It is the positive half of the enforced-vs-bare MODEL pair whose negative
+/// half is [`emit_audit_event_via_bare_put`]. The LIVE enforcement is
+/// engine-layer: `benten_engine::Engine::audit_sequence` over the real
+/// enforced-grant WRITE (driven by the `engine_enforced_path_*` arm of
+/// `crates/benten-engine/tests/f_audit_1_enforced_write_path_attribution_triple.rs`).
+/// See `docs/SECURITY-POSTURE.md` "Test-debt note — `f_audit_1` arm-(a)
+/// model-shape" for the tracked upgrade to a real end-to-end drive.
+///
+/// The `handler_cid` is the canonical audit-emit handler subgraph CID the
+/// enforced WRITE would attribute the event to — precisely the attribution a
+/// bare `put_node` cannot supply.
+///
+/// **R6-tail F-11: model-shape helper — gated off the frozen public surface**
+/// (zero production callers; consumed only by the `f_audit_1` pin, symmetric
+/// with its already-gated [`emit_audit_event_via_bare_put`] sibling).
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn emit_audit_event_via_engine(
     set_id: &[u8; 32],

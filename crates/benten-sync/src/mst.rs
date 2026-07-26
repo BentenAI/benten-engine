@@ -451,6 +451,13 @@ impl MerkleProof {
     /// matches the published root. Used by the
     /// `mst_light_client_verification_against_content_addressed_root`
     /// test pin to assert tampered proofs are rejected.
+    ///
+    /// Gated off the frozen v1-beta public surface (R6 tail fold-in):
+    /// zero production callers — the three consumers are
+    /// `src/mst.rs` `mod tests`, `src/light_client.rs` `mod tests`, and
+    /// the `tests/light_client.rs` integration pin (the last is why the
+    /// `feature = "testing"` arm is required alongside `test`).
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn with_tampered_node(&self) -> Self {
         let mut tampered = self.clone();

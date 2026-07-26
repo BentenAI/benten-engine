@@ -199,7 +199,6 @@ impl core::marker::UnsafeUnpin for benten_membership_set::audit::AuditQueryCompo
 impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AuditQueryComposition
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AuditQueryComposition
 pub fn benten_membership_set::audit::audit_log_query_composition(&[u8; 32]) -> benten_membership_set::audit::AuditQueryComposition
-pub fn benten_membership_set::audit::emit_audit_event_via_engine(&[u8; 32], &[u8; 32], &[u8; 32], benten_membership_set::audit::AdminOp) -> benten_membership_set::audit::AuditEmitResult
 pub mod benten_membership_set::codepoints
 pub const benten_membership_set::codepoints::MEMBERSHIP_SET_BAND_HI: u16
 pub const benten_membership_set::codepoints::MEMBERSHIP_SET_BAND_LO: u16

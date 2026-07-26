@@ -29,7 +29,8 @@
 //! Arms: (1) AdminOnly + non-Admin → denied; (2) PublicAllMembers +
 //! member → admitted; (3) `audit:<set_id>:*` parses through the EXISTING
 //! `RestrictedScope` arm WITHOUT adding a 3rd top-level `Scope` arm
-//! (struct/grep fence — `Scope` stays EXACTLY 2 arms); (4) the 4 reserved
+//! (real `benten_caps::Scope` exhaustive match — `Scope` stays EXACTLY 2 arms);
+//! (4) the 4 reserved
 //! variants resolve to UCAN-caveat/IVM compositions, NOT codepoints
 //! (no-audit-gradation-codepoint grep-defense source scan == 0).
 
@@ -46,6 +47,8 @@ use std::path::Path;
 // `benten_caps::RestrictedScope` arm (m-15 GNC-1) — `Scope` stays EXACTLY 2
 // arms (no 3rd top-level arm).
 // =====================================================================
+use benten_caps::restricted_spec::RestrictedScope;
+use benten_caps::scope::Scope;
 use benten_membership_set::audit::{
     AuditAccessGradation, AuditReadDecision, RequesterRole,
     parse_audit_scope_added_new_top_level_scope_arm, restricted_audit_scope_contains,
@@ -97,6 +100,30 @@ fn audit_scope_parses_via_existing_restricted_scope_arm_no_new_top_level_arm() {
          benten_caps::RestrictedScope arm (m-15 GNC-1) — it MUST NOT add a \
          3rd top-level `Scope` variant (Scope stays EXACTLY 2 arms)"
     );
+
+    // The routing claim above, exercised against the REAL `benten_caps` types
+    // rather than only the membership-set predicate (R6 tail fold-in): an
+    // `audit:<set_id>:*` scope is carried by the EXISTING
+    // `Scope::RestrictedSelector(RestrictedScope)` arm, and the match below is
+    // exhaustive over a NON-`#[non_exhaustive]` enum — so adding a 3rd
+    // top-level `Scope` variant compile-FAILS this pin.
+    let audit_scope: Scope = Scope::RestrictedSelector(
+        RestrictedScope::new().with_label_allowlist(vec![scope.to_string()]),
+    );
+    match audit_scope {
+        Scope::RestrictedSelector(ref spec) => {
+            assert_eq!(
+                spec.label_allowlist.as_deref(),
+                Some(&[scope.to_string()][..]),
+                "F-AUDIT-3: the audit scope MUST round-trip through the REAL \
+                 benten_caps::RestrictedSelector arm"
+            );
+        }
+        Scope::Hashes(_) => panic!(
+            "F-AUDIT-3: an `audit:<set_id>:*` scope MUST NOT route through the \
+             content-CID `Scope::Hashes` arm"
+        ),
+    }
     assert!(
         restricted_audit_scope_contains(scope, "audit:set-0x51:read:event-0xAB"),
         "F-AUDIT-3: the parsed audit RestrictedScope MUST decidably CONTAIN a \

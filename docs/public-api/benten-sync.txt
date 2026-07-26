@@ -611,7 +611,6 @@ pub benten_sync::mst::MerkleProof::target_key: alloc::string::String
 impl benten_sync::mst::MerkleProof
 pub fn benten_sync::mst::MerkleProof::approximate_bytes(&self) -> usize
 pub fn benten_sync::mst::MerkleProof::reconstruct_root(&self) -> benten_sync::mst::MstCid
-pub fn benten_sync::mst::MerkleProof::with_tampered_node(&self) -> Self
 impl core::clone::Clone for benten_sync::mst::MerkleProof
 pub fn benten_sync::mst::MerkleProof::clone(&self) -> benten_sync::mst::MerkleProof
 impl core::cmp::Eq for benten_sync::mst::MerkleProof

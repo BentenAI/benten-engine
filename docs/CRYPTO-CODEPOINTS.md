@@ -335,6 +335,29 @@ registry-presence-guarded in
 finding (the FREEZE band was absent from this registry doc — a prose-only-not-
 symbol-bound gap).
 
+**Both Layer-D band bases are literal-locked on BOTH of their independent homes
+(R6-final F-13).** `DEVICE_LINK_BAND_BASE` (`0x6310`) and
+`REMOTE_PERMISSION_BAND_BASE` (`0x6320`) are each defined TWICE — once in the
+wire-emitting producer (`crates/benten-engine/src/layer_d/device_link.rs` /
+`.../remote_permission.rs`) and once in the `benten_crypto_suite::registry`
+allocation map — and they are NOT re-exported from one another. The registry
+copies were previously only *presence*-guarded (the consts are placed into
+`registered_envelope_codepoints()` by `registry.rs` itself, so the presence loop
+is self-satisfying) and the engine-side `dispatch_*_codepoint` band checks derive
+their range FROM the const (also self-satisfying), leaving `0x6320` with no
+value-lock anywhere. Both homes now carry an explicit literal assertion —
+registry side in
+`crates/benten-crypto-suite/tests/f_cp_codepoint_registry_dispatch.rs`
+(`new_codepoint_integers_wire_locked`), producer side in
+`crates/benten-engine/tests/f_ld_4_multi_device_key_wrap_provisioning.rs`
+(`f_ld_4_device_link_band_base_pinned`) and
+`crates/benten-engine/tests/f_ld_2_remote_permission_wire_freeze.rs`
+(`f_ld_2_out_of_band_codepoint_typed_rejects`) — so a one-sided edit to either
+home fails the build. (These bands are pinned by paired literal locks rather than
+by a `f_disc_2` cross-crate `assert_eq!` arm because `benten-drop`, which hosts
+`f_disc_2`, does not dev-depend on `benten-engine`; the paired literals give the
+identical drift-detection property without adding a crate edge.)
+
 > **NAMED-CARRY obligation (F-full R6 R1 finding F-12; BELONGS-NAMED-NOW).**
 > The `0x6380` slot carries a **3-way discrete-value reserve obligation** that
 > MUST stay symbol-bound + integer-pinned, not prose-only: (1) `0x6380..0x638F`

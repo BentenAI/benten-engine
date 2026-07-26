@@ -555,9 +555,31 @@ pub fn decrypt_recipe_encrypted_node(
 /// (Whole)
 ///   bytes 38..: AeadEnvelope::to_wire_bytes()
 /// (Chunked)
-///   bytes 38-41 : chunk count (LE u32)
-///   for each chunk: u32 LE length || AeadEnvelope::to_wire_bytes()
+///   bytes 38-41 : chunk count (BE u32)
+///   for each chunk: u32 BE length || AeadEnvelope::to_wire_bytes()
 /// ```
+///
+/// **Byte order (M-19): BIG-endian.** The chunk count and every
+/// per-chunk length prefix are `to_be_bytes()` on encode and
+/// `from_be_bytes(..)` on decode (migrated LE → BE at F-full Wave-0 —
+/// see the `// M-19` comment at the encode site). The pre-migration
+/// "LE u32" wording in this block was stale doc text, never the shipped
+/// bytes; a from-spec re-implementation reading LE would mis-parse every
+/// real blob.
+///
+/// **No outer format-version byte — forward-evolution rides two other
+/// axes (R6-tail F-60).** Unlike the vault frame / `AeadEnvelope` /
+/// `EncryptedEnvelope` (each of which carries an explicit
+/// `format_version: u8`), this envelope has only `magic 0x3d` + a 1-byte
+/// variant tag. Forward-reject and additive evolution still hold: (1) an
+/// unknown variant tag is a typed `Err(AeadError::Authentication(
+/// "storage-envelope unknown variant tag …"))` in
+/// [`decode_encrypted_node`] — never a silent fallback — leaving 254
+/// unused tags for additive shapes, and (2) the INNER `AeadEnvelope`
+/// carries its own `format_version` + cipher-suite codepoint, so a
+/// primitive/suite change is discriminated there. A future
+/// shape-incompatible storage format takes a new tag (or a new magic
+/// byte), never an in-place mutation of `0x00`/`0x01`.
 ///
 /// The format is internal to G-CORE-3d's storage layer; it was FROZEN
 /// at the G-CORE-9 v1-beta wire-freeze (it is not a `pub`-API surface,

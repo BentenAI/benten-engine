@@ -135,3 +135,16 @@ jobs:
         # job also unconditionally passes, the detector is still doing
         # real work (self-test exercises the failing code paths).
         run: node --import tsx scripts/drift-detect.ts --self-test
+
+      - name: Mirror-scanner self-test must succeed (§3.5g item 6)
+        # Sibling meta-assertion for `drift-detect-error-variant-mirror.ts`,
+        # the load-bearing §3.5g item-6 pre-FREEZE gate. The scanner ships its
+        # own `--self-test`: a fixture enum whose three variants must classify
+        # `ok` / `violation` / `skipped`. The `violation` case is the F-06
+        # regression fixture (a variant constructed ONLY via the
+        # combinator-argument shape `.ok_or(FooError::Missing)`) — under the
+        # pre-fix follow-set that site read as "no production construction"
+        # and the scanner silently missed 57 constructions. Without this step
+        # the enforcement run at the `drift-detect` job above could regress to
+        # a silent-pass exactly as it did at F-06, with no CI signal.
+        run: node --import tsx scripts/drift-detect-error-variant-mirror.ts --self-test

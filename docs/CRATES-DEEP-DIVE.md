@@ -340,7 +340,7 @@ Every concrete v1-gate candidate surfaced by the 10 per-crate audits, tabulated.
 | `benten-id` | `serde_json` listed in dev-deps but possibly unused | low | `cargo machete` audit |
 | `benten-id` | `SeedImportError::InvalidSecret` reserved but unreachable today | low | Document reserved status for coverage-tool clarity |
 | `benten-id` | `UcanClaims::aud` is `String` not typed `Did` | low | Could tighten without breaking wire format |
-| `benten-id` | `validate_chain_no_time_check` ambiguous re. nbf handling | low | Rename to `_test_only` + gate behind cfg |
+| `benten-id` | `validate_chain_no_time_check` ambiguous re. nbf handling (5 production callers — NOT test-only; do not cfg-gate) | low | Rename/split under the v1-API-stabilization cluster (`phase-4-backlog §4.43`) |
 | `benten-id` | No wasm32-compat CI cell on the crate itself | low | Add defensive `cargo check --target wasm32-unknown-unknown -p benten-id` |
 | `benten-id` | `secret_bytes_unprotected` named uses (typed-CALL + iroh) | low | `Value::SensitiveBytes` extension (`phase-3-backlog §2.5 (e)`) |
 | `benten-sync` | `MessageKind` duplicated across `handshake.rs` + `mst_proto.rs` | low | Reconcile to single source of truth |

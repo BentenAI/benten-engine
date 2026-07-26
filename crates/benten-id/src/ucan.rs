@@ -546,10 +546,22 @@ pub(crate) fn ct_signature_eq(a: &[u8], b: &[u8]) -> bool {
 /// u64::MAX` (which never trips `exp`). Use the timed variant for
 /// production paths.
 ///
-/// **Caveat (O-23):** this `_no_time_check` entry point has NO production
-/// caller — every production chain-walk goes through the timed
-/// [`validate_chain_at`] / [`validate_chain_for_capability`]. It exists
-/// only for tests that construct time-agnostic fixtures.
+/// **Caveat (O-23, corrected):** this `_no_time_check` entry point DOES have
+/// production callers — five at HEAD, none `cfg(test)`-gated:
+/// `benten-sync/src/handshake.rs:728` (`Handshake::respond`) +
+/// `:856` (`Handshake::finalise`) validate the remote-issued grant at
+/// handshake time, and `benten-caps/src/chain_authority.rs:94` / `:164` /
+/// `:267` (`validate_chain_with_rotation_log` /
+/// `validate_chain_with_envelope_ceiling` / `validate_chain_with_manifest_ceiling`)
+/// use it as the structural+crypto primitive under a local authority
+/// consultation. **Where the nbf/exp half lives for each:** the two handshake
+/// sites bound wallclock skew with the frame-level replay-window check and
+/// defer nbf/exp to the G14-D delivery-time `validate_chain_at(now)` recheck
+/// (see the rationale comment at `handshake.rs:716-726`); the three
+/// `chain_authority` sites are ceiling-AND predicates whose callers own the
+/// time gate. Do NOT gate this fn behind `cfg(test)` — that would break all
+/// five. The CRUD/write path continues to use the timed
+/// [`validate_chain_at`] / [`validate_chain_for_capability`].
 pub fn validate_chain_no_time_check(chain: &[Ucan]) -> Result<(), UcanError> {
     // For "no time check", we still want `nbf` / `exp` consistency
     // checks to be skipped — pass `now = 0` to skip nbf only if all

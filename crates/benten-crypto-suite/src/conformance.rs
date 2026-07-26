@@ -20,7 +20,12 @@
 //!
 //! The embedded modules are exactly the wire/AAD/keying-path producers per
 //! the R0.7 §4.1 M-19 site-list (`aead.rs`, `structural_kdf.rs`, `varsig.rs`,
-//! `sizes.rs`, `swap_matrix.rs`, `envelope.rs`, `vault.rs`, `cipher_suite.rs`).
+//! `sizes.rs`, `swap_matrix.rs`, `envelope.rs`, `vault.rs`, `cipher_suite.rs`)
+//! plus the two HPKE/KEM keying-path modules `hpke.rs` + `mlkem.rs` (R6-final
+//! F-27: both are wire/keying-path producers in THIS crate and were absent from
+//! the scanned set — the `O-05` M-19-widening row covers only the CROSS-crate
+//! producers, so the in-crate gap fell through both nets; both are LE-free at
+//! enrollment, so the gate stays at 0).
 
 /// Endianness conformance scanner (M-19).
 pub mod endianness {
@@ -38,6 +43,16 @@ pub mod endianness {
         ("envelope.rs", include_str!("envelope.rs")),
         ("vault.rs", include_str!("vault.rs")),
         ("cipher_suite.rs", include_str!("cipher_suite.rs")),
+        // R6-final F-27: the HPKE envelope + ML-KEM-768 keying-path modules were
+        // absent from the scanned set. The `O-05` M-19-widening row
+        // (`docs/V1-FROZEN-INTERFACE-DEFERRED.md`) enumerates only the CROSS-crate
+        // producers (`benten-drop/layer_c.rs`, `benten-membership-set/aad.rs`,
+        // `benten-engine/layer_d/*.rs`), so these two in-crate producers fell
+        // through both the scanner and the deferral. Both are LE-free at HEAD, so
+        // enrolling them keeps the survivor count at 0 while closing the
+        // future-drift gap for this crate's own surfaces.
+        ("hpke.rs", include_str!("hpke.rs")),
+        ("mlkem.rs", include_str!("mlkem.rs")),
     ];
 
     /// Whether a source line is a comment / doc line (after trimming). A

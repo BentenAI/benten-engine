@@ -24,6 +24,21 @@
 > > enum/struct set before the tag lands, re-run the count once more at the
 > > final pre-tag pass.
 > >
+> > **⚑ TRIGGER FIRED — the re-run above is now MANDATORY, not conditional
+> > (recorded at the R6-tail close-out pass, base `53e27088`).** The
+> > `196 / 135 / 448 / 53 / 188 / 644` tally is pinned to HEAD `b86dec03`,
+> > which is 4 commits behind `53e27088`, and commit `024fd4b0`
+> > ("… F-03/F-04 gate non-exempt test-symbols") cfg-gated public items —
+> > shrinking the pub surface and invalidating the denominators. Treat the
+> > §11 figures as KNOWN-STALE-at-`b86dec03` until the pre-tag re-run. The
+> > count was deliberately NOT refreshed in this pass: §11's generating
+> > methodology is not recorded in the doc, and a re-derivation by a
+> > different method would replace a known-stale number with a
+> > confidently-wrong one. Re-run with the SAME method that produced the
+> > `b86dec03` figures. NOT a convergence blocker — the machine-enforced
+> > `cargo-public-api` baselines are regenerated and green; only this prose
+> > narrative drifts.
+> >
 > > **⚑ R14 F-04 pre-tag-sweep line — banner/description retense (couples to
 > > F-19 above; Ben-gated).** The R6–R14 phase-close council has CONVERGED
 > > (0 BLOCKER/MAJOR at R14; MINOR/OBS residual closed at the R14 pre-tag doc
@@ -119,7 +134,15 @@ fail CI on a frozen-surface mutation:
    **authoritative diff gate is the CI workflow**
    `.github/workflows/cargo-public-api.yml`, which regenerates the public
    surface at PR-time and diffs it against the committed baselines at
-   `docs/public-api/benten-*.{txt,json}` (a diff fails CI). The Rust-side
+   `docs/public-api/benten-*.txt` (a diff fails CI). The one non-`.txt`
+   baseline, `docs/public-api/benten-renderer-tauri.json`, is NOT part of
+   that workflow diff loop — it is the Tauri IPC method-name allowlist
+   baseline, enforced instead by the Rust drift-detector
+   `crates/benten-renderer-tauri/tests/ipc_method_name_stability_drift_detector.rs`
+   (it pins `_ipc_method_name_allowlist_baseline._anticipated_method_set`
+   byte-for-byte against `TauriRenderer::ipc_method_allowlist()`; silent
+   IPC-surface expansion is a manifest-bypass risk). Both baselines are
+   frozen; the enforcement mechanism differs. The Rust-side
    test `crates/benten-engine/tests/cargo_public_api_drift.rs` is the
    **presence-pin** — it asserts the workflow file exists and references the
    `cargo-public-api` extension (non-vacuity), NOT the drift diff itself.
@@ -1085,7 +1108,7 @@ SURFACE.
 |---|---|---|
 | `packages/engine/src/index.ts` exports | All `export` statements at HEAD | LOCKED as-shipped at the freeze wave; commit the post-freeze `index.d.ts` |
 | `packages/engine/src/engine.ts` `Engine` + `PolicyKind` | As-shipped | LOCKED |
-| `packages/engine/src/errors.generated.ts` `CATALOG_CODES` | The 201-TS-class catalog at HEAD `b93b2efc` (199 Rust ErrorCode throwable variants + `E_INV_ITERATE_NEST_DEPTH` Phase-2a-retired retained envelope + `E_UNKNOWN` forward-compat sentinel = 201; documented in ERROR-CATALOG.md "Catalog count narrative" table) | LOCKED — mirror item 8's `ErrorCode` mirror discipline; auto-generation contract frozen (regen MUST produce byte-identical file given same input) |
+| `packages/engine/src/errors.generated.ts` `CATALOG_CODES` | The 203-TS-class catalog (201 Rust ErrorCode throwable variants + `E_INV_ITERATE_NEST_DEPTH` Phase-2a-retired retained envelope + `E_UNKNOWN` forward-compat sentinel = 203; documented in ERROR-CATALOG.md "Catalog count narrative" table; pinned by `crates/benten-errors/tests/stable_shape.rs` `CATALOG_VARIANT_COUNT == 201`) | LOCKED — mirror item 8's `ErrorCode` mirror discipline; auto-generation contract frozen (regen MUST produce byte-identical file given same input) |
 | `packages/engine/src/types.ts` typed-call shapes | `TypedCallInputShapes`, `TypedCallOutputShapes`, `ManifestSignature`, the `ed25519_*` / `keypair_*` / `did_resolve` arms | LOCKED — **PQ-hybrid-capable** sizes (NO hardcoded Ed25519 32B-key / 64B-sig assumption; per item 10 PQ-hybrid JS-shape widening + napi-r1-1 atomic mirror) |
 | `packages/engine/src/types.ts` other interface exports | `Subgraph`, `RegisteredHandler`, `AttributionFrame`, `Trace*`, `CapabilityClaim`, `DeviceAttestation`, `CapabilityGrant`, `Edge`, `TypedCallOp`, etc. | LOCKED as-shipped |
 | `packages/engine/src/index.d.ts` | The TS module declaration file; generated from napi-rs via the build pipeline | LOCKED post-regen at the freeze wave |
@@ -1110,12 +1133,13 @@ contained).
 
 **errors.generated.ts ↔ catalog ↔ Rust `ErrorCode` parity audit
 RESOLVED at G-CORE-9 V1-FROZEN-INTERFACE row 8a (investigation outcome
-in commit `75a1d33a` body).** Counts at HEAD `b93b2efc`: 199 Rust
+in commit `75a1d33a` body).** Counts at HEAD: 201 Rust
 ErrorCode throwable variants + 1 `E_INV_ITERATE_NEST_DEPTH`
 Phase-2a-retired retained envelope (catalog ID retained for
 backward-compat string round-trip; Rust enum has no variant) + 1
 `E_UNKNOWN` forward-compat sentinel (mirrors Rust `Unknown(String)`
-fallback) = 201 catalog/TS entries.
+fallback) = 203 catalog/TS entries. Machine-pinned by
+`crates/benten-errors/tests/stable_shape.rs` (`CATALOG_VARIANT_COUNT == 201`).
 **Delta is the legitimate retained-envelope set, NOT drift**; the
 drift-detect script (`npm run drift:errors`) validates this exact
 pattern. Documented in ERROR-CATALOG.md's "Catalog count narrative"
@@ -2151,7 +2175,9 @@ assigned at v1-beta:
    `f_ms_2_constructor_cardinality_memberref.rs`).
 5. **`0x6610` group AAD = BLINDED 11-field set** (pinned by
    `f_aad_1_members_table_canonical_cbor_length_injective.rs` +
-   `f_aad_2_nine_tuple_injectivity_opaque_boundary.rs`).
+   `f_aad_2_nine_tuple_injectivity_opaque_boundary.rs` — the `nine_tuple`
+   FILENAME is stale; the file pins the 11-field set, rename tracked at
+   `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-32).
 
 **Escape valve:** any Composing-time change to the EXACTLY-3 Kind
 cardinality, the 5-value RoleId ordinal, the one-DID-one-record fusion,

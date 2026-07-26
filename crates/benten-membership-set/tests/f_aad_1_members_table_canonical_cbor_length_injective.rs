@@ -409,6 +409,103 @@ fn f_aad_1_every_field_is_byte_bound() {
     );
 }
 
+/// F-AAD-1 arm 6 — TOP-LEVEL map-key order is DAG-CBOR canonical
+/// (length-first), NOT Rust `BTreeMap` byte-wise `Ord` (R6-tail F-39).
+///
+/// Every fixture above uses only length-12 DIDs, so for the TOP-LEVEL map keys
+/// the Rust `Ord` iteration order and the DAG-CBOR canonical order AGREE — no
+/// arm above can distinguish them. (The struct-FIELD layer IS locked by
+/// `EXPECTED_HEX`, whose key order `role`/`member_ref`/`sig_pubkey`/
+/// `is_authority`/`admitted_at_hlc` is neither declaration order nor pure
+/// bytewise order.) This arm closes the top-level half with a MIXED-LENGTH
+/// pair chosen so the two candidate orders DISAGREE:
+///
+/// - Rust `String` `Ord`: `"did:key:zAAA"` < `"did:key:zB"` (byte 9: `A` <
+///   `B`) — `BTreeMap` iterates the 12-char DID FIRST.
+/// - DAG-CBOR canonical (RFC-7049 length-first): the CBOR text header is
+///   `0x6a` for the 10-char DID and `0x6c` for the 12-char DID, so the
+///   10-char DID sorts FIRST.
+///
+/// The encoder MUST emit the SHORTER key first. A regression to
+/// source-iteration-order emission, or an RFC-8949 bytewise re-sort, flips
+/// this pin. NQ-W4 consequence: two engines whose member DIDs differ in length
+/// must still materialize byte-identical AAD.
+#[test]
+fn f_aad_1_top_level_map_keys_sorted_length_first_not_bytewise() {
+    let short = Did("did:key:zB".to_string()); // 10 chars → CBOR text header 0x6a
+    let long = Did("did:key:zAAA".to_string()); // 12 chars → CBOR text header 0x6c
+
+    // Fixture precondition: Rust `Ord` DISAGREES with the canonical order.
+    // Without this the arm would be vacuous.
+    assert!(
+        long < short,
+        "fixture precondition: Rust Ord must order the LONGER DID first, \
+         otherwise the two orderings agree and this arm proves nothing"
+    );
+
+    // Two otherwise-unremarkable member records; only the DID key LENGTH
+    // differs, so the encoding difference under test is purely the key order.
+    let entry_short = MemberEntry {
+        role: RoleId::Member,
+        is_authority: false,
+        sig_pubkey: None,
+        admitted_at_hlc: Hlc {
+            physical_ms: 1_000,
+            logical: 0,
+            node_id: 0x1111_1111,
+        },
+        member_ref: MemberRef::UserDid,
+    };
+    let entry_long = MemberEntry {
+        role: RoleId::Member,
+        is_authority: false,
+        sig_pubkey: None,
+        admitted_at_hlc: Hlc {
+            physical_ms: 2_000,
+            logical: 0,
+            node_id: 0x2222_2222,
+        },
+        member_ref: MemberRef::UserDid,
+    };
+
+    let mut table = BTreeMap::new();
+    table.insert(short, entry_short);
+    table.insert(long, entry_long);
+
+    let bytes = canonical_members_table_bytes(&table);
+    let hex = hex_encode(&bytes);
+
+    // Header-inclusive CBOR text tokens for the two keys.
+    // `6a` = text(10), `6c` = text(12) — the same `6c6469643a6b65793a7a414141`
+    // token that opens the frozen EXPECTED_HEX golden above.
+    let short_key = "6a6469643a6b65793a7a42"; // text(10) "did:key:zB"
+    let long_key = "6c6469643a6b65793a7a414141"; // text(12) "did:key:zAAA"
+    let short_at = hex
+        .find(short_key)
+        .expect("the 10-char DID key must appear in the canonical encoding");
+    let long_at = hex
+        .find(long_key)
+        .expect("the 12-char DID key must appear in the canonical encoding");
+    assert!(
+        short_at < long_at,
+        "top-level map keys MUST be DAG-CBOR canonical (length-first): the \
+         10-char DID (`0x6a` header) must precede the 12-char DID (`0x6c` \
+         header) even though Rust `Ord` iterates the 12-char one first; \
+         hex=`{hex}`"
+    );
+
+    // And the mixed-length case stays insertion-order-independent.
+    let mut reversed = BTreeMap::new();
+    for (k, v) in table.iter().rev() {
+        reversed.insert(k.clone(), v.clone());
+    }
+    assert_eq!(
+        bytes,
+        canonical_members_table_bytes(&reversed),
+        "mixed-length keys stay insertion-order-independent (cross-engine convergence)"
+    );
+}
+
 // ── helpers ─────────────────────────────────────────────────────────────
 
 fn hex_encode(bytes: &[u8]) -> String {

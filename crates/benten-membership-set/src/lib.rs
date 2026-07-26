@@ -46,6 +46,22 @@
 //!   the Inv-13 audit-dedup model — the LIVE tamper/dedup enforcement is
 //!   engine-layer: `benten_engine::Engine::audit_sequence` + the graph-layer
 //!   Inv-13 dedup + `Node::load_verified` mid-chain tamper rejection.
+//! - `audit::emit_audit_event_via_engine` / `audit::emit_audit_event_via_bare_put`
+//!   (R6-tail F-11) — the enforced-vs-bare attribution-triple SHAPE model. The
+//!   "enforced" helper performs ZERO enforcement (it constructs its
+//!   `AuditEmitResult` from its own arguments); both are `cfg(any(test, feature
+//!   = "testing"))`-gated off the frozen surface. The LIVE enforced-WRITE
+//!   attribution is `benten_engine::Engine::audit_sequence` (the
+//!   `engine_enforced_path_*` arm of `f_audit_1`); see
+//!   `docs/SECURITY-POSTURE.md` "Test-debt note — `f_audit_1` arm-(a)
+//!   model-shape".
+//! - [`audit::audit_log_query_composition`] (R6-tail F-66) — returns a
+//!   HARDCODED `{primitive_tags: [READ, BRANCH, RESPOND],
+//!   is_a_new_primitive_kind_variant: false}` descriptor; it does not resolve
+//!   or walk a real composition and has zero production callers. The
+//!   load-bearing no-13th-`PrimitiveKind` property is enforced elsewhere — by
+//!   the frozen 12-variant `benten_core::PrimitiveKind` itself, driven in
+//!   `crates/benten-engine/tests/f_audit_4_audit_log_query_graph_native_not_frozen_op.rs`.
 //! - [`governance::GovernanceTier`] tier promotion (`promote_tier`) — a
 //!   data-half transition model; the LIVE governance authority is engine +
 //!   capability-policy driven.

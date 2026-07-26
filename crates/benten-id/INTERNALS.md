@@ -302,7 +302,7 @@ The crate sits clean. Identity is foundational by nature — it can't compose fr
 
 **Device-attestation envelope V2 internals don't leak.** `DeviceAttestation`'s `signature` field is publicly accessible — required for test-side bit-flipping — but the `CanonicalBytes` trait impl (the signature-input encoding) uses an internal `SigInput<'a>` struct that excludes the sig field. Construction goes through `issue_*` functions only.
 
-**One small thing to flag for retrospective:** the `validate_chain_no_time_check` docstring is unusually candid about its time-handling ambiguity; production code paths in `benten-caps`'s UCANBackend use `validate_chain_at`. Fine as-is.
+**One small thing to flag for retrospective:** the `validate_chain_no_time_check` docstring is unusually candid about its time-handling ambiguity. Note the split: `benten-caps`'s `UCANBackend` write path uses `validate_chain_at`, but `benten-caps::chain_authority` (`validate_chain_with_rotation_log` / `_envelope_ceiling` / `_manifest_ceiling`) and `benten-sync::handshake` (`respond` / `finalise`) call the `_no_time_check` variant in production, each owning its own time gate elsewhere (delivery-time recheck for the handshake pair). Fine as-is, but the "tests-only" reading of that entry point is wrong.
 
 ---
 
@@ -339,7 +339,7 @@ A handful of things worth surfacing for retrospective:
 
 2. **`UcanClaims::aud` is a `String` not a typed `Did`.** Audience is compared via `ct_signature_eq` over UTF-8 bytes — works correctly. Looser type accommodates non-DID audiences (some UCAN ecosystems use URLs). Convenience method `audience_did(&Did)` exists. Coherent design choice.
 
-3. **`validate_chain_no_time_check` is ambiguous re. `nbf` handling.** Docstring directs callers to `validate_chain_at` for production. Used primarily by the basic-validation test pin. Possible future cleanup: gate behind `#[cfg(any(test, debug_assertions))]`.
+3. **`validate_chain_no_time_check` is ambiguous re. `nbf` handling.** Docstring directs the CRUD/write path to `validate_chain_at`. It is NOT test-only: five production callers exist (`benten-sync::handshake` `respond`/`finalise`; `benten-caps::chain_authority` `validate_chain_with_rotation_log`/`_envelope_ceiling`/`_manifest_ceiling`), each pairing it with a separate time gate. **Do NOT gate it behind `#[cfg(any(test, debug_assertions))]`** — that would break all five. Any future cleanup is a rename/split under the v1-API-stabilization cluster (#1169 / `docs/future/phase-4-backlog.md §4.43`), not a cfg-gate.
 
 4. **`AttestationKind` enum has one variant** (`SupersededBy`). Keeps shape across future rotation-event types (e.g. multi-sig-rotation, threshold-revoke per Kith). `kind()` returns a constant.
 
