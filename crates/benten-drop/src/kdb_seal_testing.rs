@@ -67,10 +67,11 @@ use crate::layer_c::{
 };
 
 // ─────────────────────────────────────────────────────────────────────────
-// NEW binding-based seal API — LOGIC-UNDER-TEST (stub `todo!()` → real at R5).
+// NEW binding-based seal API — LOGIC-UNDER-TEST (REAL at HEAD; was a
+// `todo!()` stub at R3, swapped at R5).
 //
-// Free functions so the R3→R5 swap is a single-file edit and the test call
-// sites never change. Each replaces a substitutable seal signature (design
+// Free functions so the R3→R5 swap was a single-file edit and the test call
+// sites never changed. Each replaces a substitutable seal signature (design
 // §5): the recipient KEM key is no longer an independently-chosen param — it
 // arrives PROVEN-committed inside a `RecipientBinding`.
 // ─────────────────────────────────────────────────────────────────────────

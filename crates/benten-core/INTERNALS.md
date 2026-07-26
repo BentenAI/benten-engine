@@ -58,14 +58,14 @@ Crate root. Carries the module-level docs, the `WriteAuthority` enum (lifted int
 
 `WriteAuthority` (`lib.rs:103-120`) has three variants — `User` (default), `EnginePrivileged`, `SyncReplica { origin_peer: Cid }` — and is the single source-of-truth shape both `benten-graph` and `benten-caps` re-export.
 
-### `value.rs` (~261 LOC)
+### `value.rs` (~439 LOC)
 The `Value` enum (eight variants: `Null`, `Bool`, `Int(i64)`, `Float(f64)`, `Text(String)`, `Bytes(Vec<u8>)`, `List(Vec<Value>)`, `Map(BTreeMap<String, Value>)`). Three convenience constructors (`text`, `unit`, `map_of`). `to_canonical` performs the float-validation + `-0.0`-normalisation walk before encode.
 
 **Codec split** (the load-bearing design choice): `Serialize` is derived via `#[serde(untagged)]` and is safe at encode time because every variant writes a distinct CBOR major type. `Deserialize` is **hand-written** because `untagged` deserialisation collapses channels CBOR distinguishes — a small-integer array could round-trip as `Bytes` instead of `List`, and a text-string would land on `visit_str` regardless of which CBOR major type was on the wire. The `ValueVisitor` impl dispatches on the actual data-model type the decoder surfaces. Map keys are decoded as `String` to enforce DAG-CBOR's text-key restriction.
 
 **Public exports:** `Value`.
 
-### `edge.rs` (~133 LOC)
+### `edge.rs` (~180 LOC)
 The `Edge` struct (`source: Cid`, `target: Cid`, `label: String`, `properties: Option<BTreeMap<String, Value>>`) + a private `EdgeHashView` serde view used for canonical bytes.
 
 **Two non-obvious choices, both pinned by tests:**
@@ -130,7 +130,7 @@ The Phase-4-Foundation plugin composition-cycle detector (`benten_platform_found
 
 **Public exports:** `ATTRIBUTION_PROPERTY_KEY`, `NodeHandle`, `OperationNode`, `PrimitiveKind`, `Subgraph`, `SubgraphBuilder`, `canonical_subgraph_bytes`.
 
-### `change_stream.rs` (~231 LOC)
+### `change_stream.rs` (~273 LOC)
 The `ChangeStream` port that `benten-eval`'s SUBSCRIBE primitive consumes via dependency injection. Defines `SubscriberId` (a content-addressed `Cid` newtype), `ChangeKind` (`Created` / `Updated` / `Deleted`, `non_exhaustive` for Phase-3 `Replicated` / `Conflict` arms), and `ChangeEvent` (the full nine-field shape: `anchor_cid`, `kind`, `seq`, `payload_bytes`, `labels`, `tx_id`, `actor_cid`, `handler_cid`, `capability_grant_cid`).
 
 The trait is object-safe with three methods (`subscribe`, `next_event`, `unsubscribe`) returning `Result<_, String>` so it carries no error-type dependency. The decision to put this port in `benten-core` rather than `benten-eval` is recorded inline: the change-event source is a backend concern and the port must sit at the stable arch-1 seam.

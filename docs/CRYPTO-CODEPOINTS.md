@@ -80,9 +80,19 @@ This is the NQ-A1 conservative-fallback policy:
 The reserved set is enumerated in
 `crates/benten-crypto-suite/src/codepoint.rs::ReservedCodepoint` — each slot's
 `resolve()` ALWAYS typed-rejects at v1-beta (never a silent accept). The
-`ChainedStateTlv` per-stanza sub-slot (GAP-6b) is **AAD-bound** when present
-(`chained_state_tlv_aad_binding`) so a present-vs-absent flip is detectable at
-decrypt (not advisory).
+`ChainedStateTlv` per-stanza sub-slot (GAP-6b) has a **specified** AAD binding
+(`0x01 ‖ band_base_be` when present, `0x00` when absent) so that a
+present-vs-absent flip WOULD be detectable at decrypt once the sub-slot is
+emitted. **At v1-beta that binding is not a live decrypt-time check:** the
+helper that computes it, `codepoint.rs::chained_state_tlv_aad_binding`, is
+`#[cfg(any(test, feature = "testing"))]`-gated and has **zero production
+callers** (its only consumer is
+`crates/benten-drop/tests/f_nqa1_1_frozen_surface_additive_extensibility.rs`,
+which byte-pins the assembly). The construction is therefore GOLDEN-PINNED, not
+enforced — which is vacuous rather than exploitable, because the sub-slot is
+never emitted at v1-beta (the reserve's `resolve()` always typed-rejects). The
+sibling rustdoc at `codepoint.rs::ReservedCodepoint::ChainedStateTlv` carries
+the same disclosure.
 
 > **Band-base reconciliation (R6 R6 F-04).** `ReservedCodepoint::band_base()`
 > for both `RotatingGroupKeyChainedMode` and `ChainedStateTlv` dispatches from

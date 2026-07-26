@@ -83,7 +83,7 @@ crate ships from the workspace yet.
 
 ## 3. Files inventory in `src/`
 
-### `lib.rs` (986 LOC)
+### `lib.rs` (1222 LOC)
 Crate root + module list + crate-level re-exports.
 Owns the `GraphError` enum (the canonical storage-layer error type with seven
 variants and a `code()` mapping to the stable error catalog), the
@@ -160,7 +160,7 @@ referencing Edge inside the same redb txn (r6b-ivm-1 — the prior version left
 dangling edges); `PendingOp::PutEdge` always emits `ChangeKind::EdgeCreated`,
 never `Created`, so edge-driven IVM views see the right event shape.
 
-### `indexes.rs` (90 LOC)
+### `indexes.rs` (128 LOC)
 Label and property-value index plumbing. Two `MultimapTableDefinition`s
 (`LABEL_INDEX_TABLE`, `PROP_INDEX_TABLE`) plus three crate-private helpers:
 `value_index_bytes` (DAG-CBOR-encode a `Value` for use as an index key
@@ -238,17 +238,17 @@ the system-zone label gate is preserved as a defense-in-depth check against a
 buggy subscription.
 
 ### `backends/mod.rs` + four submodules
-- `backends/blob_backend_trait.rs` (119 LOC) — the `BlobBackend` trait scaffold.
+- `backends/blob_backend_trait.rs` (179 LOC) — the `BlobBackend` trait scaffold.
   Three methods (`get`, `put`, `is_persistent`) returning `impl Future + Send`
   per D-PHASE-3-7 (browser-target async compatibility). Associated `type Error`.
   Not object-safe (RPITIT + assoc type). Generic-cascade direction.
-- `backends/blob_backend.rs` (344 LOC, native-only) — `RedbBlobBackend`, the
+- `backends/blob_backend.rs` (538 LOC, native-only) — `RedbBlobBackend`, the
   concrete redb-native impl. Stores blobs as `system:ModuleBytes` Nodes (label +
   `blob_cid: Text` + `blob_bytes: Bytes` properties) through
   `put_node_with_context(privileged_for_engine_api())`. Defense-in-depth
   recomputes `BLAKE3(bytes)` and rejects `CidMismatch` at the put boundary.
   Closes Compromise #17 (in-memory module-bytes registry).
-- `backends/snapshot_blob.rs` (~615 LOC post-G-CORE-6b) — `SnapshotBlobBackend`, a read-only
+- `backends/snapshot_blob.rs` (~714 LOC post-G-CORE-6b) — `SnapshotBlobBackend`, a read-only
   `KVBackend` over a canonical DAG-CBOR `SnapshotBlob` payload
   (schema_version=**2** post-G-CORE-6b, anchor_cid, nodes:BTreeMap<Cid,Vec<u8>>,
   system_zone_index, **merkle_root: Option<Cid>** [v2: §8-B mode-(b)

@@ -55,13 +55,13 @@ Dev-only: `proptest` (4 proptests), `hex` (test bytes), `toml` (dep-edge audit t
 
 **Eleven modules** (up from 8 at prior revision; `plugin_did` + `grant_reader` + `canonical_bytes` added). Roughly in dependency order within the crate:
 
-### `lib.rs` (100 LOC)
+### `lib.rs` (112 LOC)
 Crate root. Declares the 11 sub-modules, re-exports the 7 error types + `ReaderError` + the `CanonicalBytes` trait at top-level for ergonomic `use benten_id::UcanError;` shapes. Module-level docstring narrates G14-A1 vs G14-A2 scope split, **plus the NEW G27-C scope section** (lib.rs:60-69) calling out the sibling `GrantReader` trait and the `arch-r1-10` reason it's a sibling rather than an extension of `benten-caps`'s trait. Plus three CLAUDE.md baked-in commitments the crate is sensitive to (#3 code-as-graph, #17 deployment shapes, arch-r1-10 dependency-edge). `#![deny(missing_docs)] + #![forbid(unsafe_code)]` at the crate level.
 
 ### `canonical_bytes.rs` (46 LOC) — **NEW; refinement-audit-2026-05 S-ID (Qual-2 #759)**
 The `CanonicalBytes` trait — one named seam consolidating 6 previously-duplicated private `canonical_bytes` sites + 2 inline `SigInput<'a>` projection structs across `did_rotation`/`vc`/`ucan`/`device_attestation`. Documents the deterministic-fixed-shape + signature-input-hygiene + byte-stability (v1-wire-adjacent, §3.5m P-III) contract. Impls live in each owning module (byte-identical reproductions of the prior bodies); the byte-equality + sign/verify round-trip pin is `tests/canonical_bytes_trait.rs`.
 
-### `errors.rs` (419 LOC; up from 7-error to **9-error** taxonomy)
+### `errors.rs` (670 LOC; up from 7-error to **9-error** taxonomy)
 Nine typed-error enums, one per public surface module + two specialized sub-error shapes. Interesting shape decisions:
 
 - `SeedImportError` — six DISTINCT variants for the envelope-import path. Drives the proptest at `prop_keypair_from_seed_bytes_arbitrary_input_no_panic`.
@@ -81,12 +81,12 @@ Notable test-only escape hatches (`#[doc(hidden)]`):
 - `SecretKey::bytes_for_test` + `Keypair::secret_bytes_for_test` — test-only raw-`[u8; 32]` accessors the in-tree tests use for the zeroize source-grep + redaction round-trip. **D-74/75/76: both are `#[cfg(any(test, feature = "testing"))]`-gated** so they leave the default-feature callable surface entirely (a `_for_test`-named raw-secret accessor must not be reachable in a production build). `tests/keypair.rs` therefore carries `required-features = ["testing"]`.
 - `secret_bytes_unprotected` on `Keypair` — the sanctioned PRODUCTION raw-seed alias (NOT `_for_test`-named). It reads through the `pub(crate)` `SecretKey::bytes_unprotected` accessor (never the cfg-gated `_for_test` one). Documented use sites: `typed_call_dispatch.rs::keypair_generate` + `keypair_from_seed` (typed-CALL output schema today surfaces raw bytes in `Value::Bytes`; phase-3-backlog §2.5 (e) tracks the `Value::SensitiveBytes` extension); `benten-caps` authorization-grant issuer key; and `benten-sync` transport + peer-discovery for iroh keypair construction (D-74/75/76 migrated these two off the former `secret_bytes_for_test` call sites). **The doc comment warns the caller is responsible for wrapping in `Zeroizing` if the value lives past the immediate dispatch.**
 
-### `did.rs` (125 LOC)
-W3C did-method-key encode/decode. Three constants pin the spec compliance (did.rs:26-33): `ED25519_MULTICODEC = [0xed, 0x01]`, `DID_KEY_PREFIX = "did:key:z"`, multibase prefix `z` = base58btc. Encoded shape: `"did:key:z" + base58btc(0xed01 || <32 pubkey bytes>)`.
+### `did.rs` (861 LOC)
+W3C did-method-key encode/decode, plus the `did:benten` hybrid key-set method. Two constants pin the `did:key` spec compliance — `did.rs::ED25519_MULTICODEC` (`[0xed, 0x01]`) and `did.rs::DID_KEY_PREFIX` (`"did:key:z"`, whose multibase prefix `z` selects base58btc). Encoded shape: `"did:key:z" + base58btc(0xed01 || <32 pubkey bytes>)`.
 
-The `Did` newtype implements `Serialize`/`Deserialize` as `#[serde(transparent)]` (did.rs:51-53) — round-trips the string form, **does NOT validate on deserialize**. Callers needing validate-on-deserialize call `Did::resolve` explicitly. Used by `benten-sync`'s `HandshakeFrame` wire format (`net-blocker-4`).
+The `Did` newtype implements `Serialize`/`Deserialize` as `#[serde(transparent)]` — round-trips the string form, **does NOT validate on deserialize**. Callers needing validate-on-deserialize call `did.rs::Did::resolve` explicitly. Used by `benten-sync`'s `HandshakeFrame` wire format (`net-blocker-4`).
 
-`Did::from_string_unchecked` (did.rs:118-120) is the post-deserialize "trust the string" entry. The W3C-vector test carries 3 pinned hex pubkey → DID-string fixtures + fail-closed wrong-multicodec.
+`did.rs::Did::from_string_unchecked` is the post-deserialize "trust the string" constructor. It is **`pub(crate)`, NOT a public entry point** — the `#835` discharge executed the `pub(crate)` half, so it is unreachable from outside `benten-id` (compile-time enforced; the discharge is pinned by `crates/benten-crypto-suite/src/discharge.rs` + `tests/tf2_only_crypto_primitive_call_site_and_835_discharge.rs`). External callers route through `did.rs::Did::parse_validated` or, for tests with intentionally-invalid placeholder DID strings, `did.rs::Did::from_string_for_test_fixture`. The W3C-vector test carries 3 pinned hex pubkey → DID-string fixtures + fail-closed wrong-multicodec.
 
 ### `ucan.rs` (995 LOC)
 The chain-walk validator. Largest module. Public surface:
@@ -243,18 +243,18 @@ Per refinement-audit-2026-05 Safe-4 (META #739 lock-poisoning posture / META #73
 **21 test files; ~3,100 LOC of test surface** (up from 14 files / 2,328 LOC at prior revision). Substantial expansion driven by G24-D plugin-DID + G27-C GrantReader + R6-FP-3 defensive-return hardening + R6-FP-BF un-ignore sweep.
 
 - **`dependency_edges.rs` (35 LOC)** — 1 test. Reads its own Cargo.toml and asserts none of 7 forbidden workspace crates appear in `[dependencies]`. The `arch-r1-10` pin. (Verifies the new `benten-core` + `benten-errors` deps are intentionally NOT in the forbidden set.)
-- **`keypair.rs` (259 LOC)** — 7 tests. Round-trip + zeroize source-grep + no-Clone source-grep + redaction round-trip + clone-doesn't-widen-lifetime + OsRng source-grep.
+- **`keypair.rs` (296 LOC)** — 7 tests. Round-trip + zeroize source-grep + no-Clone source-grep + redaction round-trip + clone-doesn't-widen-lifetime + OsRng source-grep.
 - **`keypair_seed.rs` (171 LOC)** — 6 tests + 1 proptest. Round-trip / short-input / long-input / corrupted / unknown-version / source-grep-no-tracing / DAG-CBOR canonical-bytes stability. Proptest: 2,000 cases.
-- **`did_key.rs` (222 LOC)** — 5 tests. Deterministic-from-pubkey / multibase-prefix-z / multicodec-0xed01 + W3C vectors + fail-closed wrong-multicodec.
+- **`did_key.rs` (285 LOC)** — 5 tests. Deterministic-from-pubkey / multibase-prefix-z / multicodec-0xed01 + W3C vectors + fail-closed wrong-multicodec.
 - **`prop_did_key.rs` (30 LOC)** — 10,000-case round-trip byte-identity proptest.
 - **`prop_keypair_generate.rs` (47 LOC)** — 1,000-case distinctness proptest + 2,000-call aggregate-set distinctness test.
-- **`ucan.rs` (284 LOC)** — 10 tests. Empty chain rejects / single-token round-trip / attenuation rejects overgrant / nbf / exp / chain-walk propagates expiry / audience-binding rejects cross-atrium replay / constant-time-eq source-grep audit / ucan_chain_revocation_propagates RED-PHASE (`#[ignore]`'d for §2.1-followup).
+- **`ucan.rs` (366 LOC)** — 10 tests. Empty chain rejects / single-token round-trip / attenuation rejects overgrant / nbf / exp / chain-walk propagates expiry / audience-binding rejects cross-atrium replay / constant-time-eq source-grep audit / ucan_chain_revocation_propagates RED-PHASE (`#[ignore]`'d for §2.1-followup).
 - **`prop_ucan_attenuation.rs` (249 LOC)** — 1,000-case proptest on both authority-attenuation AND time-window-narrowing axes.
 - **`vc.rs` (147 LOC)** — 5 tests. Round-trip / expiration / revocation / trust-domain / tamper detection.
 - **`prop_vc_arbitrary.rs` (22 LOC)** — 10,000-case malformed-input no-panic proptest.
 - **`multi_sig.rs` (127 LOC)** — 4 tests. Trait-signature compile-time pin + Ed25519SingleKey round-trip + ThresholdMultiSig PostPhase3 stub / recovery-protocol source-grep with comment-stripping.
-- **`did_rotation.rs` (113 LOC)** — 4 tests. Emit-attestation / propagation-to-backend RED-PHASE-ignored (§2.1-followup) / superseded-rejected / canonical-bytes-stable.
-- **`device_attestation.rs` (569 LOC)** — 12+ tests. Round-trip / envelope-consumed-at-chain-walk / freshness-window / nonce-replay / parent-revocation / revoked-device-cannot-sign / envelope-attenuation / widening-rejected / self-re-attestation / runtime-recheck / browser-auto-assert / browser-construction-time-rejection + forged-signature-rejection + 9-cell zone-scope-matrix.
+- **`did_rotation.rs` (207 LOC)** — 4 tests. Emit-attestation / propagation-to-backend RED-PHASE-ignored (§2.1-followup) / superseded-rejected / canonical-bytes-stable.
+- **`device_attestation.rs` (365 LOC)** — 12+ tests. Round-trip / envelope-consumed-at-chain-walk / freshness-window / nonce-replay / parent-revocation / revoked-device-cannot-sign / envelope-attenuation / widening-rejected / self-re-attestation / runtime-recheck / browser-auto-assert / browser-construction-time-rejection + forged-signature-rejection + 9-cell zone-scope-matrix.
 - **`graph_encoded.rs` (53 LOC)** — 4 RED-PHASE tests, all `#[ignore]`'d with rationale strings routing to G14-B + G14-C.
 - **`plugin_did_install_uses_os_rng_not_seed_derivation.rs` (22 LOC) — NEW.** Un-ignored at R6-FP-BF (closes R6 R1 test-coverage-auditor tc-1+tc-2). Two-mint distinctness assertion — defends D-4F-16's "OsRng minting, NOT deterministic seed derivation from user-DID".
 - **`plugin_did_install_no_hkdf_from_user_did_grep_assert.rs` (47 LOC) — NEW.** Un-ignored at R6-FP-BF. Source-file grep-assert against `plugin_did.rs` for forbidden patterns (`hkdf`, `Hkdf`, `HKDF`, `derive_from_user`, `derive_from_seed`, `DeriveFromUserDid`, `plugin_did_from_user_did`). Defends D-4F-16 at the source-bytes level.

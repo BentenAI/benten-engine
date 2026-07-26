@@ -184,7 +184,11 @@ Per br-r1-3: admin UI v0 bundle ≤600KB gzipped with code-splitting strategy:
 - View creator (sub-feature; dynamic-import boundary)
 - Plugin browser (sub-feature; dynamic-import boundary)
 
-CI workflow `.github/workflows/bundle-size.yml` measures the browser bundle against this budget. It is INFORMATIONAL ONLY — it reports current size + delta from baseline as a PR comment / step summary and is NOT a member of the required-check set, so a regression surfaces for reviewer judgement rather than blocking the merge.
+**CI status at v1-beta — read this as written; the per-PR delta report is NOT built.** `.github/workflows/bundle-size.yml`, the workflow named for per-PR size + delta reporting, is a **RED-PHASE STUB**. Its one job is `bundle-size-stub` (`name: browser bundle size — RED-PHASE STUB`) and its one step is a `TODO(Phase 2b G10-A-browser)` placeholder that echoes what the job *would* do and then `exit 0`s. It builds no bundle, measures nothing, compares against no baseline, and posts no PR comment or step summary. The measure / compare-to-baseline / report steps are the named **G10-A-browser** deliverable. (The workflow's own header comment describes that intended end-state in the present tense; it describes the deliverable, not the current job body.)
+
+What *does* run today is the ≤600KB gzipped cap on the **engine** `wasm32-unknown-unknown` bundle, enforced in `.github/workflows/wasm-browser.yml`: the `bundle + size cap + headless smoke` job builds the bundle (`release-wasm` profile + `wasm-opt -Oz`), gzips it, and its `Bundle size cap (wasm-r1-7 ≤600KB gzipped)` step fails the job when the artifact exceeds 614,400 bytes. `bindings/napi/tests/wasm32_unknown_unknown_bundle_size_under_threshold.rs` asserts the same cap against the built artifact (it skips when the artifact is absent, so a local `cargo test` without a wasm32 toolchain stays green; that workflow builds the artifact before invoking it). Both are documented INFORMATIONAL — not members of the required-check set — so a breach fails its job without blocking merge.
+
+No CI check measures the **admin-UI-specific** v0 budget or the code-splitting boundaries listed above; that measurement arrives with G10-A-browser.
 
 ### §4.2 CSP directives
 

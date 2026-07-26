@@ -41,7 +41,7 @@ The crate itself is *only* an enum with three accessor functions and one tiny he
 
 Only one file.
 
-### `src/lib.rs` (~2010 LOC)
+### `src/lib.rs` (~2779 LOC)
 
 Crate root. Contains the `ErrorCode` enum (**201** named throwable variants at HEAD + `Unknown(String)` forward-compat fallback = 202 total enum entries; authoritative count `CATALOG_VARIANT_COUNT = ALL_CATALOG_VARIANTS.len()` in `crates/benten-errors/tests/stable_shape.rs` + the `docs/ERROR-CATALOG.md` preamble four-count reconciliation; derives `Hash + Ord` per Fwd-2 #1007 v1-API-stabilization sweep), the `FIRING_CODES_AT_PHASE_2A_SNAPSHOT` + `RESERVED_CODES_AT_PHASE_2A_SNAPSHOT` const slices used by the drift tests, the three `ErrorCode` accessor methods (`as_str` / `as_static_str` / `routed_edge_label`), the `from_str` parser, a `Display` impl, and two `PartialEq` cross-type impls bridging `ErrorCode` ↔ `&str`. LOC grew 1666 → ~2051 across Phase 4-Foundation (50 net new throwable variants minted; see §2.5 below) then shrank ~40 LOC in the ST-ERRORS v1-API-stabilization lane (dead `parse_cap_string` / `CapString` / `code()` / bare-`str` `PartialEq` removed — Hyg-1 #283/#286/#291).
 

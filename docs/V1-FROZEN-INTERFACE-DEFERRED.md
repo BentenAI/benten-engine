@@ -3354,7 +3354,7 @@ did not resolve unilaterally.
   bytes" for an input that is too SHORT. Both use a `saturating_sub` that floors
   to zero on the short side:
   `crates/benten-id/src/did.rs:612-618` (`Did::resolve_signing` —
-  `decoded.len().saturating_sub(consumed + CID_LEN)`) and `:683-687`
+  `decoded.len().saturating_sub(consumed + CID_LEN)`) and `:691-695`
   (`Did::keyset_cid` — `tail.len().saturating_sub(CID_LEN)`).
 - **NOT a security gap:** the reject itself is correct and fail-closed in both
   cases — a truncated or over-long committed component never resolves. Only the
@@ -3371,8 +3371,9 @@ did not resolve unilaterally.
   truncation-vs-overrun into distinct diagnostics (short ⇒ `HybridBodyTooShort`,
   long ⇒ `HybridTrailingBytes { extra }` with a genuine non-zero count) at BOTH
   sites together, and add a reject-matrix pin per branch. Low priority.
-- **Anchor:** R6 tail fold-in F35; `crates/benten-id/src/did.rs:612-618` +
-  `:683-687`; `crates/benten-id/src/errors.rs:186` (`HybridBodyTooShort`) + `:199`
+- **Anchor:** R6 tail fold-in F35; `crates/benten-id/src/did.rs:612-618`
+  (`Did::resolve_signing`) + `:691-695` (`Did::keyset_cid`);
+  `crates/benten-id/src/errors.rs:186` (`HybridBodyTooShort`) + `:199`
   (`HybridTrailingBytes`).
 
 ### Row D-92 — F73: `benten-engine` module gating splits target-vs-feature; the wasm32⇒browser-backend convention is implicit → v1-GM `compile_error!` guard

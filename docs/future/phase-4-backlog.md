@@ -237,11 +237,25 @@ Full enumeration + cross-references at GH issue #1308. (Section numbered §3.9 p
 
 ### §3.11 crypto-suite naming — `WrappedKey::ek_mlkem` misnomer rename (F-full R6 R1 finding F-20; FROZEN-FIELD — defer to freeze-lens + Ben)
 
-The `WrappedKey` field `ek_mlkem` at `crates/benten-crypto-suite/src/cipher_suite.rs::WrappedKey` (`:1162`) is a **misnomer**: `ek` conventionally denotes an encapsulation key (public key), but this field carries the ML-KEM-768 **ciphertext** (`ct`, the KEM encapsulation output), per the doc-comment at `cipher_suite.rs:629` ("ML-KEM-768 ciphertext (the \"ek_mlkem\" half)") and the decapsulate call at `:398` (`mlkem::decapsulate(mlkem_dk_bytes, wrapped.ek_mlkem.as_slice())`). The accurate name is `ct_mlkem` (or `mlkem_ct`).
+The `WrappedKey` field `ek_mlkem` at `crates/benten-crypto-suite/src/cipher_suite.rs::WrappedKey` (struct declared at `:1157`; the field itself at `:1165`) is a **misnomer**: `ek` conventionally denotes an encapsulation key (public key), but this field carries the ML-KEM-768 **ciphertext** (`ct`, the KEM encapsulation output), per the field doc-comment at `cipher_suite.rs:1163` ("ML-KEM-768 ciphertext (the \"ek_mlkem\" half)") and the decapsulate call at `cipher_suite.rs:574` (`mlkem::decapsulate(mlkem_dk_bytes, wrapped.ek_mlkem.as_slice())`). The accurate name is `ct_mlkem` (or `mlkem_ct`).
 
 **Why deferred (NOT fix-now):** `WrappedKey` is a **frozen wire-format-adjacent type** — the field name is part of the public `benten-crypto-suite` API surface (pinned by `docs/public-api/benten-crypto-suite.txt` + the cargo-public-api drift gate) and the serialized envelope shape. A rename is a public-API change that touches a FROZEN field, so it is gated on the **freeze-lens review + Ben sign-off** at the v1-beta interface-freeze decision-point (the same gate as the BUILD-BACKLOG Row 7 name-collision renames). Per CLAUDE.md #5 no-shims, the rename is a hard cut when taken, not an alias.
 
-**Acceptance criteria (freeze-lens + Ben):** rename `WrappedKey::ek_mlkem` → `ct_mlkem` (the byte layout is unchanged — only the Rust identifier); regenerate `docs/public-api/benten-crypto-suite.txt`; sweep the ~6 in-crate references (`cipher_suite.rs:318/342/395/628/644`, `swap_matrix.rs:576/1631`). Surfaced at R6 R1; FLAGGED for freeze-lens + Ben (frozen-field touch).
+**Acceptance criteria (freeze-lens + Ben):** rename `WrappedKey::ek_mlkem` → `ct_mlkem` (the byte layout is unchanged — only the Rust identifier); regenerate `docs/public-api/benten-crypto-suite.txt`; sweep the **9 in-crate `ek_mlkem` occurrences, re-derived against HEAD** — `cipher_suite.rs:485` / `:518` / `:574` / `:1163` (field doc) / `:1165` (field decl) / `:1177` / `:1181`, and `swap_matrix.rs:579` / `:1746`. (The site list previously recorded here — `cipher_suite.rs:318/342/395/628/644` + `swap_matrix.rs:576/1631` — was stale: none of those lines holds an `ek_mlkem` reference at HEAD. Re-derive with `grep -n ek_mlkem crates/benten-crypto-suite/src/*.rs` at execution time rather than trusting the pinned numbers.) Surfaced at R6 R1; FLAGGED for freeze-lens + Ben (frozen-field touch).
+
+### §3.12 `INTERNALS.md` per-file LOC counts drift silently — residual sub-10% tail + no drift gate (R6 tail fold-in, 2026-07-26)
+
+Every `crates/*/INTERNALS.md` pins an exact per-file LOC count in prose (`### \`did.rs\` (861 LOC)`, `- **\`policy.rs\`** (595 LOC) — …`). Nothing verifies them, so they decay on every commit that touches a source file.
+
+**Audited at HEAD (R6 tail fold-in).** Of ~160 such claims, **51 had drifted by more than 10%** — worst cases `manifest_envelope_recheck.rs` 144→495 (243%), `manifest_store.rs` 249→490 (96%), `did_rotation.rs` (tests) 113→207 (83%), `vault.rs` 633→1121 (77%), `value.rs` 261→439 (68%). Two had drifted DOWN (`module_ecosystem.rs` 310→132; `tests/device_attestation.rs` 569→365), which is the more misleading direction because a shrinking file reads as an unchanged one. **All 51 were corrected in that same pass** by re-deriving from `wc -l`.
+
+**What is NOT closed (this row).** (a) The residual **sub-10% tail** — roughly 60 further claims are off by 1–9% (e.g. `sig.rs` 751 vs 815, `codepoint.rs` 409 vs 441). These were deliberately left: they are orientation figures, correcting them churns the doc without changing what a reader concludes, and they re-drift on the next commit. (b) There is **no gate** — nothing re-fires when the next commit moves a file, so the >10% tail simply regrows.
+
+**Acceptance criteria.** Pick ONE of two durable shapes rather than re-running the manual sweep:
+1. **Drop the precision** — replace exact counts with a coarse band (`~500 LOC`, or `small / medium / large`), which is all the orientation value these figures actually carry; or
+2. **Gate it** — add an `INTERNALS.md` LOC-drift lane to the existing `cite-drift-detector` (it already parses these docs for path cites) that re-derives each `(N LOC)` against `wc -l` and fails above a chosen tolerance, resolving `src/` vs `tests/` vs `benches/` by the enclosing section heading.
+
+Note for whoever takes this: a naive `crates/*/src/<file>` resolution is WRONG — the "Tests inventory" sections name `tests/<file>.rs` with the same basename, and resolving those against `src/` produces false drift (this bit the R6 tail fold-in pass on `crates/benten-id/INTERNALS.md` before section-aware resolution was added). Prefer (1); (2) only if the exact counts are judged worth keeping.
 
 ---
 

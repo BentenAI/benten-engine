@@ -19,7 +19,7 @@ import type { Chunk, StreamHandle } from "@benten/engine";
 describe("engine.callStream", () => {
   // DISAGREE-WITH-EXPLANATION (HARD RULE clause-c) — pre-v1 Class A
   // un-ignore (2026-05-10): assumes `chunk.seq` field on `Chunk` type
-  // that does not exist (`packages/engine/src/types.ts:1092`:
+  // that does not exist (`packages/engine/src/types.ts::Chunk`, at `:1163`:
   // `export type Chunk = Buffer;` — no `seq` field). Original TODO
   // referenced phantom destination `wave-8c-stream-infra-mr-S4`
   // (Phase-2b internal label; no matching phase-3-backlog entry).
@@ -75,8 +75,10 @@ describe("engine.callStream", () => {
 
   // DISAGREE-WITH-EXPLANATION (HARD RULE clause-c) — pre-v1 Class A
   // un-ignore (2026-05-10): assumes `handle.closed` getter on
-  // `StreamHandle` that does not exist (`packages/engine/src/types.ts:1124-1140`:
-  // `StreamHandle` has `next()` + `close()` only; no `closed` field).
+  // `StreamHandle` that does not exist (`packages/engine/src/types.ts::StreamHandle`,
+  // at `:1195`: its members are `next()` / `close()` / `isDrained()` /
+  // `seqSoFar()` / `requiresExplicitClose()` — there is no `closed` field
+  // or getter).
   // Original TODO referenced phantom destination `wave-8c-stream-infra-mr-S4`.
   // The `close()` idempotency contract IS server-side enforced; the
   // public TS surface deliberately does NOT expose `.closed` (per the

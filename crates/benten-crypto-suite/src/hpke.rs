@@ -14,8 +14,11 @@
 //!
 //! Layer-C drops and Layer-D wraps route through the SAME wrap primitive
 //! ([`wrap_key_to_recipient`] / [`unwrap_key_from_recipient`]) — the real
-//! X25519⊕ML-KEM-768 X-Wing KEM-DEM at codepoint `0x647a` (the committing
-//! combiner in [`crate::cipher_suite`]). There is ONE KEM-DEM impl, not two.
+//! X25519⊕ML-KEM-768 X-Wing KEM-DEM at codepoint `0x647a` (the strip-resistant
+//! X-Wing combiner in [`crate::cipher_suite`] — both shared secrets are mixed
+//! into the KEK, so neither KEM half can be stripped; full AEAD
+//! key-commitment in the robustness sense is OUT OF SCOPE at v1-beta per
+//! Inv-17 / Compromise #30). There is ONE KEM-DEM impl, not two.
 //!
 //! # NQ-C1 (the McMillion-`hpke`-faithful vs Benten-supplies-KEM fork)
 //!

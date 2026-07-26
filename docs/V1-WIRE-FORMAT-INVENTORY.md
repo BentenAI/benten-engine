@@ -513,7 +513,7 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 <!-- R13 F-17: prose section header renumbered §30 → §28 to restore sequential
      prose-section numbering (the prior §27 prose section folds summary-table
      rows 27/28/29 — the Layer-D bands — into one section, so this is the 28th
-     prose section; the summary table below keeps its item-row numbering 1..30,
+     prose section; the summary table below keeps its item-row numbering 1..32,
      which counts wire-surfaces not prose sections — no hex / layout change). -->
 
 **Surface:** `benten_crypto_suite::vault` — `VaultPayload` + `serialize_vault` / `decode_vault` / `open_vault` / `decode_vault_strict`; the DAK derivation `derive_dak` (`benten_crypto_suite::vault`). This is an **at-rest** wire-format-bearing surface (in scope per the redb at-rest precedent — items 1 / 8 / 11 / 12 / 24 all enumerate at-rest formats).

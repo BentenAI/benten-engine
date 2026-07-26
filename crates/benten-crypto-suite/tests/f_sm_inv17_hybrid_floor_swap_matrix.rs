@@ -15,8 +15,8 @@
 //! - **F-SM-2** Full bidirectional cipher swap matrix: hybrid-default +
 //!   classical `0x6400` + no-encryption + NF-1 PQ⊕PQ `0x647b` arm, each a
 //!   real built path, BOTH directions (`open(seal(pt,cfg),cfg)==pt`).
-//! - **F-SM-3** Strip-resistance / committing-combiner negative: removing
-//!   or zeroing the PQ-half OR the classical-half fails decryption.
+//! - **F-SM-3** Strip-resistance negative: removing or zeroing the PQ-half
+//!   OR the classical-half fails decryption.
 //!
 //! # Ground-truth at HEAD (`sed`-verified `swap_matrix.rs`)
 //!
@@ -48,7 +48,7 @@ use benten_crypto_suite::swap_matrix::SwapMatrix;
 
 /// R5: real SwapMatrix seal/open/strip via the `testing`-feature keypair +
 /// `sign_and_seal`/`open_and_verify` production API. The strip helpers zero a
-/// hybrid half of the real `WrappedKey` so the committing X-Wing combiner
+/// hybrid half of the real `WrappedKey` so the strip-resistant X-Wing combiner
 /// derives a different key ⇒ the AEAD open fails-closed.
 mod f_sm_real {
     use benten_crypto_suite::swap_matrix::SwapMatrix;
@@ -150,7 +150,8 @@ mod f_sm_real {
     }
 
     /// Production open — real `open_and_verify`. Returns `None` if a stripped
-    /// half made the committing combiner derive a different key (fail-closed).
+    /// half made the strip-resistant combiner derive a different key
+    /// (fail-closed).
     #[must_use]
     pub fn open(cfg: Cfg, sealed: &[u8], _recipient_pub: &[u8]) -> Option<Vec<u8>> {
         let id = u64::from_be_bytes(sealed.try_into().ok()?);
@@ -160,8 +161,8 @@ mod f_sm_real {
             assert_eq!(ctx.cfg, cfg, "open cfg must match seal cfg");
             let m = matrix(cfg);
             // Apply any strip mutation to a clone of the real envelope's
-            // wrapped key (the committing X-Wing combiner derives a different
-            // key when a half is zeroed ⇒ AEAD open fails-closed).
+            // wrapped key (the strip-resistant X-Wing combiner derives a
+            // different key when a half is zeroed ⇒ AEAD open fails-closed).
             let mut env = clone_envelope(&ctx.envelope);
             if let Some(sealed) = env.sealed.as_mut() {
                 if ctx.pq_stripped {
@@ -354,15 +355,16 @@ fn full_bidirectional_cipher_swap_matrix() {
     );
 }
 
-/// **F-SM-3** — strip-resistance / committing-combiner negative.
+/// **F-SM-3** — strip-resistance negative.
 ///
 /// Removing or zeroing the PQ-half OR the classical-half of a hybrid-
-/// default sealed envelope fails decryption (the X-Wing combiner is
-/// committing across BOTH halves). This is the load-bearing Inv-17 +
-/// C-5/C-6 safety property. would-FAIL-if-no-op'd: at the stub the strip
-/// helpers no-op, so `open` still succeeds — the assertions FAIL red
-/// until R5 wires the real committing combiner where the stripped open
-/// fails-closed.
+/// default sealed envelope fails decryption (the X-Wing combiner mixes
+/// BOTH shared secrets into the KEK, so zeroing either half derives a
+/// different key; this is strip-resistance, NOT full AEAD key-commitment
+/// in the robustness sense — that is OUT OF SCOPE at v1-beta per Inv-17 /
+/// Compromise #30). This is the load-bearing Inv-17 + C-5/C-6 safety
+/// property. The strip helpers are LIVE against the real combiner as of
+/// R5 (the red-phase no-op stub they were written against is gone).
 #[test]
 fn strip_resistance_committing_combiner_negative() {
     let sealed = seal(Cfg::HybridDefault, PLAINTEXT, &RECIPIENT_PUB);
@@ -377,13 +379,13 @@ fn strip_resistance_committing_combiner_negative() {
     let pq_stripped = strip_pq_half(&sealed);
     assert!(
         open(Cfg::HybridDefault, &pq_stripped, &RECIPIENT_PUB).is_none(),
-        "stripping the ML-KEM-768 (PQ) half MUST fail decryption (committing combiner)"
+        "stripping the ML-KEM-768 (PQ) half MUST fail decryption (strip-resistant combiner)"
     );
 
     // Stripping the classical (X25519) half must fail decryption.
     let classical_stripped = strip_classical_half(&sealed);
     assert!(
         open(Cfg::HybridDefault, &classical_stripped, &RECIPIENT_PUB).is_none(),
-        "stripping the X25519 (classical) half MUST fail decryption (committing combiner)"
+        "stripping the X25519 (classical) half MUST fail decryption (strip-resistant combiner)"
     );
 }

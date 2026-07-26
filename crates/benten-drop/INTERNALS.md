@@ -61,7 +61,7 @@ Drop bundles are **forever-valid once distributed**: revocation of the embedded 
 
 - **`lib.rs`** (94 LOC) — crate-level doc (the 3-mode taxonomy + defense-in-depth + revocation reach narrative). Pub re-exports: `DROP_BUNDLE_MAX_SIZE_BYTES`, `DropBundle`, `DropBundleError`, `DropBundleVersion`, `DropContentMode`, `EncryptedContent` + the `layer_c` module (`RecipientPublic` / `RecipientSecret` re-exports, `EncryptedEnvelope`, seal/open surface). `#![forbid(unsafe_code)]` + `#![deny(rust_2018_idioms)]`.
 
-- **`bundle.rs`** (877 LOC) — the substantive offline-bundle surface. Owns:
+- **`bundle.rs`** (1034 LOC) — the substantive offline-bundle surface. Owns:
   - **`DropBundle`** — the top-level CBOR-on-disk envelope. Fields: `version: DropBundleVersion`, `spec: RestrictedScopeSpec`, `audience: Did`, `mode: DropContentMode`, `auth_grant: AuthorizationGrant`, `content: Vec<EncryptedContent>`, `envelope_sig: EnvelopeSignature`. CBOR-serialized via `serde_ipld_dagcbor`.
   - **`DropBundleVersion`** — version discriminator (`V1` + `Synthetic` test-only arm). `#[non_exhaustive]`. Unknown reader-side versions surface `E_DROP_BUNDLE_VERSION_UNSUPPORTED`.
   - **`DropContentMode`** — `OnlinePull` (mode 1) or `OfflineDrop` (mode 2). `#[non_exhaustive]`. **No `InlineTiny` arm** at v1-beta (mode 3 deferred). Synthetic Mode-3 construction at runtime fires `E_DROP_BUNDLE_MODE3_INLINE_REJECTED`.
@@ -72,7 +72,7 @@ Drop bundles are **forever-valid once distributed**: revocation of the embedded 
 
 - **`envelope_sig.rs`** (166 LOC) — the envelope-level Ed25519 signature helpers. `EnvelopeSignature` wire-bytes type + sign / verify functions over the bundle header transcript. Routes through `benten-crypto-suite::sig::SignatureSuite` rather than calling `ed25519-dalek` directly (per the only-call-site rule). The signed transcript is the canonical-byte serialization of `(version, spec_cid, audience, mode, auth_grant, content_root_hash, key_material_hash)` — note `content_root_hash` is hashed-over-payload (not each ciphertext byte), so per-Node AEAD-tag verification is the inner defense layer.
 
-- **`layer_c.rs`** (2670 LOC, the LARGEST file in the crate) — the **online Layer-C encrypt-to-recipient / Sealed-Sender** surface (G-CORE-3f / F-full Layer-C). See §3-LAYER-C below.
+- **`layer_c.rs`** (3283 LOC, the LARGEST file in the crate) — the **online Layer-C encrypt-to-recipient / Sealed-Sender** surface (G-CORE-3f / F-full Layer-C). See §3-LAYER-C below.
 
 ### 3-LAYER-C. The Layer-C encrypt-to-recipient surface (`layer_c.rs`)
 

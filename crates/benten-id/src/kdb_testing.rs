@@ -120,10 +120,11 @@ pub use crate::keyset::KeySetDocument;
 // ─────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────
-// CODEC + RESOLVERS — LOGIC-UNDER-TEST (stub `todo!()` → real entry at R5).
+// CODEC + RESOLVERS — LOGIC-UNDER-TEST (REAL at HEAD; was a `todo!()` stub
+// at R3, swapped at R5).
 //
-// Free functions so the R3→R5 swap is a single-file edit and the test
-// call sites never change. At R5 each body delegates to the minted real
+// Free functions so the R3→R5 swap was a single-file edit and the test
+// call sites never changed. Each body now delegates to the minted real
 // method (noted per fn).
 // ─────────────────────────────────────────────────────────────────────────
 
