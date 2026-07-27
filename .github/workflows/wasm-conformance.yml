@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Free disk space (Linux runners only)
         # infra-disk-pressure-fix-2026-05-22: SANDBOX adversarial native-run
@@ -87,7 +87,7 @@ jobs:
         # The 2 globals-touching tests (`sandbox_module_cache_avoids_recompilation_on_repeated_call`
         # + `wait_signal_shape_defaults_untyped_accepts_any_value`) flake
         # under cargo test's default in-binary parallelism.
-        uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2
+        uses: taiki-e/install-action@41049aa56687c35e0afa74eed4f09cec4f9afabf # v2
         with:
           tool: cargo-nextest
 
@@ -176,7 +176,7 @@ jobs:
       # regardless of the root file (per the F-06 toolchain-shadow note).
       RUSTUP_TOOLCHAIN: stable
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Free disk space (Linux runners only)
         if: runner.os == 'Linux'
