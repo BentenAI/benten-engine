@@ -1748,6 +1748,18 @@ CONVERGENCE ARC: R14(CONVERGED narrow)→R15(1 MAJ F-01 from benten-id coverage)
 ---
 # ★★★★★ COMPACT-SURVIVAL RESUME CONTRACT — 2026-07-04 NIGHT-SHIFT (read THIS block first on resume) ★★★★★
 
+> **⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡ LATEST 2026-07-27 — SUPERSEDES EVERY BLOCK BELOW.**
+> **★ READ `.addl/phase-4-meta/HANDOFF-2026-07-27-r6-round1-and-falsification.md` IN FULL — it is the authoritative resume point.** Then decision-log **D-93 → D-99**.
+> **BASE:** `7bb1a9fa` on `phase-4-meta-core/r9-base` == PR #1382 head. **13 REQUIRED checks green** (13 not 12; `frozen-bytes corpus` added to LIVE protection 2026-07-26). Worktree `.claude/worktrees/r6-r1-foldin` @ 7bb1a9fa, clean.
+> **ROUND #1 (wpfddi0vj) = NOT-CONVERGED** — 0 BLOCKER, **26 MAJOR**, 129 minor/obs, 6 missed lenses, panel 25/25. Counter **0**.
+> **FALSIFICATION SWEEP (wjep08tzv) = 17 of 36 enforcement claims ESCAPED under mutation.** Harness validated by 4 positive controls; tree byte-identical after. Highest-yield instrument of the phase (~1.7M tokens vs ~19M for a council round).
+> **THE SHAPE:** the crypto substrate is SOUND (9 findings refuted, 39 mis-severity, 7 prior properties re-derived intact). **17 of 26 MAJORs are one shape — the record asserts an enforcement that does not exist.** The doc Ben would sign currently overstates what the binary enforces.
+> **★ D-93's "no required check runs the test suite" is SUPERSEDED** — the S-4 `assert-needs-succeeded` guard makes the workspace nextest transitively merge-blocking via T9. Six of six required aggregates use that composite action; **the whole freeze rests on it.**
+> **★ F-066's "content exists in no artifact" is WRONG** — 62 lens JSONs are recoverable from git history; agents cannot read gitignored `.addl/` and inferred absence from invisibility.
+> **NEXT:** fix waves W-CI → W-SUB → W-BYTES → W-REC → W-AUTH → W-WIRE → W-DOC → W-MINOR, landed SEPARATELY with a re-gate between each; then **Round #2 at 31 lenses** (Ben ruled full, not lean). **HELD FOR BEN: merging #1382 + creating the tag.**
+> **DISK:** a full gate needs ~40 GiB headroom (we hit 100% and killed an agent). `cargo clean --manifest-path <wt>/Cargo.toml`; raw `rm`/`git worktree remove` are permission-denied.
+>
+
 > **⚡⚡⚡⚡⚡⚡⚡⚡⚡ LATEST 2026-07-25 (SUPERSEDES every block below; read decision-log D-86 + `.addl/phase-4-meta/r6-reround-council-triage.json`). Written on resume-from-compact.**
 > **BASE:** r9-base == origin == PR #1382 head @ **`53e27088`**. **CORRECTED 2026-07-26: 10 of 12 required checks PASS, 2 SKIP** (`cross-leg byte-equality gate (T9)` + `create-benten-app cold install` — both `needs:`-chained behind the NON-required `build+test` matrix, which had a failed macOS leg, so they never ran). My 2026-07-25 verification script explicitly treated `skipping` as acceptable — that was the bug in my own check. **Worse: NO required check runs the test suite**, so every frozen golden is advisory-only. See D-93. `mergeStateStatus=BLOCKED` = Ben's held merge action, not a defect. 4 non-required reds, ALL diagnosed non-substantive: CodeQL (0 open alerts), `macos-x86_64 @stable` = **cancelled** (50m runner), `macos-arm64 @1.95.0` = failed on the **"Upload CID artifact"** infra step (not a test), `webview-e2e` = the known tauri-driver flake.
 > **WHERE WE ARE:** R6 phase-close convergence loop. Counter = **0**. The plan Ben approved: **FULL round #1** → then a **LEAN confirming round #2** (drop the ~9-10 perennially-clean crypto-construction lenses; keep hygiene/freeze-surface + changed-area + a few crypto sentinels + completeness-critic) → two-consecutive-CONVERGED → TAG-READY.
