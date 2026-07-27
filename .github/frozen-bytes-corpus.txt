@@ -177,3 +177,16 @@ canonical_bytes_v1_const_values_id
 canonical_bytes_v1_const_values_membership_set
 canonical_bytes_v1_const_values_platform_foundation
 canonical_bytes_v1_const_values_sync
+
+# --- Inv-19/21/22 enforcement + the invariant/doc registration catch-net -----
+# Added after the ci-harden falsification pass measured Inv-21 at ZERO corpus
+# representation despite the provenance line claiming rows 15-23. Each of these
+# is named by `docs/INVARIANT-COVERAGE.md` as the enforcement for its row; all
+# live in packages already in the `-p` selection, so this costs no new package.
+f_inv21_fork_tie_break_totality_version_node_cid
+f_disc_2_invariant_and_doc_registration_catch_net
+f_inv19_1_kv_type_restriction_immutable_version_node_cid
+f_ms_2_constructor_cardinality_memberref
+f_ms_3_members_table_fusion
+f03_revocation_payload_cid_sig_independent_regression
+f03_ucan_verify_strict_rejects_malleable_sig_regression

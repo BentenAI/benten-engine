@@ -76,7 +76,9 @@ The CI workflow set at Phase-3 close covers:
 
 - **Build + test:** `ci.yml` (full nextest run + clippy + fmt),
   `frozen-bytes.yml` (required-grade run of the v1-beta frozen-bytes corpus —
-  byte-pins, canonical-bytes goldens, crypto codepoints, KATs, Inv-14..23,
+  byte-pins, canonical-bytes goldens, crypto codepoints, KATs, the Inv-15..23
+  enforcement pins named by `docs/INVARIANT-COVERAGE.md` (Inv-19/21 guard no
+  wire bytes today under their documented register-then-enforce carve-out),
   the S-3 const-VALUE and S-6 domain-tag pins, and the ErrorCode catalog
   count; the corpus list lives at `.github/frozen-bytes-corpus.txt`),
   `coverage.yml` (cargo-llvm-cov), `msrv.yml` (MSRV gate),

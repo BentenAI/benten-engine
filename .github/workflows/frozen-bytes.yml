@@ -6,7 +6,10 @@ name: Frozen Bytes
 # whole `.github/workflows/` tree was `ci.yml`'s `cargo nextest run`, inside the
 # job `build+test <leg> @ <rust>`. That job is NOT among the required contexts
 # in `.github/branch-protection.yml` — so every canonical-bytes golden, every
-# crypto codepoint, every KAT, the Inv-15..23 pins and the ErrorCode catalog
+# crypto codepoint, every KAT, the Inv-15..23 enforcement pins named by
+# `docs/INVARIANT-COVERAGE.md` (see the corpus file for per-row coverage;
+# Inv-19/21 guard no wire bytes today by their documented register-then-
+# enforce carve-out) and the ErrorCode catalog
 # count were enforced only on an advisory lane. A stale frozen golden could —
 # and did — ride a green board.
 #
@@ -105,8 +108,8 @@ jobs:
           # S-5 hazard the audit found in ci.yml's T9 gate. If the corpus file
           # is truncated, emptied or commented out, `cargo nextest run` with
           # zero `--test` flags stops meaning what this job's name says. Fail.
-          if [ "${#TARGETS[@]}" -lt 100 ]; then
-            echo "FLOOR VIOLATED: corpus lists ${#TARGETS[@]} targets, expected >= 100."
+          if [ "${#TARGETS[@]}" -ne 116 ]; then
+            echo "FLOOR VIOLATED: corpus lists ${#TARGETS[@]} targets, expected exactly 116."
             echo "The frozen-bytes corpus must not shrink. If a pin was renamed,"
             echo "update the name; if a surface was genuinely deleted, lower this"
             echo "floor in the SAME commit with a written reason."
@@ -191,3 +194,27 @@ jobs:
             --features "$FEATURES" \
             "${SELECT[@]}" \
             -E "$FILTER"
+
+          # ---- 5. in-crate (`--lib`) pins ----------------------------------
+          # The selection above passes only `--test <name>`, so it reaches
+          # INTEGRATION targets only. Some frozen constants are module-private
+          # and can only be pinned from a `#[cfg(test)] mod tests` inside the
+          # production file — those live in the lib target and were invisible
+          # to step 4. Proven by mutation during the ci-harden falsification
+          # pass: flipping `X25519_CLASSICAL_INFO_V1` (concatenated into the
+          # `classical_combine` SHA3-256 preimage for the 0x6400 arm, so its
+          # bytes never reach the wire and every round-trip stays
+          # self-consistent) left the 109-target corpus fully GREEN.
+          #
+          # This arm also lifts the 11 pre-existing home-crate
+          # `HOME == registry::MIRROR` domain-tag mirror unit tests onto the
+          # required lane, where they become real byte pins now that the
+          # registry side carries literals.
+          cargo nextest run \
+            --profile ci \
+            --locked \
+            --no-tests=fail \
+            -p benten-crypto-suite \
+            -p benten-caps \
+            --features benten-crypto-suite/testing,benten-caps/testing \
+            --lib
