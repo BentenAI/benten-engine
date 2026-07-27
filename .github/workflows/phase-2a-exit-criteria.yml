@@ -62,7 +62,7 @@ jobs:
     name: Gate 1 — WAIT suspend/resume determinism
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Free disk space
         uses: ./.github/actions/free-disk-space
@@ -73,7 +73,7 @@ jobs:
         with:
           key: phase-2a-wait
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2
+        uses: taiki-e/install-action@41049aa56687c35e0afa74eed4f09cec4f9afabf # v2
         with:
           tool: cargo-nextest
       - name: Run WAIT-resume integration tests
@@ -107,7 +107,7 @@ jobs:
     name: Gate 2 — Inv-8/11/13/14 firing
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Free disk space
         uses: ./.github/actions/free-disk-space
@@ -118,7 +118,7 @@ jobs:
         with:
           key: phase-2a-invariants
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2
+        uses: taiki-e/install-action@41049aa56687c35e0afa74eed4f09cec4f9afabf # v2
         with:
           tool: cargo-nextest
       - name: Run invariants test modules
@@ -139,7 +139,7 @@ jobs:
     name: Gate 4 — Option C flanking methods
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Free disk space
         uses: ./.github/actions/free-disk-space
@@ -150,7 +150,7 @@ jobs:
         with:
           key: phase-2a-option-c
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2
+        uses: taiki-e/install-action@41049aa56687c35e0afa74eed4f09cec4f9afabf # v2
         with:
           tool: cargo-nextest
       - name: Run Option C flanking + end-to-end tests
@@ -182,7 +182,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Free disk space
         uses: ./.github/actions/free-disk-space

@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0   # need full history for main..HEAD diff
 
@@ -60,7 +60,7 @@ jobs:
         # ~120s for `cargo install --locked cargo-public-api` from
         # source. Pin to the action SHA + tool name; cargo-public-api
         # versioning is the tool's own.
-        uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2
+        uses: taiki-e/install-action@41049aa56687c35e0afa74eed4f09cec4f9afabf # v2
         with:
           tool: cargo-public-api
 

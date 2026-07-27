@@ -120,7 +120,7 @@ jobs:
       # link path).
       RUSTUP_TOOLCHAIN: "1.95.0"
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Install Rust toolchain (1.95.0 + wasm32-unknown-unknown)
         # pinned 1.95.0 — 1.96.0 lld errors on napi-rs wasm env.napi_* imports (R5: tracked, un-pin when napi-rs v3 ships a 1.96-compatible wasm link path)
@@ -192,7 +192,7 @@ jobs:
           - firefox
           - webkit
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -328,7 +328,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Cell — three-browser cid_pin equivalence (compare across cells)
         run: |
