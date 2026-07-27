@@ -1,0 +1,179 @@
+# Frozen-bytes corpus — the v1-beta wire / byte / golden / codepoint / KAT /
+# invariant pins.
+#
+# Consumed by `.github/workflows/frozen-bytes.yml`. One cargo test-target name
+# per line (the file stem of a `crates/<crate>/tests/<stem>.rs` integration
+# target). `#` comments and blank lines are ignored.
+#
+# Provenance: `docs/V1-WIRE-FORMAT-INVENTORY.md` (its Summary table numbers 32
+# wire-format surfaces and names the byte-pin test for each) plus
+# `docs/INVARIANT-COVERAGE.md` rows 15-23, plus the S-3/S-6 const-VALUE and
+# domain-tag pins minted at the 2026-07-26 CI-integrity pass.
+#
+# ADDING A PIN: add the test-target stem in the right section. A wrong or
+# deleted name makes cargo fail fast with `no test target named ...` before it
+# compiles anything — deliberate. A silently-dropped pin is the exact failure
+# mode this gate exists to prevent.
+#
+# NAMING: a target stem must be UNIQUE across the packages the workflow selects
+# (`--test <name>` matches package-set-wide). That is why the eleven S-3
+# const-value files carry a per-crate suffix rather than a shared stem — with a
+# shared stem one corpus line would select eleven binaries and trip the
+# workflow's selection-integrity gate.
+#
+# DO NOT shrink this list below the floor asserted in the workflow.
+
+# --- inventory row 1: Node/Edge canonical DAG-CBOR + sentinel CID -------------
+anchor_id_excluded_from_cid
+canonical_bytes_fastpath_stable
+edge_cid
+node_cid
+subgraph_deterministic_dagcbor
+tf1_843_989_byte_equiv_and_cid_regression_guard
+
+# --- rows 2, 12: SnapshotBlob v2 + RedbBackend whole-file schema envelope -----
+canonical_bytes_v1_snapshot_blob
+redb_schema_version_envelope_pin
+snapshot_blob_backend
+tf11_snapshot_blob_schema_version_p3_migration_path
+
+# --- rows 4, 8: per-chunk AEAD wire envelope + TwoCidStore mapping ------------
+canonical_bytes_v1_aead_wrap
+tf3d_aad_binds_plaintext_cid_rebinding_attack
+tf3d_per_chunk_aead_iroh_block_size
+tf3d_two_cid_mapping_roundtrip
+
+# --- rows 5, 10, 30: crypto-suite codepoints / Varsig header / Layer-A vault --
+canonical_bytes_v1_codepoints_and_aad
+canonical_bytes_v1_varsig_and_sig_envelope
+f_cp_codepoint_registry_dispatch
+f_lb_2_aad_truncation_defense_be
+f_va_1_vault_ondisk_format_freeze
+f_va_2_argon2id_dak_derivation
+f_w0_envelope_v2_migration
+kdb_cs1_kem_cp_component_crosscheck
+tf2_codepoint_dispatch_typed_unsupported_classical_downgrade
+tf2_hybrid_both_must_verify_strip_resistant
+tf2_no_hardcoded_sizes_ml_dsa65_vector
+tf2_strip_resistance_negative
+tf3a_structural_kdf_step_root_derivation
+tf3a_ucan_varsig_v1_header_carries_hybrid_signature
+tf3a_x_wing_hybrid_wrap_x25519_mlkem768_codepoint_0x647a
+tf4_codepoint_0x647c_pure_pq_mlkem_only
+tf4_gcore3c_full_swap_matrix_strip_resistance_pure_pq_nondefault
+tf4_gcore3c_swap_matrix_conformance_additional
+
+# --- KATs (published external vectors, all inlined as constants — no network) -
+f_kat_1_libcrux_rustcrypto_fips203_kat
+f_kat_2_check_secret_independence_ci_gate
+f_kat_3_hpke_kem_extensibility_nq_c1
+f_kat_4_lamps_composite_mldsa_interop
+
+# --- Inv-16 (envelope unification) + Inv-17 (hybrid floor) -------------------
+f_inv16_1_envelope_unification
+f_sm_inv17_hybrid_floor_swap_matrix
+
+# --- row 6: AuthorizationGrant CBOR + binding-message self-bind --------------
+canonical_bytes_v1_authorization_grant
+tf3b_audience_substitution_post_sign_rejected
+tf3b_authorization_grant_binding_sig_one_signed_artifact
+tf3b_issuer_verifying_key_substitution_post_sign_rejected
+tf3b_scope_substitution_post_sign_rejected
+
+# --- rows 7, 26: Drop bundle CBOR + Layer-C band + Inv-18 + Inv-23 -----------
+canonical_bytes_v1_drop_bundle
+canonical_bytes_v1_envelope_codepoints
+f_02_group_aad_11field_and_f_01_truncation
+f_lc_abuse_control_group_posture_and_inv18
+f_lc_hpke_encrypt_to_recipient_sealed_sender
+f_nqc4_1_did_key_hybrid_pubkey_multicodec
+kdb_drop11_audience_aad_golden
+kdb_drop1_7_gapkdb_seal_flagship
+kdb_drop2_sole_constructor
+kdb_drop9_group_commitment_golden
+
+# --- freeze-registry / frozen-surface tally pins -----------------------------
+f_freeze_1_net_frozen_surface_tally_and_zero_hooks
+f_nqa1_1_frozen_surface_additive_extensibility
+kdb_docs_5_crypto_codepoints_wired
+kdb_docs_6_v1_wire_inventory
+
+# --- row 25: MembershipSet 0x6610 group AAD + RoleId + federation -----------
+f_aad_1_members_table_canonical_cbor_length_injective
+f_aad_2_nine_tuple_injectivity_opaque_boundary
+f_fed_1_2_subset_ref_federation
+f_ms_1_kind_enum_exactly_3
+f_ms_4_5_roleid_ordinal_and_invitee_zero
+
+# --- rows 14, 15, 16, 31, 32: benten-id DID / KeySet / UCAN / rotation ------
+canonical_bytes_trait
+device_attestation
+did_key
+did_rotation
+kdb_canonical_bytes_v1_keyset
+kdb_did_benten_codec
+kdb_f_inj_did_benten_reject
+kdb_f_inj_keyset_strict_canonical
+kdb_resolve_kem_fail_closed
+kdb_resolve_signing_dispatch
+ucan
+
+# --- rows 11, 13, 17, 24, 27, 28, 29 + Inv-14 + Inv-15 ----------------------
+device_attestation_envelope_direct
+exec_state_envelope_shape
+exec_state_payload_shape
+f_ld_2_remote_permission_wire_freeze
+f_ld_4_multi_device_key_wrap_provisioning
+f_ld_8_layer_d_timestamp_exclusion
+g12_e_suspension_store_round_trips
+host_error_wire_format_excludes_cids
+inv15_sig_malleability_does_not_change_identifier
+invariant_14_fixture_cid
+module_manifest_canonical
+
+# --- row 18: PluginManifest (two canonical-bytes shapes) --------------------
+f_inj_1_install_record_signing_payload_injective
+plugin_manifest_full_round_trip
+
+# --- rows 20, 21, 22, 23: Atrium handshake / MST / PeerId / Loro ------------
+handshake
+loro_lww
+loro_rich_type
+mst_diff
+mst_revocation_priority
+peer_id
+tf3e_zero_conversion_endpoint_id_is_verifying_key
+
+# --- DSL emission-path canonical bytes -------------------------------------
+canonical_bytes_v1_scheme_pin
+
+# --- ErrorCode catalog (CATALOG_VARIANT_COUNT == 201) ----------------------
+esc_vector_variant_names_canonical
+host_error_code_variants_reserved
+stable_shape
+
+# --- S-6: absolute byte pins for the domain-separation tag corpus -----------
+# Pins all 22 registered tags to literal bytes, which is what converts the
+# eleven pre-existing home-crate `HOME == registry::MIRROR` drift-asserts from
+# tautological into real pins. Also reaches the three `pub(crate)` KDF labels
+# positionally through `registered_domain_tags()`.
+f_dt_1_domain_tag_absolute_byte_pins
+
+# --- S-3: frozen const VALUE pins ------------------------------------------
+# The required cargo-public-api baselines record const TYPES but never VALUES,
+# so `ENVELOPE_FORMAT_VERSION: u8 = 1` -> `= 2` is an EMPTY baseline diff on a
+# frozen wire version byte. These pin the values: CID framing bytes, envelope
+# magic/version bytes, codepoint-registry integers, did:key multicodecs, ALPN
+# strings, KDF/AAD domain tags at their home declarations, Argon2id vault
+# params, and the whole META #629 decode-bound cluster.
+canonical_bytes_v1_const_values_caps
+canonical_bytes_v1_const_values_core
+canonical_bytes_v1_const_values_crypto_suite
+canonical_bytes_v1_const_values_drop
+canonical_bytes_v1_const_values_engine
+canonical_bytes_v1_const_values_eval
+canonical_bytes_v1_const_values_graph
+canonical_bytes_v1_const_values_id
+canonical_bytes_v1_const_values_membership_set
+canonical_bytes_v1_const_values_platform_foundation
+canonical_bytes_v1_const_values_sync

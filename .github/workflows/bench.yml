@@ -105,8 +105,21 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     needs: bench-compile-gate
+    # S-4 (CI-integrity audit 2026-07-26). Same shape as the aggregates in
+    # ci.yml / determinism.yml: a `bench-compile-gate` failure skips this job,
+    # and a skipped job reports SUCCESS. Neither this job nor its upstream is
+    # currently listed in .github/branch-protection.yml despite both carrying
+    # "(required)" in their names — see the note filed with that spec — so
+    # today this laundering is cosmetic. Closed here so the shape does not
+    # survive into whatever promotion happens next.
+    if: always()
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Assert every upstream job succeeded
+        uses: ./.github/actions/assert-needs-succeeded
+        with:
+          needs-json: ${{ toJSON(needs) }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable

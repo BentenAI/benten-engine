@@ -182,6 +182,13 @@ jobs:
   determinism-matrix:
     name: determinism / ${{ matrix.browser }}
     needs: build-bundle
+    # S-4 (CI-integrity audit 2026-07-26). `build-bundle` is NOT a required
+    # context, but all three legs of this job ARE ("determinism / chromium",
+    # "determinism / firefox", "determinism / webkit"). Without
+    # `if: always()`, a `build-bundle` failure skips all three — and GitHub
+    # reports a skipped job to branch protection as SUCCESS, turning one
+    # non-required failure into three green required checks.
+    if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -193,6 +200,14 @@ jobs:
           - webkit
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      # First step after checkout so an already-red upstream costs seconds,
+      # not the 45-minute budget (and fails before the confusing
+      # "Download bundle artifact" error an absent bundle would produce).
+      - name: Assert every upstream job succeeded
+        uses: ./.github/actions/assert-needs-succeeded
+        with:
+          needs-json: ${{ toJSON(needs) }}
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -325,10 +340,19 @@ jobs:
   cid-equivalence-reduce:
     name: cid_pin equivalence across three browsers (compare reduce)
     needs: determinism-matrix
+    # S-4 (CI-integrity audit 2026-07-26). Without `if: always()` this
+    # REQUIRED context is SKIPPED when any browser leg dies, and a skipped
+    # job is reported to branch protection as SUCCESS.
+    if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Assert every upstream job succeeded
+        uses: ./.github/actions/assert-needs-succeeded
+        with:
+          needs-json: ${{ toJSON(needs) }}
 
       - name: Cell — three-browser cid_pin equivalence (compare across cells)
         run: |

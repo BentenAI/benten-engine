@@ -1296,6 +1296,26 @@ mod tests {
             reg::RECIPIENT_SEED_LABEL,
             "RECIPIENT_SEED_LABEL drifted from the central domain_registry mirror"
         );
+        // S-6 ABSOLUTE pin. The mirror-equality above moves under a coordinated
+        // rename of BOTH sides; the literal does not. (The registry side is
+        // additionally pinned by the `f_dt_1_domain_tag_absolute_byte_pins`
+        // corpus test — this arm keeps the home honest on its own.)
+        assert_eq!(
+            RECIPIENT_SEED_LABEL, b"benten-crypto-suite:recipient-seed",
+            "the frozen deterministic-recipient-seed expansion label is exactly \
+             `benten-crypto-suite:recipient-seed`"
+        );
+        // S-6 ABSOLUTE pin for the NAMED UN-ENROLLED `0x6400` classical-combiner
+        // info string (R17 F-09; see the `domain_registry` module docs). It is
+        // NOT in `registered_domain_tags()`, so the corpus pin does not reach
+        // it — and it keys material (folded into the `classical_combine`
+        // SHA3-256 preimage), so a rename silently re-keys every `0x6400`
+        // shared secret while every round-trip stays green.
+        assert_eq!(
+            X25519_CLASSICAL_INFO_V1, b"x25519-classical-v1-benten-0x6400",
+            "the frozen 0x6400 classical-combiner info string is exactly \
+             `x25519-classical-v1-benten-0x6400`"
+        );
     }
 
     #[test]

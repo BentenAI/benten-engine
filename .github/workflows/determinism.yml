@@ -198,10 +198,23 @@ jobs:
   cross-leg-gate:
     name: T9 cross-leg byte-equality gate
     needs: [multi-arch, msrv, wasm-runtime]
+    # S-4 (CI-integrity audit 2026-07-26). Same shape as ci.yml's
+    # `cross-leg-determinism`: without `if: always()` this REQUIRED context is
+    # SKIPPED when any T4/T5/T6 leg dies, and GitHub reports a skipped job to
+    # branch protection as SUCCESS. This gate happened to run on the r9-base
+    # freeze base only because all 8 of its legs passed there.
+    if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      # First step after checkout so an already-red upstream costs seconds,
+      # not the 25-minute budget.
+      - name: Assert every upstream job succeeded
+        uses: ./.github/actions/assert-needs-succeeded
+        with:
+          needs-json: ${{ toJSON(needs) }}
 
       - name: Download all CID artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -213,11 +226,18 @@ jobs:
         run: |
           set -euo pipefail
           # Collect every CID into a single space-separated list, one per leg.
+          shopt -s nullglob
           declare -A legs
           for dir in cids/cid-*; do
             leg=$(basename "$dir" | sed 's/^cid-//')
             # Each artifact dir contains a single .txt file.
             file=$(find "$dir" -type f -name '*.txt' | head -n 1)
+            if [ -z "$file" ]; then
+              # Mirrors ci.yml's sibling gate: name the failure rather than
+              # dying on a bare redirect error two lines later.
+              echo "MISSING CID: artifact directory $dir contains no .txt file."
+              exit 1
+            fi
             value=$(tr -d '[:space:]' < "$file")
             legs[$leg]="$value"
           done
@@ -227,13 +247,28 @@ jobs:
             printf '  %-24s %s\n' "$leg" "${legs[$leg]}"
           done
 
-          # Sanity: we expect at least 5 legs (macos-arm64, macos-x86_64,
-          # linux-x86_64, linux-arm64, windows-x86_64, wasm32-wasip1, plus
-          # the msrv legs). A missing artifact silently drops a leg, which
-          # would weaken the cross-leg gate without failing it — catch that
-          # degenerate case here.
-          if [ "${#legs[@]}" -lt 5 ]; then
-            echo "EXPECTED ≥5 legs, observed ${#legs[@]} — an upload step likely failed silently."
+          # A missing artifact silently drops a leg, which would weaken the
+          # cross-leg gate without failing it — catch that degenerate case.
+          #
+          # S-5 (CI-integrity audit 2026-07-26): this floor was `-lt 5` while
+          # the matrix produces 8, so three legs could vanish unnoticed. The
+          # count is now exact and derived from this workflow's own matrices,
+          # so any change to the leg set is a deliberate, reviewed edit:
+          #
+          #   multi-arch   5  (macos-arm64, macos-x86_64, linux-x86_64,
+          #                    linux-arm64, windows-x86_64)
+          #   msrv         2  (msrv-1.95, msrv-stable)
+          #   wasm-runtime 1  (wasm32-wasip1)
+          #               ---
+          #   EXPECTED     8
+          #
+          # Confirmed against the live run 29879772849, which logged
+          # "Legs observed (8)".
+          EXPECTED_LEGS=8
+          if [ "${#legs[@]}" -ne "$EXPECTED_LEGS" ]; then
+            echo "LEG-COUNT FLOOR FAILED: expected exactly ${EXPECTED_LEGS} legs, observed ${#legs[@]}."
+            echo "Either an upload step failed silently, or the job matrix changed"
+            echo "without updating EXPECTED_LEGS above. Both must be deliberate."
             exit 1
           fi
 

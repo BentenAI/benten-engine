@@ -1,0 +1,193 @@
+name: Frozen Bytes
+
+# S-1 closure (CI-integrity audit, 2026-07-26).
+#
+# THE GAP. Before this workflow the ONLY `--workspace` test invocation in the
+# whole `.github/workflows/` tree was `ci.yml`'s `cargo nextest run`, inside the
+# job `build+test <leg> @ <rust>`. That job is NOT among the required contexts
+# in `.github/branch-protection.yml` — so every canonical-bytes golden, every
+# crypto codepoint, every KAT, the Inv-15..23 pins and the ErrorCode catalog
+# count were enforced only on an advisory lane. A stale frozen golden could —
+# and did — ride a green board.
+#
+# WHAT THIS JOB IS. A narrow, required-grade run of exactly the pins that
+# guard v1-beta frozen bytes. It is NOT a second copy of the suite: it selects
+# ~109 named test targets out of the workspace's ~900 integration test
+# binaries, which is what keeps it cheap enough to be a merge gate. `ci.yml`'s
+# multi-arch `build+test` matrix still runs the FULL suite on every leg and
+# remains the authoritative cross-platform verifier; this job only guarantees
+# the freeze corpus cannot go un-run.
+#
+# WHY A SEPARATE FILE, NOT A JOB IN `ci.yml`. Branch protection matches on job
+# NAME strings; a new job inside `ci.yml` risks perturbing the three `ci.yml`
+# contexts that are already required. A new file with its own concurrency group
+# cannot. Same rationale as `cross-process-graph.yml`.
+#
+# NEVER weaken this to make a pin pass. A failing pin here means a frozen byte
+# moved. Fix the change, not the pin.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# NO path filter — deliberate. `.github/branch-protection.yml` records that
+# path-filtered workflows cannot be made required: GitHub treats an absent
+# required context as blocking, so a doc-only PR would deadlock. A required
+# check must run on every PR.
+
+concurrency:
+  group: frozen-bytes-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # §3.5o CI disk-OOM env discipline — the same pair `ci.yml` sets at workflow
+  # scope and `cross-process-graph.yml` mirrors.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+
+jobs:
+  frozen-bytes-corpus:
+    name: frozen-bytes corpus (v1-beta wire freeze)
+    runs-on: ubuntu-24.04
+    # PROVISIONAL. No GitHub-runner measurement was possible before this
+    # landed. Tighten once two runs have landed on the PR: a required check
+    # with a loose timeout hides a hang.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Free disk space (Linux runners only)
+        # Mirrors ci.yml. This job links ~109 test binaries rather than ~900,
+        # so the pressure is far lower, but the step is cheap insurance and an
+        # `errno=28` mid-link would make the gate result meaningless.
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/free-disk-space
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: frozen-bytes
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2
+        with:
+          tool: cargo-nextest
+
+      - name: Run the frozen-bytes corpus
+        shell: bash
+        env:
+          # ci.yml runs the full suite at PROPTEST_CASES=1024. This gate pins
+          # bytes, not distributions; the corpus contains exactly one
+          # `proptest!` block (a u32-index injectivity property in
+          # f_aad_2_nine_tuple_injectivity_opaque_boundary), so the default 256
+          # suffices here and keeps the tail short. The 1024-case run still
+          # happens on the `build+test` matrix.
+          PROPTEST_CASES: "256"
+          PROPTEST_MAX_SHRINK_ITERS: "4096"
+        run: |
+          set -euo pipefail
+
+          # ---- 1. read the corpus -------------------------------------------
+          mapfile -t TARGETS < <(grep -vE '^[[:space:]]*(#|$)' .github/frozen-bytes-corpus.txt)
+          echo "frozen-bytes corpus: ${#TARGETS[@]} test targets"
+
+          # ---- 2. anti-vacuous floor (the determinism.yml idiom) ------------
+          # An aggregate reporting success on a SHRUNKEN input set is the exact
+          # S-5 hazard the audit found in ci.yml's T9 gate. If the corpus file
+          # is truncated, emptied or commented out, `cargo nextest run` with
+          # zero `--test` flags stops meaning what this job's name says. Fail.
+          if [ "${#TARGETS[@]}" -lt 100 ]; then
+            echo "FLOOR VIOLATED: corpus lists ${#TARGETS[@]} targets, expected >= 100."
+            echo "The frozen-bytes corpus must not shrink. If a pin was renamed,"
+            echo "update the name; if a surface was genuinely deleted, lower this"
+            echo "floor in the SAME commit with a written reason."
+            exit 1
+          fi
+
+          SELECT=()
+          for t in "${TARGETS[@]}"; do SELECT+=(--test "$t"); done
+
+          # `-p <crate>` (NOT `--workspace`) is load-bearing for speed: with
+          # `--workspace`, cargo compiles the lib of EVERY workspace member —
+          # including `tools/benten-admin-shell` (Tauri), `tools/benten-dev`
+          # and `crates/benten-renderer-tauri`, none of which host a corpus
+          # target. Naming the 13 crates that DO host one cuts that out.
+          #
+          # The feature list is ci.yml's list MINUS `benten-dev/testing`:
+          # `tools/benten-dev` is not in this package selection, so naming its
+          # feature would be an unresolvable feature path — the same trimming
+          # `cross-process-graph.yml` documents for its `-p benten-engine`
+          # scope. `benten-ivm/testing` STAYS: benten-ivm is a dependency of
+          # benten-engine.
+          PKGS=(
+            -p benten-errors
+            -p benten-core
+            -p benten-graph
+            -p benten-caps
+            -p benten-eval
+            -p benten-engine
+            -p benten-id
+            -p benten-sync
+            -p benten-dsl-compiler
+            -p benten-platform-foundation
+            -p benten-drop
+            -p benten-crypto-suite
+            -p benten-membership-set
+          )
+          FEATURES=benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-caps/testing,benten-core/testing,benten-id/testing,benten-crypto-suite/testing,benten-drop/testing,benten-ivm/testing,benten-platform-foundation/testing,benten-sync/testing,benten-membership-set/testing
+
+          # `handshake_round_trip_over_iroh_loopback_transport`
+          # (crates/benten-sync/tests/handshake.rs) binds real loopback sockets
+          # through iroh. A required check must not flake on socket
+          # availability. The other five tests in that binary are pure byte /
+          # shape pins and DO run.
+          FILTER='all() - test(=handshake_round_trip_over_iroh_loopback_transport)'
+
+          # ---- 3. selection-integrity gate (build happens here) -------------
+          # This step exists because the selection can silently degrade to
+          # "everything" or "nothing" if the `--test` flags fail to reach cargo
+          # as separate argv entries. Assert the built binary set is EXACTLY
+          # the corpus before trusting the run below.
+          cargo nextest list \
+            --list-type binaries-only \
+            --locked \
+            "${PKGS[@]}" \
+            --features "$FEATURES" \
+            "${SELECT[@]}" \
+            > /tmp/frozen-bytes-binaries.txt
+
+          selected=$(grep -cE '::' /tmp/frozen-bytes-binaries.txt)
+          echo "selected test binaries: $selected"
+          if [ "$selected" -ne "${#TARGETS[@]}" ]; then
+            echo "SELECTION MISMATCH: corpus lists ${#TARGETS[@]} targets but"
+            echo "cargo selected $selected test binaries."
+            echo "Too FEW  => a corpus name no longer resolves."
+            echo "Too MANY => a corpus name is ambiguous across the selected"
+            echo "            packages (e.g. 'device_attestation' also exists"
+            echo "            in bindings/napi — which is why benten-napi is"
+            echo "            not in the -p list)."
+            cat /tmp/frozen-bytes-binaries.txt
+            exit 1
+          fi
+
+          # ---- 4. run ------------------------------------------------------
+          # `--no-tests=fail` is explicit rather than relying on the `auto`
+          # default, so a future nextest default change cannot turn an empty
+          # run into a green run.
+          cargo nextest run \
+            --profile ci \
+            --locked \
+            --no-tests=fail \
+            "${PKGS[@]}" \
+            --features "$FEATURES" \
+            "${SELECT[@]}" \
+            -E "$FILTER"

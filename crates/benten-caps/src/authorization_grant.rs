@@ -1000,3 +1000,32 @@ impl AuthorizationGrant {
         }
     }
 }
+
+#[cfg(test)]
+mod domain_tag_freeze_pin {
+    /// ABSOLUTE byte pin for the AuthorizationGrant binding-signature domain
+    /// tag (S-6).
+    ///
+    /// `BINDING_SIG_DOMAIN` is prefixed into the binding-signature preimage
+    /// (`binding_message`), so its bytes are covered by the signature but are
+    /// NOT themselves serialized onto the wire — sign/verify round-trips stay
+    /// self-consistent under a rename, and a v4→v5-style bump is exactly the
+    /// kind of deliberate change this pin exists to force into the open.
+    ///
+    /// Unlike the tags in `benten_crypto_suite::domain_registry`, this one is
+    /// NOT enrolled in `registered_domain_tags()`, so it has no mirror and no
+    /// cross-surface prefix-free coverage. See the enrollment question raised
+    /// in the S-6 spec.
+    ///
+    /// If this fails, the signature domain moved. Do NOT edit the literal.
+    #[test]
+    fn binding_sig_domain_matches_frozen_literal() {
+        assert_eq!(
+            super::BINDING_SIG_DOMAIN,
+            b"benten/g-core-3b/authorization-grant/v5",
+            "the frozen AuthorizationGrant binding-signature domain is exactly \
+             `benten/g-core-3b/authorization-grant/v5` (v5 = the R6-final F-01 BE \
+             length-prefix migration bump)"
+        );
+    }
+}

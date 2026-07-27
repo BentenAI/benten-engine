@@ -75,6 +75,10 @@ image (rust default, node default, etc.).
 The CI workflow set at Phase-3 close covers:
 
 - **Build + test:** `ci.yml` (full nextest run + clippy + fmt),
+  `frozen-bytes.yml` (required-grade run of the v1-beta frozen-bytes corpus —
+  byte-pins, canonical-bytes goldens, crypto codepoints, KATs, Inv-14..23,
+  the S-3 const-VALUE and S-6 domain-tag pins, and the ErrorCode catalog
+  count; the corpus list lives at `.github/frozen-bytes-corpus.txt`),
   `coverage.yml` (cargo-llvm-cov), `msrv.yml` (MSRV gate),
   `wasm-conformance.yml` + `wasm-runtime.yml` (wasm32 target gates).
 - **Supply chain:** `cargo-vet.yml` (audit-policy), `cargo-public-api.yml`
