@@ -80,7 +80,21 @@ pub struct RotationAttestation {
 /// lands post-Phase-3 — the deliberate forward-stable shape is the
 /// point. Wire-format-adjacent; out of scope to mutate per the lane
 /// rule regardless.
+/// `#[non_exhaustive]` (D-96): a recovery authorizer is a NEW attestation kind,
+/// and this enum freezes into the v1-beta public API at
+/// `phase-4-meta-core-close`. Without the attribute, minting that variant
+/// post-tag is a SemVer-major break on a frozen type, which is what the
+/// identity-recovery survey's "authority-recovery is safely deferrable"
+/// conclusion silently assumed was possible. Free here: the only external use
+/// is an `assert_eq!` comparison, which `#[non_exhaustive]` still permits.
+///
+/// Deliberately NOT applied to `RotationAttestation` itself: its canonical
+/// signing bytes are a separate closed `SigInput`, so any field added later
+/// would be UNSIGNED — an unsigned field on an attestation is a security smell,
+/// and the cleaner route for recovery is a sibling `RecoveryAttestation` type
+/// with its own canonical bytes, which is additive by construction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum AttestationKind {
     /// "Old DID is superseded by new DID" — the only kind in Phase 3.
     SupersededBy,

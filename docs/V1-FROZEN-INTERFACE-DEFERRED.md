@@ -2288,6 +2288,38 @@ Row D-15's audit-readiness concern.
 
 ### Row D-69 — MC-6 vault salt origination → production vault-creation wiring (deferred with device-auth)
 
+**★ BINDING PROVISIONING CONTRACT (D-95, ratified 2026-07-26).** The Argon2id decode FLOOR
+(`VAULT_ARGON2_MIN_M_COST = 8`) was evaluated for raising before the freeze and deliberately KEPT. It is a
+DECODER/panic-guard bound mirroring `argon2::Params::new`'s own RFC minimums — **not** a security floor — and
+there is no value that is simultaneously fast enough for the `f_va_3` constant-time pin (which sits exactly at
+it) and strong enough to matter: the security-meaningful floors (>=8 MiB) make a many-iteration timing test a
+flake candidate on a required lane, and the test-compatible ones (<=1 MiB) are still trivially brute-forced.
+Raising 8 -> 1024 buys 50x against an adversary who needs 2^40 — noise. **The security floor therefore belongs
+HERE, at provisioning, and this row is that contract.** The production vault-creation path MUST:
+
+1. **Originate parameters at or above `OWASP_DEFAULT`** (m=19456 KiB, t=2, p=1). Recommended target
+   `m=65536, t=10, p=1` — measured 288.7 ms on an M1, 16.8x the default's work (+4.07 bits), the maximum
+   expressible inside the current policy ceilings. Values are per-vault header fields, so this is an
+   operational choice forever, not a format change: strengthening the default never breaks an existing vault.
+2. **Originate the 16-byte salt AND the 32-byte `K_principal` from a real CSPRNG** (`OsRng`), never from a
+   fixture or a caller-supplied constant. As of this row the only callers are tests passing fixed constants.
+3. **NOT expose a caller-chosen-parameters path to end users.** `serialize_vault` now enforces the same
+   floors/ceilings `parse_vault_frame` does (D-95), so a mistake is a typed error rather than silent key loss —
+   but the parameter CHOICE must not be a user-facing knob.
+4. **★ PREFER GENERATING THE VAULT SECRET OVER PROMPTING FOR A PASSWORD.** This outranks every parameter
+   decision above. Per the 2026-07-26 post-quantum research (D-94), the binding constraint is password entropy,
+   not KDF cost: every parameter change available inside the frozen bounds is worth ~4 bits, while ONE extra
+   word in a generated passphrase is worth 12.9. Argon2id is post-quantum-safe **provided what it is fed is not
+   a human-chosen password** — if provisioning generates the secret at high entropy the quantum question
+   evaporates; if it prompts and validates, no parameter set inside or outside the envelope rescues it, and the
+   realistic attacker uses a GPU rack rather than a quantum computer.
+
+*Rationale, and why the floor is not the lever:* an attacker cannot weaken a victim's vault by editing its
+header downward — different params yield a different DAK, so the AEAD tag fails (fail-closed). Their actual
+move is to take the vault and brute-force it at its ORIGINAL parameters. The floor never defended against that.
+And the floor remains RAISABLE later precisely because this contract exists: if provisioning guarantees strong
+parameters, no legitimate low-param vault will ever exist, so narrowing the accepted set stays cheap.
+
 - **Caller-contract disclosure (v1-beta):** the R11 MC-6 fix makes the vault
   on-disk frame self-contained (the 16-byte Argon2id salt + params are persisted
   in the header, so `vault.cbor` bytes + password alone re-derive the DAK across

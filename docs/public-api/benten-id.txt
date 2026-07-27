@@ -227,7 +227,7 @@ pub const benten_id::did::MLDSA65_PUB_MULTICODEC: [u8; 2]
 pub const benten_id::did::MLKEM768_PUB_MULTICODEC: [u8; 2]
 pub const benten_id::did::X25519_PUB_MULTICODEC: [u8; 2]
 pub mod benten_id::did_rotation
-pub enum benten_id::did_rotation::AttestationKind
+#[non_exhaustive] pub enum benten_id::did_rotation::AttestationKind
 pub benten_id::did_rotation::AttestationKind::SupersededBy
 impl core::clone::Clone for benten_id::did_rotation::AttestationKind
 pub fn benten_id::did_rotation::AttestationKind::clone(&self) -> benten_id::did_rotation::AttestationKind

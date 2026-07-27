@@ -41,7 +41,10 @@
 //!   info = "benten-dak-v1" )`. The Argon2id params + the HKDF
 //! domain-separation info-tag are part of the frozen derivation: a param /
 //! info-tag drift changes the DAK and breaks every existing vault. The
-//! info-tag is the codepoint slot for a future Argon2id-v2 param set.
+//! info-tag is NOT a version slot (D-94): a mismatch surfaces as `AeadFailed`,
+//! which F-VA-3 collapses into the same typed rejection as a wrong password, so
+//! rotating it would read as "wrong password". The honest version axes are the
+//! `format_version` byte and the vault-band codepoint (0x6102..0x61FF free).
 //!
 //! # Memory hygiene (F-VA-4; Compromise #36/#39)
 //!
@@ -76,7 +79,8 @@ pub const SYMMETRIC_AEAD_12B_CODEPOINT: u16 = 0x6101;
 /// XChaCha20-Poly1305 nonce width (m-4) — the frozen vault nonce length.
 pub const VAULT_XNONCE_LEN: usize = 24;
 
-/// The frozen DAK HKDF info-tag (codepoint slot for a future Argon2id-v2
+/// The frozen DAK HKDF info-tag (domain separation only — NOT a version slot;
+/// see the module doc. Was described as a slot for a future Argon2id-v2
 /// param set per R0.5 §3.1). A registered cross-surface domain-separation tag
 /// mirrored in [`crate::domain_registry::DAK_HKDF_INFO_TAG`]; the intra-crate
 /// `vault_domain_tags_match_central_registry` test pins byte-equality.
@@ -91,7 +95,11 @@ pub const DAK_HKDF_INFO_TAG: &[u8] = b"benten-dak-v1";
 /// Canonical home is HERE.
 pub const VAULT_AAD_DOMAIN: &[u8] = b"benten-vault:";
 
-/// RFC-9106 / OWASP Argon2id params (R0.5 §2.2 tactical pick).
+/// OWASP Cheat Sheet Argon2id params (m=19456 KiB, t=2, p=1).
+/// NOT one of RFC 9106 §4's two RECOMMENDED sets (`t=1,p=4,m=2 GiB` and
+/// `t=3,p=4,m=64 MiB`) — this is 3.4x below the weaker of the two. RFC 9106
+/// makes no post-quantum claim either way; per the 2026-07-26 PQ research the
+/// binding constraint is password entropy, not the cost parameters. (R0.5 §2.2 tactical pick).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Argon2idParams {
     /// Memory cost (KiB).
@@ -369,6 +377,41 @@ pub fn serialize_vault(
 ) -> Result<Vec<u8>, VaultError> {
     use chacha20poly1305::aead::{Aead, AeadCore, KeyInit, OsRng};
     use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
+
+    // SEAL/OPEN SYMMETRY (D-95). `parse_vault_frame` enforces both floors and
+    // ceilings; without the same check here the two ends disagree, in two
+    // directions that are both silent:
+    //
+    //   * seal ABOVE the ceiling — e.g. RFC 9106 §4's own RECOMMENDED
+    //     `m = 2 GiB`, which `derive_dak`/`Params::new` accept happily —
+    //     produces a well-formed, correctly-sealed vault that `open_vault`
+    //     then rejects with `Argon2ParamsOutOfBounds`. That is SILENT KEY LOSS
+    //     at provisioning time: the user has a vault nothing can ever open.
+    //   * seal AT the floor (`m = 8`) produces a perfectly openable vault at
+    //     roughly 1,650x less work than `OWASP_DEFAULT`.
+    //
+    // Mirroring the check converts both into a typed error at the moment of
+    // the mistake. The bounds themselves are unchanged, so `m = 8` stays legal
+    // on BOTH ends and the constant-time `f_va_3` fixture is unaffected — the
+    // floor is a decoder/panic-guard bound (it mirrors `Params::new`'s own RFC
+    // minimums), NOT a security floor. The security floor belongs to the
+    // provisioning path, which must originate parameters at or above
+    // `OWASP_DEFAULT` (see `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-69).
+    let below_floor = params.m_cost < VAULT_ARGON2_MIN_M_COST
+        || params.t_cost < VAULT_ARGON2_MIN_T_COST
+        || params.p_cost < VAULT_ARGON2_MIN_P_COST
+        || params.m_cost < params.p_cost.saturating_mul(8);
+    if params.m_cost > VAULT_ARGON2_MAX_M_COST
+        || params.t_cost > VAULT_ARGON2_MAX_T_COST
+        || params.p_cost > VAULT_ARGON2_MAX_P_COST
+        || below_floor
+    {
+        return Err(VaultError::Argon2ParamsOutOfBounds {
+            m_cost: params.m_cost,
+            t_cost: params.t_cost,
+            p_cost: params.p_cost,
+        });
+    }
 
     // R6-reround: the transient plaintext buffer holds the full VaultPayload
     // canonical bytes (incl. the SECRET `k_principal` + `user_did_signing_key`)
