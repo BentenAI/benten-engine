@@ -2944,30 +2944,44 @@ parameters, no legitimate low-param vault will ever exist, so narrowing the acce
 
 ## Pull-forward #2 (DoS decode-cap sweep) NAMED-CARRY rows
 
-### Row D-84 — `InstallRecord::signing_payload()` `nonce`↔`plugin_did` adjacency is not length-delimited → robust-injectivity hardening at the G-CORE-8.2 install-wiring
+### Row D-84 — CLOSED AS-BUILT: `InstallRecord::signing_payload()` `nonce`↔`plugin_did` seam IS length-delimited (BE-u32 both sides) — NO further hardening is owed
 
-- **Frozen surface (v1-beta):** `InstallRecord::signing_payload()`
-  (`crates/benten-platform-foundation/src/plugin_manifest.rs`) concatenates
-  `manifest_cid(36, fixed) ‖ ts(8, fixed) ‖ nonce(var) ‖ plugin_did(var) ‖
-  granted_caps(BE-u32-count + per-cap BE-u32-len‖bytes)`. The M-2b
-  granted-caps section (pull-forward #2) IS canonically length-prefixed +
-  injective. The `nonce`↔`plugin_did` boundary is NOT length-delimited.
-- **Currently SAFE (why this is a hardening, not a live defect):** every
-  construction site uses a fixed-16-byte `nonce` + a `plugin_did` with the
-  fixed 9-byte ASCII `did:key:z` prefix, so the boundary is unambiguous for
-  the real threat (post-signing tamper of an honestly-signed record, whose
-  fields are short + unsaturated — injectivity holds). Confirmed non-gating
-  by the M-2b security mini-review (2026-07-04).
-- **Deferred consumption (destination):** when the install path goes LIVE
-  at the **G-CORE-8.2** install-wiring (Phase-4-Meta-Composing — no
-  `Engine::install_plugin` exists at v1-beta; only tests call
-  `plugin_lifecycle::install_plugin`), harden `signing_payload()` to be
-  robustly injective regardless of field widths — either length-prefix
-  `nonce` + `plugin_did` (the future-proof form, matching the M-2b caps
-  pattern) OR add a fail-closed `nonce.len() == <fixed-width>` assertion at
-  the signing/verify boundary (the cheaper, non-encoding-changing form).
-  Required only if a variable-length `nonce` is ever admitted.
-- **Anchor:** #2 M-2b security mini-review (2026-07-04); `plugin_manifest.rs::InstallRecord::signing_payload`.
+> **⚠️ DO NOT ACT ON THIS ROW. There is no deferred work here.** This row is
+> retained for provenance only. Its original text described the seam as "NOT
+> length-delimited" and queued length-prefixing work — that description was
+> STALE, and the queued work is ALREADY IN THE CODE. Adding the prefixes a
+> second time would change a FROZEN signature pre-image and silently
+> invalidate every previously-signed `InstallRecord`. If you came here from a
+> Composing task list looking for work to do: the work is done. Close the item.
+
+- **AS-BUILT (v1-beta, FROZEN):** `InstallRecord::signing_payload()`
+  (`crates/benten-platform-foundation/src/plugin_manifest.rs:616-653`) emits
+  `manifest_cid(36, fixed) ‖ ts(8, fixed, BE-u64) ‖ len(nonce)(BE-u32) ‖
+  nonce ‖ len(plugin_did)(BE-u32) ‖ plugin_did ‖ cap_count(BE-u32) ‖
+  (len(cap)(BE-u32) ‖ cap)*`. EVERY variable-width field is length-prefixed,
+  so the WHOLE pre-image is injective — not just the M-2b granted-caps
+  section. The `nonce`↔`plugin_did` boundary is length-delimited at
+  `:636-641` under the comment `F-INJ-1: length-prefix the nonce ->
+  plugin_did seam`.
+- **History (why the row said otherwise):** the row was written against the
+  pre-F-INJ-1 layout, where `nonce` and `plugin_did` were bare-concatenated
+  and the seam was genuinely ambiguous. F-INJ-1 landed the BE-u32 prefixes on
+  both fields — the "future-proof form, matching the M-2b caps pattern" the
+  row itself recommended — and the row was never retensed. The stale text was
+  caught by ORCH ground-truth verification at R6 round #1 (§3.5n) and
+  corrected here; the alternative cheaper form the row floated (a fail-closed
+  fixed-width `nonce.len()` assertion) was NOT taken and is moot.
+- **Enforcement (this is what makes the correction stick):**
+  `crates/benten-platform-foundation/tests/canonical_bytes_v1_install_record_signing_preimage.rs`
+  — `d84_nonce_and_plugin_did_are_length_prefixed_exactly_once` asserts each
+  field carries EXACTLY ONE BE-u32 prefix and pins the total pre-image length,
+  so a second prefix layer fails the build; the golden-hex + per-field
+  big-endian pins in the same file (E-02) cover the rest of the layout.
+- **Anchor:** #2 M-2b security mini-review (2026-07-04) — original row;
+  `plugin_manifest.rs::InstallRecord::signing_payload` `:636-641` (F-INJ-1
+  prefixes, the landed state); R6 round #1 falsification sweep finding E-02
+  (the pre-image had no byte-pin, which is why the drift between row and code
+  went unseen).
 
 ---
 
@@ -3215,10 +3229,22 @@ did not resolve unilaterally.
   production caller hardcodes (fail-closed on mis-pairing). Note that a future second
   info-tag must re-version via the frame codepoint.
 - **O-05 — M-19 LE-survivor scanner under-scopes the F-full surface → M-19-widening
-  row.** `benten-crypto-suite/src/conformance.rs` `WIRE_PATH_SOURCES` embeds only
-  the 8 crypto-suite modules; enumerate `benten-drop/layer_c.rs`,
-  `benten-membership-set/aad.rs`, `benten-engine/layer_d/*.rs` as in-scope for the
-  consolidated LE-survivor scan (all BE today; golden pins catch pinned fields).
+  row.** `benten-crypto-suite/src/conformance.rs` `WIRE_PATH_SOURCES` embeds the
+  **10** crypto-suite modules (8 originals + `hpke.rs`/`mlkem.rs` at R6-final F-27);
+  enumerate `benten-drop/layer_c.rs`, `benten-membership-set/aad.rs`,
+  `benten-engine/layer_d/*.rs` as in-scope for the consolidated LE-survivor scan
+  (all BE today; golden pins catch pinned fields). **R6 round #1 update:**
+  `benten-platform-foundation::plugin_manifest` is no longer part of this residue —
+  it got its own in-crate scanner alongside the E-02 signing-pre-image golden.
+  `benten-graph::aead_wrap` IS still part of it: it has no survivor SCANNER. Its BE
+  chunk-count/chunk-length prefixes (`aead_wrap.rs:622`/`:628`) are no longer
+  unpinned, though — the E-03/E-04 pins landed in the same R6 round-#1 commit and
+  cover the chunked-arm discriminant, the u32-BE count and every per-chunk u32-BE
+  length prefix on BOTH the encode and the decode side
+  (`benten-graph/tests/canonical_bytes_v1_aead_wrap.rs` +
+  `benten-graph/src/aead_wrap.rs::tests`). What the residue now names for
+  `aead_wrap` is scanner coverage for its UNPINNED integer sites, not the chunked
+  prefixes. Fold both into the consolidated scan.
 - **O-06 — `docs/CRYPTO-CODEPOINTS.md` RESERVED-table qualify the RemotePermission
   band (ADDRESSED at R6-final F-05).** The RESERVED table previously listed
   `0x6320..0x632F RemotePermission — RESERVED`, but §4.0 marks
@@ -3528,39 +3554,60 @@ did not resolve unilaterally.
   `crates/benten-id/tests/kdb_resolve_kem_fail_closed.rs` header (the RK-4/RK-5
   fixture note).
 
-### Row D-95 — R17 F-09: `X25519_CLASSICAL_INFO_V1` is a keying domain tag left OUT of the prefix-free registry → v1-GM enroll-or-exempt
+### Row D-95 — CLOSED at R6 round #1 by ENROLLMENT: `X25519_CLASSICAL_INFO_V1` is now in the prefix-free registry (corpus 22 → 23)
 
-- **Observation (NAMED, not fixed this round):**
-  `cipher_suite::X25519_CLASSICAL_INFO_V1`
-  (`b"x25519-classical-v1-benten-0x6400"`,
-  `crates/benten-crypto-suite/src/cipher_suite.rs`) is a domain-separation info
-  string folded into the `0x6400` classical-combiner preimage — it DOES key
-  material — yet it carries no
-  `benten_crypto_suite::domain_registry::registered_domain_tags()` corpus entry,
-  so it is not covered by the `all_domain_tags_are_prefix_free` gate. It is left
-  out at v1-beta because it is a single self-contained combiner surface rather
-  than a cross-surface separator, and because enrolling it now would add a
-  23rd corpus entry the frozen surface does not yet carry.
-- **No security impact at v1-beta:** the tag is folded into exactly one
-  preimage (the non-default classical `0x6400` combiner) and is not reused on
-  any other keying, signing, or AEAD-AAD surface, so there is no cross-surface
-  pair for it to collide with. Not a fix-gate. (The sibling
-  `cipher_suite::X_WING_LABEL` is also un-enrolled, but its bytes are fixed by
-  `draft-connolly-cfrg-xwing-kem-10` §5.3 — a spec-mandated constant inside the
-  `0x647a` combiner preimage, not a Benten-minted separator.)
-- **Deferred (destination + shape):** v1-GM hardening — EITHER enroll it in
-  `registered_domain_tags()` (bumping the `registry_spans_the_full_corpus_wide_scope`
-  count assertion and adding a `domain_registry`-equality drift-assert at its
-  home const, the idiom every other mirrored tag uses) OR promote the
-  `domain_registry` module's "NAMED UN-ENROLLED tag" paragraph to a permanent
-  documented exemption with a stated class rule. Either direction is
-  **wire-neutral** — enrollment adds a corpus entry and a test assertion; it
-  does not change the tag bytes or any preimage.
-- **Anchor:** R17 F-09; `crates/benten-crypto-suite/src/cipher_suite.rs`
-  (`X25519_CLASSICAL_INFO_V1` + its carve-out rustdoc);
-  `crates/benten-crypto-suite/src/domain_registry.rs` (the "NAMED UN-ENROLLED
-  tag" section + `registered_domain_tags()`); `docs/SECURITY-PROOFS.md` §4.1 +
-  `docs/THREAT-MODEL.md` §5 (the 22-tag corpus scope statements).
+- **RESOLVED (enroll direction taken).** `cipher_suite::X25519_CLASSICAL_INFO_V1`
+  (`b"x25519-classical-v1-benten-0x6400"`) is a domain-separation info string
+  folded into the `0x6400` classical-combiner preimage — it DOES key material —
+  so the class rule puts it INSIDE the registered corpus. It now carries a
+  `benten_crypto_suite::domain_registry::registered_domain_tags()` entry and is
+  covered by the `all_domain_tags_are_prefix_free` gate. The corpus moves
+  **22 → 23**.
+- **Why enroll rather than exempt.** R6-final F-06 had already enrolled
+  `STRUCTURAL_KDF_ROOT_LABEL`, `STRUCTURAL_KDF_STEP_LABEL` and
+  `SWAP_MATRIX_AAD_DOMAIN` on identical reasoning — each is a single
+  self-contained surface that keys or AAD-binds secret material, and each is
+  prefix-free against the corpus, so enrolling is zero-wire-byte. The stated
+  reason for excluding this tag ("a single self-contained combiner surface, not
+  a cross-surface separator") is the same argument that precedent already
+  rejected. Enrolling also removes a conditional from a PUBLISHED claim at the
+  freeze: `docs/SECURITY-PROOFS.md` §4.1 and `docs/THREAT-MODEL.md` §5 both
+  state the registry spans every signing/KDF/AEAD-AAD cross-surface tag, which
+  was accurate only under an exemption documented in a source file the reader of
+  those docs never sees — the record-asserts-more-than-the-enforcement shape
+  this round exists to close.
+- **Wire-neutral, as the row itself recorded.** The registry is a collision
+  table, not a wire surface. ZERO wire bytes change; the tag's own bytes are
+  untouched and independently pinned at
+  `cipher_suite::tests::cipher_suite_domain_tags_match_central_registry`.
+  Prefix-freedom holds by inspection: byte 0 of the new tag is `x` (0x78), and
+  byte 0 of all 22 pre-existing tags is one of `b`, `C`, `r`, `s`.
+- **Structural choice.** The registry references
+  `crate::cipher_suite::X25519_CLASSICAL_INFO_V1` DIRECTLY (the const moves
+  private → `pub(crate)`; not on the public-api baseline) rather than mirroring
+  it. There is therefore no second copy to drift and no `HOME == MIRROR`
+  drift-assert is needed — the `structural_kdf` / `swap_matrix` idiom, which is
+  strictly stronger than the mirrored form the original row proposed. The entry
+  is APPENDED at the tail of the vec, so every pre-existing registry index is
+  unchanged and `f_dt_1`'s positional byte pin only gains a row.
+- **The sibling exemption is now sharper by contrast.**
+  `cipher_suite::X_WING_LABEL` stays OUT, and that exclusion rests on a clean
+  class rule rather than sitting next to a second un-enrolled tag with a weaker
+  excuse: its bytes are fixed by `draft-connolly-cfrg-xwing-kem-10` §5.3 — a
+  spec-mandated constant inside the `0x647a` combiner preimage, not a
+  Benten-minted separator.
+- **Enforcement.** `domain_registry::tests::registry_spans_the_full_corpus_wide_scope`
+  (count 23 + per-family membership);
+  `f_dt_1_domain_tag_absolute_byte_pins.rs` `FROZEN_DOMAIN_TAGS[22]` (absolute
+  bytes, positional); and a dedicated arm in
+  `cipher_suite::tests::cipher_suite_domain_tags_match_central_registry` that
+  fails if the registry entry is removed — without it, dropping the entry would
+  only trip the count assertion, which a future tag addition could mask.
+- **Anchor:** R17 F-09 (origin); R6 round #1 D-95 closure;
+  `crates/benten-crypto-suite/src/cipher_suite.rs`;
+  `crates/benten-crypto-suite/src/domain_registry.rs`;
+  `docs/SECURITY-PROOFS.md` §4.1 + `docs/THREAT-MODEL.md` §5 (both retensed
+  22 → 23 in the same commit).
 
 ---
 

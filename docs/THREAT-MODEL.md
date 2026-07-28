@@ -291,7 +291,7 @@ clear the same prefix-free check). See `docs/SECURITY-PROOFS.md` §4.1 "Cross-su
 (prefix-free)" for the property statement and the §4.1 "Inner-format domain-separation (single vs group)" note for
 the single-vs-group instance this generalizes. **Status:** the registry + its prefix-free regression test SHIPPED
 (F-full / R6-R4 structural shape) — the centralizing registry CODE is at
-`crates/benten-crypto-suite/src/domain_registry.rs` (a 22-tag corpus via `registered_domain_tags()` plus the
+`crates/benten-crypto-suite/src/domain_registry.rs` (a 23-tag corpus via `registered_domain_tags()` plus the
 `all_domain_tags_are_prefix_free` regression); this row + the SECURITY-PROOFS property record the v1-beta
 commitment the code realizes. **Documented carve-out:** the §3.9 gossip-topic derivation is deliberately NOT a
 registered tag — it is `blake3::keyed_hash(K_Set, membership_set_id ‖ BE(generation))` with NO

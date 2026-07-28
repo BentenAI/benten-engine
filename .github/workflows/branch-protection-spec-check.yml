@@ -1,27 +1,43 @@
 # Branch-protection spec drift detector.
 #
-# Reads `.github/branch-protection.yml`, fetches the live protection
-# state via the GitHub branch-protection GET endpoint, diffs the two,
-# and either WARNS (default) or FAILS (when STRICT_PROTECTION_CHECK
-# is true) on drift.
+# Reads `.github/branch-protection.yml`, validates it against itself and the
+# workflow tree, then fetches live protection state and diffs the two.
 #
-# Why warn-by-default: this workflow lands BEFORE Ben applies the spec
-# to the live repo (applying needs a PAT with admin scope; that's the
-# Phase-2a §3.1 item-2 follow-up). Failing on drift the moment this
-# lands would block every PR until Ben runs the apply runbook in
-# `.github/branch-protection.yml`. After Ben applies + flips the
-# strict-mode flag, drift becomes a hard fail.
+# F-015 RESHAPE (R6 round #1, 2026-07-27). Before this, the whole workflow
+# could not fail:
 #
-# Toggling strict mode (after the live state is applied):
+#   * `STRICT_PROTECTION_CHECK_DEFAULT: 'false'` meant every drift was a
+#     warning;
+#   * with no PAT the live fetch degraded to diffing `{}`, producing a drift
+#     signal indistinguishable from real drift and therefore unactionable —
+#     alarm fatigue by construction;
+#   * the workflow was not itself a required context, so nothing obliged
+#     anyone to look.
+#
+# The fix separates what needs a PAT from what does not, because conflating
+# them is what made the whole thing advisory:
+#
+#   Job 1 `spec-self-consistency` — needs NO PAT, HARD-FAILS. Everything
+#     checkable about the spec without reading live state: contexts resolve to
+#     real jobs, those jobs actually run on pull requests, required and pending
+#     sets are disjoint, pending entries explain themselves. This is a real
+#     gate on every PR and is in the required set.
+#
+#   Job 2 `spec-self-consistency-self-test` — proves job 1 still detects. Same
+#     idiom as `drift-detect.yml`'s already-required "self-test (meta-assertion
+#     that the detector actually detects)". A validator nobody falsifies is a
+#     validator nobody can trust: the R6 falsification sweep found 17 of 36
+#     enforcement claims unenforced precisely because passing was mistaken for
+#     enforcing.
+#
+#   Job 3 `drift-check` — needs a PAT. Stays advisory until one is configured,
+#     but no longer manufactures a fake drift number when it cannot see live
+#     state. It reports NOT-VERIFIED, which is the truth.
+#
+# Toggling strict mode for job 3 (after the live state is applied):
 #   Option A — flip the env-var below to `true`.
 #   Option B — set repo Variable `STRICT_PROTECTION_CHECK=true` in
-#              Settings → Secrets and variables → Actions → Variables;
-#              the workflow reads `${{ vars.STRICT_PROTECTION_CHECK }}`
-#              if defined, else falls back to the env default.
-#
-# Closes Phase-2a CI-1 deferral together with the spec file. Without
-# this workflow the spec is just documentation; with it, the spec is
-# load-bearing.
+#              Settings → Secrets and variables → Actions → Variables.
 
 name: Branch Protection Spec Check
 
@@ -42,33 +58,167 @@ concurrency:
 
 permissions:
   contents: read
-  # NOTE: GitHub's GITHUB_TOKEN cannot read branch-protection settings —
-  # the `administration` permission key does not exist for GITHUB_TOKEN
-  # (only `actions`, `checks`, `contents`, `deployments`, `discussions`,
-  # `id-token`, `issues`, `packages`, `pages`, `pull-requests`,
-  # `repository-projects`, `security-events`, `statuses`,
-  # `attestations`, `models` are valid). Live drift-check therefore
-  # requires a PAT stored at `secrets.BRANCH_PROTECTION_READ_TOKEN`
-  # with `repo` scope (or fine-grained "Administration: read"). When
-  # the secret is absent the workflow degrades to spec-YAML-validation
-  # only and emits a warning that drift-check is unavailable. When
-  # present it diffs live state against spec.
+  # NOTE: GitHub's GITHUB_TOKEN cannot read branch-protection settings — the
+  # `administration` permission key does not exist for GITHUB_TOKEN. Live
+  # drift-check therefore requires a PAT at
+  # `secrets.BRANCH_PROTECTION_READ_TOKEN` with `repo` scope (or fine-grained
+  # "Administration: read"). Job 1 deliberately depends on none of that.
 
 env:
-  # Default = warn-only. Override at the repo Variables level
-  # (`vars.STRICT_PROTECTION_CHECK`) to flip without code change, or
-  # edit this line for a permanent flip after Ben applies the spec.
+  # Governs job 3 ONLY. Jobs 1 and 2 are unconditional hard gates — a flag that
+  # can switch a check off is a flag that will be found switched off.
   STRICT_PROTECTION_CHECK_DEFAULT: 'false'
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1 — PAT-free, hard-fail. The floor that F-015 says must exist.
+  # ---------------------------------------------------------------------------
+  spec-self-consistency:
+    name: branch-protection spec self-consistency
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install PyYAML
+        run: python3 -m pip install --quiet --disable-pip-version-check pyyaml
+
+      - name: Validate spec against itself and the workflow tree
+        # MUTATION THAT MUST MAKE THIS FAIL: add any of
+        #   - "no such job"                    (phantom context)
+        #   - "workspace benches (nightly)"    (schedule-only job)
+        #   - a second copy of an existing entry (duplicate)
+        # to `protection.required_status_checks.contexts` in
+        # `.github/branch-protection.yml`. Each is exercised for real by the
+        # self-test job below.
+        run: python3 .github/scripts/validate-branch-protection-spec.py .github/branch-protection.yml
+
+  # ---------------------------------------------------------------------------
+  # Job 2 — meta-assertion. Mirrors drift-detect.yml's required self-test.
+  # ---------------------------------------------------------------------------
+  spec-self-consistency-self-test:
+    name: branch-protection spec self-consistency self-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install PyYAML
+        run: python3 -m pip install --quiet --disable-pip-version-check pyyaml
+
+      - name: Assert the validator rejects each known-bad spec
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          expect_reject() {
+            local label="$1" spec="$2"
+            if python3 .github/scripts/validate-branch-protection-spec.py "$spec" > /tmp/out.txt 2>&1; then
+              echo "::error::SELF-TEST FAILED — validator ACCEPTED a spec it must reject: $label"
+              cat /tmp/out.txt
+              return 1
+            fi
+            echo "  ok — rejected: $label"
+            return 0
+          }
+
+          fails=0
+
+          # (a) phantom context: matches no job `name:` anywhere. A required
+          #     context that never reports blocks every PR forever.
+          python3 - <<'PY'
+          import shutil
+          shutil.copyfile(".github/branch-protection.yml", "/tmp/m-phantom.yml")
+          text = open("/tmp/m-phantom.yml").read().replace(
+              '      - "Cargo.lock integrity"',
+              '      - "Cargo.lock integrity"\n      - "spec self-test phantom context"',
+              1,
+          )
+          open("/tmp/m-phantom.yml", "w").write(text)
+          PY
+          expect_reject "phantom context" /tmp/m-phantom.yml || fails=$((fails+1))
+
+          # (b) schedule-only job promoted. `workspace benches (nightly)` is
+          #     gated behind `if: github.event_name == 'schedule' || ...` so it
+          #     never reports on a PR. This is the #12/C3 footgun.
+          python3 - <<'PY'
+          import shutil
+          shutil.copyfile(".github/branch-protection.yml", "/tmp/m-schedule.yml")
+          text = open("/tmp/m-schedule.yml").read().replace(
+              '      - "Cargo.lock integrity"',
+              '      - "Cargo.lock integrity"\n      - "workspace benches (nightly)"',
+              1,
+          )
+          open("/tmp/m-schedule.yml", "w").write(text)
+          PY
+          expect_reject "schedule-only job promoted to required" /tmp/m-schedule.yml || fails=$((fails+1))
+
+          # (c) duplicate context.
+          python3 - <<'PY'
+          import shutil
+          shutil.copyfile(".github/branch-protection.yml", "/tmp/m-dupe.yml")
+          text = open("/tmp/m-dupe.yml").read().replace(
+              '      - "Cargo.lock integrity"',
+              '      - "Cargo.lock integrity"\n      - "Cargo.lock integrity"',
+              1,
+          )
+          open("/tmp/m-dupe.yml", "w").write(text)
+          PY
+          expect_reject "duplicate required context" /tmp/m-dupe.yml || fails=$((fails+1))
+
+          # (d) a pending_promotion entry ALSO listed as required — i.e. someone
+          #     promoted a known-unenforceable stub without removing its
+          #     blocker. This is CE-02 / C5 recurring.
+          python3 - <<'PY'
+          import shutil, yaml
+          shutil.copyfile(".github/branch-protection.yml", "/tmp/m-both.yml")
+          spec = yaml.safe_load(open("/tmp/m-both.yml"))
+          first = spec["pending_promotion"][0]["context"]
+          text = open("/tmp/m-both.yml").read().replace(
+              '      - "Cargo.lock integrity"',
+              f'      - "Cargo.lock integrity"\n      - "{first}"',
+              1,
+          )
+          open("/tmp/m-both.yml", "w").write(text)
+          PY
+          expect_reject "pending context also marked required" /tmp/m-both.yml || fails=$((fails+1))
+
+          # (e) a pending entry with its `blocker:` stripped — ambition with no
+          #     stated reason is how a stub quietly becomes a candidate again.
+          python3 - <<'PY'
+          import yaml
+          spec = yaml.safe_load(open(".github/branch-protection.yml"))
+          spec["pending_promotion"][0]["blocker"] = ""
+          yaml.safe_dump(spec, open("/tmp/m-noblocker.yml", "w"))
+          PY
+          expect_reject "pending entry with empty blocker" /tmp/m-noblocker.yml || fails=$((fails+1))
+
+          # And the control: the REAL spec must pass. Without this arm a
+          # validator that rejects everything would score a perfect self-test.
+          if ! python3 .github/scripts/validate-branch-protection-spec.py .github/branch-protection.yml; then
+            echo "::error::SELF-TEST FAILED — validator rejects the real, unmutated spec."
+            fails=$((fails+1))
+          else
+            echo "  ok — accepted: the real spec"
+          fi
+
+          if [ "$fails" -ne 0 ]; then
+            echo "::error::$fails self-test arm(s) failed. The spec validator is no longer detecting what it claims to detect."
+            exit 1
+          fi
+          echo "PASSED: validator rejected all 5 known-bad specs and accepted the real one."
+
+  # ---------------------------------------------------------------------------
+  # Job 3 — live diff. Needs a PAT; advisory until one exists AND strict is on.
+  # ---------------------------------------------------------------------------
   drift-check:
     name: Compare live branch-protection vs. spec
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    needs: spec-self-consistency
 
     steps:
       - name: Checkout
-        # actions/checkout@v5 → matches workspace-wide pin standardised in 9e68f84/e014653; bumped 2026-05-08 supply-chain audit
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Resolve strict-mode flag
@@ -83,9 +233,6 @@ jobs:
 
       - name: Install yq
         run: |
-          # yq v4 is preinstalled on ubuntu-latest as `yq`; verify and
-          # version-pin via apt only as a fallback. Avoid extra action
-          # dependency surface.
           if ! command -v yq >/dev/null 2>&1; then
             sudo wget -qO /usr/local/bin/yq \
               https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
@@ -93,46 +240,32 @@ jobs:
           fi
           yq --version
 
-      - name: Validate spec YAML well-formedness
-        # Always runs. Sets the floor: even without a PAT, this workflow
-        # ensures the spec file parses as YAML and has the expected
-        # top-level shape. A typo in the spec would have no other guard.
-        run: |
-          python3 -c "import yaml,sys; d=yaml.safe_load(open('.github/branch-protection.yml')); assert 'protection' in d, 'spec missing top-level protection key'; print('spec YAML OK; top-level keys:', list(d.keys()))"
-
       - name: Fetch live protection state
         id: live
         env:
-          # PAT precedence: dedicated read-only PAT secret if configured,
-          # else fall back to GITHUB_TOKEN (which will 403 — handled below).
           GH_TOKEN: ${{ secrets.BRANCH_PROTECTION_READ_TOKEN || secrets.GITHUB_TOKEN }}
           PAT_CONFIGURED: ${{ secrets.BRANCH_PROTECTION_READ_TOKEN != '' }}
         run: |
           set +e
-          # GET /repos/.../branches/main/protection — returns the
-          # current protection JSON, 404 if unprotected, or 403 if the
-          # token lacks admin scope (which GITHUB_TOKEN always does for
-          # this endpoint, by GitHub's design).
           live_json="$(gh api /repos/${{ github.repository }}/branches/main/protection 2>&1)"
           rc=$?
           set -e
 
           if [ $rc -ne 0 ]; then
             if echo "$live_json" | grep -q "Branch not protected"; then
-              # Genuine 404 — spec exists, no live protection applied yet.
               echo "live_state=unprotected" >> "$GITHUB_OUTPUT"
               echo '{}' > live.json
             elif echo "$live_json" | grep -q "Resource not accessible"; then
-              # 403 — expected when no PAT is configured. Degrade to
-              # spec-only mode; emit a one-time warning that surfaces
-              # the runbook for Ben.
               echo "live_state=skipped_no_pat" >> "$GITHUB_OUTPUT"
-              echo '{}' > live.json
+              # Deliberately NOT writing '{}' — a synthetic empty live state
+              # made the diff below report drift against every context, a
+              # number that meant "we cannot see" but read as "everything is
+              # wrong". The diff step now skips entirely in this state.
               if [ "$PAT_CONFIGURED" = "true" ]; then
-                echo "::error::PAT configured at BRANCH_PROTECTION_READ_TOKEN but still got 403 — token may lack 'repo' scope or 'Administration: read' fine-grained permission. Re-issue PAT with the right scope."
+                echo "::error::PAT configured at BRANCH_PROTECTION_READ_TOKEN but still got 403 — token may lack 'repo' scope or 'Administration: read'. Re-issue with the right scope."
                 exit 1
               fi
-              echo "::warning::Live drift-check skipped — no PAT configured at secrets.BRANCH_PROTECTION_READ_TOKEN. Spec YAML validity verified above; that is the floor. To enable live drift-check, create a fine-grained PAT with 'Administration: read' scope on this repo and store as a repo secret named BRANCH_PROTECTION_READ_TOKEN. See header of .github/branch-protection.yml for details."
+              echo "::warning::Live drift-check NOT VERIFIED — no PAT at secrets.BRANCH_PROTECTION_READ_TOKEN. The spec self-consistency gate above still ran and is a hard gate. See the header of .github/branch-protection.yml to enable live diffing."
             else
               echo "::error::Failed to fetch live protection: $live_json"
               exit 1
@@ -141,25 +274,25 @@ jobs:
             echo "live_state=protected" >> "$GITHUB_OUTPUT"
             echo "$live_json" > live.json
           fi
-          echo "Live state: $(grep ^live_state "$GITHUB_OUTPUT")"
 
       - name: Extract spec
+        if: steps.live.outputs.live_state != 'skipped_no_pat'
         run: |
-          # Pull the `protection:` subtree from the spec and emit JSON.
+          # `.protection` only — `pending_promotion` is documentation, not part
+          # of the branch-protection API payload.
           yq -o=json '.protection' .github/branch-protection.yml > spec.json
           echo "--- spec.json (first 40 lines) ---"
           head -40 spec.json
 
       - name: Diff live vs spec (key fields)
         id: diff
+        if: steps.live.outputs.live_state != 'skipped_no_pat'
         run: |
           set +e
 
           drift=0
           report=""
 
-          # Helper: compare a jq-extractable field between live + spec.
-          # Drift if the values differ (including missing on either side).
           compare() {
             local label="$1"
             local jq_expr="$2"
@@ -176,8 +309,6 @@ jobs:
             report="- Branch is UNPROTECTED on the live repo. Spec exists but has not been applied. Run the apply runbook documented at the top of .github/branch-protection.yml."
             drift=1
           else
-            # Required-status-check contexts (sorted compare; order
-            # doesn't matter for the gate's effect).
             live_ctx="$(jq -c '.required_status_checks.contexts // [] | sort' live.json)"
             spec_ctx="$(jq -c '.required_status_checks.contexts // [] | sort' spec.json)"
             if [ "$live_ctx" != "$spec_ctx" ]; then
@@ -219,8 +350,15 @@ jobs:
 
       - name: Decide outcome
         run: |
+          state="${{ steps.live.outputs.live_state }}"
           drift="${{ steps.diff.outputs.drift }}"
           strict="${{ steps.strict.outputs.strict }}"
+
+          if [ "$state" = "skipped_no_pat" ]; then
+            echo "Live diff NOT VERIFIED (no PAT). Spec self-consistency gate passed."
+            echo "NOT-VERIFIED is reported as such, never as a drift count." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
 
           if [ "$drift" = "0" ]; then
             echo "No drift. PASS."
@@ -232,6 +370,5 @@ jobs:
             exit 1
           fi
 
-          # Default warn-only path.
           echo "::warning::Branch-protection drift detected. STRICT_PROTECTION_CHECK is false (warn-only). Apply the spec via the runbook in .github/branch-protection.yml, then flip the strict flag."
           exit 0

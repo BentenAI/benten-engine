@@ -98,6 +98,11 @@ jobs:
     name: build-smoke / macos-14
     runs-on: macos-14
     timeout-minutes: 30
+    env:
+      # F-060. `toolchain: 1.95` on the dtolnay step below only sets the rustup
+      # default, which the repo-root rust-toolchain.toml (`channel = "stable"`)
+      # overrides. This line is what actually pins the build.
+      RUSTUP_TOOLCHAIN: "1.95"
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - name: Setup Rust toolchain
@@ -121,6 +126,9 @@ jobs:
     name: webview-e2e / ubuntu-24.04
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      # F-060 — see the note on `build-only-macos` above. Same shadow, same fix.
+      RUSTUP_TOOLCHAIN: "1.95"
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 

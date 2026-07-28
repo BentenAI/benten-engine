@@ -44,18 +44,50 @@ jobs:
     name: cargo build --workspace --locked @1.95
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      # F-060. THE WHOLE POINT OF THIS WORKFLOW LIVES ON THIS LINE.
+      #
+      # dtolnay/rust-toolchain sets the rustup DEFAULT. The repo-root
+      # `rust-toolchain.toml` declares `channel = "stable"`, and rustup ranks a
+      # toolchain file above the default — so the bare `cargo build` below ran
+      # on floating stable and this job has never tested MSRV since it landed.
+      # `RUSTUP_TOOLCHAIN` outranks the file. Same idiom `wasm-conformance.yml`
+      # and `wasm-browser.yml` already document for the identical shadow.
+      #
+      # Keep in lock-step with the `toolchain:` input below and with
+      # `workspace.package.rust-version` in Cargo.toml.
+      RUSTUP_TOOLCHAIN: "1.95"
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Install MSRV toolchain
         # Canonical install idiom — replaces the manual `rustup toolchain
         # install ... && rustup default ...` that was a form drift with
-        # the rest of the workflow fleet. Sets the workspace MSRV as
-        # default so subsequent `cargo ...` invocations use it without
-        # an explicit `+1.95`.
+        # the rest of the workflow fleet. NOTE: this action's `toolchain:`
+        # input only sets the rustup DEFAULT, which rust-toolchain.toml
+        # overrides; the `RUSTUP_TOOLCHAIN` job env above is what actually
+        # selects 1.95 for the cargo invocations. Both must stay in sync.
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # master (no semver tags; Dependabot rotates frequently)
         with:
           toolchain: "1.95"
+
+      - name: Assert the MSRV toolchain is actually in effect
+        # F-060 falsification pin. Without this, a dropped/typo'd
+        # RUSTUP_TOOLCHAIN silently reverts the job to floating stable and the
+        # board stays green — which is exactly how the gate stayed broken.
+        #
+        # MUTATION THAT MUST MAKE THIS FAIL: delete the `RUSTUP_TOOLCHAIN`
+        # line from the job `env:` above. rust-toolchain.toml then wins,
+        # `cargo --version` reports the floating-stable version, and this step
+        # exits 1.
+        run: |
+          set -euo pipefail
+          actual="$(cargo --version)"
+          echo "$actual"
+          case "$actual" in
+            *" 1.95."*) echo "OK: MSRV 1.95 toolchain is in effect." ;;
+            *) echo "::error::MSRV gate is not testing MSRV — expected cargo 1.95.x, got: $actual"; exit 1 ;;
+          esac
 
       - name: Build workspace
         # G11-A Wave 2a: `benten-engine/test-helpers` pairs with

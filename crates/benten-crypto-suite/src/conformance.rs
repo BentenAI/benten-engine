@@ -19,7 +19,8 @@
 //!     integer field (m-1: the info-tag is not flagged).
 //!
 //! The embedded modules are exactly the wire/AAD/keying-path producers per
-//! the R0.7 §4.1 M-19 site-list (`aead.rs`, `structural_kdf.rs`, `varsig.rs`,
+//! the R0.7 §4.1 M-19 site-list — **10 modules** at HEAD: the original 8
+//! (`aead.rs`, `structural_kdf.rs`, `varsig.rs`,
 //! `sizes.rs`, `swap_matrix.rs`, `envelope.rs`, `vault.rs`, `cipher_suite.rs`)
 //! plus the two HPKE/KEM keying-path modules `hpke.rs` + `mlkem.rs` (R6-final
 //! F-27: both are wire/keying-path producers in THIS crate and were absent from
@@ -29,11 +30,20 @@
 
 /// Endianness conformance scanner (M-19).
 pub mod endianness {
-    /// The wire/AAD/keying-path source modules embedded for the scan. These
-    /// are the M-19 site-list producers in THIS crate (the cross-crate
-    /// producers — `benten-graph::aead_wrap`, `benten-platform-foundation::
-    /// plugin_manifest` — are scanned by their own crates' tests; this gate
-    /// covers the crypto-suite's own surfaces).
+    /// The wire/AAD/keying-path source modules embedded for the scan — the
+    /// M-19 site-list producers in THIS crate. This gate covers the
+    /// crypto-suite's own surfaces ONLY.
+    ///
+    /// Cross-crate M-19 producers, with their ACTUAL scan state (the prior
+    /// blanket "scanned by their own crates' tests" claim was verified false
+    /// at R6 round #1 — neither crate had a survivor scanner, which is part of
+    /// why the E-02 install-record endianness mutation went undetected):
+    /// - `benten-platform-foundation::plugin_manifest` — SCANNED, by
+    ///   `benten-platform-foundation/tests/m19_endianness_scanner_platform_foundation.rs`.
+    /// - `benten-graph::aead_wrap` — NOT scanned by any survivor scanner. Its
+    ///   BE chunk-count / chunk-length prefixes rest on the golden byte-pins in
+    ///   `benten-graph/tests/canonical_bytes_v1_aead_wrap.rs`. Routed to the
+    ///   `O-05` M-19-widening row.
     const WIRE_PATH_SOURCES: &[(&str, &str)] = &[
         ("aead.rs", include_str!("aead.rs")),
         ("structural_kdf.rs", include_str!("structural_kdf.rs")),

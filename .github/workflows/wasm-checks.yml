@@ -108,8 +108,31 @@ jobs:
             exit 1
           fi
           # Verify the failure was the architectural gate, not something else.
-          if ! echo "$output" | grep -q -E "(compile_error!|baked-in #17|target_arch)"; then
-            echo "::error::benten-sync wasm32 build failed BUT not for the expected architectural reason. The compile_error! macro at crates/benten-sync/src/lib.rs MUST be the failure source. Got:"
+          #
+          # CE-07 (R6 round #1). The alternation this replaced —
+          # `-E "(compile_error!|baked-in #17|target_arch)"` — certified an
+          # UNRELATED failure as this job's own gate. Delete the
+          # `compile_error!` at crates/benten-sync/src/lib.rs and the wasm32
+          # build still exits 101, on `getrandom`, whose own `compile_error!`
+          # token satisfies the pattern; the job then printed PASSED while the
+          # thing it guards was gone. `target_arch` is even weaker — it appears
+          # in ordinary cfg diagnostics all over the dep graph.
+          #
+          # Two literal, Benten-specific conditions replace it: the marker
+          # string from the macro body AND the source path rustc attributes the
+          # error to. No dependency can satisfy both.
+          #
+          # MUTATION THAT MUST MAKE THIS FAIL: delete the `compile_error!`
+          # block at crates/benten-sync/src/lib.rs:155. The build still fails
+          # (on getrandom), but neither the marker nor the path appears, so
+          # this step exits 1 instead of printing PASSED.
+          if ! echo "$output" | grep -qF 'baked-in #17'; then
+            echo "::error::benten-sync wasm32 build failed BUT the output does not carry the 'baked-in #17' marker from the compile_error! at crates/benten-sync/src/lib.rs. The gate has been removed, or the build broke earlier for an unrelated reason. Got:"
+            echo "$output"
+            exit 1
+          fi
+          if ! echo "$output" | grep -qF 'crates/benten-sync/src/lib.rs'; then
+            echo "::error::benten-sync wasm32 build carried the 'baked-in #17' marker but rustc did not attribute it to crates/benten-sync/src/lib.rs — so the marker came from somewhere else. Got:"
             echo "$output"
             exit 1
           fi
@@ -165,8 +188,20 @@ jobs:
             exit 1
           fi
           # Verify the failure was the architectural gate, not something else.
-          if ! echo "$output" | grep -q -E "(compile_error!|baked-in #17|target_arch)"; then
-            echo "::error::benten-membership-set wasm32 build failed BUT not for the expected architectural reason. The compile_error! macro at crates/benten-membership-set/src/lib.rs MUST be the failure source. Got:"
+          #
+          # CE-08 — the same defect as CE-07 one cell up, and it must be fixed
+          # in both places or the weaker cell becomes the one that matters.
+          # See the benten-sync cell for the full rationale.
+          #
+          # MUTATION THAT MUST MAKE THIS FAIL: delete the `compile_error!`
+          # block at crates/benten-membership-set/src/lib.rs:110.
+          if ! echo "$output" | grep -qF 'baked-in #17'; then
+            echo "::error::benten-membership-set wasm32 build failed BUT the output does not carry the 'baked-in #17' marker from the compile_error! at crates/benten-membership-set/src/lib.rs. The gate has been removed, or the build broke earlier for an unrelated reason. Got:"
+            echo "$output"
+            exit 1
+          fi
+          if ! echo "$output" | grep -qF 'crates/benten-membership-set/src/lib.rs'; then
+            echo "::error::benten-membership-set wasm32 build carried the 'baked-in #17' marker but rustc did not attribute it to crates/benten-membership-set/src/lib.rs — so the marker came from somewhere else. Got:"
             echo "$output"
             exit 1
           fi

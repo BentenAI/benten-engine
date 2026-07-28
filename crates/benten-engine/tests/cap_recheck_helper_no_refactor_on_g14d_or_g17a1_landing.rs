@@ -256,7 +256,16 @@ fn allow_all_and_deny_all_remain_pub_at_module_root() {
 /// Producer (engine-side helper) + consumer (eval-side runtime) name-
 /// alignment verified at runtime test time.
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — cap-recheck-helper translation-layer closure-shape pin. G14-D wave-5a + G17-A1 wave-5b both shipped (PR #115 + #117); test body pins specific DeliveryCapRecheck ↔ CapRecheckFn name-alignment + decision-parity invariant; un-ignore at Phase-4-Foundation pre-tag sweep per docs/future/phase-4-backlog.md §4.29 (HARD RULE 12 clause-(b))."]
+#[ignore = "F-073 destination-retarget: the cited `Phase-4-Foundation pre-tag sweep` \
+    (§4.29) shipped 2026-05-14 without firing — §4.29 has now missed TWO named \
+    destinations. Verified UN-AUTHORABLE at r9-base: the body needs \
+    `ChangeEvent::synthesize_for_test(...)`, which does not exist (the only occurrences \
+    in the tree are the commented pseudo-code below). NOT redundant either — the six \
+    green siblings in this file all exercise `CapRecheckFn` directly; none exercises the \
+    `CapRecheckFn` -> `DeliveryCapRecheck` translation-layer decision parity this arm \
+    names, which is the 25th-p/c-drift shape. Closing it needs the test-only \
+    ChangeEvent constructor first. Destination: docs/future/phase-4-backlog.md §4.168 residual 6 \
+    (HARD RULE 12 clause-(b))."]
 fn cap_recheck_helper_consumed_with_change_event_to_principal_zone_cid_translation_shape_documented()
  {
     // G14-D implementer wires this:

@@ -36,10 +36,24 @@ name: Bench
 #      threshold is intentionally generous; the bench artifact is the
 #      authoritative perf signal humans read during review.
 #
-#   3. **Nightly full sweep (REQUIRED).** Continues to run the
-#      workspace bench sweep nightly + uploads Criterion HTML / CSV
+#   3. **Nightly full sweep (INFORMATIONAL — cannot be required).** Continues
+#      to run the workspace bench sweep nightly + uploads Criterion HTML / CSV
 #      output. This is the source of truth for §14.6-direct benchmark
 #      drift between commits.
+#
+#      RETENSE (#12 / C3, R6 round #1 2026-07-27): this tier previously said
+#      "(REQUIRED)". It cannot be. The job is gated behind
+#      `if: github.event_name == 'schedule' || ... 'workflow_dispatch'`, so it
+#      never reports on a pull request, and GitHub treats an absent required
+#      context as blocking — promoting it would deadlock `main` permanently.
+#      `.github/scripts/validate-branch-protection-spec.py` now fails if
+#      anyone tries.
+#
+#      Tiers 1 and 2 WERE promoted to the required set at the same time. Until
+#      then the word "(required)" in their display names was decorative:
+#      SECURITY-POSTURE.md:1229-1231 closed Compromise #12 on a promotion that
+#      had never happened, and the only "bench" line in
+#      `.github/branch-protection.yml` sat under "=== Excluded (and why) ===".
 #
 # Future ratchets (Phase 8/9+ when CI moves to dedicated runners or
 # Bencher.dev integration lands):

@@ -211,7 +211,7 @@ mutual prefix-freedom over the whole registered set, so a future tag mint that w
 (e.g. minting `"benten-drop:layer-c:cek-v2"` while `"benten-drop:layer-c:cek"` exists) fails CI rather than
 silently opening a cross-surface confusion path. (Cross-ref: `docs/THREAT-MODEL.md` §5 T-DOMSEP / T-DOMSEP-MIT
 for the threat statement. The centralizing registry CODE + its prefix-free regression test have SHIPPED at
-`crates/benten-crypto-suite/src/domain_registry.rs` — a 22-tag corpus enumerated by `registered_domain_tags()`
+`crates/benten-crypto-suite/src/domain_registry.rs` — a 23-tag corpus enumerated by `registered_domain_tags()`
 with the `all_domain_tags_are_prefix_free` regression; this property records the structural shape that code
 realizes. **The §3.9 gossip-topic derivation is deliberately NOT a registered tag** — it is
 `blake3::keyed_hash(K_Set, membership_set_id ‖ BE(generation))` with NO domain-separation label (R0.7 §3.9

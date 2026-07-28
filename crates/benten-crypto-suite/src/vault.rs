@@ -1027,6 +1027,172 @@ mod tests {
         ));
     }
 
+    /// FS-11 / F-072 — the SEAL-side half of the D-95 seal/open symmetry guard.
+    ///
+    /// The two negative tests above (and every other vault negative in the
+    /// corpus) seal with IN-BOUNDS `OWASP_DEFAULT` params and then corrupt
+    /// header bytes, so they route through `parse_vault_frame` and NEVER reach
+    /// the seal-side check. That made `serialize_vault`'s `below_floor` binding
+    /// and its `if` (this file, the block immediately before the `Zeroizing`
+    /// plaintext buffer) DELETABLE with the whole crate green. This test drives
+    /// the SEAL path with out-of-bounds params directly.
+    ///
+    /// MUTATION THAT MUST MAKE THIS FAIL: delete the `let below_floor = ...`
+    /// binding and the `if params.m_cost > VAULT_ARGON2_MAX_M_COST || ... {
+    /// return Err(...) }` block from `serialize_vault`. `serialize_vault` does
+    /// not call `derive_dak` (the DAK is supplied by the caller), so with the
+    /// guard gone it seals happily and returns `Ok(bytes)` for every sub-case
+    /// below — each `unwrap_err()` then panics.
+    ///
+    /// A narrower one-line form of the same mutation: replace `|| below_floor`
+    /// in that `if` with `|| false`, which turns the four floor sub-cases (B, C,
+    /// D, E) green while leaving the ceilings intact.
+    ///
+    /// Why this matters beyond tidiness — both directions are silent:
+    ///   * ABOVE the ceiling produces a well-formed vault that `open_vault`
+    ///     then permanently rejects: SILENT KEY LOSS at provisioning time.
+    ///   * BELOW the floor produces a perfectly openable vault at a fraction of
+    ///     the intended work factor.
+    #[test]
+    // Six table cases + the isolated RFC-9106 relation case. Splitting them
+    // into separate `#[test]` fns would lose the shared positive control that
+    // keeps the guard from passing for the wrong reason.
+    #[allow(clippy::too_many_lines)]
+    fn out_of_bounds_argon2_params_reject_at_the_seal_path() {
+        let payload = VaultPayload {
+            k_principal: [0x11u8; 32],
+            user_did_signing_key: vec![0x22u8; 64],
+            user_did_creation_time: 0,
+        };
+        let salt = [0x77u8; 16];
+        let dak = [0x33u8; 32];
+
+        // Positive control: the in-bounds default MUST still seal. Without this
+        // the test could pass for the wrong reason (e.g. a guard that rejects
+        // everything).
+        assert!(
+            serialize_vault(&payload, &salt, OWASP_DEFAULT, &dak).is_ok(),
+            "positive control: OWASP_DEFAULT MUST seal"
+        );
+
+        // Each case names the ONE bound it violates; every other field is held
+        // in-bounds so the sub-case isolates that arm of the guard.
+        let cases: [(&str, Argon2idParams); 6] = [
+            // --- CEILINGS ---
+            (
+                "m_cost above VAULT_ARGON2_MAX_M_COST",
+                Argon2idParams {
+                    m_cost: VAULT_ARGON2_MAX_M_COST + 1,
+                    t_cost: 2,
+                    p_cost: 1,
+                },
+            ),
+            (
+                "t_cost above VAULT_ARGON2_MAX_T_COST",
+                Argon2idParams {
+                    m_cost: OWASP_DEFAULT.m_cost,
+                    t_cost: VAULT_ARGON2_MAX_T_COST + 1,
+                    p_cost: 1,
+                },
+            ),
+            (
+                "p_cost above VAULT_ARGON2_MAX_P_COST",
+                Argon2idParams {
+                    m_cost: OWASP_DEFAULT.m_cost,
+                    t_cost: 2,
+                    p_cost: VAULT_ARGON2_MAX_P_COST + 1,
+                },
+            ),
+            // --- FLOORS ---
+            (
+                // NOTE: with p_cost >= 1 the m_cost floor cannot be isolated —
+                // any m_cost < 8 also violates the `m_cost < p_cost * 8`
+                // relation, and driving p_cost to 0 to separate them trips the
+                // p_cost floor instead. This case therefore fires the m-floor
+                // AND the relation together, deliberately.
+                "m_cost below VAULT_ARGON2_MIN_M_COST",
+                Argon2idParams {
+                    m_cost: VAULT_ARGON2_MIN_M_COST - 1,
+                    t_cost: 2,
+                    p_cost: 1,
+                },
+            ),
+            (
+                "t_cost below VAULT_ARGON2_MIN_T_COST",
+                Argon2idParams {
+                    m_cost: OWASP_DEFAULT.m_cost,
+                    t_cost: VAULT_ARGON2_MIN_T_COST - 1,
+                    p_cost: 1,
+                },
+            ),
+            (
+                "p_cost below VAULT_ARGON2_MIN_P_COST",
+                Argon2idParams {
+                    m_cost: OWASP_DEFAULT.m_cost,
+                    t_cost: 2,
+                    p_cost: VAULT_ARGON2_MIN_P_COST - 1,
+                },
+            ),
+        ];
+
+        for (label, params) in cases {
+            let outcome = serialize_vault(&payload, &salt, params, &dak);
+            match outcome {
+                Err(VaultError::Argon2ParamsOutOfBounds {
+                    m_cost,
+                    t_cost,
+                    p_cost,
+                }) => {
+                    // The typed error reports the offending params verbatim, so
+                    // a caller can surface which knob was wrong.
+                    assert_eq!(
+                        (m_cost, t_cost, p_cost),
+                        (params.m_cost, params.t_cost, params.p_cost),
+                        "{label}: the typed error MUST report the offending params verbatim"
+                    );
+                }
+                Err(other) => panic!(
+                    "{label}: seal MUST reject with Argon2ParamsOutOfBounds; got Err({other:?})"
+                ),
+                Ok(_) => panic!(
+                    "{label}: serialize_vault SEALED out-of-bounds params. The seal-side \
+                     bounds guard in serialize_vault has been removed or neutered — \
+                     parse_vault_frame's mirror check does NOT cover the seal path \
+                     (FS-11 / F-072)."
+                ),
+            }
+        }
+
+        // The RELATION arm, isolated: m_cost >= MIN_M_COST, t_cost and p_cost
+        // both in-bounds, yet m_cost < p_cost * 8. This is the only sub-case
+        // that exercises the `m_cost < p_cost.saturating_mul(8)` term on its
+        // own, and it is the arm a naive "check each field against its own
+        // min/max" rewrite would silently drop.
+        let relation_violating = Argon2idParams {
+            m_cost: 31, // >= MIN_M_COST (8), but < p_cost * 8 == 32
+            t_cost: 2,
+            p_cost: 4, // == VAULT_ARGON2_MAX_P_COST, so no ceiling fires
+        };
+        assert!(
+            relation_violating.m_cost >= VAULT_ARGON2_MIN_M_COST
+                && relation_violating.t_cost >= VAULT_ARGON2_MIN_T_COST
+                && relation_violating.p_cost >= VAULT_ARGON2_MIN_P_COST
+                && relation_violating.m_cost <= VAULT_ARGON2_MAX_M_COST
+                && relation_violating.t_cost <= VAULT_ARGON2_MAX_T_COST
+                && relation_violating.p_cost <= VAULT_ARGON2_MAX_P_COST,
+            "fixture precondition: every per-field bound is satisfied, so ONLY the \
+             m_cost < p_cost*8 relation can reject this"
+        );
+        assert!(
+            matches!(
+                serialize_vault(&payload, &salt, relation_violating, &dak),
+                Err(VaultError::Argon2ParamsOutOfBounds { .. })
+            ),
+            "seal MUST reject m_cost < p_cost*8 (RFC 9106 relation) even though every \
+             per-field bound is satisfied (FS-11 / F-072)"
+        );
+    }
+
     /// R11 MC-6 — the self-containment property: `vault.cbor` bytes + password
     /// ALONE re-derive the DAK (salt+params from the frame header) and decrypt.
     /// NO external salt is needed. would-FAIL-on-revert: if the frame did not

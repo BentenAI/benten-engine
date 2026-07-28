@@ -36,9 +36,13 @@ fn workspace_root() -> PathBuf {
 }
 
 #[test]
-#[ignore = "phase-4-foundation R4-FP-3 RED-PHASE — G26-A wave-10 un-ignores. \
-    Pin source: r2-test-landscape.md §2.12 row 3 + sec-3.5-r1-13. §13.11 UCAN revocation \
-    observance closure narrative landed at Phase-4-Foundation Track B close."]
+#[ignore = "F-073 destination-retarget: SECURITY-POSTURE.md was restructured and no \
+    longer has a §13.11 — verified at r9-base, ZERO occurrences of `13.11` and ZERO of \
+    `#199` in the file. Three of the five arms (revoke_capability_by_grant_cid, \
+    namespace-mismatch root cause, HISTORICAL marker) DO pass; only the two \
+    section-number/PR-number arms are stale. Closing this is a doc-cite retarget, not \
+    engineering: re-point the two arms at the closure narrative's current home. \
+    Destination: docs/future/phase-4-backlog.md §4.168 residual 4 (HARD RULE 12 clause-(b))."]
 fn security_posture_phase_4_foundation_section_13_11_closed() {
     let posture = workspace_root().join("docs/SECURITY-POSTURE.md");
     let body = fs::read_to_string(&posture).expect("read SECURITY-POSTURE.md");

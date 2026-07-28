@@ -80,23 +80,27 @@
 **Byte-pin test coverage:**
 - `crates/benten-crypto-suite/tests/tf3a_*.rs` + `crates/benten-crypto-suite/tests/tf4_*.rs` — AEAD round-trip + codepoint dispatch pins.
 - `crates/benten-crypto-suite/tests/tf3a_pq_hybrid_wasm32_roundtrip.rs` — same-target PQ-hybrid self-round-trip (recovered-plaintext byte-identity; NOT cross-target wire-byte identity — fresh random ephemeral/nonce per seal), **CI-gated under wasm32-wasip1** by the `crypto-suite-wasm-roundtrip` job in `.github/workflows/wasm-conformance.yml` (F-full R6 R1 finding F-06; the encryption layer is now exercised on the wasm target through wasmtime, not just compile-checked / native-run). **Scope (R10-council F-04):** this gate guards **wasm32-wasip1**, NOT **wasm32-unknown-unknown** — the target the BrowserBackend thin-compute shape (CLAUDE.md baked-in #17) actually ships on. wasm32-wasip1 cleanliness is a strong necessary condition for BrowserBackend but is a distinct target; the wasm32-unknown-unknown crypto round-trip drift-gate is a NAMED CI follow-up (row below).
-- `crates/benten-graph/src/aead_wrap.rs` — production wrap path; consumed by every encryption-bearing test.
+- `crates/benten-graph/src/aead_wrap.rs` — production wrap path. **R6 round #1 correction:** "consumed by every encryption-bearing test" was the whole of this bullet, and consumption is not coverage — it is the tautology shape the falsification sweep exists to find. The `encode_encrypted_node` STORAGE framing had a golden for the `Whole` arm only; the `Chunked` arm (every stored object ≥ 64 KiB) had none, and flipping its variant tag (`:614`) plus the u32 chunk count BE→LE (`:622` encode / `:679` decode) left all nine benten-graph corpus targets at 27/27 PASS. Now really pinned at `crates/benten-graph/tests/canonical_bytes_v1_aead_wrap.rs::{encode_encrypted_node_chunked_layout_frozen, threshold_dispatch_reaches_the_chunked_discriminant, decode_chunked_reads_big_endian_count_and_length_prefixes, chunked_storage_envelope_header_absolute_golden_hex}` + the full-interleave absolute golden `crates/benten-graph/src/aead_wrap.rs::tests::encode_encrypted_node_chunked_absolute_golden_hex`. The decode-side arm never calls the encoder (it hand-authors BE spec bytes and asserts LE-poisoned variants are REJECTED), so a bilateral encoder+decoder flip is caught too.
 
 **crypto-suite target-story note (R15 F-23).** `benten-crypto-suite` is **native-only by its dep graph** today (top-level `getrandom 0.4 sys_rng` + `ml-dsa`'s `getrandom` feature + `libcrux-ml-kem`). Its **`wasm32-unknown-unknown` build story is CI-unexercised** — the wasm CI gate above (`crypto-suite-wasm-roundtrip`) targets **wasm32-wasip1**, and no job builds the crate for `wasm32-unknown-unknown`, so its entropy / `getrandom`-backend selection on that target is unproven. Named follow-up: `docs/future/phase-3-backlog.md §15.4 / §15.5`.
 
 **M-19 endianness conformance scanner (`benten_crypto_suite::conformance::endianness`).** The flagship M-19 gate
 `wire_path_le_survivor_count()` is a REAL source-scanner over `include_str!`-embedded module source (not a
 hand-coded `0`): it counts surviving `to_le_bytes` / `from_le_bytes` on any wire/AAD/keying path and MUST report
-**0** (live survivor count = **0** at HEAD; F-W0-3 pin). The `WIRE_PATH_SOURCES` site-list it scans embeds **8
+**0** (live survivor count = **0** at HEAD; F-W0-3 pin). The `WIRE_PATH_SOURCES` site-list it scans embeds **10
 crypto-suite source modules** — `aead.rs`, `structural_kdf.rs`, `varsig.rs`, `sizes.rs`, `swap_matrix.rs`,
-`envelope.rs`, `vault.rs`, `cipher_suite.rs` (an earlier framing under-counted this set; the array, not the prose
-list, is authoritative). This gate covers the crypto-suite's OWN wire surfaces; the **cross-crate** M-19
-producers (`benten-graph::aead_wrap`, `benten-platform-foundation::plugin_manifest`) are scanned by their own
-crates' tests today. **Intended widened scope:** consolidating the cross-crate producers under one workspace-wide
+`envelope.rs`, `vault.rs`, `cipher_suite.rs`, plus `hpke.rs` + `mlkem.rs` (enrolled at R6-final F-27; two earlier
+framings under-counted this set at 8 — the array, not the prose list, is authoritative). This gate covers the
+crypto-suite's OWN wire surfaces. Of the **cross-crate** M-19 producers,
+`benten-platform-foundation::plugin_manifest` IS scanned by its own crate
+(`tests/m19_endianness_scanner_platform_foundation.rs`, added at R6 round #1 alongside the E-02 signing-pre-image
+golden); `benten-graph::aead_wrap` is **NOT** scanned by any survivor scanner and rests on its golden byte-pins
+(the prior claim that both were "scanned by their own crates' tests today" was verified false).
+**Intended widened scope:** consolidating the cross-crate producers under one workspace-wide
 M-19 survivor scan (so a single gate covers every wire/AAD/keying path in the workspace, not just the
 crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZEN-INTERFACE-DEFERRED.md`.
 
-**FREEZE-WAVE status:** ✅ COVERED — `IROH_BLOCK_SIZE = 16 * 1024` constant pin lives in the aead module's golden-constant tests.
+**FREEZE-WAVE status:** ✅ COVERED — `IROH_BLOCK_SIZE = 16 * 1024` constant pin lives in the aead module's golden-constant tests, and (since R6 round #1) the `encode_encrypted_node` **`Chunked`** storage arm carries real layout + endianness + absolute-hex goldens on both the encode and decode sides. **Prior to R6 round #1 this row read `✅ COVERED` on the strength of the `IROH_BLOCK_SIZE` constant pin alone** — a constant pin says nothing about the framing that carries it, and the chunked framing was in fact unpinned. Corrected per the E-03/E-04 findings.
 
 ---
 
@@ -173,8 +177,9 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 **Byte-pin test coverage:**
 - `crates/benten-sync/src/two_cid_store.rs` — internal round-trip pins.
 - `crates/benten-sync/tests/tf3e_*.rs` family — UCAN-blobs ALPN handler round-trip pins exercise the mapping.
+- `crates/benten-graph/tests/canonical_bytes_v1_two_cid_key_layout.rs` — the **at-rest KEY layout** this mapping is stored under, `benten_graph::two_cid_map::TwoCidMap::{table_key, partition_table_key}` (`m:<cid>` and `d:<did>:m:<cid>`), full-layout + absolute-hex goldens. **Added at R6 round #1 (W-08b):** this row's Surface line names only `benten_sync::TwoCidStore`, so the benten-graph key producer — the bytes redb actually keys on — sat outside every inventory row. Its own unit pin asserted `starts_with(b"d:")` plus "`:m:` appears somewhere", both of which survive **swapping the two `extend_from_slice` arguments**; that swap cross-wires every per-DID lookup and makes `redb_backend.rs::parse_namespace_from_mapping_key` recover the plaintext CID as the namespace DID — a partition-isolation failure (`multitenant-r1-5`). The replacement pins assert each segment positionally with `assert_ne!` guards and distinct DID/CID fixtures.
 
-**FREEZE-WAVE status:** ✅ COVERED.
+**FREEZE-WAVE status:** ✅ COVERED — for the `benten-sync` mapping table AND (since R6 round #1) the `benten-graph` at-rest key layout it is stored under.
 
 ---
 

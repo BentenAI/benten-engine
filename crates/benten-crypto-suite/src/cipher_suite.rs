@@ -148,23 +148,27 @@ pub const X_WING_LABEL: [u8; 6] = [0x5c, 0x2e, 0x2f, 0x2f, 0x5e, 0x5c];
 /// Classical-only `0x6400` combiner domain-separation info string. ASCII;
 /// NOT an integer wire/AAD field (m-1: not flagged by the BE scanner).
 ///
-/// NAMED CARVE-OUT (R17 F-09): this is the sole BENTEN-MINTED keying-surface
-/// domain tag that applies the domain-separation idiom over key material
-/// WITHOUT a `domain_registry` corpus entry / prefix-free enrollment (unlike
-/// the recipient-seed label, which IS enrolled; the sibling [`X_WING_LABEL`] is
-/// likewise un-enrolled but is NOT Benten-minted — its bytes are fixed by
-/// `draft-connolly-cfrg-xwing-kem-10` §5.3 and it lives inside the single
-/// `0x647a` combiner preimage, so it is not a cross-surface separator). Because it
-/// folds only into the `0x6400` classical combiner preimage (a single
-/// self-contained keying surface, not a cross-surface separator), it is left
-/// UN-enrolled at v1-beta. The hardening — enroll it in
-/// `domain_registry::registered_domain_tags()` OR record a documented exemption
-/// in the module's "Scope carve-out" section — is NAMED at
-/// `crates/benten-crypto-suite/src/domain_registry.rs` (the carve-out note) +
-/// `docs/V1-FROZEN-INTERFACE-DEFERRED.md`. Doc-only; no enrollment this round
-/// (enrolling now would add a corpus entry the frozen surface does not yet
-/// carry).
-const X25519_CLASSICAL_INFO_V1: &[u8] = b"x25519-classical-v1-benten-0x6400";
+/// ENROLLED (D-95 closure; was the R17 F-09 NAMED UN-ENROLLED carve-out). This
+/// is a Benten-minted tag that applies the domain-separation idiom over KEY
+/// material — it is folded into the `0x6400` classical-combiner preimage — so it
+/// now carries a [`crate::domain_registry::registered_domain_tags`] entry and is
+/// covered by the corpus-wide `all_domain_tags_are_prefix_free` gate, the same
+/// treatment the structural-KDF and swap-matrix labels received at R6-final F-06
+/// on identical reasoning (single-surface, secret-keying, prefix-free, and
+/// therefore zero-wire-byte to enroll).
+///
+/// `pub(crate)` so `domain_registry` can name it directly in the corpus vec.
+/// There is deliberately NO mirror constant in `domain_registry` — the registry
+/// references THIS definition, so unlike a mirrored tag there is no second copy
+/// that could drift, and no `HOME == MIRROR` drift-assert is needed (the
+/// `structural_kdf` / `swap_matrix` idiom).
+///
+/// The sibling [`X_WING_LABEL`] remains deliberately un-enrolled and that
+/// exemption is now sharper by contrast: its bytes are NOT Benten-minted (they
+/// are fixed by `draft-connolly-cfrg-xwing-kem-10` §5.3) and it lives inside the
+/// single `0x647a` combiner preimage, so it is a spec-mandated constant rather
+/// than a Benten domain separator.
+pub(crate) const X25519_CLASSICAL_INFO_V1: &[u8] = b"x25519-classical-v1-benten-0x6400";
 
 /// Deterministic-recipient-seed BLAKE3 expansion domain-separation label —
 /// prefixed into the keyed-hash that expands a recipient `seed` into the three
@@ -1305,16 +1309,25 @@ mod tests {
             "the frozen deterministic-recipient-seed expansion label is exactly \
              `benten-crypto-suite:recipient-seed`"
         );
-        // S-6 ABSOLUTE pin for the NAMED UN-ENROLLED `0x6400` classical-combiner
-        // info string (R17 F-09; see the `domain_registry` module docs). It is
-        // NOT in `registered_domain_tags()`, so the corpus pin does not reach
-        // it — and it keys material (folded into the `classical_combine`
-        // SHA3-256 preimage), so a rename silently re-keys every `0x6400`
-        // shared secret while every round-trip stays green.
+        // S-6 ABSOLUTE pin for the `0x6400` classical-combiner info string. It
+        // keys material (folded into the `classical_combine` SHA3-256 preimage),
+        // so a rename silently re-keys every `0x6400` shared secret while every
+        // round-trip stays green — the absolute literal is what catches that.
         assert_eq!(
             X25519_CLASSICAL_INFO_V1, b"x25519-classical-v1-benten-0x6400",
             "the frozen 0x6400 classical-combiner info string is exactly \
              `x25519-classical-v1-benten-0x6400`"
+        );
+        // D-95 closure — it is ENROLLED in the prefix-free corpus (it was the
+        // R17 F-09 named un-enrolled carve-out). MUTATION THAT MUST MAKE THIS
+        // FAIL: remove the `crate::cipher_suite::X25519_CLASSICAL_INFO_V1` entry
+        // from `domain_registry::registered_domain_tags()`. Without this arm,
+        // dropping the entry only trips the corpus COUNT assertion, which a
+        // future tag addition would mask.
+        assert!(
+            reg::registered_domain_tags().contains(&X25519_CLASSICAL_INFO_V1),
+            "the 0x6400 classical-combiner info string MUST stay enrolled in the \
+             prefix-free domain-tag corpus (D-95)"
         );
     }
 

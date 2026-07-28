@@ -190,3 +190,20 @@ f_ms_2_constructor_cardinality_memberref
 f_ms_3_members_table_fusion
 f03_revocation_payload_cid_sig_independent_regression
 f03_ucan_verify_strict_rejects_malleable_sig_regression
+
+# --- materializer canonical bytes / canonical CID (F-073 live gap) -----------
+# Added at R6 round #1. This target was GREEN, unignored, and referenced by ZERO
+# workflows: its only lane was `ci.yml`'s `build+test`, which is not a required
+# context, so a materializer canonical-bytes or canonical-CID regression shipped
+# on a fully green board. The pin that would have surfaced that
+# (`benten-engine/tests/materializer_determinism_canonical_bytes_stable_across_runs.rs`)
+# was `#[ignore]`d against a destination that shipped two phases ago; it is
+# un-ignored in the same commit and its ARM 2 now reads THIS file.
+materializer_canonical_bytes_determinism_across_runs
+
+# --- R6 round #1 falsification-sweep closures (E-02 / E-03 / E-04 / W-08b) ---
+# Each closes a surface the sweep proved had NO byte pin anywhere in the
+# workspace. See the per-file module docs for the exact surviving mutation.
+canonical_bytes_v1_two_cid_key_layout
+canonical_bytes_v1_install_record_signing_preimage
+m19_endianness_scanner_platform_foundation

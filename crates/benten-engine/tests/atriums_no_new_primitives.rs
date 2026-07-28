@@ -57,7 +57,19 @@ fn atriums_compose_via_existing_primitives_no_new_primitive_kind_variants() {
 }
 
 #[test]
-#[ignore = "phase-3-backlog §7.3.D — Atrium example handlers compose from 12 primitives only. G20-B wave-8b shipped; test body pins handler-composition structural invariant; un-ignore at Phase-4-Foundation pre-tag sweep per docs/future/phase-4-backlog.md §4.29 (HARD RULE 12 clause-(b))."]
+#[ignore = "F-073 destination-retarget: the cited `Phase-4-Foundation pre-tag sweep` \
+    (§4.29) shipped at `phase-4-foundation-close` 2026-05-14 without firing — §4.29 has \
+    now missed TWO named destinations. Verified UN-AUTHORABLE as specified at r9-base, \
+    for three independent reasons: (1) the pseudo-code walks \
+    `packages/engine/examples/atrium-*` as DIRECTORIES joined with `handler.ts`, but the \
+    examples are FILES (`atrium-peer-mgmt.ts`, `atrium-sync-trigger.ts`); (2) the \
+    required `ucan-grant` category has no example at all; (3) `did-resolution.ts` lacks \
+    the `atrium-` prefix the loop filters on. The 12-primitive commitment ITSELF is \
+    covered — `exit_criterion_13_...` in this same file is green and unignored, as are \
+    the six per-feature pins listed in \
+    exit_criterion_7_aggregates_6_distributed_primitive_pins.rs. Closing this needs \
+    example authoring, not a test edit. Destination: docs/future/phase-4-backlog.md §4.168 residual 5 \
+    (HARD RULE 12 clause-(b))."]
 fn atrium_examples_handlers_compose_entirely_from_existing_12_primitives_no_engine_call_outside_subgraph()
  {
     // cag-4 architectural pin. G20-B implementer wires this:

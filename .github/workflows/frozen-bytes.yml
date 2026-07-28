@@ -15,8 +15,10 @@ name: Frozen Bytes
 #
 # WHAT THIS JOB IS. A narrow, required-grade run of exactly the pins that
 # guard v1-beta frozen bytes. It is NOT a second copy of the suite: it selects
-# ~109 named test targets out of the workspace's ~900 integration test
-# binaries, which is what keeps it cheap enough to be a merge gate. `ci.yml`'s
+# the named test targets in `.github/frozen-bytes-corpus.txt` — 120 at the time
+# of writing, and the exact-match floor in step 2 below is the authority — out
+# of the workspace's ~900 integration test binaries, which is what keeps it
+# cheap enough to be a merge gate. `ci.yml`'s
 # multi-arch `build+test` matrix still runs the FULL suite on every leg and
 # remains the authoritative cross-platform verifier; this job only guarantees
 # the freeze corpus cannot go un-run.
@@ -64,8 +66,9 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Free disk space (Linux runners only)
-        # Mirrors ci.yml. This job links ~109 test binaries rather than ~900,
-        # so the pressure is far lower, but the step is cheap insurance and an
+        # Mirrors ci.yml. This job links the corpus (~120 test binaries) plus
+        # the per-crate `--lib` targets from step 5, rather than ~900, so the
+        # pressure is far lower — but the step is cheap insurance and an
         # `errno=28` mid-link would make the gate result meaningless.
         if: runner.os == 'Linux'
         uses: ./.github/actions/free-disk-space
@@ -108,8 +111,8 @@ jobs:
           # S-5 hazard the audit found in ci.yml's T9 gate. If the corpus file
           # is truncated, emptied or commented out, `cargo nextest run` with
           # zero `--test` flags stops meaning what this job's name says. Fail.
-          if [ "${#TARGETS[@]}" -ne 116 ]; then
-            echo "FLOOR VIOLATED: corpus lists ${#TARGETS[@]} targets, expected exactly 116."
+          if [ "${#TARGETS[@]}" -ne 120 ]; then
+            echo "FLOOR VIOLATED: corpus lists ${#TARGETS[@]} targets, expected exactly 120."
             echo "The frozen-bytes corpus must not shrink. If a pin was renamed,"
             echo "update the name; if a surface was genuinely deleted, lower this"
             echo "floor in the SAME commit with a written reason."
@@ -204,17 +207,71 @@ jobs:
           # pass: flipping `X25519_CLASSICAL_INFO_V1` (concatenated into the
           # `classical_combine` SHA3-256 preimage for the 0x6400 arm, so its
           # bytes never reach the wire and every round-trip stays
-          # self-consistent) left the 109-target corpus fully GREEN.
+          # self-consistent) left the then-109-target corpus fully GREEN.
           #
-          # This arm also lifts the 11 pre-existing home-crate
+          # This arm also lifts the pre-existing home-crate
           # `HOME == registry::MIRROR` domain-tag mirror unit tests onto the
           # required lane, where they become real byte pins now that the
           # registry side carries literals.
+          #
+          # SCOPE FIX (R6 round #1 falsification sweep, 2026-07-27). This arm
+          # named `-p benten-crypto-suite -p benten-caps` only — 2 of the 13
+          # corpus crates. That is why the chunked storage-envelope mutations
+          # escaped the freeze gate entirely, and it left the
+          # `domain_registry_mirror` modules in `benten-drop` (layer_c.rs,
+          # envelope_sig.rs) and `benten-membership-set` (keying.rs, aad.rs) —
+          # module-private signing-domain label pins, precisely the class this
+          # arm exists for — on no required lane at all.
+          #
+          # The original narrowing was reportedly forced by the workspace
+          # feature string erroring on a narrow package selection. The proper
+          # solution is not a narrower package list but the SAME selection step
+          # 4 already proves resolvable: `"${PKGS[@]}"` with `"$FEATURES"`.
+          # Every feature path in $FEATURES is reachable from that package set
+          # (`benten-ivm/testing` via benten-engine), which is exactly why step
+          # 4 works — so reusing both variables makes this arm's resolvability
+          # a consequence of step 4's, not an independent bet.
+          #
+          # `benten-errors` hosts no `#[cfg(test)] mod tests` in its lib; it is
+          # left in the selection because naming it costs nothing and dropping
+          # it would make this list drift from $PKGS. Every other corpus crate
+          # has lib unit tests.
+          cargo nextest list \
+            --list-type binaries-only \
+            --locked \
+            "${PKGS[@]}" \
+            --features "$FEATURES" \
+            --lib \
+            > /tmp/frozen-bytes-lib-binaries.txt
+
+          # Anti-narrowing floor. The failure this arm just recovered from was
+          # a silently-too-small package list, so assert the crates whose lib
+          # hosts frozen-byte pins are all present.
+          #
+          # MUTATION THAT MUST MAKE THIS FAIL: delete `-p benten-drop` from the
+          # PKGS array above. benten-drop's lib target disappears from the
+          # listing and this loop exits 1 — whereas before the fix, removing a
+          # crate from a 2-entry list produced no signal at all.
+          missing=0
+          for c in benten-core benten-graph benten-caps benten-eval benten-engine \
+                   benten-id benten-sync benten-platform-foundation \
+                   benten-crypto-suite benten-drop benten-membership-set \
+                   benten-dsl-compiler; do
+            if ! grep -qF "$c" /tmp/frozen-bytes-lib-binaries.txt; then
+              echo "::error::lib arm is missing crate '$c' — the --lib selection has narrowed."
+              missing=$((missing + 1))
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Selected lib binaries were:"
+            cat /tmp/frozen-bytes-lib-binaries.txt
+            exit 1
+          fi
+
           cargo nextest run \
             --profile ci \
             --locked \
             --no-tests=fail \
-            -p benten-crypto-suite \
-            -p benten-caps \
-            --features benten-crypto-suite/testing,benten-caps/testing \
+            "${PKGS[@]}" \
+            --features "$FEATURES" \
             --lib

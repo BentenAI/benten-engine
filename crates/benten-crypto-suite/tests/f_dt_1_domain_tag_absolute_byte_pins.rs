@@ -22,14 +22,15 @@
 //!
 //! # What this file pins
 //!
-//! The literal bytes of all 22 registered tags, in registry order. Because the
+//! The literal bytes of all 23 registered tags, in registry order. Because the
 //! eleven home-crate drift-asserts already tie each home constant to its
 //! registry mirror, nailing the registry side to literals here transitively
 //! converts every one of those existing asserts into a real byte pin.
 //!
-//! This also reaches the three `pub(crate)` tags
+//! This also reaches the four `pub(crate)` tags
 //! (`structural_kdf::STRUCTURAL_KDF_ROOT_LABEL` / `STRUCTURAL_KDF_STEP_LABEL`,
-//! `swap_matrix::SWAP_MATRIX_AAD_DOMAIN`) that no integration test can name
+//! `swap_matrix::SWAP_MATRIX_AAD_DOMAIN`,
+//! `cipher_suite::X25519_CLASSICAL_INFO_V1`) that no integration test can name
 //! directly — their VALUES flow into the returned vec, so the positional pin
 //! covers them.
 //!
@@ -50,9 +51,9 @@ use benten_crypto_suite::domain_registry::{
 
 /// The frozen corpus, in `registered_domain_tags()` order.
 ///
-/// Entries 20-22 are the `pub(crate)` tags that cannot be named from an
+/// Entries 20-23 are the `pub(crate)` tags that cannot be named from an
 /// integration test; they are pinned positionally through the returned vec.
-const FROZEN_DOMAIN_TAGS: [&[u8]; 22] = [
+const FROZEN_DOMAIN_TAGS: [&[u8]; 23] = [
     // --- same-key (user-DID Ed25519) signature / AAD family (6) ---
     b"benten/layer-d/device-link-provisioning/v1", // PROVISIONING_DOMAIN
     b"benten/g-core-3f/drop-bundle-envelope/v1",   // ENVELOPE_SIG_DOMAIN
@@ -84,6 +85,8 @@ const FROZEN_DOMAIN_TAGS: [&[u8]; 22] = [
     b"step",            // structural_kdf::STRUCTURAL_KDF_STEP_LABEL
     // --- swap-matrix sign-and-seal AAD-commit prefix (1, pub(crate)) ---
     b"sm-aad:", // swap_matrix::SWAP_MATRIX_AAD_DOMAIN
+    // --- classical-combiner keying info string (1, pub(crate); D-95) ---
+    b"x25519-classical-v1-benten-0x6400", // cipher_suite::X25519_CLASSICAL_INFO_V1
 ];
 
 /// The whole frozen corpus, positionally, against literal bytes.

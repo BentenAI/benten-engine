@@ -52,8 +52,12 @@
 //! - **Swap-matrix sign-and-seal AAD-commit prefix** (R6-final F-06
 //!   follow-up; home `crate::swap_matrix`) — `SWAP_MATRIX_AAD_DOMAIN`,
 //!   reached from the production `sign_and_seal` → `compose_aad` path.
+//! - **Classical-combiner keying info string** (D-95; home
+//!   `crate::cipher_suite`) — `X25519_CLASSICAL_INFO_V1`, folded into the
+//!   `0x6400` classical-combiner preimage. It keys SECRET material, so it is
+//!   enrolled on the same rule as the structural-KDF labels.
 //!
-//! The nine families above enumerate all **22** tags
+//! The ten families above enumerate all **23** tags
 //! [`registered_domain_tags`] returns; a new family added to the vec without
 //! a bullet here is a doc-vs-code drift.
 //!
@@ -98,18 +102,26 @@
 //!   the load-bearing statement, so a future public-content-hash namespace is
 //!   already covered without editing this note.
 //!
-//! # NAMED UN-ENROLLED tag — `X25519_CLASSICAL_INFO_V1` (R17 F-09)
+//! # `X25519_CLASSICAL_INFO_V1` is ENROLLED (D-95 closure; was R17 F-09)
 //!
 //! `cipher_suite::X25519_CLASSICAL_INFO_V1`
-//! (`b"x25519-classical-v1-benten-0x6400"`) is a keying domain-separation
-//! info string folded into the `0x6400` classical combiner preimage. UNLIKE
-//! the two carve-outs above, it DOES key material — but it is a single
-//! self-contained combiner surface (not a cross-surface separator), so it is
-//! left OUT of the registered corpus at v1-beta rather than being enrolled or
-//! given a permanent exemption. This is a NAMED hardening item (enroll it in
-//! [`registered_domain_tags`] with a `domain_registry`-equality drift-assert
-//! at its home, OR promote this paragraph to a permanent documented exemption)
-//! carried at `docs/V1-FROZEN-INTERFACE-DEFERRED.md`; NOT resolved this round.
+//! (`b"x25519-classical-v1-benten-0x6400"`) is a keying domain-separation info
+//! string folded into the `0x6400` classical-combiner preimage. UNLIKE the
+//! carve-outs above, it DOES key material, so the class rule puts it INSIDE the
+//! registered corpus — the same call R6-final F-06 made for the structural-KDF
+//! and swap-matrix labels, which are likewise single self-contained surfaces
+//! that key/AAD-bind secret material. Enrolling is zero-wire-byte (the registry
+//! is a collision table, not a wire surface) and the tag is prefix-free against
+//! the corpus by inspection: no other registered tag begins with `x`.
+//!
+//! It is referenced DIRECTLY from [`registered_domain_tags`] rather than
+//! mirrored here, so there is no second copy to drift and no `HOME == MIRROR`
+//! assert is required (the `structural_kdf` / `swap_matrix` idiom).
+//!
+//! The sibling `cipher_suite::X_WING_LABEL` stays OUT, and that exclusion is
+//! principled rather than pending: its bytes are fixed by
+//! `draft-connolly-cfrg-xwing-kem-10` §5.3, so it is a spec-mandated constant
+//! inside the `0x647a` combiner preimage, not a Benten-minted separator.
 //!
 //! # The single source of truth vs. the home-crate mirrors
 //!
@@ -302,6 +314,11 @@ pub fn registered_domain_tags() -> Vec<&'static [u8]> {
         // home: `crate::swap_matrix`; production surface `sign_and_seal` →
         // `compose_aad`). Prefix-free against the corpus.
         crate::swap_matrix::SWAP_MATRIX_AAD_DOMAIN,
+        // Classical-combiner keying info string (D-95; home
+        // `crate::cipher_suite`; folded into the `0x6400` combiner preimage).
+        // APPENDED at the tail so every pre-existing registry index is
+        // unchanged — `f_dt_1`'s positional pin only gains an entry.
+        crate::cipher_suite::X25519_CLASSICAL_INFO_V1,
     ]
 }
 
@@ -375,19 +392,20 @@ mod tests {
         assert!(registered_domain_tags().contains(&PROVISIONING_DOMAIN));
     }
 
-    /// The widened corpus enumerates EXACTLY the 22 cross-surface tags the
-    /// SECURITY-PROOFS §4.1 / THREAT-MODEL §5 scope names. Locking the count
-    /// makes the prefix-free invariant forward-fire on ANY tag change: adding a
-    /// tag without updating this count fails the build (forcing a deliberate
-    /// re-confirmation that the new tag clears the prefix-free check), and the
-    /// per-family membership assertion below catches an accidental drop of any
-    /// named surface.
+    /// The widened corpus enumerates EXACTLY the 23 cross-surface tags the
+    /// SECURITY-PROOFS §4.1 / THREAT-MODEL §5 scope names (23 since the D-95
+    /// enrollment of the `0x6400` classical-combiner info string). Locking the
+    /// count makes the prefix-free invariant forward-fire on ANY tag change:
+    /// adding a tag without updating this count fails the build (forcing a
+    /// deliberate re-confirmation that the new tag clears the prefix-free
+    /// check), and the per-family membership assertion below catches an
+    /// accidental drop of any named surface.
     #[test]
     fn registry_spans_the_full_corpus_wide_scope() {
         let tags = registered_domain_tags();
         assert_eq!(
             tags.len(),
-            22,
+            23,
             "registered_domain_tags() count changed — re-confirm the new/removed tag is \
              prefix-free and update SECURITY-PROOFS §4.1 / THREAT-MODEL §5 scope"
         );
@@ -424,6 +442,8 @@ mod tests {
             crate::structural_kdf::STRUCTURAL_KDF_STEP_LABEL,
             // Swap-matrix sign-and-seal AAD-commit prefix (R6-final F-06 follow-up):
             crate::swap_matrix::SWAP_MATRIX_AAD_DOMAIN,
+            // Classical-combiner keying info string (D-95):
+            crate::cipher_suite::X25519_CLASSICAL_INFO_V1,
         ] {
             assert!(
                 tags.contains(&expected),

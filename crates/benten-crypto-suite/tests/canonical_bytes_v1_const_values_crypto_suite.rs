@@ -30,7 +30,10 @@
 //! are not repeated; the free-standing `registry::*` integers below are a
 //! DIFFERENT, previously-unpinned set.
 
-use benten_crypto_suite::aead::{IROH_BLOCK_SIZE, WHOLE_CONTENT_AEAD_THRESHOLD};
+use benten_crypto_suite::aead::{
+    ENVELOPE_FORMAT_VERSION_V1 as AEAD_ENVELOPE_FORMAT_VERSION_V1,
+    ENVELOPE_MAGIC as AEAD_ENVELOPE_MAGIC, IROH_BLOCK_SIZE, WHOLE_CONTENT_AEAD_THRESHOLD,
+};
 use benten_crypto_suite::cipher_suite::{
     ML_KEM_768_CT_LEN, ML_KEM_768_DK_LEN, ML_KEM_768_EK_LEN, ML_KEM_768_SS_LEN, X_WING_LABEL,
     X25519_PUBLIC_LEN, X25519_SECRET_LEN,
@@ -69,6 +72,49 @@ fn envelope_header_bytes_are_frozen() {
     assert_eq!(
         MAX_NONCE_LEN, 24,
         "MAX_NONCE_LEN bounds the nonce field parsed from untrusted envelope bytes"
+    );
+}
+
+/// GCS-16 — `ENVELOPE_MAGIC` and `ENVELOPE_FORMAT_VERSION_V1` are each defined
+/// TWICE (`src/aead.rs:64,68` and `src/envelope.rs:47,50`). Both `aead::` copies
+/// are in the frozen public-api baseline, and `aead::AeadEnvelope::to_wire_bytes`
+/// writes wire byte 0 from the `aead::` copy while `src/vault.rs:447` writes its
+/// frame magic from the `envelope::` copy — two homes, one wire byte.
+///
+/// The pin directly above covers only the `envelope::` home. `aead.rs:537`'s
+/// `assert_eq!(bytes[0], ENVELOPE_MAGIC)` is a tautology its own doc-comment
+/// admits: `bytes[0]` was written FROM that same constant. So nothing on the
+/// crate compares the two homes to each other. The bytes agree today; this pins
+/// that they STAY agreeing.
+///
+/// MUTATION THAT MUST MAKE THIS FAIL: change `ENVELOPE_MAGIC` in `src/aead.rs`
+/// alone (e.g. `0xae` -> `0xaf`), leaving `src/envelope.rs` untouched. Every
+/// AEAD seal/open round-trip stays green (both ends read the same `aead::`
+/// copy), and `envelope_header_bytes_are_frozen` stays green (it reads the
+/// `envelope::` copy) — the two homes have silently diverged onto different
+/// wire bytes, and only this test sees it.
+#[test]
+fn dual_homed_envelope_header_constants_agree_across_both_homes() {
+    assert_eq!(
+        AEAD_ENVELOPE_MAGIC, ENVELOPE_MAGIC,
+        "aead::ENVELOPE_MAGIC and envelope::ENVELOPE_MAGIC are the SAME wire byte 0 \
+         written by two different encoders (aead::AeadEnvelope::to_wire_bytes vs \
+         vault::serialize_vault); they MUST NOT diverge (GCS-16)"
+    );
+    assert_eq!(
+        AEAD_ENVELOPE_FORMAT_VERSION_V1, ENVELOPE_FORMAT_VERSION_V1,
+        "aead::ENVELOPE_FORMAT_VERSION_V1 and envelope::ENVELOPE_FORMAT_VERSION_V1 are \
+         the SAME wire byte 1 discriminator defined in two homes (GCS-16)"
+    );
+    // Absolute arm: a coordinated edit to BOTH homes would keep the equality
+    // above green, so nail each home to its frozen literal too.
+    assert_eq!(
+        AEAD_ENVELOPE_MAGIC, 0xae,
+        "the aead:: home of ENVELOPE_MAGIC is frozen at 0xae"
+    );
+    assert_eq!(
+        AEAD_ENVELOPE_FORMAT_VERSION_V1, 0x01,
+        "the aead:: home of ENVELOPE_FORMAT_VERSION_V1 is frozen at 0x01"
     );
 }
 

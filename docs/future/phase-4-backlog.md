@@ -1729,4 +1729,84 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Safe-1 #523/#5
 
 ---
 
+### §4.168 F-073 stale-ignore residuals — the seven arms that CANNOT be un-ignored (the live §4.29 successor)
+
+**This row exists because §4.29 has now missed TWO named destinations.** §4.29 is titled
+"…stale-rationale sweep at pre-tag (**Phase-4-Foundation pre-tag**)"; Phase-4-Foundation
+SHIPPED at tag `phase-4-foundation-close` on 2026-05-14 without that sweep firing, exactly
+as Phase 3 had shipped without the §7.3.D batch it in turn cited. Retargeting the F-073
+residuals at §4.29 would have reproduced the defect one hop over, so this row is minted as
+its live successor. Per HARD RULE rule-12 clause-(b) the destination must EXIST at the
+moment the cite is written — that is what this row is for.
+
+**Provenance.** R6 round #1 finding **F-073**: 25 `#[ignore]` arms across 15 files cite a
+destination that shipped two phases ago. 16 of them (Family A, `§4.29` / Phase-4-Foundation
+pre-tag) were 100 % `unimplemented!()` placeholders and were **DELETED** at R6 round #1
+after real green coverage was located for each stated obligation. 4 of the 9 Family-B arms
+(`G26-A`/`G26-B wave-10`) were verified true-at-HEAD or made true and **UN-IGNORED** in the
+same commit. The seven residuals below are the remainder: each was verified FALSE at
+`7bb1a9fa`, and closing each is real out-of-partition work, not a test edit.
+
+**The seven residuals.**
+
+1. **`plugin-manifest-validation.yml` does not exist** — no such workflow, and
+   `.github/branch-protection.yml` names no such context. Manifest BYTES are not unguarded
+   (`plugin_manifest_full_round_trip` + `f_inj_1_install_record_signing_payload_injective`
+   are both on the required frozen-bytes corpus); what is missing is the PR-time
+   schema-check workflow. Pin:
+   `crates/benten-engine/tests/plugin_manifest_validation_workflow_required_on_pr.rs`.
+2. **`admin-ui-v0-build.yml` does not exist** — `admin-shell-e2e.yml` exists and may be the
+   intended successor surface. **Resolve which before authoring.** Pin:
+   `crates/benten-engine/tests/admin_ui_v0_build_workflow_required_on_pr.rs`.
+3. **The branch-protection umbrella over (1) + (2)** needs RE-SCOPING, not just
+   un-ignoring: its third leg (materializer determinism) was CLOSED DIFFERENTLY at R6
+   round #1 — registered on the required frozen-bytes corpus rather than minted as its own
+   workflow context. Pin:
+   `crates/benten-engine/tests/branch_protection_spec_lists_new_phase_4_foundation_required_contexts.rs`.
+4. **`docs/SECURITY-POSTURE.md` has no §13.11 and no `#199`** (zero occurrences of each,
+   verified). Three of the pin's five arms DO pass; only the two section-number / PR-number
+   arms are stale. Closing this is a doc-cite retarget at the closure narrative's current
+   home. Pin:
+   `crates/benten-engine/tests/security_posture_phase_4_foundation_section_13_11_closed.rs`.
+5. **The `ucan-grant` Atrium example does not exist**, and the pin's walk is
+   un-authorable as specified for two further independent reasons (it treats
+   `packages/engine/examples/atrium-*` as DIRECTORIES joined with `handler.ts`, but they are
+   FILES; and `did-resolution.ts` lacks the `atrium-` prefix the loop filters on). The
+   12-primitive commitment itself IS covered by green unignored siblings. Closing this needs
+   EXAMPLE AUTHORING. Pin: `crates/benten-engine/tests/atriums_no_new_primitives.rs` (the
+   one arm; the file's other two are out of scope).
+6. **`ChangeEvent::synthesize_for_test(...)` was never minted** — the only occurrences in
+   the tree are the commented pseudo-code in the pin itself. Not redundant: the six green
+   siblings all exercise `CapRecheckFn` directly, none exercises the
+   `CapRecheckFn` → `DeliveryCapRecheck` translation-layer decision parity (the
+   25th-p/c-drift shape). Needs the test-only constructor first. Pin:
+   `crates/benten-engine/tests/cap_recheck_helper_no_refactor_on_g14d_or_g17a1_landing.rs`
+   (the one arm; the file's other seven are green and unignored).
+7. **`exit_criterion_7` slot 6 is MIS-SPECIFIED** — all six named pin files exist and five
+   carry the `PrimitiveKind`/`Strategy` substance marker the umbrella's own pseudo-code
+   specifies, but
+   `crates/benten-renderer-tauri/tests/three_rung_baked_in_17_defense_extension_pin.rs`
+   contains no `PrimitiveKind`: it is a wasm32 bundle-content / baked-in-#17
+   deployment-shape pin. Authoring verbatim REDs; relaxing the marker to `Renderer` would go
+   GREEN while asserting something the umbrella does not claim (pim-18 SHAPE-not-SUBSTANCE).
+   Pin:
+   `crates/benten-engine/tests/exit_criterion_7_aggregates_6_distributed_primitive_pins.rs`.
+
+**Acceptance criteria.** (a) Residuals 1-3 close together or not at all — 3 is the umbrella
+over 1 and 2, re-scoped to two legs. (b) Residual 4 is a two-line doc-cite retarget and
+should NOT wait on the others. (c) Residual 5 closes by authoring the missing
+`ucan-grant` example AND re-specifying the walk against files-not-directories; **do not**
+loosen the four-category requirement to make it pass. (d) Residual 6 closes by minting
+`ChangeEvent::synthesize_for_test` behind the existing test-only cfg gate. (e) Residual 7
+closes by naming a REAL renderer-tauri 12-primitive pin for slot 6, **or** by dropping to
+five slots with a written reason — never by loosening the marker (that is the exact
+SHAPE-not-SUBSTANCE failure pim-18 §3.6f exists to stop).
+
+**A destination that ships without firing is the defect, not the schedule.** If this row's
+own phase closes with these still open, mint the successor rather than re-pointing at this
+one. Estimated scope: ~300-500 LOC (two CI workflows + one example + one test-only
+constructor + two re-scopings).
+
+---
+
 (Section structure additive; entries land as Phase 4-Foundation work surfaces them.)

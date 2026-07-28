@@ -95,6 +95,15 @@ jobs:
           - { os: ubuntu-24.04-arm, leg: linux-arm64,   target: aarch64-unknown-linux-gnu,  rust: "1.95.0" }
           - { os: ubuntu-24.04-arm, leg: linux-arm64,   target: aarch64-unknown-linux-gnu,  rust: stable   }
     runs-on: ${{ matrix.os }}
+    env:
+      # F-060. The four `rust: "1.95.0"` legs never compiled on 1.95: the
+      # dtolnay action sets the rustup DEFAULT, and the repo-root
+      # rust-toolchain.toml (`channel = "stable"`) outranks a default. Every
+      # bare `cargo` step below therefore ran on floating stable, making the
+      # MSRV half of this matrix a duplicate of the stable half.
+      # `RUSTUP_TOOLCHAIN` outranks the toolchain file. On the `stable` legs
+      # this expands to `stable` and is a no-op, so one line covers both.
+      RUSTUP_TOOLCHAIN: ${{ matrix.rust }}
     # Raised 25 -> 50: the slowest legs (macos-x86_64, linux-x86_64 @ stable)
     # running `cargo nextest run` with PROPTEST_CASES=1024 on the grown
     # workspace consistently exceed 25min and were GitHub-killed at the
@@ -129,6 +138,23 @@ jobs:
         uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2
         with:
           tool: cargo-nextest
+
+      - name: Assert the pinned toolchain is actually in effect
+        # F-060 falsification pin, MSRV legs only. See the `RUSTUP_TOOLCHAIN`
+        # note on the job `env:` above.
+        #
+        # MUTATION THAT MUST MAKE THIS FAIL: delete the `RUSTUP_TOOLCHAIN`
+        # line from the job `env:`. The 1.95.0 legs silently fall back to
+        # floating stable and this step exits 1.
+        if: matrix.rust != 'stable'
+        run: |
+          set -euo pipefail
+          actual="$(cargo --version)"
+          echo "$actual"
+          case "$actual" in
+            *" 1.95."*) echo "OK: MSRV 1.95 toolchain is in effect." ;;
+            *) echo "::error::MSRV leg is not testing MSRV — expected cargo 1.95.x, got: $actual"; exit 1 ;;
+          esac
 
       - name: cargo fmt --check
         # fmt + clippy only on stable to avoid MSRV-chasing lint churn; the

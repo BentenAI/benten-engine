@@ -19,11 +19,23 @@
 //! 1. The companion per-crate test
 //!    `materializer_canonical_bytes_determinism_across_runs.rs` exists
 //!    at `crates/benten-platform-foundation/tests/`.
-//! 2. A CI workflow OR a gating composition is registered that runs the
-//!    materializer determinism test in the always-required CI surface
-//!    (either via an existing `determinism.yml` extension OR a new
-//!    workflow file). The composition prevents the materializer
-//!    determinism gate from silently regressing.
+//! 2. That companion test is REGISTERED ON THE REQUIRED LANE — i.e. its
+//!    target stem appears in `.github/frozen-bytes-corpus.txt`, the corpus
+//!    `frozen-bytes.yml` runs as the required `frozen-bytes corpus
+//!    (v1-beta wire freeze)` context.
+//!
+//! ## F-073 — why arm 2 changed shape
+//!
+//! Arm 2 used to scan `.github/workflows/*.yml` for the word "materializer",
+//! against a `G26-B wave-10` destination that shipped two phases ago. NO
+//! workflow has ever contained that word, so the arm was never true — and it
+//! was `#[ignore]`d, so nothing said so. The gap it was hiding is real: a
+//! materializer canonical-bytes / canonical-CID regression rode a green board,
+//! because the companion test's only lane (`ci.yml`'s `build+test`) is not a
+//! required context (see `frozen-bytes.yml`'s own header on that gap).
+//!
+//! The required-lane registration surface at HEAD is the corpus FILE, not a
+//! workflow body, so that is what arm 2 now reads.
 
 #![allow(clippy::unwrap_used)]
 
@@ -38,10 +50,12 @@ fn workspace_root() -> PathBuf {
         .expect("workspace root")
 }
 
+/// FAILS ON THIS ONE-LINE MUTATION: delete the
+/// `materializer_canonical_bytes_determinism_across_runs` line from
+/// `.github/frozen-bytes-corpus.txt` — arm 2 fires. (The corpus floor in
+/// `frozen-bytes.yml` fires too; both are deliberate, and neither fired
+/// before F-073 because this pin was ignored and the line did not exist.)
 #[test]
-#[ignore = "phase-4-foundation R4-FP-3 RED-PHASE — G26-B wave-10 un-ignores. \
-    Pin source: r2-test-landscape.md §2.13 row 2 + mat-r1-3. CI-side materializer determinism \
-    gate composes with the per-crate test shipped at R3 Family E."]
 fn materializer_determinism_canonical_bytes_stable_across_runs() {
     let root = workspace_root();
 
@@ -55,36 +69,32 @@ fn materializer_determinism_canonical_bytes_stable_across_runs() {
         per_crate_test.display()
     );
 
-    // ARM 2: CI workflow registers the materializer determinism test.
-    // Look for either an existing determinism workflow extension OR a
-    // new dedicated workflow. The implementer at G26-B picks the
-    // composition shape; this test asserts SOMETHING references the
-    // materializer determinism path in `.github/workflows/`.
-    let workflows = root.join(".github/workflows");
-    assert!(workflows.is_dir(), ".github/workflows/ MUST exist");
+    // ARM 2: the companion test is registered on the REQUIRED lane.
+    //
+    // Substring matching is not enough here: a `#` comment mentioning the stem
+    // would satisfy it while registering nothing. Match a whole non-comment
+    // line, which is exactly the shape `frozen-bytes.yml` itself selects on
+    // (`grep -vE '^[[:space:]]*(#|$)'`).
+    let corpus_path = root.join(".github/frozen-bytes-corpus.txt");
+    let corpus = std::fs::read_to_string(&corpus_path).unwrap_or_else(|e| {
+        panic!(
+            "frozen-bytes corpus MUST exist at {} ({e})",
+            corpus_path.display()
+        )
+    });
 
-    let mut found_reference = false;
-    for entry in std::fs::read_dir(&workflows).unwrap().flatten() {
-        let p = entry.path();
-        if !p.extension().is_some_and(|e| e == "yml" || e == "yaml") {
-            continue;
-        }
-        let body = std::fs::read_to_string(&p).unwrap_or_default();
-        if body.contains("materializer_canonical_bytes_determinism_across_runs")
-            || body.contains("materializer-determinism")
-            || body.contains("materializer determinism")
-            || (body.contains("materializer") && body.contains("determinism"))
-        {
-            found_reference = true;
-            break;
-        }
-    }
+    let registered = corpus
+        .lines()
+        .map(str::trim)
+        .any(|line| line == "materializer_canonical_bytes_determinism_across_runs");
 
     assert!(
-        found_reference,
-        "At least one workflow in .github/workflows/ MUST reference the materializer \
-         determinism gate (either by test name or by descriptive label). Without the CI \
-         registration, the per-crate test could silently regress without surfacing on PR. \
-         G26-B wave-10 wires this composition per meth-r1-9 + mat-r1-3."
+        registered,
+        "`materializer_canonical_bytes_determinism_across_runs` MUST be listed in \
+         {} so it runs on the REQUIRED `frozen-bytes corpus (v1-beta wire freeze)` \
+         context. Its only other lane is `ci.yml`'s `build+test` job, which is NOT a \
+         required context — a materializer canonical-bytes or canonical-CID regression \
+         would ride a green board. That is the F-073 gap this arm exists to catch.",
+        corpus_path.display()
     );
 }

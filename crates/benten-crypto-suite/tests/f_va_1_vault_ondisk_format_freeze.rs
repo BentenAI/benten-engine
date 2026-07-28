@@ -361,3 +361,81 @@ fn vault_opens_from_bytes_and_password_alone() {
         Err(VaultError::AeadFailed)
     ));
 }
+
+/// D-79 — ABSOLUTE literal pins on the first four bytes of the frozen vault
+/// on-disk frame.
+///
+/// The frame's magic / version / codepoint are described in PROSE here (the
+/// `F-VA-1 (e)` header-layout comment) and enforced only RELATIVELY elsewhere:
+/// `f_va_12_non_v2_version_byte_uniformly_rejects_baseline` proves the decoder
+/// READS byte 1 but never pins its VALUE, and `serialize_vault` writes bytes 0-1
+/// from `envelope::ENVELOPE_MAGIC` / `ENVELOPE_FORMAT_VERSION_V2` while
+/// `parse_vault_frame` compares against those same two symbols. Every such
+/// equality has symbols on BOTH sides, so a coordinated edit — or a bilateral
+/// endianness flip on the codepoint — leaves the whole crate green.
+///
+/// This is a permanently-frozen on-disk frame. Three literal asserts are the
+/// cheapest insurance available against a silent forever-decode break.
+///
+/// THREE MUTATIONS MUST MAKE THIS FAIL, none of which any other test catches:
+///   1. Change the literal `serialize_vault` pushes for byte 0 AND the literal
+///      `parse_vault_frame` compares it against (a bilateral magic change).
+///   2. Same for byte 1 (the V2 format-version discriminator).
+///   3. Flip the codepoint to `to_le_bytes()` in `serialize_vault` AND to
+///      `u16::from_le_bytes` in `parse_vault_frame` — a bilateral endianness
+///      change against the M-19 BE freeze. Round-trip tests stay green because
+///      both ends agree; only the absolute byte pin below disagrees.
+#[test]
+fn vault_frame_first_bytes_are_absolutely_frozen() {
+    let payload = fixture_payload();
+    let dak = fixture_dak();
+    let bytes = serialize_vault_for_test(&payload, &dak);
+
+    assert!(
+        bytes.len() > 4,
+        "the vault frame MUST carry at least the 4-byte magic/version/codepoint prefix"
+    );
+
+    // Byte 0 — the Benten envelope magic. Frozen at 0xae (the Varsig-style
+    // multiformats sibling; Varsig uses 0xb5).
+    assert_eq!(
+        bytes[0], 0xae,
+        "vault frame byte 0 (magic) is FROZEN at 0xae — this is a permanent \
+         on-disk format; a change here makes every existing vault.cbor \
+         undecodable forever (D-79)"
+    );
+
+    // Byte 1 — the vault frame format-version discriminator. Frozen at 0x02
+    // (V2; the M-20 / Wave-0 single V1->V2 bump, with no surviving V1 golden).
+    assert_eq!(
+        bytes[1], 0x02,
+        "vault frame byte 1 (format-version) is FROZEN at 0x02 (V2) — a renumber \
+         breaks forever-decodability of every persisted vault (D-79)"
+    );
+
+    // Bytes 2-3 — the vault band codepoint 0x6100, BIG-ENDIAN per M-19.
+    assert_eq!(
+        &bytes[2..4],
+        &[0x61u8, 0x00u8],
+        "vault frame bytes 2-3 (codepoint) are FROZEN at 0x6100 BIG-ENDIAN per M-19 \
+         (D-79)"
+    );
+
+    // would-FAIL guard: the codepoint is NOT little-endian. A bilateral LE flip
+    // (encoder AND decoder) survives every round-trip test; it does not survive
+    // this.
+    assert_ne!(
+        &bytes[2..4],
+        &VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT.to_le_bytes(),
+        "vault frame codepoint MUST NOT be little-endian (M-19 freeze)"
+    );
+
+    // Symbolic cross-check: the literals above and the shared envelope
+    // constants must still describe the same bytes. If this arm fails while the
+    // literal arms pass, someone moved the constant without moving the frame.
+    assert_eq!(
+        u16::from_be_bytes([bytes[2], bytes[3]]),
+        VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT,
+        "the frame codepoint MUST agree with VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT"
+    );
+}

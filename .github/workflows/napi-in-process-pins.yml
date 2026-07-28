@@ -1,0 +1,200 @@
+name: napi in-process pins
+
+# F-032 closure (R6 round #1 falsification sweep, 2026-07-27).
+#
+# THE GAP. `benten-napi`'s security regression-guards — including
+# `install_module_signed_napi_cdylib_enforcement_1205_closure_pin`, which
+# `docs/SECURITY-POSTURE.md` cites as the Compromise #21 closure — executed in
+# ZERO CI lanes. Three independent mechanisms had to line up:
+#
+#   1. Every integration test under `bindings/napi/tests/` needs the rlib build
+#      mode (`--no-default-features --features in-process-test`). With the
+#      default `napi-export` ON the napi extern symbols do not resolve when
+#      libtest links the binary, so `ci.yml`'s `cargo nextest run` cannot run
+#      them — and its feature list never named `benten-napi/in-process-test`.
+#   2. Two of the gated files carry no `[[test]]` stanza in
+#      `bindings/napi/Cargo.toml` at all.
+#   3. The single lane that DID enable the feature — `wasm-browser.yml`'s
+#      "Run G10-A-browser + G18-A must-pass integration tests" step — passes a
+#      seven-entry `--test` ALLOWLIST. Everything outside the list is silently
+#      never built.
+#
+# VERIFIED SCOPE at base 7bb1a9fa: 17 test targets are gated on
+# `in-process-test` (15 via `required-features` in `bindings/napi/Cargo.toml`,
+# plus 2 that carry only a file-level `#![cfg(feature = "in-process-test")]`
+# and no stanza). The wasm-browser allowlist runs 7. The 14 pins that never
+# executed are the six `cap_*` / `install_module_*` guards plus `wait_clock`
+# (14 `#[test]` fns) and `input_validation` (5 more).
+#
+# WHAT THIS JOB IS. The rlib-mode run of EVERY in-process-test target. The
+# selection is COMPUTED from the two sources of truth (`Cargo.toml`
+# required-features + the file-level cfg gates), never hand-listed — a
+# hand-listed allowlist is the exact mechanism that lost the pins, so
+# reintroducing one here would reintroduce the defect. A pin file added
+# tomorrow is picked up with no workflow edit.
+#
+# WHY A SEPARATE FILE, NOT A JOB IN `ci.yml`. Same rationale `frozen-bytes.yml`
+# records: branch protection matches on job NAME strings, so a new job inside
+# `ci.yml` risks perturbing the three `ci.yml` contexts that are already
+# required. A new file with its own concurrency group cannot.
+#
+# NEVER weaken the floor to make this pass. A floor violation means a pin
+# stopped being selected — which is precisely F-032 recurring.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# NO path filter — deliberate, same reasoning `frozen-bytes.yml` records: a
+# required context must run on every PR or GitHub treats the absent context as
+# blocking and a doc-only PR deadlocks.
+
+concurrency:
+  group: napi-in-process-pins-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # §3.5o CI disk-OOM env discipline.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+
+jobs:
+  napi-in-process-pins:
+    name: benten-napi in-process pins (rlib mode)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Free disk space (Linux runners only)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/free-disk-space
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: napi-in-process-pins
+
+      - name: Compute the in-process-test target set
+        id: targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > /tmp/napi-in-process-targets.txt
+          import glob, os, re
+
+          cargo = open("bindings/napi/Cargo.toml").read()
+
+          # Source of truth 1 — `[[test]]` stanzas whose `required-features`
+          # names the gate. Comment lines may sit between `name` and
+          # `required-features`, so allow them.
+          registered = {
+              m.group(1)
+              for m in re.finditer(
+                  r'\[\[test\]\]\s*\nname\s*=\s*"([^"]+)"\s*\n'
+                  r'(?:(?:[ \t]*#[^\n]*\n)*)[ \t]*required-features\s*=\s*\[([^\]]*)\]',
+                  cargo,
+              )
+              if "in-process-test" in m.group(2)
+          }
+
+          # Source of truth 2 — files carrying only the inner cfg attribute and
+          # no stanza. Both of the orphans F-032 found are in this set.
+          gated = {
+              os.path.basename(p)[:-3]
+              for p in glob.glob("bindings/napi/tests/*.rs")
+              if re.search(
+                  r'^#!\[cfg\(feature\s*=\s*"in-process-test"\)\]',
+                  open(p).read(),
+                  re.M,
+              )
+          }
+
+          for name in sorted(registered | gated):
+              print(name)
+          PY
+
+          count=$(wc -l < /tmp/napi-in-process-targets.txt | tr -d ' ')
+          echo "in-process-test targets: $count"
+          cat /tmp/napi-in-process-targets.txt
+
+          # Anti-shrink floor, the `frozen-bytes.yml` idiom. Without it a
+          # regex that stops matching degrades the whole job to a green no-op —
+          # which is F-032's own failure mode wearing a different hat.
+          #
+          # MUTATION THAT MUST MAKE THIS FAIL: delete the
+          # `required-features = ["in-process-test"]` line from any one
+          # `[[test]]` stanza in bindings/napi/Cargo.toml (and, for the two
+          # stanza-less pins, their file-level `#![cfg(...)]`) -> count drops
+          # to 16 -> this step exits 1.
+          if [ "$count" -ne 17 ]; then
+            echo "::error::FLOOR VIOLATED: computed $count in-process-test targets, expected exactly 17."
+            echo "Too FEW  => a pin lost its gate and is no longer selected here (F-032 recurrence)."
+            echo "Too MANY => a new pin landed; raise this floor in the SAME commit."
+            exit 1
+          fi
+
+      - name: Run every in-process-test target
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SELECT=()
+          while IFS= read -r t; do SELECT+=(--test "$t"); done < /tmp/napi-in-process-targets.txt
+
+          # `--no-default-features` drops `napi-export`, leaving a pure-Rust
+          # rlib the libtest binaries can link. This is the build mode
+          # bindings/napi/Cargo.toml documents on the `input_validation`
+          # stanza; it is the ONLY mode in which these targets link at all.
+          cargo test -p benten-napi --locked \
+            --no-default-features \
+            --features in-process-test \
+            "${SELECT[@]}" \
+            2>&1 | tee /tmp/napi-in-process-run.log
+
+      - name: Assert every computed target actually executed
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Selection-integrity gate. `cargo test --test <name>` on a target
+          # whose `required-features` are unmet is skipped SILENTLY with a
+          # zero exit — the same certifies-nothing shape CE-07 found in
+          # wasm-checks.yml. Assert each target produced a `Running` line.
+          #
+          # MUTATION THAT MUST MAKE THIS FAIL: drop
+          # `--features in-process-test` from the run step above -> every
+          # target is filtered out by required-features, cargo still exits 0,
+          # and this step reports all 17 missing.
+          missing=0
+          while IFS= read -r t; do
+            if ! grep -qF "Running tests/${t}.rs" /tmp/napi-in-process-run.log; then
+              echo "::error::in-process-test target '${t}' was NEVER RUN (no 'Running tests/${t}.rs' line)."
+              missing=$((missing + 1))
+            fi
+          done < /tmp/napi-in-process-targets.txt
+
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::$missing of 17 in-process-test targets did not execute. This is F-032."
+            exit 1
+          fi
+
+          # A binary that runs zero tests is also a silent pass. `input_validation`
+          # and the six cap_*/install_module_* guards all carry #[test] fns, so a
+          # global zero here means the harness, not the pins, changed.
+          if grep -qE 'running 0 tests' /tmp/napi-in-process-run.log; then
+            echo "::error::At least one in-process-test binary ran 0 tests. A gated pin file has been emptied or its #[test] fns removed."
+            grep -nE 'Running tests/|running 0 tests' /tmp/napi-in-process-run.log
+            exit 1
+          fi
+
+          echo "PASSED: all 17 in-process-test targets executed with a non-empty test set."

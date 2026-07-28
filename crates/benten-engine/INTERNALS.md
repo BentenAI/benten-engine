@@ -226,14 +226,14 @@ The crate ships substantial test coverage — ~145 files in `tests/` plus ~45 in
 
 ### 5b. CRUD + transactions + system zones
 
-- `engine_crud.rs`, `cid_pin_handler_version_chain.rs`, `cid_pin_loro_merged_versions.rs`, `engine_transaction_policy_panic_safe.rs`, `engine_read_view_returns_view_state.rs`, `engine_read_view_stale.rs`, `prop_no_state_leak.rs`, `production_refuses_noauth.rs`, `noauth_startup_log.rs`.
+- `engine_crud.rs`, `cid_pin_handler_version_chain.rs`, `engine_transaction_policy_panic_safe.rs`, `engine_read_view_returns_view_state.rs`, `engine_read_view_stale.rs`, `prop_no_state_leak.rs`, `production_refuses_noauth.rs`, `noauth_startup_log.rs`.
 - **System zones:** `inv_11_read_from_user_code_to_system_zone_denied.rs`, `inv_11_system_zone_drift_test.rs`, `inv_11_transform_constructed_cid_adversarial.rs`, `inv_11_write_system_label_rejected.rs`, `system_zone_api_exclusivity.rs`, `system_zone_stopgap_and_full_coexist.rs`, `reserved_handler_namespace_rejected.rs`.
 - **Other invariants:** `inv_8_isolated_call_budget_bypass.rs`, `inv_13_dispatch.rs`, `inv_13_wait_resume_stale_pin.rs`, `invariant_coverage_doc_lists_inv_4_and_inv_7_active.rs`.
 
 ### 5c. Capabilities + UCAN
 
 - `cap_recheck_helper_no_refactor_on_g14d_or_g17a1_landing.rs`, `cap_recheck_helper_signature_pinned.rs`, `cap_recheck_in_flight.rs`, `cap_snapshot_hash_inputs.rs`, `subscribe_cap_recheck.rs`, `subscribe_cap_recheck_concurrency.rs`, `subscribe_device_revoke.rs`, `subscribe_partial_revoke_typed_error.rs`, `call_stream_as_partial_revoke_cancels_stream.rs`.
-- **UCAN:** `engine_ucan_b_alignment.rs`, `ucan_replay_audience.rs`, `revoke_capability_by_grant_cid.rs`.
+- **UCAN:** `ucan_replay_audience.rs`, `revoke_capability_by_grant_cid.rs`.
 - **Engine-side `read_node_as` / `put_node` closure:** `engine_read_node_as_put_node_pre_v1_closure.rs`.
 
 ### 5d. WAIT + suspension
@@ -251,7 +251,7 @@ The crate ships substantial test coverage — ~145 files in `tests/` plus ~45 in
 
 ### 5g. Atrium + sync
 
-- `atrium_g16_b_e_substantive_e2e.rs` (the LOAD-BEARING dual-gate deepest-e2e composition pin), `atrium_leave_rejoin.rs`, `atrium_lifecycle.rs`, `device_attestation_envelope_direct.rs`, `device_cid_runtime_arm.rs`, `sync_hop_depth_bound.rs`, `sync_inbound_hlc_skew_rejected.rs`, `sync_replica_attribution.rs`, `hlc_attribution_frame.rs`, `anchor_prefix.rs`, `anchor_store.rs`.
+- `atrium_g16_b_e_substantive_e2e.rs` (the LOAD-BEARING dual-gate deepest-e2e composition pin), `atrium_leave_rejoin.rs`, `atrium_lifecycle.rs`, `device_attestation_envelope_direct.rs`, `device_cid_runtime_arm.rs`, `sync_hop_depth_bound.rs`, `sync_inbound_hlc_skew_rejected.rs`, `sync_replica_attribution.rs`, `hlc_attribution_frame.rs`, `anchor_store.rs`.
 
 ### 5h. IVM views + AST cache
 
@@ -263,7 +263,7 @@ The crate ships substantial test coverage — ~145 files in `tests/` plus ~45 in
 
 ### 5j. Doc-coupling + spec compliance
 
-- `error_catalog_md_drift_phase_2b.rs`, `security_posture_compromise_9_marked_closed.rs`, `security_posture_md_phase_2b_compromises_documented.rs`, `quickstart_md_walkthroughs_compile.rs`, `component_model_decision.rs`, `component_model_phase3_decision_lands_per_d_phase_3_6.rs`, `paper_prototype_revalidation_doc_present.rs`, `metrics.rs`, `write_authority_enum.rs`.
+- `error_catalog_md_drift_phase_2b.rs`, `security_posture_compromise_9_marked_closed.rs`, `security_posture_md_phase_2b_compromises_documented.rs`, `quickstart_md_walkthroughs_compile.rs`, `component_model_phase3_decision_lands_per_d_phase_3_6.rs`, `paper_prototype_revalidation_doc_present.rs`, `metrics.rs`, `write_authority_enum.rs`.
 
 ### 5k. Engine-open rebuild + R6 pins
 

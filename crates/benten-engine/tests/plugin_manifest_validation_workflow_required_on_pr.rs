@@ -24,9 +24,14 @@ fn workspace_root() -> PathBuf {
 }
 
 #[test]
-#[ignore = "phase-4-foundation R4-FP-3 RED-PHASE — G26-B wave-10 un-ignores. \
-    Pin source: r2-test-landscape.md §2.13 row 3 + meth-r1-9 + D-4F-1. plugin-manifest- \
-    validation.yml workflow exists + required-on-PR via branch-protection spec."]
+#[ignore = "F-073 destination-retarget: the cited `G26-B wave-10` destination shipped at \
+    `phase-4-foundation-close` (2026-05-14) WITHOUT this workflow. Verified FALSE at \
+    r9-base: no `.github/workflows/plugin-manifest-validation.yml`, and \
+    branch-protection.yml names no such context. Manifest bytes are NOT unguarded — \
+    `plugin_manifest_full_round_trip` + `f_inj_1_install_record_signing_payload_injective` \
+    are both on the required frozen-bytes corpus; what is missing is the PR-time \
+    schema-check workflow. Destination: docs/future/phase-4-backlog.md §4.168 residual 1 \
+    (HARD RULE 12 clause-(b))."]
 fn plugin_manifest_validation_workflow_required_on_pr() {
     let root = workspace_root();
     let workflow = root.join(".github/workflows/plugin-manifest-validation.yml");

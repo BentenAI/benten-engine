@@ -229,6 +229,22 @@ jobs:
           npm ci --include=dev || npm install --include=dev
           npx --yes playwright@latest install --with-deps ${{ matrix.browser }}
 
+      # ---------------------------------------------------------------------
+      # C5 (R6 round #1 2026-07-27) — READ BEFORE PROMOTING THIS JOB.
+      #
+      # Every "Cell —" step below is `echo` + `::warning:: harness fixture not
+      # yet wired`. Not one of them can fail on a determinism difference; the
+      # job's only real failure modes are npm/Playwright install. It was
+      # nevertheless listed in `.github/branch-protection.yml`'s required set
+      # (it is NOT in the live set — live carries 13 contexts, the spec carried
+      # 30), so the spec would have promoted a check that certifies
+      # browser-launch success as cross-browser byte-determinism.
+      #
+      # The four contexts from this workflow now live in that file's
+      # `pending_promotion` block with their blocker recorded. Move them back
+      # in the SAME commit that wires the G18-A-followup fixtures — not before.
+      # ---------------------------------------------------------------------
+
       # Engine-determinism surface 1 (br-r4-r1-5 #1): Node envelope
       # canonical-bytes determinism.
       - name: Cell — node_envelope canonical-bytes determinism

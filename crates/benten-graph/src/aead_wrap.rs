@@ -1182,4 +1182,82 @@ mod tests {
         // Exact end == total is in-bounds.
         assert_eq!(checked_range_end(80, 20, 100), Some(100));
     }
+
+    /// Lowercase-hex encoder for the absolute golden below (no `hex` dep in
+    /// this workspace).
+    fn to_hex(bytes: &[u8]) -> String {
+        use core::fmt::Write as _;
+        let mut s = String::with_capacity(bytes.len() * 2);
+        for b in bytes {
+            let _ = write!(s, "{b:02x}");
+        }
+        s
+    }
+
+    /// An `AeadEnvelope` with LITERAL nonce + ciphertext, so its wire encoding
+    /// is deterministic. `ChunkedCiphertext::encrypt` draws a fresh random
+    /// nonce per chunk, so it can never produce an absolute golden — which is
+    /// why the full-interleave pin has to live in-crate (the `chunks` field is
+    /// `pub(crate)`), not in the integration corpus.
+    fn fixed_chunk_envelope(nonce_byte: u8, ciphertext: &[u8]) -> AeadEnvelope {
+        AeadEnvelope {
+            format_version: 0x01,
+            cipher_codepoint: CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+            nonce: vec![nonce_byte; 12],
+            ciphertext: ciphertext.to_vec(),
+        }
+    }
+
+    /// E-03 / E-04 — ABSOLUTE golden for the FULL interleaved `Chunked`
+    /// storage encoding, per-chunk bodies included. The integration-corpus
+    /// pins cover the layout and the endianness; this one freezes the entire
+    /// byte string, so it also catches a coordinated mutation that edits an
+    /// encoder site and its structural pin together.
+    ///
+    /// MUTATIONS THAT MUST MAKE THIS FAIL (each is one line in this file):
+    ///   :614  `out.push(0x01);`      -> `out.push(0x00);`
+    ///   :622  `&count.to_be_bytes()` -> `&count.to_le_bytes()`
+    ///   :628  `&len.to_be_bytes()`   -> `&len.to_le_bytes()`
+    ///   moving the count field after the per-chunk framing, or the CID after
+    ///   the count, or widening/narrowing any length field
+    ///
+    /// The two chunk envelopes carry DIFFERENT ciphertext widths (4 B and 3 B)
+    /// so the two length prefixes differ — a mutation that re-emits chunk 0's
+    /// length for every chunk changes these bytes.
+    ///
+    /// PROVENANCE: the literal below was CAPTURED FROM THE REAL ENCODER at R6
+    /// round #1 (M-20 — goldens are never hand-authored) by running:
+    ///
+    /// ```text
+    /// CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=line-tables-only CARGO_BUILD_JOBS=6 \
+    ///   cargo nextest run -p benten-graph --lib \
+    ///   aead_wrap::tests::encode_encrypted_node_chunked_absolute_golden_hex
+    /// ```
+    ///
+    /// Shape: 182 hex chars = 91 bytes (42 header + (4 + 21) + (4 + 20)).
+    ///
+    /// The command is kept so a future maintainer can RE-DERIVE the value when
+    /// a wire change is deliberate and ratified. **If this test fails and you
+    /// did not intend a wire change, the encoder regressed — fix the encoder,
+    /// not this literal.**
+    #[test]
+    fn encode_encrypted_node_chunked_absolute_golden_hex() {
+        let node = EncryptedNode::Chunked {
+            plaintext_cid: fixed_cid(0xAA),
+            chunked: ChunkedCiphertext {
+                chunks: vec![
+                    fixed_chunk_envelope(0x01, &[0xDE, 0xAD, 0xBE, 0xEF]),
+                    fixed_chunk_envelope(0x02, &[0xCA, 0xFE, 0xBA]),
+                ],
+            },
+        };
+        let bytes = encode_encrypted_node(&node).unwrap();
+        let got = to_hex(&bytes);
+        let expected = "3d0101711e20aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0000000200000015ae01647a0c010101010101010101010101deadbeef00000014ae01647a0c020202020202020202020202cafeba";
+        assert_eq!(
+            got, expected,
+            "encode_encrypted_node(Chunked) storage framing drifted from the \
+             frozen v1-beta bytes.\nGOLDEN-CAPTURE chunked_absolute = \"{got}\""
+        );
+    }
 }

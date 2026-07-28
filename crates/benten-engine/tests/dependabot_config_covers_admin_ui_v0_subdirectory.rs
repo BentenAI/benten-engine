@@ -22,11 +22,11 @@ fn workspace_root() -> PathBuf {
         .expect("workspace root")
 }
 
+/// FAILS ON THIS ONE-LINE MUTATION: delete the
+/// `directory: "/packages/admin-ui-v0"` line from `.github/dependabot.yml` —
+/// the second (`has_directory_line`) assertion fires. A `#` comment mentioning
+/// admin-ui-v0 does NOT satisfy it, which is what that second arm is for.
 #[test]
-#[ignore = "phase-4-foundation R4-FP-3 RED-PHASE — G26-B wave-10 un-ignores. \
-    Pin source: r2-test-landscape.md §2.13 row 4 + meth-r1-9. dependabot.yml MUST add \
-    packages/admin-ui-v0/ directory entry alongside existing packages/engine + bindings/napi \
-    + tools/create-benten-app coverage."]
 fn dependabot_config_covers_admin_ui_v0_subdirectory() {
     let root = workspace_root();
     let path = root.join(".github/dependabot.yml");

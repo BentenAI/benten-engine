@@ -113,6 +113,32 @@ updates:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
 
+  # F-073: `packages/admin-ui-v0` shipped at Phase-4-Foundation G24-A with its
+  # own package.json and never got a dependabot entry, so its vitest /
+  # Playwright / browser-mode deps have gone untracked since. The pin that was
+  # supposed to catch this
+  # (`benten-engine/tests/dependabot_config_covers_admin_ui_v0_subdirectory.rs`)
+  # was `#[ignore]`d against a `G26-B wave-10` destination that shipped two
+  # phases ago; it is un-ignored in the same change as this entry.
+  - package-ecosystem: npm
+    directory: "/packages/admin-ui-v0"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - javascript
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: npm
     directory: "/tools/create-benten-app"
     schedule:

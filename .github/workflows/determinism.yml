@@ -104,6 +104,15 @@ jobs:
       fail-fast: false
       matrix:
         rust: ["1.95", "stable"]
+    env:
+      # F-060. LOAD-BEARING FOR THIS JOB'S ENTIRE CLAIM. The repo-root
+      # rust-toolchain.toml (`channel = "stable"`) outranks the rustup default
+      # the dtolnay action sets, so BOTH legs ran on floating stable and the
+      # T5 cross-toolchain canonical-CID stability assertion compared a
+      # toolchain against itself. RUSTUP_TOOLCHAIN outranks the file.
+      # The matrix value `1.95` is a rustup version-channel spec and resolves
+      # to the 1.95.x the action installed.
+      RUSTUP_TOOLCHAIN: ${{ matrix.rust }}
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
@@ -111,6 +120,25 @@ jobs:
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # master (no semver tags; Dependabot rotates frequently)
         with:
           toolchain: ${{ matrix.rust }}
+
+      - name: Assert the pinned toolchain is actually in effect
+        # F-060 falsification pin. Two legs that silently share one compiler
+        # cannot detect cross-toolchain drift, which is the only thing T5
+        # exists to detect.
+        #
+        # MUTATION THAT MUST MAKE THIS FAIL: delete the `RUSTUP_TOOLCHAIN`
+        # line from the job `env:` -> the 1.95 leg reports the stable version
+        # -> this step exits 1.
+        run: |
+          set -euo pipefail
+          actual="$(cargo --version)"
+          echo "leg=${{ matrix.rust }} -> $actual"
+          if [ "${{ matrix.rust }}" != "stable" ]; then
+            case "$actual" in
+              *" 1.95."*) echo "OK: MSRV 1.95 toolchain is in effect." ;;
+              *) echo "::error::T5 msrv leg is not on 1.95 — got: $actual"; exit 1 ;;
+            esac
+          fi
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2

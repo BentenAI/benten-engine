@@ -271,6 +271,18 @@ jobs:
         # (mirrors the canonical pattern documented in the napi crate's
         # Cargo.toml [[test]] gates).
         #
+        # THIS IS NOT THE FULL napi PIN RUN (F-032, R6 round #1 2026-07-27).
+        # The `--test` allowlist below names seven of the SEVENTEEN targets
+        # gated on `in-process-test`; it is browser-lane scope, not coverage.
+        # For years it was also the ONLY lane that enabled the feature at all,
+        # so the other ten — including
+        # `install_module_signed_napi_cdylib_enforcement_1205_closure_pin`,
+        # which SECURITY-POSTURE.md cites as the Compromise #21 closure —
+        # executed nowhere. The authoritative run is now
+        # `.github/workflows/napi-in-process-pins.yml`, which computes its
+        # selection from Cargo.toml + the file-level cfg gates instead of
+        # hand-listing it. Do not add pins here; they belong there.
+        #
         # G18-A wave-5a additions: browser_manifest_store (is_persistent
         # flip per br-r1-8), browser_blob_backend (IndexedDB BlobBackend
         # variant per G14-C trait surface), indexeddb_schema (D-PHASE-3-27

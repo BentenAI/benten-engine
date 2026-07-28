@@ -16,7 +16,7 @@
 //! work can't silently augment to a 3-tuple without updating both
 //! sides + the failing pin signals).
 
-use benten_crypto_suite::aead::aad_per_chunk;
+use benten_crypto_suite::aead::{aad_per_chunk, aad_per_recipe, aad_whole_content};
 use benten_crypto_suite::codepoint::{CipherSuiteCodepoint, HashCodepoint, SigCodepoint};
 use benten_crypto_suite::sig::SignatureSuite;
 use benten_crypto_suite::varsig::{UcanVarsigV1Header, VarsigError};
@@ -198,6 +198,199 @@ fn aad_per_chunk_canonical_layout_pinned() {
         &aad[aad.len() - 4..],
         &total_chunks.to_le_bytes(),
         "AAD total_chunks MUST NOT be little-endian (M-19 migrates aead.rs:245 LE → BE)"
+    );
+}
+
+/// E-07 closure — the whole-content AEAD AAD layout, which had NO golden.
+///
+/// This is the arm that seals every payload under `WHOLE_CONTENT_AEAD_THRESHOLD`
+/// (64 KiB): the COMMON case. The falsification sweep swapped its two segments
+/// at `aead.rs:234-236` and the crate stayed 210/210 + 14/14 PASS. Nothing
+/// compared the produced AAD against an expected byte layout —
+/// `aad_whole_content` is a seal-local builder with no decoder, so seal and open
+/// agree bilaterally on ANY segment order and every round-trip test stays green.
+/// The sibling `aad_per_chunk_canonical_layout_pinned` above already had this
+/// shape; this arm mirrors it onto the unpinned whole-content builder.
+///
+/// MUTATION THAT MUST MAKE THIS FAIL: in `aead.rs::aad_whole_content`, swap the
+/// two pushes so `aad.extend_from_slice(plaintext_cid);` runs before
+/// `aad.extend_from_slice(AEAD_WHOLE_CONTEXT);`. That mutation preserves the
+/// total length exactly, so ONLY the positional segment assertions below catch
+/// it.
+#[test]
+fn aad_whole_content_canonical_layout_pinned() {
+    // A distinctive CID fill so a segment swap produces a readable failure
+    // message (the positional asserts would catch an all-zero CID too).
+    let plaintext_cid = [0xAA_u8; 32];
+
+    let aad = aad_whole_content(&plaintext_cid);
+
+    // Layout (2 segments): tag || plaintext_cid.
+    let tag = b"benten-aead:whole:";
+    let expected_len = tag.len() + plaintext_cid.len();
+    assert_eq!(
+        aad.len(),
+        expected_len,
+        "whole-content AAD layout regression — expected (tag || cid), total {} bytes; got {}",
+        expected_len,
+        aad.len()
+    );
+
+    // Segment 1: the domain-separation tag LEADS. A whole-content seal can never
+    // be reinterpreted as a per-chunk or per-Recipe seal only because this
+    // distinct prefix comes first — that property is positional, not just
+    // present-somewhere.
+    assert_eq!(
+        &aad[..tag.len()],
+        tag,
+        "whole-content AAD MUST LEAD with the `benten-aead:whole:` domain-separation \
+         tag — a swap to (cid || tag) preserves length and is invisible to every \
+         seal/open round-trip (E-07)"
+    );
+
+    // Segment 2: the plaintext CID FOLLOWS (§1.A.FROZEN item 15(g)
+    // AAD-binds-plaintext-CID rebinding defense).
+    assert_eq!(
+        &aad[tag.len()..],
+        &plaintext_cid,
+        "whole-content AAD MUST bind the plaintext CID immediately after the tag — \
+         rebinding-attack defense per §1.A.FROZEN item 15(g)"
+    );
+
+    // would-FAIL guard (mirrors the per-chunk pin's `assert_ne!` arm): the
+    // swapped concatenation is a DIFFERENT byte string. If this ever fires, the
+    // two asserts above are not actually comparing bytes.
+    let swapped: Vec<u8> = plaintext_cid
+        .iter()
+        .copied()
+        .chain(tag.iter().copied())
+        .collect();
+    assert_ne!(
+        aad, swapped,
+        "the swapped-segment layout (cid || tag) MUST NOT equal the canonical layout (E-07)"
+    );
+
+    // Cross-arm separation: the whole-content prefix must not have converged
+    // with its two siblings. If the three tags ever collided, a per-chunk seal
+    // could be replayed as a whole-content seal at the same CID.
+    assert_ne!(
+        &aad[..tag.len()],
+        b"benten-aead:chunk:",
+        "the whole-content AAD tag MUST stay distinct from the per-chunk tag"
+    );
+}
+
+/// E-08 closure — the per-Recipe AEAD AAD layout, which had NO golden.
+///
+/// `aad_per_recipe` binds `(plaintext_cid, recipe_index, total_recipes)` and
+/// BOTH integers are `u32`. Swapping the two fields at `aead.rs:306-307` is
+/// therefore length-preserving AND endianness-preserving: neither a size check
+/// nor an anti-little-endian guard can see it. The falsification sweep made
+/// exactly that swap and the crate stayed 210/210 + 14/14 PASS.
+///
+/// TWO MUTATIONS MUST MAKE THIS FAIL:
+///   1. FIELD SWAP — in `aead.rs::aad_per_recipe`, emit
+///      `total_recipes.to_be_bytes()` before `recipe_index.to_be_bytes()`.
+///      Caught only because the two probe values below are DISTINCT; a fixture
+///      using `(1, 1)` would sail straight through.
+///   2. ENDIANNESS REVERT — `to_le_bytes()` in place of `to_be_bytes()`
+///      (against the M-19 BE freeze). Caught by the `assert_ne!` arms.
+#[test]
+fn aad_per_recipe_canonical_layout_pinned() {
+    // Fixture discipline: the two u32 probes MUST differ from each other (so a
+    // field SWAP is observable) and each must have distinct BE/LE byte orders
+    // (so an endianness revert is observable). `recipe_index < total_recipes`
+    // keeps the fixture semantically honest.
+    let plaintext_cid = [0xAA_u8; 32];
+    let recipe_index: u32 = 0x0123_4567;
+    let total_recipes: u32 = 0x89AB_CDEF;
+    assert_ne!(
+        recipe_index, total_recipes,
+        "fixture precondition: the two u32 probes MUST differ or a field swap is invisible"
+    );
+
+    let aad = aad_per_recipe(&plaintext_cid, recipe_index, total_recipes);
+
+    // Layout (4 segments): tag || plaintext_cid || recipe_index BE || total_recipes BE.
+    let tag = b"benten-aead:recipe:";
+    let expected_len = tag.len() + plaintext_cid.len() + 4 + 4;
+    assert_eq!(
+        aad.len(),
+        expected_len,
+        "per-Recipe AAD layout regression — expected (tag || cid || u32-BE recipe_index \
+         || u32-BE total_recipes), total {} bytes; got {}",
+        expected_len,
+        aad.len()
+    );
+
+    // Segment 1: domain-separation tag, distinct from the whole-content and
+    // per-chunk tags so a per-Recipe seal can never be reinterpreted as either.
+    assert_eq!(
+        &aad[..tag.len()],
+        tag,
+        "per-Recipe AAD domain-separation tag changed — wire-format break"
+    );
+
+    // Segment 2: plaintext CID.
+    assert_eq!(
+        &aad[tag.len()..tag.len() + plaintext_cid.len()],
+        &plaintext_cid,
+        "per-Recipe AAD plaintext_cid binding changed — wire-format break"
+    );
+
+    // Segment 3: recipe_index FIRST, big-endian (M-19).
+    assert_eq!(
+        &aad[aad.len() - 8..aad.len() - 4],
+        &recipe_index.to_be_bytes(),
+        "per-Recipe AAD MUST bind recipe_index FIRST as u32-BE — a swap with \
+         total_recipes is length- and endianness-preserving and is caught ONLY here (E-08)"
+    );
+
+    // Segment 4: total_recipes SECOND, big-endian (M-19).
+    assert_eq!(
+        &aad[aad.len() - 4..],
+        &total_recipes.to_be_bytes(),
+        "per-Recipe AAD MUST bind total_recipes SECOND as u32-BE — the inter-Recipe \
+         truncation defense commits to the seal-time count (E-08)"
+    );
+
+    // Explicit hex pin: with recipe_index = 0x01234567 and
+    // total_recipes = 0x89ABCDEF the expected BIG-ENDIAN tail is
+    //   [0x01, 0x23, 0x45, 0x67] || [0x89, 0xAB, 0xCD, 0xEF]
+    let expected_recipe_index_bytes = [0x01_u8, 0x23, 0x45, 0x67];
+    let expected_total_recipes_bytes = [0x89_u8, 0xAB, 0xCD, 0xEF];
+    assert_eq!(
+        &aad[aad.len() - 8..aad.len() - 4],
+        &expected_recipe_index_bytes,
+        "per-Recipe AAD u32-BE recipe_index encoding regression — must use to_be_bytes() (M-19)"
+    );
+    assert_eq!(
+        &aad[aad.len() - 4..],
+        &expected_total_recipes_bytes,
+        "per-Recipe AAD u32-BE total_recipes encoding regression — must use to_be_bytes() (M-19)"
+    );
+
+    // would-FAIL guard 1 (endianness): neither integer is little-endian.
+    assert_ne!(
+        &aad[aad.len() - 8..aad.len() - 4],
+        &recipe_index.to_le_bytes(),
+        "per-Recipe AAD recipe_index MUST NOT be little-endian (M-19)"
+    );
+    assert_ne!(
+        &aad[aad.len() - 4..],
+        &total_recipes.to_le_bytes(),
+        "per-Recipe AAD total_recipes MUST NOT be little-endian (M-19)"
+    );
+
+    // would-FAIL guard 2 (field swap): the recipe_index slot must not hold
+    // total_recipes. This is the arm the falsification sweep's swap defeats
+    // everywhere else — same width, same endianness, same length.
+    assert_ne!(
+        &aad[aad.len() - 8..aad.len() - 4],
+        &total_recipes.to_be_bytes(),
+        "per-Recipe AAD field ORDER regression — total_recipes is sitting in the \
+         recipe_index slot (E-08: both fields are u32, so only distinct probe \
+         values expose this)"
     );
 }
 
