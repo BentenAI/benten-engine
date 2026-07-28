@@ -1,0 +1,146 @@
+{
+  "lens": "L6 capability-system + plugin-trust, phase-wide",
+  "round": "R6 R2",
+  "phase": "Phase-4-Meta-Core",
+  "reviewer_agent": "general-purpose subagent (orchestrator-direct lens-as-prompt; this file)",
+  "reviewed_at_sha": "3c80546f",
+  "main_at_review_time": "5ca364e7",
+  "scope": {
+    "files_in_scope": [
+      "crates/benten-caps/src/policy.rs",
+      "crates/benten-engine/src/engine_caps.rs (delegate_capability + admit_write_chain)",
+      "crates/benten-platform-foundation/src/plugin_lifecycle.rs (install_plugin + InstallPorts)",
+      "crates/benten-platform-foundation/src/install_consent.rs",
+      "crates/benten-engine/src/engine.rs (apply_atrium_merge per-row check_write_with_audience)",
+      "crates/benten-engine/src/engine_diagnostics.rs (transaction commit per-write hook)",
+      "crates/benten-engine/src/engine_wait.rs (WAIT-resume put_node)",
+      "crates/benten-engine/src/primitive_host.rs (evaluator per-write cap-recheck)",
+      "crates/benten-engine/src/write_boundary_chain_validator.rs",
+      "docs/V1-FROZEN-INTERFACE.md item 8 / V1-FROZEN-INTERFACE-DEFERRED.md Row D-3 / ERROR-CATALOG.md / V1-BETA-BREAKING-CHANGES.md / SECURITY-POSTURE.md"
+    ]
+  },
+  "summary": {
+    "disposition": "APPROVE-WITH-FINDINGS — 1 MAJOR + 3 MINOR + 2 OBS",
+    "headline": "All 3 §8-E hook trait surfaces are present + sealed-discipline preserved + Class B β intact + InstallPorts.policy port shape (CRITIC-2 F-1.2) honored. The S3a InstallConsentPolicy threading is wired AT THE PORT LEVEL but no engine-side adapter exists to project CapabilityPolicy::check_install_consent into the install_plugin call path — the only production-reachable InstallConsentPolicy impl is AdmitAllInstallConsent. A custom CapabilityPolicy that overrides check_install_consent has ZERO runtime effect at v1-beta unless an adapter lands. The V1-FROZEN-INTERFACE.md row claim 'external policy authors overriding any of the three hooks now have runtime effect at v1-beta' is true for §S3b (per_delegation) + §S3c (check_write_with_audience) but FALSE for §S3a (install_consent) — sec-r6r2-l6-1 MAJOR. Test-shape concerns at sec-r6r2-l6-2/3/4 MINOR. R6 R1 L6 substrate-frozen-but-consumer-unwired cluster verified closed at S1/S2/S3b/S3c (consumer reachable end-to-end) and PARTIAL at S3a (consumer reachable only via test-fixture port-wiring; production CapabilityPolicy override is dead surface).",
+    "convergence_signal_vs_r1": "Substantial R6 R1 cluster closure (4 of 5 §S surfaces fully consumer-wired); S3a residual is the single remaining surface gap. Trend = monotonic improvement; recommend the MAJOR get an FP-2 closure (engine-side adapter ~30 LOC) or an explicit V1-FROZEN-INTERFACE-DEFERRED.md Row update from 'CLOSED' to 'PARTIAL-CLOSED, adapter to G-COMP-1' so the doc + state agree."
+  },
+  "findings": [
+    {
+      "id": "sec-r6r2-l6-1",
+      "severity": "MAJOR",
+      "title": "§S3a install-consent: engine-side adapter `CapabilityPolicyInstallConsent` is referenced in install_consent.rs:25 module doc but does not exist; production CapabilityPolicy.check_install_consent override is dead surface at v1-beta",
+      "evidence": {
+        "doc_claim": "crates/benten-platform-foundation/src/install_consent.rs:25 — '...the engine-side adapter `CapabilityPolicyInstallConsent` (NOT in this crate because of the dep-cycle constraint) wraps the policy.'",
+        "code_search": "`git grep -ln CapabilityPolicyInstallConsent 3c80546f` returns ONLY the install_consent.rs reference (the doc-claim line itself). No `impl InstallConsentPolicy for ...` over CapabilityPolicy exists anywhere in benten-engine, benten-caps, benten-platform-foundation, bindings/napi, or packages/engine. The only production-callable InstallConsentPolicy impls are AdmitAllInstallConsent + DenyAllInstallConsent (both helpers).",
+        "v1_frozen_interface_md_line_735_contradiction": "docs/V1-FROZEN-INTERFACE.md:735 row claim 'Net: external policy authors overriding any of the three hooks now have runtime effect at v1-beta' is FALSE for check_install_consent — without the adapter, a custom CapabilityPolicy.check_install_consent is unreachable from `plugin_lifecycle::install_plugin`'s `policy: &dyn InstallConsentPolicy` port.",
+        "deferral_already_documented_inconsistently": "V1-FROZEN-INTERFACE-DEFERRED.md Row D-3 marks D-3-a 'CLOSED' at §S3a (line 154), then forensic body at line 200+ says 'A future custom CapabilityPolicy author overriding any of the three will be silently ignored' (which is now FALSE for §S3b/§S3c but REMAINS TRUE for §S3a). The doc-state is internally inconsistent — Row D-3-a should be 'PARTIAL CLOSED, adapter to G-COMP-1' OR the adapter should land at FP-2.",
+        "delegate_capability_contrast": "`delegate_capability` in engine_caps.rs:572-587 consults `self.engine.policy.as_ref().check_per_delegation(...)` DIRECTLY against the trait method — no adapter required because engine_caps lives in benten-engine and `&self.engine.policy` IS the configured CapabilityPolicy. The same direct-consultation pattern is NOT available at the install path because `plugin_lifecycle::install_plugin` lives in benten-platform-foundation which cannot dep-cycle into benten-caps via benten-engine."
+      },
+      "impact": {
+        "security": "CLAUDE.md baked-in #18 Layer-2 install-time consent admission policy (e.g. a curated-DID trust-list, an institutional ratification gate) cannot be wired through the engine's CapabilityPolicy at v1-beta. The pipeline structurally consults a default-`Ok(())`-returning AdmitAllInstallConsent helper instead. A production deployment wanting install-time policy enforcement must EITHER fork the install entry point OR construct its own InstallConsentPolicy impl + pass it directly to install_plugin (which is not the documented Phase-4-Meta-Core seam shape — the documented surface is CapabilityPolicy.check_install_consent override).",
+        "doc_state_consistency": "V1-FROZEN-INTERFACE.md item 8 row + V1-FROZEN-INTERFACE-DEFERRED.md Row D-3-a + install_consent.rs module-doc + the SECURITY-POSTURE.md line all read like the wiring is complete; the missing adapter contradicts the surface-as-documented.",
+        "audit_trail": "When a real CapabilityPolicy author lands at G-COMP-1 / Phase-4-Meta-Composing and discovers their check_install_consent override has been silently ignored since v1-beta, the regression-window is the entire v1-beta release."
+      },
+      "disposition": "FIX-NOW (per HARD RULE 12) — three valid options:\n\n(a) [PREFERRED] Land the engine-side adapter at FP-2 (≤50 LOC, ~5 LOC for the blanket impl + ~10 LOC for engine glue + ~20 LOC for a substantive end-to-end test wiring a denying CapabilityPolicy through install_plugin via the adapter). The adapter shape: `impl InstallConsentPolicy for &Arc<dyn CapabilityPolicy>` (or a newtype wrapper) lives in benten-engine; engine glue construct `InstallPorts.policy = &EngineCapabilityPolicyAdapter::new(&engine.policy)` at install boundary. Production install path documented + adapter test verifies a non-default check_install_consent reaches the install pipeline.\n\n(b) DEFER-NAMED-NOW per HARD RULE 12 clause (b): edit docs to acknowledge the gap. V1-FROZEN-INTERFACE-DEFERRED.md Row D-3-a status flips 'CLOSED' → 'PARTIAL CLOSED — adapter to G-COMP-1'. V1-FROZEN-INTERFACE.md:735 row text edits 'external policy authors overriding any of the three hooks now have runtime effect at v1-beta' → '... two of the three hooks (check_per_delegation + check_write_with_audience) now have runtime effect at v1-beta; check_install_consent's engine-side adapter defers to G-COMP-1 per dep-cycle constraint'. install_consent.rs:25 module doc edits 'the engine-side adapter `CapabilityPolicyInstallConsent` (NOT in this crate because of the dep-cycle constraint) wraps the policy' → 'The engine-side adapter is a G-COMP-1 deliverable per the dep-cycle constraint; at v1-beta production installs route through `AdmitAllInstallConsent` (admit-all) unless the caller supplies a custom InstallConsentPolicy directly to InstallPorts.policy.' Document the named destination explicitly + add a v1-beta breaking-changes warning so policy authors know.\n\n(c) DISAGREE: cite a Ben ratification or design constraint that makes the adapter intentionally absent — none found in the F4 design pipeline pre-work.\n\nRecommend (a) over (b) — the adapter is small + closes the gap fully + aligns the doc-state with the SHAPE-OF-PHASE-4-META-CORE v1-beta contract."
+    },
+    {
+      "id": "sec-r6r2-l6-2",
+      "severity": "MINOR",
+      "title": "§S3b delegate_capability test r6_r1_fp_f4_s3b_*.rs has 5 arms but NONE call `delegate_capability(...)` end-to-end — pure pim-18 / §3.6f SHAPE-not-SUBSTANCE shape",
+      "evidence": {
+        "test_file": "crates/benten-engine/tests/r6_r1_fp_f4_s3b_delegate_capability_consults_check_per_delegation.rs",
+        "arm_audit": "Arm 1 `delegate_capability_surfaces_plugin_per_delegation_denied_code` asserts the new ErrorCode variant exists (no delegate_capability call). Arm 2 `check_per_delegation_observes_invocation` calls `policy.check_per_delegation(...)` directly on a CountingPolicy (no delegate_capability call). Arm 3 `check_per_delegation_returns_err_on_denial` calls policy directly. Arm 4 `default_check_per_delegation_admits_all` checks NoAuthBackend default. Arm 5 `check_per_delegation_is_callable_on_arc_dyn_capability_policy` checks Arc<dyn ...> dispatch. NONE construct an Engine + EngineCapsHandle + call delegate_capability(...) with a real grant + plugin DID store + denying policy + assert PluginPerDelegationDenied surfaces from the delegate_capability return.",
+        "self_admission": "Arm 1's body: '// The end-to-end integration test (with a real grant + plugin DID store) is exercised by the existing G27-A/D/G24-D-FP suite; this arm pins the variant's existence + reachability.' — but the G27-A/D/G24-D-FP tests pre-date the §S3b wiring and do NOT exercise the new check_per_delegation hook path."
+      },
+      "impact": "Reverting the engine_caps.rs:572-587 wire-in (the `if let Some(policy) = self.engine.policy.as_ref() && policy.check_per_delegation(...).is_err()` block) would NOT be caught by this test file's assertions. The Δv3-3 invert-the-panic pattern that §S3c uses for the workspace-sweep verification is the right shape; §S3b should adopt it: a CapabilityPolicy whose check_per_delegation panics, install it on a real Engine, run delegate_capability, verify the panic fires (would-FAIL via panic IF wire-in present; would-NOT-FAIL if reverted because the policy is never called). pim-18 §3.6f exact failure mode.",
+      "disposition": "FIX-NOW — add arm 6 to the existing test file: construct full Engine + grant + plugin DID handle + install an invert-the-panic CapabilityPolicy whose check_per_delegation panics; call delegate_capability; assert panic fires. ~50 LOC; mirrors §S3c arm-1 invert-the-panic discipline (per Δv3-3 ratification). Closes the §3.6f / pim-18 gap on the delegate_capability wire-in."
+    },
+    {
+      "id": "sec-r6r2-l6-3",
+      "severity": "MINOR",
+      "title": "§S3c workspace-walker enumeration arm is `assert_eq!(EXPECTED_CHECK_WRITE_WITH_AUDIENCE_SITES, 4)` — does NOT scan code; brittle to silent additions",
+      "evidence": {
+        "test_file": "crates/benten-engine/tests/r6_r1_fp_f4_s3c_workspace_check_write_routes_through_with_audience.rs:106-110",
+        "arm_3_body": "fn workspace_walker_audit_four_check_write_with_audience_sites() {\n    const EXPECTED_CHECK_WRITE_WITH_AUDIENCE_SITES: usize = 4;\n    assert_eq!(EXPECTED_CHECK_WRITE_WITH_AUDIENCE_SITES, 4);\n}",
+        "intent_comment": "// future drift via a new WRITE entry point landing `policy.check_write` instead of `_with_audience` should be caught at the §3.6j sweep-completeness self-verify discipline against this enumerated count.",
+        "actual_shape": "The constant is asserted against itself — a trivially-true tautology. The §3.6j sweep-completeness discipline names a brief-template mandate at author-time + a sweep validation tool BEFORE claiming completeness. This arm relies on a future PR-time grep that never runs against the constant."
+      },
+      "impact": "A future R5/R3 implementer adding a new WRITE entry point in engine-internal code that calls `policy.check_write(&ctx)` directly (instead of `_with_audience`) would land cleanly. The pim-N-sweep-completeness-self-verify (§3.6j) discipline asks tests like this to RUN the walker against the wave's own outputs, not just assert a numerical constant against itself.",
+      "disposition": "FIX-NOW — replace the arm body with a substantive walker: `walkdir::WalkDir::new('crates/').into_iter()` (the R4-FP-4 grep-walk pin precedent at benten-platform-foundation/Cargo.toml has the dep) → count `.check_write(&ctx)` call sites in production code (excluding `_with_audience` matches, test-fixture matches, and the excluded `benten-caps::ucan_grounded` substrate-internal sites per Δv3-7) → assert the count is 0 (the discipline post-S3c is: ZERO production policy.check_write sites; all routed through _with_audience). Mirrors §3.6j sub-rule. ~30 LOC."
+    },
+    {
+      "id": "sec-r6r2-l6-4",
+      "severity": "MINOR",
+      "title": "§S3a r6_r1_fp_f4_s3a_*.rs test has 6 arms but NONE call `install_plugin(...)` end-to-end with a DenyAllInstallConsent through InstallPorts.policy",
+      "evidence": {
+        "test_file": "crates/benten-platform-foundation/tests/r6_r1_fp_f4_s3a_install_pipeline_consults_check_install_consent.rs",
+        "arm_audit": "Arm 1 counts policy.check_install_consent calls on a CountingAdmit policy (direct trait call). Arm 2 calls policy.check_install_consent on DenyAllInstallConsent directly. Arm 3 calls a PluginSpecificDeny directly. Arm 4 calls AdmitAllInstallConsent directly. Arm 5 verifies InstallPorts struct constructibility with both ports. Arm 6 is explicitly 'a forensic anchor; the §S3a wiring per plugin_lifecycle.rs lands the call at step 3c immediately after step 3b's replay check' — body is just comments.",
+        "self_admission": "File-header §6 of the test body: '// the end-to-end install_plugin integration is exercised by the existing platform-foundation tests (they all wire AdmitAllInstallConsent post-S3a migration; with the threading verified by their compilation).' — but compilation only verifies the type-shape compiles; it does NOT verify the install_plugin call body actually consults `ports.policy.check_install_consent` (a hypothetical revert deleting the step-3c block would still compile because the port field is structurally constructible without being called).",
+        "existing_test_coverage_check": "The pre-S3a `plugin_install_consent_required_at_install_time.rs` integration tests DO call install_plugin end-to-end but ALL with `&AdmitAllInstallConsent` — the deny-arm of `ports.policy.check_install_consent.is_err() → return Err(PluginInstallConsentDenied)` (plugin_lifecycle.rs:959-965) is NEVER exercised by a test."
+      },
+      "impact": "A revert of plugin_lifecycle.rs:959-965 (the step-3c install-consent block) would NOT be caught by any test. The deny-arm of the wire-in is dead-uncovered. Coupled with sec-r6r2-l6-1 MAJOR (the production CapabilityPolicy adapter is missing): the only way to surface PluginInstallConsentDenied via install_plugin at v1-beta is to construct an explicit `&DenyAllInstallConsent` and pass it directly to InstallPorts.policy — and that path has no test pin.",
+      "disposition": "FIX-NOW — add arm 7 to the existing test file: construct InstallPorts with `policy: &DenyAllInstallConsent`; call install_plugin end-to-end with a valid signed manifest + install record; assert the call returns `Err(ErrorCode::PluginInstallConsentDenied)`; assert library + cap-minter + private-ns are all empty (fail-closed semantics per §4.35 zero partial-mint). ~80 LOC; mirrors the existing plugin_install_consent_required_at_install_time.rs ARM (a) shape with the policy field swapped to DenyAllInstallConsent. Closes the §3.6f / pim-18 gap on the install-consent wire-in deny-arm."
+    },
+    {
+      "id": "sec-r6r2-l6-5",
+      "severity": "OBS",
+      "title": "audience_did populate-side at delegate_capability cap-target is intentionally NOT implemented per Δv3-2 — brief mentions verifying it; design defers to G-COMP-1",
+      "evidence": {
+        "brief_claim": "L6 review brief: 'audience_did populated at delegate_capability cap-target site; left None at apply_atrium_merge per category-correctness (Δv3-2)'",
+        "actual_state": "`git grep -n audience_did 3c80546f -- crates/benten-engine/src/engine_caps.rs` returns 0 results. delegate_capability's Step 4 writes the new grant via `privileged_put_node` (is_privileged=true) without constructing a CapWriteContext with audience_did:Some(plugin_did) — the privileged write path skips check_write_with_audience entirely.",
+        "design_rationale_doc": "V1-FROZEN-INTERFACE.md:735 row: 'populate-side at delegate_capability defers to G-COMP-1 + the existing Layer-3 check_per_delegation wiring covers delegate-runtime audience-discrimination needs.' Δv3-2 in the F4 design pipeline ratified this."
+      },
+      "impact": "None — design intent is honored. The brief's wording slightly overstates: at v1-beta, audience_did is populated at ZERO sites in production code (only construct-tested in g_core_8_capability_policy_sealed_compile_test.rs:261 and g_core_8_write_boundary_user_root_chain_validator_4_23.rs:143). The CapWriteContext::audience_did FIELD is structurally present + frozen at v1-beta per V1-FROZEN-INTERFACE; the runtime audience-discrimination contract is delivered by check_per_delegation at delegate-runtime, not by audience_did-populated check_write_with_audience.",
+      "disposition": "DISAGREE-WITH-EXPLANATION per HARD RULE 12 clause (c) — no action needed; the brief's phrasing is a slight overstatement of the design ratification but the actual code state matches Δv3-2 intent. Recommend the orchestrator-direct triage edit the V1-FROZEN-INTERFACE.md:735 row to add an explicit 'audience_did populate-side is zero production sites at v1-beta; G-COMP-1 lands the delegate_capability cap-target populate-site' clause for forensic clarity."
+    },
+    {
+      "id": "sec-r6r2-l6-6",
+      "severity": "OBS",
+      "title": "Sealed-discipline + Class B β + InstallPorts.policy port shape (CRITIC-2 F-1.2) all VERIFIED preserved at HEAD",
+      "evidence": {
+        "sealed_discipline": "policy.rs:48-62 hosts `pub(crate) mod sealed { pub trait Sealed {} }`; CapabilityPolicy declared `pub trait CapabilityPolicy: sealed::Sealed + Send + Sync`; workspace test-doubles use `impl benten_caps::__sealed_for_workspace_tests::Sealed for X {}` (feature-gated re-export); `crates/benten-engine/tests/g_core_8_capability_policy_sealed_compile_test.rs` is the structural backstop.",
+        "class_b_beta_preserved": "Engine::policy field declared `pub(crate)` (engine.rs:838); Engine::policy() accessor declared `pub(crate)` (engine.rs:2169); no `pub fn capability_policy()` accessor exists; the only public surface that takes a CapabilityPolicy is the EngineBuilder::capability_policy setter (builder.rs:154 — write-side only, not read-side accessor).",
+        "install_ports_policy_port_shape": "plugin_lifecycle.rs:748 declares `pub policy: &'a dyn crate::install_consent::InstallConsentPolicy` as a port (not an accessor); install_consent.rs:1-18 module doc explicitly cites CRITIC-2 F-1.2 + Class B β as the rationale.",
+        "no_engine_policy_leak": "`git grep -n 'pub fn capability_policy\\|pub.*policy:' 3c80546f -- crates/benten-engine/src/` shows only `pub(crate)` items + the Builder setter; no leak."
+      },
+      "impact": "Positive: F4's S3a-via-port (CRITIC-2 F-1.2) design intent is fully honored. Sealed discipline survives the §8-E additions per G-CORE-9 V1-FROZEN-INTERFACE row 6 contract. Phase-4-Meta-Core v1-interface freeze is structurally consistent on these axes.",
+      "disposition": "No action — observability only."
+    }
+  ],
+  "r6_r1_l6_cluster_closure_verification": {
+    "r1_finding_cluster": "R6 R1 L6 named 'substrate-frozen-but-consumer-unwired' across §S1 (write_boundary_chain_validator) + §S2 (install_record_replay_store option-wrapped) + §S3a (check_install_consent) + §S3b (check_per_delegation) + §S3c (check_write_with_audience) + §S4 (ProductionManifestEnvelopeRechecker).",
+    "closure_status": {
+      "S1": "CLOSED — WriteBoundaryChainValidator wired at all ~13 WRITE entry points via Engine::admit_write_chain; substantive test at r6_r1_fp_f4_s1_*.rs (184 LOC). Verified end-to-end.",
+      "S2": "CLOSED — InstallRecordReplayStore Option<> wrapper dropped; every fixture wires substantive closure (production: make_engine_replay_check_closure; tests: noop_replay_check). Verified via plugin_lifecycle.rs:743-749 + InternalCardConstructibility tests.",
+      "S3a": "PARTIAL CLOSED — InstallConsentPolicy trait wired at install_plugin step 3c via InstallPorts.policy port. BUT engine-side adapter (CapabilityPolicyInstallConsent) missing → production CapabilityPolicy.check_install_consent override has zero runtime effect. See sec-r6r2-l6-1 MAJOR. Sec-r6r2-l6-4 MINOR: deny-arm of step-3c not end-to-end tested.",
+      "S3b": "CLOSED — CapabilityPolicy.check_per_delegation consulted at delegate_capability Step 2b/3 between manifest-shares resolver and effective-scope pick. Verified via direct engine.policy field access (no adapter needed; same-crate). Sec-r6r2-l6-2 MINOR: test-shape is pim-18 SHAPE-not-SUBSTANCE; revert of wire-in would not be caught.",
+      "S3c": "CLOSED — 4 production check_write sites all switched to check_write_with_audience (engine.rs:1413 + engine_diagnostics.rs:84 + engine_wait.rs:900 + primitive_host.rs:613); Δv3-3 invert-the-panic policy verifies wire-in (would-FAIL on revert). Sec-r6r2-l6-3 MINOR: arm 3 workspace-walker is tautological constant-vs-constant assertion, not a real walker.",
+      "S4": "CLOSED — ProductionManifestEnvelopeRechecker + ProductionEngineBuilder + D-6 + D-18 wired per F4 merge commit 844a780b. Substantive test at r6_r1_fp_f4_s4_*.rs (79 LOC)."
+    },
+    "net_r1_l6_disposition": "5 of 6 §S surfaces fully consumer-wired + substantive test coverage; 1 of 6 (§S3a) is PARTIAL-CLOSED (port-wired, adapter missing). Closing sec-r6r2-l6-1 MAJOR collapses the residual."
+  },
+  "audience_did_population_audit": {
+    "production_source_files_with_audience_did_some": "ZERO (`git grep 'audience_did: Some' -- crates/benten-*/src/` returns 0 results outside manifest_signing.rs's UCAN engine_audience_did field which is a different domain).",
+    "test_files_with_audience_did_some": "g_core_8_capability_policy_sealed_compile_test.rs:261 (sealed-discipline compile test) + g_core_8_write_boundary_user_root_chain_validator_4_23.rs:143 + g_core_8_layer3_shares_resolver_verify_stays_regression_1294.rs (test fixture). No production-runtime arm populates audience_did.",
+    "design_intent": "Per Δv3-2: audience_did stays None at all sweep sites in v1-beta; the populate-side at delegate_capability defers to G-COMP-1; the audience-discrimination contract for delegate-runtime is delivered by check_per_delegation (S3b), NOT by audience_did-populated check_write_with_audience. The CapWriteContext::audience_did FIELD is structurally locked at v1-beta per V1-FROZEN-INTERFACE item 8 for forward-compat."
+  },
+  "new_capability_system_gaps_introduced": "NONE — the §S surfaces are all additive and do not regress existing capability-system invariants. Plugin-trust three-layer model preserved: Layer-1 user-as-root (S1 chain-bearing admission via WriteBoundaryChainValidator), Layer-2 install-time manifest envelope (S3a port; gap is the engine-side adapter, NOT the substrate), Layer-3 runtime delegation envelope (S3b check_per_delegation + private-namespace clause + Wave-E shares-policy resolver).",
+  "pim_n_candidates_surfaced": [
+    {
+      "name": "pim-N-test-shape-must-exercise-end-to-end-not-trait-direct",
+      "evidence": "sec-r6r2-l6-2 + sec-r6r2-l6-4 both surface the same anti-pattern: test files for §S3a/§S3b are full of arms that call trait methods directly (on the default impl, on a counting impl, on a denying impl) WITHOUT actually invoking the production entry point (install_plugin / delegate_capability) end-to-end. The invert-the-panic shape used at §S3c arm 1 IS the substantive shape; recommend pim-N codify this as: 'for any §-wire-in production-arm test, AT LEAST ONE arm MUST call the production entry point with the wire-in observable end-to-end (deny-arm typed-code; invert-the-panic; or assertion-on-side-effect).' Strengthens pim-18 §3.6f.",
+      "instance_count": 2,
+      "below_3_recurrence_threshold": "Yes — recommend OBSERVE not codify yet; surface to R6 R3 if a 3rd instance appears.",
+      "named_destination_if_codify": "dispatch-conventions.md §3.6f sub-rule extension OR new §3.6k"
+    },
+    {
+      "name": "pim-N-doc-claim-must-match-code-claim-for-adapter-references",
+      "evidence": "sec-r6r2-l6-1 surfaces a module-doc claim ('CapabilityPolicyInstallConsent ... wraps the policy') that references a non-existent code symbol. Recommend a pre-push doc-grep that flags `module-doc-references-symbol-that-doesnt-exist`. Pairs with §3.5g type-name cross-doc mirror pattern (Phase-4-Foundation R6 R1).",
+      "instance_count": 1,
+      "below_3_recurrence_threshold": "Yes — OBSERVE.",
+      "named_destination_if_codify": "dispatch-conventions.md §3.5g extension if 2+ more instances surface"
+    }
+  ],
+  "approval_state": "APPROVE-WITH-FINDINGS for R6 R2 advance — provided sec-r6r2-l6-1 MAJOR triages to either (a) FP-2 adapter implementation OR (b) explicit doc-state correction (V1-FROZEN-INTERFACE.md:735 + V1-FROZEN-INTERFACE-DEFERRED.md Row D-3-a + install_consent.rs:25 module doc). The 3 MINOR test-shape findings can land as a single ~150-LOC fix-pass alongside the MAJOR (`fix(r6-r2-fp): close L6 MAJOR + 3 MINOR test-shape pins`).",
+  "convergence_signal": "MONOTONIC IMPROVEMENT vs R1 — 5/6 §S surfaces fully closed (was 0/6 pre-F4). Recommend Q5 advancement to R3 once the MAJOR is closed; the 3 MINORs + 2 OBS are R6-R3-acceptable residuals if FP-2 lands."
+}

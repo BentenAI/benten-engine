@@ -1,0 +1,74 @@
+{
+  "lens": "L1 crypto-correctness, phase-wide",
+  "round": "R6 R2",
+  "review_target_branch": "phase-4-meta-core/r6-r1-fp-integration",
+  "review_target_head": "3c80546f37adee8cb2c05e1257e4aa883370ab92",
+  "disposition": "APPROVE-WITH-FIX-NOW",
+  "summary": "R6 R1 L1 fix-pass closures verified properly. F3 cross-chunk-truncation defense (total_chunks in AAD): closed end-to-end — wire-format pin + behavioral pins (cross_chunk_truncation_fails + cross_chunk_inflation_fails) both green at HEAD; BINDING_SIG_DOMAIN v1→v2 + binding_message extended to bind scope (L3-r1-1) — closure verified; #[non_exhaustive] sweep applied across the 8 enumerated types + arm-coverage audit pins live. CLAUDE.md #5 'ONE crypto-primitive call site' discipline holds workspace-wide (all consumer crates route through benten_crypto_suite::primitives::ed25519_dalek). Hybrid Ed25519⊕ML-DSA-65 NF-4 commitment construction sound (binds both pubkeys + both sigs + msg via SHA3-256 + HYBRID_DOMAIN_SEP). X-Wing combiner binds both shared secrets + both ek halves + both pubkeys (strip-resistant). Two findings to surface: L1-r6r2-MAJ-1 (issuer-pubkey trust gap at ucan_blobs_protocol::validate_request — handler trusts grant's self-declared issuer_verifying_key with no chain to a trusted root) + L1-r6r2-MIN-1 (sweep-completeness gap on item 11 — 5 SwapKeypair/SwapPublicKey/SwapRecipient* enums + AeadEnvelope struct missing from the freeze table). L1-r6r2-MIN-2 (test-pin SwapMatrixError audit only covers 1 of 7 arms — weaker than AeadError audit). L1-r6r2-OBS-1 (commitment_expected != sig.commitment is non-constant-time PartialEq — public inputs only, but discipline note).",
+  "findings": [
+    {
+      "id": "L1-r6r2-CLOSED-1",
+      "severity": "VERIFY-CLOSED",
+      "disposition": "DISAGREE-WITH-EXPLANATION (closure confirmed; nothing to act on)",
+      "description": "R6 R1 L1 Bundle F3 — AAD binds total_chunks for cross-chunk-truncation defense — confirmed CLOSED at HEAD.",
+      "evidence": "crates/benten-crypto-suite/src/aead.rs:240-247 (aad_per_chunk takes total_chunks: u32 + appends as u32-LE); crates/benten-graph/src/aead_wrap.rs:226-247 (ChunkedCiphertext::encrypt derives total_chunks from plaintext.chunks().count() + threads to suite_aad_per_chunk; 293-321 decrypt symmetrically derives + verifies); crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs:111-172 (aad_per_chunk_canonical_layout_pinned hex-pins the 4-segment layout incl. u32-LE total_chunks tail); crates/benten-graph/src/aead_wrap.rs:705-,739 (cross_chunk_truncation_fails + cross_chunk_inflation_fails behavioral pins).",
+      "recommendation": "No action — Fork 1 retraction is sound + behavioral defense is in place + wire-format hex-pinned."
+    },
+    {
+      "id": "L1-r6r2-CLOSED-2",
+      "severity": "VERIFY-CLOSED",
+      "disposition": "DISAGREE-WITH-EXPLANATION (closure confirmed; nothing to act on)",
+      "description": "R6 R1 L1 Bundle L3-r1-1 — binding_message now binds scope (BINDING_SIG_DOMAIN v1→v2) — confirmed CLOSED at HEAD.",
+      "evidence": "crates/benten-caps/src/authorization_grant.rs:364 (BINDING_SIG_DOMAIN = b'benten/g-core-3b/authorization-grant/v2'); 390-425 (binding_message 5-segment construction with scope length-prefixed via u32-LE + scope CBOR bytes; None encodes as 0_u32_le); 685-695 (verify_binding re-constructs binding_message with self.scope.as_ref() so post-sign scope mutation fails verify); 764-777 (with_swapped_scope_for_test adversarial pin); tests/tf3b_scope_substitution_post_sign_rejected.rs exists.",
+      "recommendation": "No action — scope is now part of binding-message foundation per §R3."
+    },
+    {
+      "id": "L1-r6r2-CLOSED-3",
+      "severity": "VERIFY-CLOSED",
+      "disposition": "DISAGREE-WITH-EXPLANATION (closure confirmed; nothing to act on)",
+      "description": "R6 R1 L1 Bundle — #[non_exhaustive] sweep on crypto-suite + drop + graph error/version enums — confirmed CLOSED at HEAD for the enumerated set.",
+      "evidence": "8 enums verified non_exhaustive: aead::AeadError (line 353), swap_matrix::SwapMatrixError (781), varsig::VarsigError (172), error::{UnsupportedAlgorithm,VerifyError,CryptoError} (21/54/98), graph::aead_wrap::AeadError (572), graph::two_cid_map::TwoCidMapError (106), drop::bundle::DropBundleVersion+DropBundleError (50,106), drop::envelope_sig::EnvelopeSigError (39). DropContentMode intentional carve-out per V1-FROZEN-INTERFACE.md item 15(c) + the tf3f_drop_content_mode_no_inline_tiny_arm structural pin (verified in bundle.rs:75-93 doc-block). Arm-coverage audit pins exist at crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs + crates/benten-drop/tests/g_core_9_non_exhaustive_audit_drop.rs. Cascade arm in aead_wrap.rs:633-639 (catch-all  arm for SuiteAeadError; fail-CLOSED default).",
+      "recommendation": "No action — the enumerated set is properly closed."
+    },
+    {
+      "id": "L1-r6r2-MAJ-1",
+      "severity": "MAJOR",
+      "disposition": "BELONGS-NAMED-NOW",
+      "description": "Issuer-pubkey trust gap at ucan_blobs_protocol::validate_request ARM 5. The wave-3e handler validates AuthorizationGrant.binding_sig using the issuer_verifying_key bytes EMBEDDED IN THE GRANT ITSELF (authorization_grant.rs:670 `VerifyingKey::from_bytes(&vk_bytes)` where `vk_bytes` is `self.issuer_verifying_key`). The handler does NOT chain that issuer-pubkey to a trusted root or known issuer-DID anywhere in the 6-arm pipeline. An attacker who controls any keypair can self-mint a grant with arbitrary (ucan, key_material, audience, scope) bytes, sign with their own key, embed their pubkey in `issuer_verifying_key`, and verify_binding will return Ok(()). The doc-comment at ucan_blobs_protocol.rs:273-275 ('the production wire-up accepts grants issued by other principals through the chain validator at the cap-policy hook') acknowledges the gap but no specific destination row is named in V1-FROZEN-INTERFACE-DEFERRED.md for this READ-side issuer-trust seam. (Distinct from §4.23's WRITE-side user-DID root-chain validator + distinct from Row D-26's PQ-hybrid wire-in.) At wave-3e fixtures the handler-keypair IS the grant issuer so tests stay self-consistent and never exercise the cross-issuer adversarial case. CLOSING THE GAP IS WAVE-3E PRODUCTION SCOPE not v1-beta-tag scope, BUT the named-destination must exist per HARD RULE 12.",
+      "evidence": "crates/benten-sync/src/ucan_blobs_protocol.rs:496-499 (ARM 5 verify_binding call with no upstream issuer-trust check); crates/benten-caps/src/authorization_grant.rs:653-695 (verify_binding parses issuer_verifying_key from self with NO trust-anchor); crates/benten-sync/src/ucan_blobs_protocol.rs:269-275 (doc-comment naming 'production wire-up' chain validator at 'cap-policy hook' but no specific row in DEFERRED.md).",
+      "recommendation": "BELONGS-NAMED-NOW destination = either (a) add a new Row D-NN in V1-FROZEN-INTERFACE-DEFERRED.md naming the read-side issuer-trust seam at validate_request_for_connection ARM 5 with explicit destination = the G-CORE-3e production-wire-up wave or G-COMP-1 sync hardening sub-wave; OR (b) extend Row D-15-cluster (S&C runtime carries) to enumerate this gap if it semantically fits there. Per HARD RULE 12 the deferral disposition is acceptable AS LONG AS the destination row is minted NOW. Author-time the row, then re-dispose-as-deferred."
+    },
+    {
+      "id": "L1-r6r2-MIN-1",
+      "severity": "MINOR",
+      "disposition": "BELONGS-NAMED-NOW",
+      "description": "V1-FROZEN-INTERFACE.md item 11 sweep-completeness gap on 5 SwapKeypair/SwapPublicKey/SwapRecipient* enums + AeadEnvelope struct. The freeze table at V1-FROZEN-INTERFACE.md:980-999 enumerates 158 pub-enum-bearing types + names 10 carve-outs but the swap_matrix.rs Swap*-prefixed sum-type enums (SwapKeypair, SwapPublicKey, SwapRecipientKeypair, SwapRecipientPublic, SwapRecipientSecret — all exported via lib.rs convenience re-exports at lines 147-152) are NOT in the table. These were added at G-CORE-3c post-freeze-table-authoring. Adding a future NF-1 PQ⊕PQ arm to the swap matrix would require new variants on these enums; non_exhaustive marks them additive-forward-compat per item 11's stated discipline. Similarly the AeadEnvelope struct at aead.rs:144 was deliberately left without non_exhaustive per the L1 fix-pass doc-comment (cascade-too-wide rationale) but the construction sites are only 3 — all internal to crypto-suite — so the cascade rationale doesn't actually apply.",
+      "evidence": "crates/benten-crypto-suite/src/swap_matrix.rs:998-1020 + 1023-1043 + 1046-1068 + 1071-1085 + 1088-1105 (5 enum decls without non_exhaustive); crates/benten-crypto-suite/src/lib.rs:147-152 (all 5 + SwapMatrix re-exported); crates/benten-crypto-suite/src/aead.rs:144-154 (AeadEnvelope pub-fields struct without non_exhaustive); grep AeadEnvelope { construction sites: aead.rs:286 + swap_matrix.rs:1648+1707 = all internal to crypto-suite.",
+      "recommendation": "BELONGS-NAMED-NOW destination = extend V1-FROZEN-INTERFACE.md item 11 table at row 994-996 with rows for the 5 swap-matrix enums + AeadEnvelope struct. Either: (a) apply #[non_exhaustive] inline as part of R6 R2 fix-pass (preferred; ~6 attribute additions; arm-coverage tests get updated similarly to existing pattern), OR (b) document a structural carve-out reason in V1-FROZEN-INTERFACE.md if the sum-type variant set genuinely must be exhaustive-by-design (mirroring Scope and Strategy carve-outs). Recommend path (a): the swap-matrix-arm enums are precisely the kind of type whose variant set grows over time (NF-1 PQ⊕PQ + future codepoints) — non_exhaustive is the right freeze posture."
+    },
+    {
+      "id": "L1-r6r2-MIN-2",
+      "severity": "MINOR",
+      "disposition": "BELONGS-NAMED-NOW",
+      "description": "SwapMatrixError audit-pin test at g_core_9_non_exhaustive_audit.rs:241-252 only covers 1 of 7 variants (ConfigMismatch) with `_ => 'Unknown'` catch-all. This is weaker than the parallel AeadError audit (lines 254-267) which exhaustively names 4 variants + catch-all. The audit-pin's job is to force a deliberate-review when a new variant is added; a 1-variant + catch-all pin lets ~6 net-new variants pass silently. Pattern mismatch with the established #[non_exhaustive] arm-coverage pattern + degrades the freeze-discipline signal.",
+      "evidence": "crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs:241-252 (single-arm match); SwapMatrixError actual variant count via grep crates/benten-crypto-suite/src/swap_matrix.rs:782-826 = 7+ variants (ConfigMismatch, AeadAuthFailed, Unsupported, AuditNotLandedPurePqRejected, Verify, CipherSuite, ...).",
+      "recommendation": "BELONGS-NAMED-NOW destination = extend the existing crypto_suite_swap_matrix_error_audit_arm_coverage test inline at the same R6 R2 fix-pass to enumerate ALL current SwapMatrixError variants in the match (mirroring the AeadError pattern). ~15 LOC. Same file."
+    },
+    {
+      "id": "L1-r6r2-OBS-1",
+      "severity": "OBSERVATION",
+      "disposition": "DISAGREE-WITH-EXPLANATION",
+      "description": "Hybrid signature commitment comparison at sig.rs:473 uses Vec<u8> PartialEq which is non-constant-time. For a SHA3-256 commitment over PUBLIC inputs (pubkeys + sigs + msg are all public-known at verify time), timing leakage doesn't compromise secret material — the security property is preimage resistance of SHA3-256, not commitment-equality secrecy. The subtle::ConstantTimeEq pattern is the textbook recommendation for any crypto-equality comparison; subtle is already a workspace dep (crypto-suite Cargo.toml). Discipline-note rather than fix-now.",
+      "evidence": "crates/benten-crypto-suite/src/sig.rs:471-477 (commitment_expected != sig.commitment); subtle crate at crypto-suite Cargo.toml (already workspace dep).",
+      "recommendation": "OBSERVATION ONLY — no fix-now required since the comparison inputs are public. If future R6 rounds surface ANY cryptographic-equality comparison whose inputs include secret material, codify a pim-N for 'subtle::ConstantTimeEq for crypto-equality compare' across the workspace + sweep this site to that standard then for consistency. Discipline-note can be carried at the bottom of authorization_grant.rs / sig.rs doc-blocks naming the public-input rationale."
+    },
+    {
+      "id": "L1-r6r2-OBS-2",
+      "severity": "OBSERVATION",
+      "disposition": "DISAGREE-WITH-EXPLANATION (deferred per existing named destination)",
+      "description": "Production trust paths for signing/verifying across the workspace (drop, plugin_manifest, sync handshake, engine_sync, thin_client, typed_call_dispatch, manifest_signing, authorization_grant binding-sig, did_rotation, vc, ucan) are ALL classical-only Ed25519. The new PQ-hybrid SignatureSuite + SwapMatrix surfaces are built and conformance-tested but not wired at the app layer. This is the explicit L2-R6-MAJOR-2 finding deferred to the named G-CORE-PQ-WIRE wave per V1-FROZEN-INTERFACE-DEFERRED.md Row D-26 (Ben Path A ratification 2026-05-24 PM). The classical-floor-under-audited-security posture per CLAUDE.md baked-in #15 v1-GATE addition holds at v1-beta — classical Ed25519 IS the audited floor; PQ-hybrid wire-in is defense-in-depth + post-quantum future-proofing, not a SOLE trust path being demoted.",
+      "evidence": "grep `Signature::from_bytes` across crates/ = 14 production call sites, all classical Ed25519; V1-FROZEN-INTERFACE-DEFERRED.md:1093-1156 Row D-26 (G-CORE-PQ-WIRE wave) with sub-fork α/β/γ HOW analysis + sequencing.",
+      "recommendation": "No action — properly named-deferred with explicit wave + sub-fork analysis. Discipline-note: ensure pre-G-CORE-PQ-WIRE-wave-close v1-beta-tag does not promote the classical-floor posture to 'PQ-hybrid LIVE end-to-end' until the wave actually lands."
+    }
+  ]
+}

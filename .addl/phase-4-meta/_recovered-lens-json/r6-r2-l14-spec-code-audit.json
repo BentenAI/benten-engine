@@ -1,0 +1,224 @@
+{
+  "lens": "L14-spec-to-code-compliance-audit-and-drift-against-substrate",
+  "round": "R6.R2",
+  "tier": "R6 phase-close convergence council — Round 2",
+  "branch": "phase-4-meta-core/r6-r2-l14-spec-code-audit",
+  "head_sha_audited": "3c80546f",
+  "head_sha_audited_full": "3c80546f (fix(r6-r1-fp-integration-fixup-13): add --features benten-engine/test-helpers to Gate 6 bench compile)",
+  "audit_date": "2026-05-24",
+  "audit_revision": "v2-DEPTH-AUGMENTED (post coordinator EXPANDED CONTEXT 2026-05-24 — same-attack-class-siblings sweep + cross-confirmation with L3+L11 findings + §3.6j sweep-completeness self-verify against all spec-doc file:line cites)",
+  "agent": "general-purpose orchestrated as R6 R2 L14 reviewer",
+  "schema_compliance": "feedback_review_lens_json_schema_discipline §3.6i canonical: top-level `disposition` + `findings[]` with per-finding HARD-RULE-12 shape",
+  "disposition": "APPROVE-WITH-FINDINGS (1 MAJOR + 3 MINOR + 2 OBS — non-blocking but FIX-NOW per HARD RULE 12; same-attack-class siblings exposed phantom cite-strings in the freeze-contract verification-mechanism statements themselves)",
+
+  "summary": {
+    "headline": "Spec-doc-to-code structural pins (the freeze-contract surfaces themselves) verify cleanly. 12-primitive irreducibility preserved end-to-end. §8-A visibility cluster + §8-E sealed CapabilityPolicy + 3 hooks + §4.33 legacy install_plugin DELETED + #989 namespace_did seam + Inv-14 device-grain extension + Compromise #26 F4 substantive substrate + Compromise #30 PQ-hybrid anchors + Compromise #31 revocation-reach narrative all anchor to real construction sites. **However, the DEPTH-AUGMENTED pass (per coordinator's same-attack-class-siblings discipline) surfaced a sibling class of finding L11 caught: phantom file-path cites inside V1-FROZEN-INTERFACE.md's own VERIFICATION-MECHANISM clauses + the L14-MIN-3 close at R6-FP-D that added audit-trail cites to Compromise #30 + #31 itself drifted at landing.** Specifically: V1-FROZEN-INTERFACE.md item 2 line 287 names `crates/benten-engine/tests/r1_fp_3_class_b_beta_read_node_as.rs` as the Class B β behavior-pin verification mechanism — file does NOT exist (the actual class-B-β pin lives at `engine_read_node_as_put_node_pre_v1_closure.rs` + 2 `admin_ui_v0_*_engine_read_node_as*.rs` files). This sits in the freeze-contract verification-mechanism slot, NOT just the narrative — that escalates to MAJOR (the freeze contract's own self-verification cite is phantom). Compromise #31 + #30 + Row D-26 carry phantom file cites (covered in MINOR-1+2). 5+ line-number-drift instances + 1 same-doc count drift (ARCHITECTURE.md:250 'thirteen' vs L9 header 'Fourteen') round out the cluster.",
+
+    "depth_disciplines_applied": [
+      "Same-attack-class siblings: for each verified spec claim, audited the SAME doc's parallel verification-mechanism clauses + sibling cites (caught the V1-FROZEN-INTERFACE.md item 2 phantom test-file cite that the initial pass missed)",
+      "Cross-lens cross-confirmation: cross-checked with L11's 7 phantom cite-strings in wire-format inventory (L11 caught wire-format-inventory cites; L14 catches the analogous class in V1-FROZEN-INTERFACE.md + SECURITY-POSTURE.md — the SAME drift mechanism manifesting in the spec-narrative surface)",
+      "§3.6j sweep-completeness self-verify: ran `for path in $cited_files; do test -e ... done` over EVERY file path grep-extracted from V1-FROZEN-INTERFACE.md + V1-FROZEN-INTERFACE-DEFERRED.md + sampled from SECURITY-POSTURE.md (per file 1-grep per cite, real-existence check, not just doc-internal cross-ref)",
+      "§3.5n orchestrator ground-truth-verify: every NAMED claim in spec docs got independent `git grep` / `find` validation against production source; no claim relied on another doc's mention",
+      "HARD RULE 12 NAMED-destination specificity: identified the 2 phantom file-path cites (Compromise #31 test cite + Compromise #30/D-26 install_record.rs) AND distinguished from INTENTIONAL deferred-consumption phantoms in Row D-9/D-10/D-23/D-24 (which are 'G-COMP-1 destination' OPEN rows with planned-but-not-yet-built future files; HARD RULE 12 clause-(b) NAMED-NOW valid)",
+      "Production-arm vs sentinel-presence: verified walker_as_subgraph_uses_only_four_primitives test body actually walks PrimitiveKind variants (not just asserts existence); verified namespace_did wires through put_node_with_context not just lib.rs field-declaration",
+      "Per-finding evidence: each finding carries `find crates -name 'X'` / `git grep` reproducer command + spec-claim-vs-code-reality diff with file:line citations"
+    ],
+
+    "structure_pins_verified_pass_2": [
+      "CLAUDE.md #1 12 primitives + #[non_exhaustive] PRESERVED (PrimitiveKind enum at crates/benten-core/src/subgraph.rs:69 + 12 exact variants; walker_as_subgraph_uses_only_four_primitives test at walker.rs:225; tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs pin)",
+      "CLAUDE.md #5 crypto-agility: SignatureSuite + cipher_suite codepoint dispatch + HYBRID_ED25519_MLDSA65 = 0x0001 + HYBRID_X25519_MLKEM768 = 0x647a + audit-gated try_pure_pq_sole_trust_path → AuditNotLandedPurePqRejected + bidirectional swap-matrix conformance tests (tf4_gcore3c_full_swap_matrix_strip_resistance_pure_pq_nondefault.rs + tf4_pure_pq_gated_audit_landed.rs + tf4_codepoint_0x647c_pure_pq_mlkem_only.rs + tf4_gcore3c_swap_matrix_conformance_additional.rs)",
+      "CLAUDE.md #15 v1-GATE (sealed-discipline + encryption substrate): #989 namespace_did seam + #1301 encryption-as-confidentiality (AeadEnvelope at aead.rs:145 + seal/unseal at aead.rs:260+303 + ChaCha20-Poly1305 bulk)",
+      "CLAUDE.md #17 three deployment shapes: full peer (RedbBackend) + thin compute (BrowserBackend in-RAM cache + namespace_did_unsupported typed reject) + embedded webview (TauriRenderer + InProcessSessionBridge at renderer-tauri/src/lib.rs:356)",
+      "CLAUDE.md #17 bridged-dual-runtime: Renderer trait at benten_platform_foundation::Renderer (referenced at renderer-tauri/src/lib.rs:70); compile-test pin assertion (would need separate L17 verification of the no-runtime-types-leak property; not in L14 scope)",
+      "CLAUDE.md #18 plugin-trust 3-layer: (a) user-as-root via WriteBoundaryChainValidator at install/write boundary; (b) install-manifest envelope via plugin_lifecycle.rs:865 install_plugin + manifest_envelope_chain_validation; (c) runtime delegation via §8-E CapabilityPolicy::check_per_delegation hook at policy.rs:534 + ProductionManifestEnvelopeRechecker at production_manifest_envelope_rechecker.rs:36",
+      "CLAUDE.md #18 Class B β: pub fn read_node_as at engine_wait.rs:1155 + call_as precedent at engine.rs:3449",
+      "CLAUDE.md #19 engine-extension trust: benten-renderer-tauri exists as compile-time-linked crate (not subgraph-pluggable) per the 14-crate workspace",
+      "§8-A visibility cluster post-tighten (Row D-7 closure at R6-FP-A Bundle F2): pub fn get_node → pub(crate) fn read_node, get_node_label_only → read_node_label_only (engine_wait.rs:1053), put_node → put_node_inner (engine_wait.rs:1092). read_node_as is sole public principal-bearing read.",
+      "§8-E sealed CapabilityPolicy: pub(crate) mod sealed { pub trait Sealed {} } at policy.rs:50-63; pub trait CapabilityPolicy: sealed::Sealed + Send + Sync at policy.rs:356; 3 hooks at policy.rs:510/534/573",
+      "§4.33 legacy install_plugin DELETED from module_ecosystem.rs: only verify_install_record + decide_upgrade_consent + verify_upgrade_author_continuity + check_author_trust remain pub. Canonical install path is plugin_lifecycle.rs:865.",
+      "#989 G-CORE-1 storage-partition seam: WriteContext::namespace_did: Option<Cid> at lib.rs:961 + with_namespace_did builder at lib.rs:1031 + redb_backend.rs comprehensive narrative (line 100-167+) on K_principal derivation discipline (#1336 mini-rev correction folded in)",
+      "15.a SubgraphSpec primitive: pub struct Spec (spec.rs:190) + builder pattern + pub fn walk (walker.rs:78) + pub fn walker_as_subgraph() -> Subgraph (walker.rs:183) + pub struct WalkResult (walker.rs:50) + pub struct StructuralPath (spec.rs:38)",
+      "15.a + 15.d collision-rename resolution LANDED: SubgraphSpecRestriction (spec.rs:126) + RestrictedScope (restricted_spec.rs:103) + GrantKeyMaterial (authorization_grant.rs:178) + AeadKeyMaterial (aead.rs:85)",
+      "15.c Scope two-arm enum: Hashes(Vec<Cid>) + RestrictedSelector(RestrictedScope) at scope.rs; NO #[non_exhaustive] (deliberate carve-out)",
+      "15.d AuthorizationGrant struct shape: ucan + key_material (GrantKeyMaterial) + binding_sig + audience_binding + issuer_verifying_key + audience_pubkey present (line 238 — narrative says 233 = drift -5)",
+      "15.e EncryptionClass + EncryptionClassError + pub mod codepoint + from_codepoint typed dispatch at encryption_class.rs:36-101",
+      "15.f structural KDF: derive_root (line 125) + derive_step (line 142) + StructuralKdfKey + derive_step_without_info_tag_for_test + \"root\"/\"step\" HKDF info-tags",
+      "15.g IROH_BLOCK_SIZE = 16 * 1024 at aead.rs:52 (EXACT byte-pin match with narrative — load-bearing golden-constant cite)",
+      "15.g TwoCidStore at two_cid_store.rs:64",
+      "15.h Engine::walk_share_scope at engine_share_scope.rs:59 + SubgraphSpecWalkFailed ErrorCode in benten-errors lib.rs (4-surface mirror: variant:1354 + as_static_str:1732 + routed_edge_label:2252 + from_str:2579)",
+      "Compromise #26 F4 substantive substrate: ProductionManifestEnvelopeRechecker at production_manifest_envelope_rechecker.rs:36 + synthesized-fallback hardening at line 59 (is_synthesized_node_id → UnresolvedDeny) + sync_hydrate_consume_recheck_outcome at handshake.rs:744 (D-6 closure verified)",
+      "Compromise #30 PQ-hybrid v1-beta default + classical floor + committing combiner + typed-reject fail-closed semantics all anchor to real codepoint constants + try_pure_pq_sole_trust_path arm + tf4_pure_pq_gated_audit_landed.rs conformance suite",
+      "Compromise #31 revocation-reach: future-serve-cut via per-request CapabilityPolicy::check_read consultation + forever-valid-Drop-bundles property; E_UCAN_BLOBS_REQUEST_REJECTED typed gate at benten-errors:1181",
+      "Inv-14 device-grain fields: AttributionFrame.peer_did_set:95 + device_did:101 + sync_hop_depth:111 in exec_state.rs (Phase-3 G16-B extension); Phase-4-Foundation plugin-DID principal extension also present per INVARIANT-COVERAGE.md narrative",
+      "Row D-23 + D-24 + D-26 named destinations: real prospective surfaces; current test-file phantoms are intentional 'deferred consumption' (G-COMP-1 destination) wave-shape per HARD RULE 12 clause-(b) — NOT counted as drift",
+      "All 31 Compromise rows + 14 invariants + 12 primitives + 15 §1.A.FROZEN items + 10 sub-clauses + 26 D-rows enumerated end-to-end with verifiable construction-site or named-destination",
+      "DSL CompileError variant Emit→Build rename landed (lib.rs:307-325); PrimitiveKind::Emit UNCHANGED (lib.rs:1423) per CLAUDE.md #1 commit"
+    ],
+
+    "summary_of_findings": "1 MAJOR + 3 MINOR + 2 OBSERVATION. MAJOR = the V1-FROZEN-INTERFACE.md item 2 verification-mechanism cites a phantom test file in the freeze-contract self-verification slot (sibling-class to L11's wire-format inventory phantoms; depth-augmented pass per coordinator caught it). 3 MINOR = phantom file-path cites in Compromise #30 + #31 + Row D-26 narratives (the L14-MIN-3 close at R6-FP-D itself drifted at landing) + 8-instance line-number-drift cluster. 2 OBS = single-line same-doc count drift (ARCHITECTURE.md:250 'thirteen' vs L9 header 'Fourteen') + positive confirmation of all structural pins.",
+    "would_block_phase_tag": false,
+    "would_block_round_progression": false,
+    "fix_now_orchestrator_direct_loc_budget": "~22 LOC across 7 doc-file sites; all FIX-NOW per HARD RULE 12; ≤30-min orchestrator direct"
+  },
+
+  "findings": [
+    {
+      "id": "L14-R6-R2-MAJ-1",
+      "severity": "MAJOR",
+      "title": "V1-FROZEN-INTERFACE.md item 2 Class-B-β verification-mechanism cites a phantom test file (same-attack-class sibling to L11's wire-format inventory phantoms)",
+      "location": "docs/V1-FROZEN-INTERFACE.md:287 — within the item 2 'Verification mechanism' enumerated bullet list for the read_node_as freeze",
+      "evidence": "Narrative claims: '`crates/benten-engine/tests/r1_fp_3_class_b_beta_read_node_as.rs` (existing test family) carries the behavior pins.' Verified by `find crates/benten-engine/tests -iname '*class_b_beta*' -o -iname '*r1_fp_3*'` → 0 matches; `test -e crates/benten-engine/tests/r1_fp_3_class_b_beta_read_node_as.rs` → MISSING. The actual class-B-β behavior pins live at `crates/benten-engine/tests/engine_read_node_as_put_node_pre_v1_closure.rs` + `crates/benten-engine/tests/admin_ui_v0_source_never_calls_engine_read_node_only_engine_read_node_as.rs` + `crates/benten-engine/tests/admin_ui_v0_shell_routes_through_engine_read_node_as_for_cap_scoped_reads.rs` + `crates/benten-engine/tests/read_path_check_read_fails_closed_d1_1189.rs`. The cite is grep-DISCOVERABLE-TO-A-NON-EXISTENT-FILE. This is the EXACT same drift mechanism L11 caught in V1-WIRE-FORMAT-INVENTORY.md (per coordinator EXPANDED CONTEXT: 'L11: 7 phantom cite-strings'); applied to V1-FROZEN-INTERFACE.md, it surfaces here. Severity MAJOR (not MINOR) because the cite sits in the freeze-contract VERIFICATION-MECHANISM slot — not a narrative paragraph — and the freeze contract's own self-verification cite being phantom is structurally weaker than narrative-cite drift.",
+      "disposition": "FIX-NOW",
+      "fix_destination": "Orchestrator-direct: edit V1-FROZEN-INTERFACE.md:287 to enumerate the ACTUAL class-B-β test pin files: `crates/benten-engine/tests/engine_read_node_as_put_node_pre_v1_closure.rs` + `crates/benten-engine/tests/admin_ui_v0_source_never_calls_engine_read_node_only_engine_read_node_as.rs` + `crates/benten-engine/tests/admin_ui_v0_shell_routes_through_engine_read_node_as_for_cap_scoped_reads.rs` + `crates/benten-engine/tests/read_path_check_read_fails_closed_d1_1189.rs` (the actual test family — 4 files). ~5 LOC orchestrator-direct.",
+      "named_destination_real": true,
+      "rationale": "FIX-NOW per HARD RULE 12. The freeze-contract verification-mechanism is the structural backstop the rest of §15-A pre-tag readiness depends on; a phantom cite there means the self-verification claim is unverifiable. This is exactly the sibling-class L11 caught; coordinator EXPANDED CONTEXT depth-discipline mandates checking it. The fix preserves the freeze contract integrity end-to-end.",
+      "cross_lens_signal_L11": "L11 caught 7 phantom cites in wire-format inventory; L14 catches 1 phantom cite in the freeze-contract verification-mechanism + 2 phantom cites in audit-trail-cite narratives (Compromise #30 + #31). Combined: 10 phantom-file cites across the spec-doc surface. **Cross-lens pattern: phantom file-path cites are a recurring drift class** worth ≥3-recurrence pim-N codification trigger per `feedback_pattern_induction_meta_sweep`."
+    },
+
+    {
+      "id": "L14-R6-R2-MIN-1",
+      "severity": "MINOR",
+      "title": "Compromise #31 audit-trail-cite is a phantom file path (violates the L14-MIN-3 close grep-discoverable contract claim)",
+      "location": "docs/SECURITY-POSTURE.md:2662 (Compromise #31 'Code anchors' line) + docs/SECURITY-POSTURE.md:2668 (narrative re-cite)",
+      "evidence": "Narrative claims: 'the future-serve-cut assertion at `crates/benten-engine/tests/tf3e_revoked_grant_yields_typed_revoked.rs`'. Verified by `find crates -name 'tf3e_revoked_grant*'` → 0 matches; `find crates -path '*tf3e*'` → returns only 4 files, all in `crates/benten-sync/tests/`, none with that name. The function-name `tf3e_revoked_grant_yields_typed_revoked` DOES exist as `#[test] fn` body inside `crates/benten-sync/tests/tf3e_replay_attack_ucan_expired.rs:126` — that is the actual construction site. The cite is phantom-file-path-grep-discoverable-to-the-wrong-place. Doubly egregious because the narrative IS the L14-MIN-3 close at R6-FP-D ('audit-trail-cite discipline; L14-MIN-3 close at R6-FP-D') — the lens-internal fix-up itself drifted at landing. Cross-checked with `grep -rn 'tf3e_revoked_grant_yields_typed_revoked'`: (1) actual function at benten-sync/tests/tf3e_replay_attack_ucan_expired.rs:126; (2) crates/benten-drop/tests/tf3f_revocation_reach_forever_valid_documented.rs:141 correctly cites function-name-in-context (`tf3e_replay_attack_ucan_expired.rs::tf3e_revoked_grant_yields_typed_revoked`); (3) crates/benten-caps/src/authorization_grant.rs:620 docstring also correctly references the function name as a key.",
+      "disposition": "FIX-NOW",
+      "fix_destination": "Orchestrator-direct edit to docs/SECURITY-POSTURE.md:2662 + :2668: change cite to `the tf3e_revoked_grant_yields_typed_revoked test function inside crates/benten-sync/tests/tf3e_replay_attack_ucan_expired.rs:126` (function-name + actual-host-file shape, mirroring how tf3f_revocation_reach_forever_valid_documented.rs:141 + authorization_grant.rs:620 already cite this correctly). ~3 LOC.",
+      "named_destination_real": true,
+      "rationale": "L14-MIN-3 close at R6-FP-D explicitly claimed the cite is 'grep-discoverable per pim-13 §3.12 audit-trail-cite discipline'. Cite is grep-DISCOVERABLE-TO-WRONG-PLACE = violates the discipline at the discipline's own stated origin point. FIX-NOW per HARD RULE 12 + pim-13 §3.12 + CRITIC-1 fix-up #11 phantom-destination verification pattern.",
+      "claude_md_baked_in_implications": "Strengthens the pim-N candidate (combined with L14-R6-R2-MAJ-1 + L14-R6-R2-MIN-2 below): 'audit-trail-cite VALIDATION discipline — when adding a grep-discoverable cite per pim-13 §3.12, the SAME PR landing the cite MUST run `find crates -path <cited-path>` to verify the file exists at the cited path'. Lift §3.6j sweep-completeness self-verify pattern to cite-add waves (§3.6j extension or new §3.6k)."
+    },
+
+    {
+      "id": "L14-R6-R2-MIN-2",
+      "severity": "MINOR",
+      "title": "Compromise #30 + Row D-26 cite phantom file path `install_record.rs` (the file doesn't exist; InstallRecord lives in plugin_manifest.rs)",
+      "location": "docs/SECURITY-POSTURE.md:2332 (Compromise #30 narrative app-layer-wire-in gap enumeration) + docs/V1-FROZEN-INTERFACE-DEFERRED.md:1101 (Row D-26 frozen-surface enumeration)",
+      "evidence": "Narrative says `crates/benten-platform-foundation/src/install_record.rs::InstallRecord::verify_user_signature`. Verified by `find crates -name 'install_record*'` → returns only `crates/benten-engine/src/install_record_replay.rs` + various test files; NO `install_record.rs` in `benten-platform-foundation/src/`. Actual host: `crates/benten-platform-foundation/src/plugin_manifest.rs:543` (`pub struct InstallRecord`) + `crates/benten-platform-foundation/src/plugin_manifest.rs:592` (`pub fn verify_user_signature`). Same phantom file cite in TWO artifacts (Compromise #30 + Row D-26) — wave-author propagated the wrong file path across both narratives at same authoring time.",
+      "disposition": "FIX-NOW",
+      "fix_destination": "Orchestrator-direct: edit both lines to `crates/benten-platform-foundation/src/plugin_manifest.rs::InstallRecord::verify_user_signature` (with line refs: struct:543, method:592). Same edit to both narratives so the Row D-26 wave brief, when it dispatches, finds the right file. ~2 LOC.",
+      "named_destination_real": true,
+      "rationale": "Same phantom-file class as L14-R6-R2-MIN-1 + L14-R6-R2-MAJ-1. The Row D-26 dispatched-wave author would chase a non-existent file at brief-execution time, costing one re-orient cycle. FIX-NOW per HARD RULE 12 + pim-13 §3.12.",
+      "claude_md_baked_in_implications": "Combined with MAJ-1 + MIN-1 this hits 3 phantom-file-cite instances (MAJ-1 in V1-FROZEN-INTERFACE.md item 2 + MIN-1 in Compromise #31 + MIN-2 in Compromise #30 + Row D-26). Plus L11's 7 wire-format-inventory phantoms = ≥10 cross-lens phantom-file-cite class. Strongly triggers pim-N codification."
+    },
+
+    {
+      "id": "L14-R6-R2-MIN-3",
+      "severity": "MINOR",
+      "title": "Cluster of off-by-N line-number cite-drift across Compromise narratives + V1-FROZEN-INTERFACE.md (8+ instances) — recurrence pattern triggers pim-N",
+      "location": "Multiple: docs/SECURITY-POSTURE.md:2145 + :2241 + :2295 + V1-FROZEN-INTERFACE-DEFERRED.md:606 ('engine.rs:1462-1476' / ':1448-1484' all → actual :1486-1506); docs/SECURITY-POSTURE.md:2662 ('line 2619 below' for revocation-reach asymmetry → actual line 2706); docs/V1-FROZEN-INTERFACE.md:1483 ('authorization_grant.rs:233 pub struct AuthorizationGrant' actual :238); docs/V1-FROZEN-INTERFACE.md:1585 ('structural_kdf.rs line 124 derive_root' actual :125); docs/V1-FROZEN-INTERFACE.md:1588 ('line 141 derive_step' actual :142); docs/SECURITY-POSTURE.md:2304 ('codepoint.rs line ~64' for HYBRID_X25519_MLKEM768 actual :199, drift -135 — substantial)",
+      "evidence": "Sampled audit found 8+ distinct line-number-drift instances across Compromise #26/#30/#31 narratives + V1-FROZEN-INTERFACE.md 15.a/15.d/15.f cite scaffolding. The HYBRID_X25519_MLKEM768 cite is particularly bad (says `line ~64` actual is `line 199` — drift of 135 lines; the original sig codepoint at line 49 was likely conflated with the KEM codepoint's location in the same file). Other drifts are -5 to -1 (small file-evolution since narrative was authored). Pattern is consistent: narratives carry exact line references that drift as cited files grow.",
+      "disposition": "FIX-NOW for the cite-corrections (~10 LOC orchestrator-direct) + DEFER-NAMED-NOW to dispatch-conventions §3 pim-N codification (see pattern_induction_meta_sweep section below for the candidate codification)",
+      "fix_destination": "Per-site orchestrator-direct edits + pim-N codification at dispatch-conventions §3.5 (after R6.R2 triage approves the pim-N text). Specifically: engine.rs cite range → `:1486-1506`; Compromise #31 'line 2619' → `'line 2706'`; AuthorizationGrant struct cite → `:238`; structural_kdf derive_root cite → `:125`; structural_kdf derive_step cite → `:142`; HYBRID_X25519_MLKEM768 cite → `:199`.",
+      "named_destination_real": true,
+      "rationale": "8+ instance recurrence triggers pim-N codification per `feedback_pattern_induction_meta_sweep` (≥3 = threshold; 8 = strong). HARD RULE 12 disposition: FIX-NOW for the cited drifts (clause-(a) inline closure) + NAMED-DESTINATION pim-N codification to dispatch-conventions §3.5.",
+      "claude_md_baked_in_implications": "See pattern_induction_meta_sweep.pim_n_candidates — line-number-cite-drift pim-N candidate ready for R6.R2 triage ratification."
+    },
+
+    {
+      "id": "L14-R6-R2-OBS-1",
+      "severity": "OBSERVATION",
+      "title": "ARCHITECTURE.md:250 says 'thirteen Rust crates' but L9 header says 'Fourteen crates' — single-doc internal-narrative drift",
+      "location": "docs/ARCHITECTURE.md:9 (header: 'Fourteen crates (post-Phase-4-Meta-Core G-CORE-3f)') vs :250 ('Beyond the thirteen Rust crates')",
+      "evidence": "Header L9 + L11 + L225 say 'fourteen Rust crates'; L19/L24 enumerate 11th/12th; L29/L37 add 13th + 14th. L250 narrative ('### Bindings and tooling' intro) still says 'thirteen Rust crates' — the 14th crate (benten-drop, G-CORE-3f) addition did not propagate to the bindings-section preamble. Cross-checked: CRATES-DEEP-DIVE.md:3/:50/:486 all say 'fourteen' / '14 crates' correctly; PRIMER.md:54 also says 'fourteen crates'. ARCHITECTURE.md:250 is the sole drift.",
+      "disposition": "FIX-NOW (orchestrator-direct ~1 LOC: edit ARCHITECTURE.md:250 'thirteen Rust crates' → 'fourteen Rust crates'). Severity OBSERVATION because the count is rhetorically used for narrative coherence, not as a structural pin or cite-from-elsewhere reference; folds into L16 doc-coupling lens's natural workstream if L16 surfaces independently.",
+      "named_destination_real": true,
+      "rationale": "Sub-OBS scope per HARD RULE 12 framing: small enough that inline FIX-NOW IS the right disposition; severity stays OBSERVATION because neither blocking nor structurally load-bearing.",
+      "claude_md_baked_in_implications": "Reinforces §3.5g cross-doc-mirror discipline (already codified for type-name + ErrorCode mirror). Same-doc internal-narrative coherence is a sub-variant — 'when a doc's header asserts a count, scan the same doc for downstream narrative re-uses of that count and update atomically' (1-instance evidence; below 3-recurrence threshold)."
+    },
+
+    {
+      "id": "L14-R6-R2-OBS-2",
+      "severity": "OBSERVATION",
+      "title": "POSITIVE CONFIRMATION — every structural spec-to-code pin verifies + all 4 INTENTIONAL deferred-consumption phantom files correctly distinguished from REAL phantoms (the audit's primary positive finding)",
+      "location": "Workspace-wide",
+      "evidence": "§3.6j sweep-completeness self-verify pass: ran `for path in $cited_files; do test -e ... done` over 30+ file-path cites grep-extracted from V1-FROZEN-INTERFACE.md + V1-FROZEN-INTERFACE-DEFERRED.md. Results:\n  - 26 cites verify EXISTS-AT-CITED-PATH ✓\n  - 4 cites verify intentionally-MISSING-as-G-COMP-1-deferred (Row D-7 forensic body cite `g_core_9_engine_no_direct_cap_mutation.rs` + Row D-10 deferred cite `g_core_9_share_scope_live_per_request.rs` + Row D-9 deferred cite `canonical_bytes_v1_per_chunk_aead_aad.rs` + Row D-23/D-24 deferred cross_wave test files) — these are HARD RULE 12 clause-(b) NAMED-NOW-with-real-destination valid deferrals\n  - 3 cites verify REAL-PHANTOM = drift (MAJ-1 + MIN-1 + MIN-2 above)\n\nIndependent spec-walk + code grep for every CLAUDE.md baked-in item #1-#19 returned positive match (each cited in structure_pins_verified_pass_2). Combined: the structural integrity of the freeze contract holds. The cite-drift findings are SURFACE-CITATION-LAYER drift, NOT structural-contract drift.",
+      "disposition": "OUT-OF-SCOPE (no action — positive observation that the audit's primary contract is upheld + ground-truth distinguishes intentional-deferred-phantom-FILES from drift-phantom-CITES)",
+      "named_destination_real": true,
+      "rationale": "Per `feedback_pattern_induction_meta_sweep` 5-category framework + standard 'spec-to-code structural pins verified' positive observation pattern — record the positive control side so future rounds know which surfaces were re-walked + verified at this round.",
+      "claude_md_baked_in_implications": "POSITIVE confirmation that R6 R1 L14 + R6-FP-D substantive structural closures held; the surfaces flagged at MAJ-1/MIN-1/MIN-2/MIN-3 are CITATION-class drift, NOT structural-contract drift. The freeze contract integrity is intact. The 4-intentional / 3-drift partition is the L14-specific validation pattern; demonstrates the lens is correctly distinguishing phantoms from named-destination-NOW-valid deferrals per HARD RULE 12 clause-(b)."
+    }
+  ],
+
+  "pattern_induction_meta_sweep": {
+    "framework": "5-category per `feedback_pattern_induction_meta_sweep`",
+    "categories": {
+      "1_cross_lens_patterns": "**STRONG CROSS-LENS SIGNAL — phantom file-path cites recur across spec docs:** L11 (wire-format inventory) caught 7 phantom cites per coordinator EXPANDED CONTEXT; L14 (this lens) catches 3 phantom cites (MAJ-1 in V1-FROZEN-INTERFACE.md item 2 verification-mechanism + MIN-1 in Compromise #31 + MIN-2 in Compromise #30 + Row D-26). Combined ≥10 instances triggers pim-N codification per `feedback_pattern_induction_meta_sweep` (≥3 = threshold).",
+      "2_wave_completion_gap_recurrences": "R6-FP-D's own L14-MIN-3 close at R6-FP-D drifted at landing (the audit-trail-cite added IS a phantom). Mirror of pim-2 amendment 'closure pins target SPECIFIC arms' (§3.6b sub-rule 4) — applies to cite-add waves too. **Wave-completion gap is endemic for cite-add waves** because the cite-author rarely re-verifies the existence of the cited path post-edit.",
+      "3_cross_pr_api_conflicts": "None surfaced this round.",
+      "4_ci_infrastructure_flake_classes": "None surfaced this round.",
+      "5_doc_coupling_missed_cases": "8+ line-number-drift instances + 3 phantom-file-path cites + 1 same-doc count drift (L250 thirteen vs L9 fourteen). All are doc-coupling-missed-case class. Aggregate signals: long-lived spec docs accumulate cite-drift faster than orchestrator-direct doc-coupling sweeps catch."
+    },
+    "pim_n_candidates": [
+      {
+        "candidate_id": "pim-N-cite-path-grep-validate-at-author-time",
+        "framing": "When adding a `file:line` cite or `crates/path/to/file.rs` reference to ANY doc (spec or code-narrative), the SAME PR/wave landing the cite MUST run `find crates -path <cited-path>` (or equivalent existence-check) + `wc -l <cited-path>` (line-range bounds-check) to verify (a) the file exists at exactly the cited path AND (b) any cited line number falls within the file's actual line range. Lift §3.6j sweep-completeness self-verify pattern to cite-add waves (§3.6j extension OR new §3.6k 'cite-path validation at author time').",
+        "evidence_count": "10 cross-lens (L11 7 + L14 3)",
+        "instances": ["L11 wire-format-inventory phantoms ×7", "L14-MAJ-1 V1-FROZEN-INTERFACE.md item 2 verification-mechanism phantom", "L14-MIN-1 Compromise #31 phantom test file", "L14-MIN-2 Compromise #30 phantom install_record.rs cite", "L14-MIN-2 Row D-26 phantom install_record.rs cite (same drift propagated to 2nd narrative)"],
+        "recommended_ratification": "DEFER-NAMED-NOW to pim-N codification at L15-ADDL-methodology lens or orchestrator-direct at R6.R2 triage (~5 LOC dispatch-conventions §3 addition). Threshold met strongly (10 instances; ≥3 = pattern-induction threshold)."
+      },
+      {
+        "candidate_id": "pim-N-line-number-cite-drift-discipline",
+        "framing": "Narrative cites in long-lived spec docs (V1-FROZEN-INTERFACE.md / SECURITY-POSTURE.md / INVARIANT-COVERAGE.md / GLOSSARY.md / ERROR-CATALOG.md / ARCHITECTURE.md / HOW-IT-WORKS.md) MUST prefer function/struct/method NAMES over `file:line` references UNLESS the line ref is itself a byte-pin/golden-constant identity (e.g., IROH_BLOCK_SIZE constant placement at aead.rs:52 is part of the byte-pin's load-bearing identity per item 14). Orchestrator-direct workspace-pre-push pass grep-validates each line-ref cite for line-accuracy.",
+        "evidence_count": 8,
+        "instances": ["engine.rs:1462-1476 cited as :1462/:1448 actual :1486 (3 sites)", "Compromise #31 'line 2619 below' actual line 2706", "AuthorizationGrant struct cited :233 actual :238", "structural_kdf derive_root cited line 124 actual 125", "structural_kdf derive_step cited line 141 actual 142", "HYBRID_X25519_MLKEM768 cited 'line ~64' actual 199"],
+        "recommended_ratification": "DEFER-NAMED-NOW to pim-N codification (~5 LOC dispatch-conventions §3.5 amendment). Threshold met (8 instances)."
+      },
+      {
+        "candidate_id": "pim-N-same-doc-count-narrative-coherence",
+        "framing": "When a doc's HEADER asserts a workspace count (e.g., 'Fourteen crates'), every downstream narrative re-use of that count in the SAME doc MUST be atomically updated. Scope: ARCHITECTURE.md / CRATES-DEEP-DIVE.md / PRIMER.md / VISION.md.",
+        "evidence_count": 1,
+        "instances": ["L14-R6-R2-OBS-1 (ARCHITECTURE.md L250 'thirteen' vs L9 'Fourteen')"],
+        "recommended_ratification": "OUT-OF-SCOPE-NAMED (1-instance below 3-recurrence threshold); record for forward-fire watch-list, do NOT codify."
+      }
+    ]
+  },
+
+  "verification_methodology": {
+    "approach": "§3.5n orchestrator-ground-truth verify: each spec doc claim independently grep-validated against HEAD code. No claim relied solely on another doc's mention. Depth-augmented pass per coordinator EXPANDED CONTEXT 2026-05-24.",
+    "tools_used": ["git ls-tree HEAD", "grep -rn ... crates/", "find crates -name|path ...", "wc -l on spec docs", "Read on cited file:line ranges", "test -e <path> existence-check per cited file-path", "for-loop batch existence verification across all grep-extracted cites"],
+    "scope_covered": [
+      "docs/V1-FROZEN-INTERFACE.md §1.A.FROZEN items 1-15 (all 10 sub-clauses 15.a-15.j) + Verification mechanism slots (item 2 catches MAJ-1)",
+      "docs/V1-FROZEN-INTERFACE-DEFERRED.md ALL D-rows D-1 through D-26 (D-5/D-6/D-7/D-10/D-23/D-24/D-26 spot-checked including the 4 intentional-deferred-phantom vs 1 drift-phantom partition)",
+      "docs/SECURITY-POSTURE.md Compromise rows #1-#31 + Compromise #26 post-F4 retense + Compromise #30 narrative + Compromise #31 narrative + revocation-reach asymmetry section + audit-trail cites added at R6-FP-D L14-MIN-3 close",
+      "docs/INVARIANT-COVERAGE.md 14-invariant coverage table + Inv-14 Phase-3 device-grain + Phase-4-Foundation plugin-DID extension narratives",
+      "docs/ARCHITECTURE.md crate-count narrative (header + L250 internal drift caught)",
+      "docs/ERROR-CATALOG.md catalog-count 4-row reconciliation table (192/192/193/194 self-consistent)",
+      "CLAUDE.md baked-in items #1-#19 + v1-GATE addition (cite-walk verified through main-repo CLAUDE.md per context-block accessibility)",
+      "R6-R1-FP-E-HARD-ESCALATION.md L2-R6-MAJOR-2 fork doc (G-CORE-PQ-WIRE wave context)",
+      "Cross-lens cross-confirmation with L11 wire-format inventory phantoms (per coordinator EXPANDED CONTEXT: same drift mechanism manifests across spec-doc surface)"
+    ],
+    "scope_NOT_covered": [
+      "docs/VISION.md + docs/ENGINE-SPEC.md DELETED at this HEAD (per coordinator EXPANDED CONTEXT: 'fix-up #6 D's L16 MIN-4 DISAGREE confirmed deletion'). Verified: `git ls-tree HEAD docs/ | grep -iE 'engine.spec|vision'` → 0 matches. Their deletion is INTENTIONAL + consistent at HEAD.",
+      "docs/HOW-IT-WORKS.md mid-level narrative cross-check (deferred — primary lens scope is V1-FROZEN-INTERFACE.md + SECURITY-POSTURE.md + INVARIANT-COVERAGE.md + CLAUDE.md per brief)",
+      "GLOSSARY.md term-by-term cross-check (L16 doc-coupling lens scope per R6-LENS-CATALOG.md)",
+      "FULL-ROADMAP.md + DEVELOPMENT-METHODOLOGY.md phase-progression narrative (orthogonal to spec-to-code freeze-contract integrity surface)"
+    ],
+    "scope_NOT_covered_rationale": "Per brief's lens scope (§1.A.FROZEN 15 items + 10 sub-clauses + ALL D-rows + Compromise narratives + CLAUDE.md baked-in items + 14 invariants + 194 catalog codes + Row D-26 G-CORE-PQ-WIRE) this lens is the spec-to-code freeze-contract integrity verifier. The deleted ENGINE-SPEC.md + VISION.md absence is intentional (fix-up #6 D's L16 MIN-4 DISAGREE; verified at this HEAD). The wider doc-coupling sweep is L16's lens. L14 deliberately stays focused on freeze-contract structural pins so independent cross-check with L13 (test-coverage) catches what test-file-walk misses without redundant doc-coupling overlap."
+  },
+
+  "termination_signal": {
+    "round": "R6.R2",
+    "this_lens_status": "APPROVE-WITH-FINDINGS (1 MAJ + 3 MIN + 2 OBS; pending orchestrator-direct FIX-NOW for MAJ-1 + MIN-1 + MIN-2 + MIN-3 + OBS-1)",
+    "blocks_round_advancement": false,
+    "would_block_phase_tag": false,
+    "next_round_predicted_findings_count_for_this_lens": "0 substantive (the FIX-NOW dispositions are orchestrator-direct ~22 LOC closing the cite-drift cluster + pim-N codifications are R6.R2-triage-time discussion items, not round-advancing). With the proposed pim-N 'cite-path grep-validate at author time' codified, this entire class of finding becomes structurally-prevented at landing in future rounds."
+  },
+
+  "cross_check_pairs_validation": {
+    "L14-vs-L13-test-coverage": "Per R6-LENS-CATALOG.md cross-check-pairs section: 'L13 test-coverage ↔ L14 spec-audit | Test-file walk vs spec-doc walk'. L14 (this lens) confirmed: 15.a + 15.h walker pins exist + test files exist (walker_as_subgraph_uses_only_four_primitives + tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs). Cross-check pre-empted: every spec-walked structural pin had a matching test pin in L13-scoped surfaces (per construction-site grep). L13 should independently verify substantive arm at each test-pin per pim-18 §3.6f.",
+    "L14-vs-L11-wire-format-cross-confirm": "**KEY CROSS-LENS SIGNAL.** L11 caught 7 phantom cite-strings in wire-format inventory (per coordinator EXPANDED CONTEXT). L14 caught the SAME drift mechanism (phantom file-path cites) in V1-FROZEN-INTERFACE.md + SECURITY-POSTURE.md narrative surface — confirming the drift class is doc-surface-general, not wire-format-specific. The fix discipline pim-N candidate applies UNIFORMLY across all spec docs, not just wire-format inventory.",
+    "L14-vs-L3-audience-pubkey-sibling-class": "L3 caught audience_pubkey same-attack-class as scope (per coordinator EXPANDED CONTEXT). L14 cross-checked by walking AuthorizationGrant siblings: audience_binding + audience_pubkey + issuer_verifying_key + binding_sig + key_material — all DOC-VERIFIED-PRESENT at HEAD (authorization_grant.rs:238+243+247+250+257). The L3 finding is structural (the audience_pubkey field DOES exist + DOES need same-class treatment); L14 confirms the DOC narrative correctly enumerates the same surface L3 is investigating. No additional doc-narrative gap surfaced from this cross-check.",
+    "orthogonal_verification_preserved": true,
+    "pim_18_substantive_verification": "Verified by source-reading walker_as_subgraph_uses_only_four_primitives test body (asserts PrimitiveKind variants in `allowed` set; matches actual 4 used kinds Read/Transform/Branch/...). The structural-substance pin holds. The §3.6j sweep-completeness pass also runs the production-arm-vs-sentinel-presence check: namespace_did seam at WriteContext + put_node_with_context + with_namespace_did builder + redb_backend.rs K_principal derivation comment cluster — all SUBSTANTIVE production-arm wires, not sentinel-presence."
+  },
+
+  "post_audit_orchestrator_actions_needed": [
+    "Orchestrator-direct FIX-NOW for L14-R6-R2-MAJ-1 (~5 LOC: V1-FROZEN-INTERFACE.md:287 enumerate actual class-B-β test file family: engine_read_node_as_put_node_pre_v1_closure.rs + admin_ui_v0_source_never_calls_engine_read_node_only_engine_read_node_as.rs + admin_ui_v0_shell_routes_through_engine_read_node_as_for_cap_scoped_reads.rs + read_path_check_read_fails_closed_d1_1189.rs)",
+    "Orchestrator-direct FIX-NOW for L14-R6-R2-MIN-1 (~3 LOC: SECURITY-POSTURE.md:2662 + :2668 phantom test-file cite correction → cite function-name-in-context shape: `tf3e_revoked_grant_yields_typed_revoked function inside crates/benten-sync/tests/tf3e_replay_attack_ucan_expired.rs:126`)",
+    "Orchestrator-direct FIX-NOW for L14-R6-R2-MIN-2 (~2 LOC: SECURITY-POSTURE.md:2332 + V1-FROZEN-INTERFACE-DEFERRED.md:1101 phantom install_record.rs path → plugin_manifest.rs::InstallRecord::verify_user_signature)",
+    "Orchestrator-direct FIX-NOW for L14-R6-R2-MIN-3 line-number-drift cluster (~10 LOC across 6 sites)",
+    "Orchestrator-direct FIX-NOW for L14-R6-R2-OBS-1 (~1 LOC: ARCHITECTURE.md:250 'thirteen' → 'fourteen')",
+    "Surface to R6.R2 triage: 2 substantive pim-N codification candidates (cite-path-grep-validate-at-author-time + line-number-cite-drift); 1 below-threshold pim-N watch-list candidate (same-doc-count-narrative-coherence)",
+    "**Cross-lens action**: coordinate with L11 fix-up author so the cite-path-grep-validate pim-N gets ratified across the unified L11+L14 phantom-file-cite class (avoids parallel pim-N proposals)"
+  ]
+}

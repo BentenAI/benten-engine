@@ -1,0 +1,153 @@
+{
+  "lens": "L12. cross-language §3.5g mirror + workspace missing-docs + stable+MSRV clippy gates",
+  "scope": "PHASE-WIDE (Phase-4-Meta-Core R6 R2 — re-review post-R6 R1 FP integration cluster)",
+  "branch": "phase-4-meta-core/r6-r2-l12-cross-lang",
+  "base_sha": "3c80546f37adee8cb2c05e1257e4aa883370ab92",
+  "base_ref": "origin/phase-4-meta-core/r6-r1-fp-integration",
+  "head_sha": "3c80546f37adee8cb2c05e1257e4aa883370ab92",
+  "date": "2026-05-24",
+  "disposition": "APPROVE-WITH-FIXES",
+  "summary": "Post-FP re-review of L12 cross-language §3.5g mirror + clippy + missing-docs + cargo-public-api gates. The 2 new F4 mints (PluginInstallConsentDenied + PluginPerDelegationDenied) are fully 8-surface-mirrored (Rust enum + as_static_str + from_str + routed_edge_label + ALL_CATALOG_VARIANTS + ERROR-CATALOG.md ### heading + TS class + CATALOG_CODES + CODE_TO_CTOR_GENERATED) with real production firing sites. CATALOG_VARIANT_COUNT bumped 192 → 194 correctly. The AuditNotLandedPurePqRejected reachability annotation placement (fix-up #4) is correctly positioned and the drift-detect scanner picks it up (164 reachable / 0 unreachable). All 4 Rust catalog surfaces report 194 entries; TS CATALOG_CODES (196) = 194 + E_UNKNOWN + E_INV_ITERATE_NEST_DEPTH (both deliberate retentions with classes). benten-errors stable_shape: 9/9 PASS. drift-detect main: GREEN. drift-detect-error-variant-mirror (§3.5g item 6): 0 new violations against 159-entry baseline; 124 mirrored / 210 skipped (160 via baseline) / 0 new violations. for_test_symbols_are_feature_gated: 2/2 PASS. missing_docs_workspace: 3/3 PASS (full sweep 195s). HOWEVER 3 substantive new findings introduced by FP-A + FP-F4: (1) MAJOR — both stable + MSRV clippy gates RED at HEAD on `crates/benten-platform-foundation/src/plugin_lifecycle.rs:865 install_plugin` (too_many_lines 103/100) introduced by FP-F4 T10-upgrade-wire + check_install_consent wiring; (2) MAJOR — §3.5j feature-spec is stale post-FP-A F1ab: missing `benten-crypto-suite/testing` breaks compilation of 7 crypto-suite tests under both stable + MSRV clippy spec (`_for_test` symbols now cfg-gated); the §3.5j dispatch-conventions canonical spec + every CI clippy invocation needs the feature list extended; (3) MINOR — 5 rustdoc broken-link warnings at `crates/benten-engine/src/engine_wait.rs:1134, 1142, 1145` (3 stale `[\\`Engine::get_node\\`]` cites should be `[\\`Engine::read_node\\`]` per G-CORE-9 V1-FROZEN-INTERFACE row D-4/D-22 rename; doc-cite drift). +1 pim-N candidate: bench-call-site audit on cfg-gated rename cascades (fix-up #13 surfaced).",
+  "method": [
+    "8-surface mirror audit for the 2 new F4 mints (PluginInstallConsentDenied + PluginPerDelegationDenied): grep across crates/benten-errors/src/lib.rs (enum + as_static_str + from_str + routed_edge_label) + crates/benten-errors/tests/stable_shape.rs (ALL_CATALOG_VARIANTS + count assertion) + docs/ERROR-CATALOG.md (### E_ headings) + packages/engine/src/errors.generated.ts (CATALOG_CODES + class + CODE_TO_CTOR_GENERATED) — all 8 surfaces PASS for both mints.",
+    "Production firing-site audit for the 2 mints (pim-18 §3.6f SHAPE-not-SUBSTANCE): PluginInstallConsentDenied fires at crates/benten-platform-foundation/src/install_consent.rs:82 (DenyAll backend) + crates/benten-platform-foundation/src/plugin_lifecycle.rs:963 (install pipeline step 3c); PluginPerDelegationDenied fires at crates/benten-engine/src/engine_caps.rs:582 (delegate_capability). Real production arms, not sentinel-presence.",
+    "Set-diff Rust ALL_CATALOG_VARIANTS (194) vs as_static_str arms (194) vs from_str arms (194) vs routed_edge_label arms (194) vs ERROR-CATALOG.md ### E_ headings (196) vs TS CATALOG_CODES (196) vs TS class exports (194) vs TS CODE_TO_CTOR_GENERATED (196) — all reconcile to 194 throwable + 2 retentions (E_UNKNOWN + E_INV_ITERATE_NEST_DEPTH).",
+    "CATALOG_VARIANT_COUNT pinned assertion at crates/benten-errors/tests/stable_shape.rs:1030: `assert_eq!(CATALOG_VARIANT_COUNT, 194)` — 192 → 194 update correctly captured with R6 R1 FP-F4 §S3a + §S3b provenance comment at line 1027-1028.",
+    "Run `cargo test -p benten-errors --test stable_shape --release`: 9 tests PASS (variant_count_is_pinned + catalog_variant_count_matches_enum + from_str_roundtrip_representative + as_static_str_known_and_unknown + as_str_stable_for_representative_code + from_str_unknown_is_err_and_preserves_raw_string + errorcode_is_hashable_for_keyed_routing + phase_2a_snapshot_consts_use_frozen_names + errorcode_has_total_order_for_deterministic_iteration).",
+    "Run `npx tsx scripts/drift-detect.ts`: GREEN — 'catalog, Rust enum, and TS classes agree; every ErrorCode variant has a production construction site' + 'reachability: 164 variant(s) reachable, 0 unreachable'. Verified `ErrorCode::AuditNotLandedPurePqRejected — catalog annotation: reachability: ignore` appears in the scanner output (fix-up #4 placement at docs/ERROR-CATALOG.md:1772 picked up correctly).",
+    "Run `npx tsx scripts/drift-detect-error-variant-mirror.ts`: GREEN — '0 new violation(s)' against 159-entry pre-2026-05-24 baseline; 60 pub *Error enums scanned across 240 production files; 124 variants mirrored / 210 skipped / 0 new violations.",
+    "Run `cargo nextest run -p phase-3-workspace-tests --test for_test_symbols_are_feature_gated`: 2/2 PASS (no_ungated_pub_for_test_symbols_in_production_source + exempt_list_entries_all_exist) — A's F1.d cfg-gate discipline pin holds post-FP cascade.",
+    "Run `cargo nextest run -p phase-3-workspace-tests --test missing_docs_workspace`: 3/3 PASS (no_allow_missing_docs_at_phase_3_close + all_phase_2_3_todo_markers_have_named_destinations + full_missing_docs_sweep_no_warnings_workspace_wide [195.6s]).",
+    "Run `cargo +stable clippy --workspace --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing -- -D warnings`: RED — 16 E0599 compile errors on crypto-suite tests (missing benten-crypto-suite/testing) + 1 too_many_lines clippy error on plugin_lifecycle.rs:865.",
+    "Run `cargo +stable clippy --workspace --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-crypto-suite/testing -- -D warnings`: ONLY too_many_lines error remains; all crypto-suite tests compile cleanly with the augmented feature spec.",
+    "Run `cargo +1.95 clippy --workspace --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-crypto-suite/testing -- -D warnings`: same too_many_lines error reproduces on MSRV gate.",
+    "Run `RUSTDOCFLAGS='-D missing_docs' cargo doc --workspace --no-deps --features testing`: FINISHES cleanly under -D missing_docs (the explicit deny) but emits 5 unresolved-link warnings to `Engine::get_node` from engine_wait.rs:1134, 1142, 1145 (3 source-line locations, 5 warning count — same line cited from multiple paragraphs).",
+    "Cross-confirm with sibling lenses: L3 (grant-walker) returned MAJOR L3-r2-1 audience_pubkey same-attack-class as L3-r1-1 scope; L11 (wire-format) returned MAJOR-1 7 phantom byte-pin cites. My L12 findings are independent — discipline gate vs correctness vs format-byte-pinning surfaces — no cross-lens conflict.",
+    "Ground-truth-verify per §3.5n: every claim above verified by direct grep + cargo invocation; nothing taken from prior-lens summary."
+  ],
+  "findings": [
+    {
+      "id": "l12-pw-r2-MAJOR-1",
+      "severity": "MAJOR",
+      "title": "stable + MSRV clippy gates RED at HEAD on install_plugin too_many_lines (103/100) — FP-F4 regression",
+      "where": "crates/benten-platform-foundation/src/plugin_lifecycle.rs:865-878 (function body extends to line ~1075)",
+      "evidence": "`cargo +stable clippy --workspace --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-crypto-suite/testing -- -D warnings` emits: `error: this function has too many lines (103/100)` at `pub fn install_plugin<F, M, P>(...)`. Same error reproduces on `cargo +1.95 clippy ...` with the same feature spec. The function grew past the 100-line clippy threshold from FP-F4's two additions: (a) commit a14692b6 `feat(plugin-trust): consult check_install_consent at install-pipeline step 3c + mint PluginInstallConsentDenied (D-3-a close)` adding ~15 LOC at step 3c, and (b) commit b5a6e758 `fix(platform-foundation): L2-R6-MAJOR-1 — wire T10-upgrade (a) into install_plugin (R6 R1 fix-pass)` adding the T10-upgrade caps-grew check. Net delta crosses the clippy ceiling. The R6 R1 L12 lens at HEAD 4bbc4cac was clean; this is a regression introduced by the FP merge. Per pim-N-stable-clippy-gate (§3.5j) this gate IS mandatory pre-merge — and per §3.5h MANDATORY-PRE-MERGE the orchestrator workspace pre-push verification clause was bypassed (mini-review APPROVE didn't substitute). Pim-N-cite-drift-fp1-recurrence is the directly-applicable codification.",
+      "disposition": "FIX-NOW",
+      "destination": "R6 R2 fix-pass (this branch or sibling FP cycle): EITHER (a) refactor install_plugin: extract the cap-policy step (steps 3c + 3d cap-grew check) into a separate `fn check_install_caps<F, M, P>(...)` helper that returns `Result<(), ErrorCode>` (cleanest; restores readability), OR (b) add `#[allow(clippy::too_many_lines, reason = \"install pipeline is a sequenced step list — splitting fragments the invariant ordering documented in docs/PLUGIN-MANIFEST.md §4.1\")]` directly on the function (consistent with the existing as_static_str + as_str + routed_edge_label allow-with-reason pattern in benten-errors). Decision between (a) and (b) belongs to the FP-F4 author for context; either is correct. The §3.5h orchestrator pre-push workspace clippy gate MUST run BEFORE the FP merge, not after (the existing §3.5h amendment in pim-cite-drift-fp1-recurrence is the locking rule; failure here is process-discipline-not-followed, not new rule needed)."
+    },
+    {
+      "id": "l12-pw-r2-MAJOR-2",
+      "severity": "MAJOR",
+      "title": "§3.5j feature-spec is stale post-FP-A F1ab — missing benten-crypto-suite/testing breaks 7 crypto-suite test compiles under both stable + MSRV clippy",
+      "where": "Standing spec at .addl/dispatch-conventions.md §3.5j + every CI clippy invocation using the historical 3-crate feature-list (e.g. .github/workflows/ci.yml + .github/workflows/cargo-public-api.yml + .github/workflows/phase-2a-exit-criteria.yml). Affected test files: crates/benten-crypto-suite/tests/{tf2_no_hardcoded_sizes_ml_dsa65_vector, tf3a_pq_hybrid_wasm32_roundtrip, tf3a_structural_kdf_step_root_derivation, tf3a_x_wing_hybrid_wrap_x25519_mlkem768_codepoint_0x647a, tf4_gcore3c_swap_matrix_conformance_additional, canonical_bytes_v1_codepoints_and_aad}.rs",
+      "evidence": "FP-A bundle F1ab commit e17ccadf (`chore(phase-4-meta-core-r6r1-fp-a-F1ab): workspace _for_test cfg-gating sweep + testing feature additions`) added `#[cfg(any(test, feature = \"testing\"))]` to multiple `pub fn .*_for_test*` constructors in crates/benten-crypto-suite (including `SwapMatrix::generate_keypair_for_test` at swap_matrix.rs:355, `SwapMatrix::generate_recipient_keypair_for_test` at :377, `CipherSuite::generate_recipient_keypair_for_test`, `HybridSignature::flip_pq_byte_for_test`, `HybridSignature::without_pq_half_for_test`, `StructuralKdfKey::derive_step_without_info_tag_for_test`, `SizeTouchingSurfaces::redb_store_for_test`, `UcanVarsigV1Header::with_raw_codepoint_for_test`). The crate's `[features] testing = []` declaration was added at the same time. Integration tests under `tests/` are SEPARATE compilation units that do NOT inherit `cfg(test)` from the crate-under-test; they need the `testing` feature explicitly. The standing §3.5j spec at dispatch-conventions.md line ~378 names the feature list as `--features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing` (3 crates only) — extending the cfg-gate to crypto-suite broke that spec atomically without the spec sweep. CI verification: 16 E0599 errors when running stable clippy with the historical 3-crate spec; 0 errors when adding `benten-crypto-suite/testing`. This is the same pattern as fix-up #13 (Gate 6 bench compile needed `--features benten-engine/test-helpers` post-A's F2 rename) — the FP-A cfg-gate sweep added the feature gate without sweeping every downstream invocation site.",
+      "disposition": "FIX-NOW — TWO COUPLED EDITS",
+      "destination": "R6 R2 fix-pass (this branch or sibling FP cycle): (1) update .addl/dispatch-conventions.md §3.5j feature list from `--features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing` to `--features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-crypto-suite/testing` (one-line edit; also extend §3.5g item 6 'cross-tool config mirror' to name the 4 crates instead of 3). (2) sweep every CI workflow invoking workspace clippy or `cargo build --tests` with the historical 3-crate spec — extend to the 4-crate spec. Audit shell: `grep -rln 'benten-eval/testing,benten-engine/test-helpers,benten-graph/testing' .github/workflows/ scripts/` to enumerate; expected affected workflows include cargo-public-api.yml + phase-2a-exit-criteria.yml + ci.yml + any other clippy-running surface. Pim-N candidate: 'cfg-gate addition cascades to feature-spec mirror at EVERY clippy/test-compile invocation' (extends §3.5g item #4 cross-tool config mirror to cover feature-spec-mirror-across-CI-invocations). Pairs with the fix-up #13 datapoint that bench files were also missed."
+    },
+    {
+      "id": "l12-pw-r2-MIN-1",
+      "severity": "MINOR",
+      "title": "Rustdoc broken-link drift — 3 stale `Engine::get_node` cites in engine_wait.rs should be `Engine::read_node` per G-CORE-9 row D-4/D-22 rename",
+      "where": "crates/benten-engine/src/engine_wait.rs:1134, 1142, 1145 (3 source locations; 5 rustdoc-warning instances — line 1145 cites 'whose principal is root by construction' + line 1142 cites in 'are not a checked vs bypass pair', so a single source line generates 2 warnings via 2 paragraphs)",
+      "evidence": "Running `RUSTDOCFLAGS='-D missing_docs' cargo doc --workspace --no-deps --features testing` emits 5 `warning: unresolved link to \\`Engine::get_node\\`` lines pointing at engine_wait.rs:1134:48, :1142:41, :1145:43. `grep -rn 'pub fn get_node' crates/benten-engine/src/` returns ONLY hits under `testing.rs:1109 pub fn get_node` (which is the cfg-gated test-helper re-export) — the canonical `Engine::get_node` was renamed to `Engine::read_node` per G-CORE-9 V1-FROZEN-INTERFACE row D-4 (refer §1.A.FROZEN). The doc comment paragraphs at engine_wait.rs:1134-1150 are the `pub fn read_node_as` docstring that explicitly differentiates against `Engine::read_node` (the un-attributed engine-internal read path) — the rename pass missed these intra-doc cites. Not gated by `-D missing_docs` (which only fires on undocumented `pub` items, not on broken links), so these slipped past the missing-docs workspace test. The `cargo doc` invocation itself does NOT use `-D rustdoc::broken_intra_doc_links` flag (which would promote these to errors). The §3.5j stable+MSRV clippy gate also doesn't promote rustdoc lints. Same class as r6-r1-l12 OBS-1 (feature-flag coverage) but actively manifesting at HEAD rather than coverage-gap.",
+      "disposition": "FIX-NOW",
+      "destination": "R6 R2 fix-pass — orchestrator-direct (3-line edit): replace 3 occurrences of `[\\`Engine::get_node\\`]` with `[\\`Engine::read_node\\`]` at engine_wait.rs:1134, 1142, 1145. Pairs with a §3.5j amendment to add `RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links'` to the workspace doc gate (or alternatively add `--cap-lints warn` flag inversion). Pim-N candidate: 'public-method rename cascade must include intra-doc-link sweep' (the existing pim-N-cross-language-rule-mirror §3.5g doesn't currently name intra-doc-cite mirrors as a 'config-mirror' surface; this is a 4th-recurrence-class candidate — earlier recurrences: TauriRender vs TauriRenderer 8-cite drift R6 R1 L12 #3 extension; cargo-audit ↔ deny.toml R6 R2 methodology #4 extension; bench-files-vs-test-files fix-up #13)."
+    }
+  ],
+  "ground_truth_verifications": [
+    {
+      "claim": "2 new F4 mints (PluginInstallConsentDenied + PluginPerDelegationDenied) have all 8 §3.5g mirror surfaces",
+      "verified_by": "grep across crates/benten-errors/src/lib.rs (4 hits each: enum decl + as_static_str arm + from_str arm + routed_edge_label arm) + crates/benten-errors/tests/stable_shape.rs (ALL_CATALOG_VARIANTS list entry + CATALOG_VARIANT_COUNT=194 assertion comment) + docs/ERROR-CATALOG.md (### E_PLUGIN_INSTALL_CONSENT_DENIED at line 1780 + ### E_PLUGIN_PER_DELEGATION_DENIED at line 1788) + packages/engine/src/errors.generated.ts (CATALOG_CODES entries at lines 230-231 + EPluginInstallConsentDenied class at line 3152 + EPluginPerDelegationDenied class at line 3167 + CODE_TO_CTOR_GENERATED entries at lines 3379-3380).",
+      "result": "VERIFIED — 8/8 surfaces present for both mints"
+    },
+    {
+      "claim": "Production firing sites exist for both 2 new mints (pim-18 SHAPE-not-SUBSTANCE)",
+      "verified_by": "PluginInstallConsentDenied: install_consent.rs:82 (DenyAll backend) + plugin_lifecycle.rs:963 (install pipeline step 3c). PluginPerDelegationDenied: engine_caps.rs:582 (delegate_capability runtime check). All are real Err(ErrorCode::*) returns from production functions, not test-only sites.",
+      "result": "VERIFIED — substantive firing sites, not sentinel-presence"
+    },
+    {
+      "claim": "CATALOG_VARIANT_COUNT 192 → 194 update correctly captured",
+      "verified_by": "crates/benten-errors/tests/stable_shape.rs:1030 reads `assert_eq!(CATALOG_VARIANT_COUNT, 194,...)`; provenance comment at lines 1027-1028 reads `R6 R1 FP-F4 §S3a + §S3b: +2 PluginInstallConsentDenied + PluginPerDelegationDenied — the §8-E hook denial codes. 192 → 194.`. cargo test stable_shape variant_count_is_pinned PASSes.",
+      "result": "VERIFIED"
+    },
+    {
+      "claim": "AuditNotLandedPurePqRejected reachability annotation (fix-up #4) is correctly positioned",
+      "verified_by": "docs/ERROR-CATALOG.md line 1772 contains `<!-- reachability: ignore -->` HTML comment positioned after the `### E_AUDIT_NOT_LANDED_PURE_PQ_REJECTED` heading + Status paragraph. drift-detect.ts scanner output reports `~ ErrorCode::AuditNotLandedPurePqRejected — catalog annotation: reachability: ignore` in the deliberate-skip list and final summary line `reachability: 164 variant(s) reachable, 0 unreachable`. Scanner picks up the annotation correctly.",
+      "result": "VERIFIED — annotation placement is correct + scanner consumes it"
+    },
+    {
+      "claim": "Stable clippy gate RED at HEAD on plugin_lifecycle install_plugin too_many_lines",
+      "verified_by": "Direct run of `cargo +stable clippy --workspace --all-targets --features benten-eval/testing,benten-engine/test-helpers,benten-graph/testing,benten-crypto-suite/testing -- -D warnings` reproduces `error: this function has too many lines (103/100)` at plugin_lifecycle.rs:865. Reproduces identically on `cargo +1.95 clippy ...`. Function inspected at lines 865-1075 (211 LOC body via `wc -l` of the function span); clippy's 'lines' count is stmt-counting not LOC.",
+      "result": "VERIFIED — both stable + MSRV clippy gates fail"
+    },
+    {
+      "claim": "FP-A bundle F1ab introduced the cfg-gate that breaks the §3.5j 3-crate feature spec",
+      "verified_by": "`git show 4bbc4cac:crates/benten-crypto-suite/src/swap_matrix.rs | grep -B 1 'pub fn generate_keypair_for_test'` shows NO `#[cfg(...)]` attribute at R1 baseline 4bbc4cac. Current HEAD has `#[cfg(any(test, feature = \"testing\"))]` at line 355 (post-F1ab commit e17ccadf). Cargo.toml at HEAD has `[features] testing = []` declaration (added by F1ab). 7 test files under crates/benten-crypto-suite/tests/ call `_for_test` methods without their own cfg guard and fail to compile under the historical 3-crate feature spec.",
+      "result": "VERIFIED — cause confirmed; FP-A F1ab is the root commit of the §3.5j feature-spec staleness"
+    },
+    {
+      "claim": "Engine::get_node was renamed to Engine::read_node per G-CORE-9 V1-FROZEN-INTERFACE",
+      "verified_by": "`grep -rn 'pub fn get_node\\|pub(crate) fn get_node\\|fn get_node' crates/benten-engine/src/` returns ONLY testing.rs:1109 (the cfg-gated test-helper re-export). The canonical Engine surface no longer has `get_node`; it has `read_node` per the §8-A visibility tighten + Row D-4/D-22 rename. The 3 doc-cites at engine_wait.rs:1134, 1142, 1145 are stale.",
+      "result": "VERIFIED"
+    },
+    {
+      "claim": "drift-detect-error-variant-mirror scanner GREEN against 159-entry baseline",
+      "verified_by": "Direct run reports: `found 60 pub *Error enum(s) across 240 production files; baseline grandfathers 159 pre-2026-05-24 variant(s)` + `124 variant(s) mirrored, 210 skipped (160 via baseline), 0 new violation(s)` + final OK headline.",
+      "result": "VERIFIED"
+    },
+    {
+      "claim": "missing_docs_workspace + for_test_symbols_are_feature_gated all PASS",
+      "verified_by": "cargo nextest run -p phase-3-workspace-tests --test missing_docs_workspace: 3/3 PASS (full_missing_docs_sweep took 195s; all 3 arms PASS). cargo nextest run -p phase-3-workspace-tests --test for_test_symbols_are_feature_gated: 2/2 PASS.",
+      "result": "VERIFIED"
+    }
+  ],
+  "pim_n_candidates_surfaced": [
+    {
+      "name": "cfg-gate-addition-must-sweep-every-feature-spec-mirror",
+      "kind": "extension of §3.5g item 4 cross-tool config mirror",
+      "recurrence_evidence": "(a) FP-A F1ab added cfg-gate to crypto-suite `_for_test` without updating §3.5j feature spec OR CI workflow feature lists — broke 7 test compiles (this lens MAJOR-2). (b) Fix-up #13 added bench-file --features benten-engine/test-helpers post-A's F2 visibility tighten rename — bench files weren't audited as a feature-flag-sensitive surface. (c) Earlier R6 R1 L12 fixes (fix-up #6 active_session_count_for_test cfg-un-gating) showed the same forensic shape. Per memory `feedback_baseline_regen_must_match_ci_tool_invocation` the discipline category is the same: 'when one surface gains a flag-discriminator, EVERY consumer site must mirror it atomically (CI workflow + dispatch-conventions spec + reviewer briefs + bench files + reproducer cmd in dev docs)'.",
+      "promotion_status": "CANDIDATE — recommend R6 R3 promotion as §3.5g item #5 OR amendment to existing item #4 'cross-tool config mirror' (current item #4 names cargo-audit ↔ deny.toml; would extend to 'feature-spec ↔ every CI invocation that runs clippy / test-compile / bench-compile + bench files as production-shaped consumers of cfg-gated APIs')."
+    },
+    {
+      "name": "public-method-rename-cascade-must-include-intra-doc-link-sweep",
+      "kind": "extension of §3.5g rename discipline",
+      "recurrence_evidence": "(a) This lens MIN-1: Engine::get_node → Engine::read_node rename left 3 stale `[\\`Engine::get_node\\`]` cites in engine_wait.rs. (b) Phase-4-Foundation R6 R1 L12 #3 extension (TauriRender vs TauriRenderer 8-cite drift) was the originating instance for the type-name-mirror codification. (c) R6 R2 methodology #4 extension (cargo-audit ↔ deny.toml) was a config-name rename surface. Direct intra-doc cites under `///` rustdoc are a 4th surface that the existing §3.5g item 3 doesn't currently name explicitly (it focuses on type-name cross-doc mirrors).",
+      "promotion_status": "CANDIDATE — recommend R6 R3 promotion as §3.5g item #3 amendment OR new item — also recommend that the workspace `cargo doc` gate be tightened with `RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links'` to fail-closed (the existing -D missing_docs flag doesn't catch broken-link drift)."
+    }
+  ],
+  "r6_r2_convergence_disposition": "L12 phase-wide returns 2 MAJOR + 1 MINOR — APPROVE-WITH-FIXES. NOT a candidate to ADVANCE to R3 until all 3 findings close. The 2 MAJORs are both FP-introduced regressions (FP-F4 install_plugin growth + FP-A cfg-gate cascade); both should close in a single R6 R2 fix-pass commit. The MINOR is orchestrator-direct 3-line edit + workspace gate hardening. Pim-N candidates fold into R6 R3 codification batch per pim-N-prior-phase-pim-explicit-preflight (§3.6g).",
+  "cross_check_notes": [
+    "Sibling L3 (grant-walker, MAJOR L3-r2-1) + L11 (wire-format, MAJOR-1 7 phantom byte-pin cites) returned substantive MAJORs of orthogonal classes (correctness vs format-byte-pinning). My L12 findings cover the discipline + tool-invocation surface; the 3 surfaces are independent.",
+    "Both L12 MAJORs were missed by the per-FP-branch mini-reviews because mini-review APPROVE doesn't substitute for workspace pre-merge clippy gate (per pim-N-cite-drift-fp1-recurrence §3.5h MANDATORY-PRE-MERGE-AFTER-MINI-REVIEW-APPROVE). This is a 5th-instance recurrence of the same pattern; codification holds but discipline-adherence at the FP-merge moment failed.",
+    "Per `feedback_baseline_regen_must_match_ci_tool_invocation` (codified during this FP cycle for fix-ups #5 + #11), the §3.5j feature-spec staleness (MAJOR-2) is a 1-class-up generalization: not just baseline regen, but the standing spec itself must be atomically updated whenever a cfg-gate change happens. The pim-N candidate above proposes this generalization.",
+    "Per `feedback_orchestrator_brief_thoroughness_dont_cut_for_turn_budget`: this lens deliberately ran the full §3.5g 8-surface check + 4 Rust catalog surface arm counts + the §3.5j 4-feature spec test (rather than spot-checking) — the FP-A staleness finding only surfaced because the full clippy gate was actually executed against the FP-merged state. Spot-checking would have missed it."
+  ],
+  "artifacts_consulted": [
+    "/Users/benwork/Documents/benten-engine/.addl/phase-4-meta/R6-LENS-CATALOG.md (L12 section)",
+    "/Users/benwork/Documents/benten-engine/.addl/dispatch-conventions.md (§3.5g items 1-6 + §3.5h MANDATORY-PRE-MERGE + §3.5j stable-clippy-gate + §3.5o disk-OOM)",
+    "/Users/benwork/Documents/benten-engine/.addl/phase-4-meta/r6-l12-cross-lang.json (R6 R1 L12 lens output, ADVANCE-TO-R2 disposition)",
+    "/Users/benwork/Documents/benten-engine/.addl/phase-4-meta/r6-l15-addl-methodology.json (sibling lens reference)",
+    "crates/benten-errors/src/lib.rs (ErrorCode enum + as_static_str + from_str + routed_edge_label + Display + try_static_for)",
+    "crates/benten-errors/tests/stable_shape.rs (ALL_CATALOG_VARIANTS + CATALOG_VARIANT_COUNT=194 + variant_count_is_pinned + catalog_variant_count_matches_enum)",
+    "crates/benten-engine/src/engine_wait.rs (read_node_as docstring with stale Engine::get_node cites)",
+    "crates/benten-engine/src/engine_caps.rs (PluginPerDelegationDenied firing site at line 582)",
+    "crates/benten-engine/src/production_engine_builder.rs (CapabilityPolicy::check_install_consent wrapping context)",
+    "crates/benten-platform-foundation/src/plugin_lifecycle.rs (install_plugin function at line 865 — clippy too_many_lines target)",
+    "crates/benten-platform-foundation/src/install_consent.rs (PluginInstallConsentDenied DenyAll backend at line 82)",
+    "crates/benten-crypto-suite/src/swap_matrix.rs (_for_test cfg-gates added by FP-A F1ab; AuditNotLandedPurePqRejected production firing at line 252)",
+    "crates/benten-crypto-suite/Cargo.toml (testing feature declaration added by FP-A F1ab)",
+    "crates/benten-crypto-suite/tests/tf4_gcore3c_swap_matrix_conformance_additional.rs (broken-compile witness without benten-crypto-suite/testing)",
+    "packages/engine/src/errors.generated.ts (CATALOG_CODES + 194 classes + CODE_TO_CTOR_GENERATED + 2 new mint entries at lines 230-231/3147-3172/3379-3380)",
+    "docs/ERROR-CATALOG.md (196 ### E_ headings + AuditNotLandedPurePqRejected reachability annotation at line 1772 + 2 new mint sections at lines 1780/1788)",
+    "scripts/drift-detect.ts (main drift-detect runner)",
+    "scripts/drift-detect-error-variant-mirror.ts (§3.5g item 6 scanner)",
+    "scripts/drift-detect-error-variant-mirror-baseline.txt (159-entry grandfathered list)",
+    ".github/workflows/cargo-public-api.yml (Fork 3 gate workflow)",
+    ".github/workflows/phase-2a-exit-criteria.yml (Gate 6 bench compile fixed by fix-up #13)",
+    "docs/public-api/*.txt (14 v1-frozen-surface crate baselines)",
+    "tests/phase_3_workspace/missing_docs_workspace.rs + for_test_symbols_are_feature_gated.rs (workspace discipline tests)",
+    "~/.claude/projects/-Users-benwork-Documents-benten-engine/memory/feedback_baseline_regen_must_match_ci_tool_invocation.md (new pim-N codification this FP cycle)",
+    "~/.claude/projects/-Users-benwork-Documents-benten-engine/memory/feedback_pub_error_variant_first_class_mirror.md (§3.5g item 6 origin)",
+    "~/.claude/projects/-Users-benwork-Documents-benten-engine/memory/feedback_pim_cite_drift_fp1_recurrence.md (§3.5h MANDATORY-PRE-MERGE)"
+  ]
+}

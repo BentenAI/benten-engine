@@ -1,0 +1,326 @@
+{
+  "lens": "L17",
+  "lens_name": "frozen-item-15-phase-wide",
+  "lens_scope": "R6 R2 PHASE-WIDE re-verification: §1.A.FROZEN 15-item contract verifier with focus on item 15 sub-clauses a-j + DEFERRED.md row honesty + phase-wide forward-compat additive-discipline; verifies R6 R1 L17 findings against the integration branch (3c80546f) post R6-FP-A/B/D/E/F4 merges + 13 integration fix-ups; depth disciplines applied per orchestrator follow-up (same-file sibling sweep per feedback_d17_same_file_sweep_recurrence, cross-lens cross-confirmation with L3 + L11, ground-truth cargo-public-api CI-invocation parity, DEFERRED phantom destination audit, §3.6j sweep-completeness self-verify)",
+  "round": "R6-R2",
+  "branch": "phase-4-meta-core/r6-r2-l17-frozen-item-15",
+  "base_sha": "3c80546f37adee8cb2c05e1257e4aa883370ab92",
+  "head_sha_at_start": "3c80546f37adee8cb2c05e1257e4aa883370ab92",
+  "prior_round_artifact": "r6-l17-frozen-item-15.json (committed at 02f5eb60 against base 4bbc4cac)",
+  "sibling_lens_cross_confirmation": {
+    "L3_r6_r2_grant_walker": {
+      "commit": "2759a519",
+      "headline": "L3-r2-1 MAJOR: audience_pubkey is unsigned and exploitable at ucan_blobs_protocol ARM 2 / ARM 5 split — SAME ATTACK CLASS as the just-closed L3-r1-1 scope hole; D-15c 'defense-in-depth only' rationale is CONTRADICTED",
+      "l17_implication": "Item 15.d sub-clause's 'ONE signed artifact' freeze-contract narrative is structurally inconsistent at HEAD — the binding-sig binds (domain || ucan || km || audience || scope) at 5 segments per L3-r1-1; it does NOT bind audience_pubkey. The freeze-contract claim 'AuthorizationGrant envelope = ONE signed artifact' is degraded: audience_pubkey rides on the envelope but is NOT inside the signed bytes. PROMOTES to a NEW L17-r2-MAJOR-1 finding below per same-attack-class-sibling-sweep discipline (feedback_d17_same_file_sweep_recurrence)."
+    },
+    "L11_r6_r2_wire_format": {
+      "commit": "23fb6730",
+      "headline": "L11-R6-R2-MAJOR-1: 7 phantom byte-pin test file globs in V1-WIRE-FORMAT-INVENTORY.md items 11-24 (recurring §3.6j sweep-completeness violation)",
+      "l17_implication": "Same class as L17's R1-OBS-1 → R2-MINOR-1 cite-line drift (the freeze-contract docs accumulate cite-string drift as the FP cascade churns); a §3.6j extension is the right pim-N codification — already named at L11-R6-R2-OBS process_notes 'each file-path cite in the wave's outputs MUST be grep-verified against the tree at author-time'. L17 cross-confirms the pattern signal."
+    }
+  },
+  "disposition": "APPROVE-WITH-MAJOR",
+  "r6_r2_convergence_disposition": "ITERATE-TO-CONVERGENCE per CLAUDE.md rule 9 Q5: L17-r2-MAJOR-1 (audience_pubkey freeze-contract integrity, cross-confirmed with L3-r2-1) requires a R6-R2-FP cycle. The FP shape is fold audience_pubkey into binding_message as 6th segment + bump BINDING_SIG_DOMAIN v2→v3 + retract Row D-15c 'defense-in-depth only' framing + add a no-regression pin (the L3-r2-1 fix-recipe IS the L17-r2-MAJOR-1 fix-recipe — single FP closes both lenses). 3 MINOR + 4 OBS ride alongside (cite-drift + LOC-recount + Compromise #23 cross-lens cite + 4 OBS).",
+  "summary": {
+    "items_verified": 15,
+    "subclauses_item_15_verified": 10,
+    "deferred_rows_audited": 26,
+    "deferred_rows_retracted_since_r1": 2,
+    "deferred_rows_new_since_r1": 5,
+    "breaking_changes_cohorts_audited": 6,
+    "breaking_changes_cohorts_new_since_r1": 1,
+    "blocker_count": 0,
+    "major_count": 1,
+    "minor_count": 3,
+    "obs_count": 4,
+    "positive_confirmations": 18,
+    "tag_ready": false,
+    "council_advance": "R6-R2 returns APPROVE-WITH-MAJOR; 1 MINOR from R1 (ts-public-api required-failing flip) CLOSED at R6-FP-D; A's F2 visibility tighten CLOSED at R6-FP-A; F4's S2 InstallPorts shape + item 8 retense CLOSED at R6-FP-F4; branch-protection both gates required-failing CONFIRMED; 14 cargo-public-api baselines REGENERATED at G-CORE-9 row 1 commit 8cc4eddd + integration fix-ups #5/#8/#11; ground-truth-verified the CI invocation `cargo +nightly public-api --simplified -p <crate>` matches the freeze contract — same invocation used for baseline regen so drift is structurally caught. Same-file sibling sweep on AuthorizationGrant (7 pub fields; binding_message binds 5 of 5 segments — scope binds post L3-r1-1; audience_pubkey + issuer_verifying_key do NOT bind directly; issuer_verifying_key is structurally bound via Ed25519 signature dispatch but audience_pubkey is structurally unbound + ARM-checked) surfaced L17-r2-MAJOR-1. Promotion is correct per L3-r1-1 precedent. The 3 new MINORs are cite-drift / LOC-recount cosmetics from the FP cascade churn itself."
+  },
+  "r6_r1_findings_verification": [
+    {
+      "r1_finding_id": "L17-r1-frozen-item-15-phase-wide-MINOR-1",
+      "r1_title": "ts-public-api workflow is informational-only at v1-beta (asymmetric vs cargo-public-api required-failing)",
+      "r1_disposition_recommendation": "FIX-NOW orchestrator-direct option-a (flip ts-public-api.yml to required-failing)",
+      "r6_r2_status": "CLOSED",
+      "r6_r2_verification": "Verified at .github/workflows/ts-public-api.yml: (i) workflow header comment line 12-16 explicitly documents 'Status (R6-FP-D 2026-05-24; supersedes prior informational-only posture per R6 R1 L17-MINOR-1 close): REQUIRED-FAILING'; (ii) job name line 53 = 'TS API drift detector (required-failing per G-CORE-9 FREEZE)' (renamed from 'informational'); (iii) diff step at line 120 = 'Diff regenerated vs committed baseline (required-failing per V1-FROZEN-INTERFACE item 10)'; (iv) step body uses DRIFT_FLAG_FILE tempfile pattern + explicit 'exit 1' at line 149 (no `|| true` bypass); (v) branch-protection.yml line 226-228 adds 'TS API drift detector (required-failing per G-CORE-9 FREEZE)' to required-status-checks list. Symmetric with cargo-public-api.yml at line 42 + branch-protection.yml line 224-225. Fix-up #11 + fix-up #10 (commits a1e0e653 + 0974b2ec) further regen the TS baseline against the fresh workflow header. R6-FP-D commit ci(r6-fp-d) at 36988d1a confirms 'flip ts-public-api to required-failing'. R1-MINOR-1 closure VERIFIED end-to-end. Ground-truth check (per §3.5n): grep 'exit 1' .github/workflows/ts-public-api.yml line 149 EXACT MATCH; grep 'required-failing' line 120 EXACT MATCH; grep 'TS API drift detector' .github/branch-protection.yml line 228 EXACT MATCH.",
+      "verified": true
+    },
+    {
+      "r1_finding_id": "L17-r1-frozen-item-15-phase-wide-OBS-1",
+      "r1_title": "Cite-drift V1-FROZEN-INTERFACE.md:1442 AuthorizationGrant cited at authorization_grant.rs:205; actual line 233",
+      "r1_disposition_recommendation": "Cosmetic; R6-R2 sed",
+      "r6_r2_status": "PARTIALLY-RE-DRIFTED",
+      "r6_r2_verification": "V1-FROZEN-INTERFACE.md:1483 NOW cites authorization_grant.rs:233 (one-step closer to truth than the R1-observed 205). But HEAD struct line is 238 (5-line forward drift since R1 close pass). Sibling cite at V1-FROZEN-INTERFACE.md:1503 cites authorization_grant.rs:166 for the GRANT-bearing handle; HEAD has it at line 178 (12-line drift). Pattern same as L11-R6-R2-MAJOR-1 (phantom cite-strings in wire-format inventory). Surfaces as L17-r2-MINOR-1 below.",
+      "verified": "drifted-needs-re-close"
+    },
+    {
+      "r1_finding_id": "L17-r1-frozen-item-15-phase-wide-OBS-2",
+      "r1_title": "Sub-clause 15(g) doc could clarify which layer (benten-graph TwoCidMap vs benten-sync TwoCidStore) is durable at v1-beta",
+      "r1_disposition_recommendation": "Doc improvement; R6-R2-FP",
+      "r6_r2_status": "OPEN",
+      "r6_r2_verification": "V1-FROZEN-INTERFACE.md §15.g body at lines 1629-1673 still reads as it did at R1 — single 'redb-backed plaintext_cid → ciphertext_cid mapping table at G-CORE-3d (#1323) — durable' framing; the wave-3e TwoCidStore adapter layer-distinction is still implicit. Not blocking; carried forward as L17-r2-OBS-1.",
+      "verified": "not-addressed"
+    },
+    {
+      "r1_finding_id": "L17-r1-frozen-item-15-phase-wide-OBS-3",
+      "r1_title": "Row D-19 + D-7 tag-sequence cross-reference improvement",
+      "r1_disposition_recommendation": "Doc improvement; tag-sequence cross-cite",
+      "r6_r2_status": "PARTIALLY-CLOSED",
+      "r6_r2_verification": "Row D-7 has been RETRACTED/CLOSED at R6-FP-A Bundle F2 (DEFERRED.md line 280 strike-through + revision-history line 24-36), so the tag-sequencing concern for D-7 is moot. Row D-19 still names G-CORE-9 OR G-COMP-1 as rename window. The G-COMP-1-before-v1-beta tag-sequence cross-reference enhancement is still open; carried forward as L17-r2-OBS-2 in this round.",
+      "verified": "d7-closed; d19-still-open"
+    },
+    {
+      "r1_finding_id": "L17-r1-frozen-item-15-phase-wide-OBS-4",
+      "r1_title": "Item 11 audit-test enumerates ~10 named types; workspace-walker enhancement deferred Row D-17",
+      "r1_disposition_recommendation": "Honest deferral; no R6-FP action",
+      "r6_r2_status": "VERIFIED-AS-HONEST",
+      "r6_r2_verification": "Row D-17 still open in DEFERRED.md at line 628; G-COMP-1 destination preserved; v1-beta-posture disclosure 'production code uses field-mutation pattern' still honest. No R6-R2 follow-up needed — confirmed BELONGS-NAMED per HARD RULE 12 clause-(b).",
+      "verified": true
+    },
+    {
+      "r1_finding_id": "L17-r1-frozen-item-15-phase-wide-OBS-5",
+      "r1_title": "Doc claim 20,571 LOC for public-API baselines; HEAD count is 20,559 (cosmetic recount drift)",
+      "r1_disposition_recommendation": "Single-line refresh",
+      "r6_r2_status": "WORSENED",
+      "r6_r2_verification": "V1-FROZEN-INTERFACE.md:67 STILL says 20,559 (was the HEAD-truth at R1; drift WAS 12 LOC at R1). HEAD recount at base 3c80546f = `wc -l docs/public-api/*.txt | tail -1` = 20,524 LOC (35-LOC drift since R1 observation; the F2 visibility tighten removed surfaces + the fix-up regen cascade #5 + #8 + #11 net-reduced the baselines further). Surfaces as L17-r2-MINOR-2 below.",
+      "verified": "drifted-further"
+    }
+  ],
+  "depth_discipline_pass": {
+    "same_attack_class_sibling_sweep": {
+      "discipline_anchor": "feedback_d17_same_file_sweep_recurrence",
+      "target_compilation_unit": "crates/benten-caps/src/authorization_grant.rs (AuthorizationGrant struct)",
+      "pub_field_enumeration": [
+        { "field": "ucan", "type": "UcanEnvelope", "binding_message_segment": "ucan_bytes (segment 2 of 5)", "binding_status": "BOUND" },
+        { "field": "key_material", "type": "GrantKeyMaterial", "binding_message_segment": "km_bytes (segment 3 of 5)", "binding_status": "BOUND" },
+        { "field": "binding_sig", "type": "Vec<u8>", "binding_message_segment": "(the signature itself; not in the message it signs)", "binding_status": "N/A (is the seal)" },
+        { "field": "audience_binding", "type": "Cid", "binding_message_segment": "audience CID bytes (segment 4 of 5)", "binding_status": "BOUND" },
+        { "field": "issuer_verifying_key", "type": "Vec<u8> (Ed25519)", "binding_message_segment": "NOT in binding_message; but structurally bound (the key used to verify the binding_sig is THIS field; mutating it makes binding_sig fail)", "binding_status": "STRUCTURALLY-BOUND-VIA-SIGNATURE-DISPATCH" },
+        { "field": "audience_pubkey", "type": "Option<Vec<u8>> (Ed25519)", "binding_message_segment": "NOT in binding_message", "binding_status": "UNBOUND — ARM-checked at ucan_blobs_protocol ARM 2 (connection EndpointId compare) but binding-sig does not cover it", "freeze_contract_violation": true, "attack_chain_per_L3_r2_1": "Eve obtains valid grant G for Alice; mutates G.audience_pubkey = Eve_pk; presents over Eve's iroh connection; ARM 2 passes; ARM 5 verify_binding passes; Eve gets Alice's data" },
+        { "field": "scope", "type": "Option<RestrictedScope>", "binding_message_segment": "scope_len_u32_le || scope_cbor (segment 5 of 5; post L3-r1-1 close)", "binding_status": "BOUND (since R6-FP-B L3-r1-1)" }
+      ],
+      "sweep_result": "1 of 7 pub fields STRUCTURALLY-UNBOUND-AND-ARM-CHECKED (audience_pubkey); same-attack-class as the just-closed L3-r1-1 scope hole; L3-r2-1 caught it from the protocol angle; L17-r2-MAJOR-1 catches it from the freeze-contract angle (item 15.d 'ONE signed artifact' narrative is contradicted at HEAD)",
+      "fix_recipe_shared_with_L3_r2_1": "fold audience_pubkey into binding_message as 6th segment (Option<Vec<u8>> → length-prefixed bytes, mirroring the scope_len_u32_le pattern); bump BINDING_SIG_DOMAIN v2 → v3 (mirrors the L3-r1-1 v1 → v2 bump rationale); add tf3b_audience_pubkey_substitution_post_sign_rejected.rs pin (both Some↔Some swap + None↔Some swap shapes); retract Row D-15c 'defense-in-depth only' framing"
+    },
+    "production_arm_vs_sentinel_presence_3_6j": {
+      "discipline_anchor": "feedback_pim_n_sweep_completeness_self_verify",
+      "test_pin_audit": [
+        { "claim": "item 15(a) walker_as_subgraph fractal-property test pin at tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs", "verified_via": "R1 prior verification + no related deletion in commits 5ca364e7..3c80546f (grep `git diff 5ca364e7..3c80546f -- crates/benten-core/tests/tf3w_*` returns empty)", "would_fail_if_no_op": true },
+        { "claim": "item 15(c) Scope two-arm structural pin at tf3b_no_opaque_selector_arm_structural", "verified_via": "R1 prior verification + crates/benten-caps/tests/ grep present", "would_fail_if_no_op": true },
+        { "claim": "item 15(d) verify_binding ordering-pin (binding_sig validated BEFORE UCAN scope + key material)", "verified_via": "verify_binding implementation at authorization_grant.rs lines 680+ checks binding_sig first; L3-r1-1 substantive arm tf3b_scope_substitution_post_sign_rejected_by_binding_sig PASS verified at L3 R6 R2 commit 2759a519", "would_fail_if_no_op": true },
+        { "claim": "item 15(f) HKDF info-tag corrections (step/root cross-role) at structural_kdf.rs lines 124+141", "verified_via": "grep verified `pub fn derive_root` line 124 + `pub fn derive_step` line 141; tf_*_kdf tests should cover", "would_fail_if_no_op": "yes (structural; KDF output bytes diverge if info tag swaps)" },
+        { "claim": "item 15(g) IROH_BLOCK_SIZE golden-constant pin at aead.rs:464 `assert_eq!(IROH_BLOCK_SIZE, 16 * 1024)`", "verified_via": "grep verified line 464 exact match", "would_fail_if_no_op": "yes (compile-time assert)" },
+        { "claim": "item 15(h) Engine::walk_share_scope e2e test at g_core_9_walk_share_scope_e2e.rs", "verified_via": "R1 prior verification + no related deletion in commits 5ca364e7..3c80546f", "would_fail_if_no_op": true },
+        { "claim": "item 14 P2P-interop conformance suite at tf4_gcore3c_* family (renamed from earlier-cited p2p_interop_conformance_*.rs)", "verified_via": "grep `tf4_gcore3c_full_swap_matrix_strip_resistance_pure_pq_nondefault.rs + tf4_gcore3c_swap_matrix_conformance_additional.rs` EXACT MATCH on tree; doc retense at V1-FROZEN-INTERFACE.md lines 1248-1253 acknowledges naming-drift + L14-MIN-2 close", "would_fail_if_no_op": true },
+        { "claim": "item 1 §8-A visibility tighten enforced via cargo-public-api baseline", "verified_via": "docs/public-api/benten-engine.txt regenerated post-F2 (fix-ups #5/#8/#11); the 4 tightened methods no longer appear as `pub fn` in baseline; re-`pub`-ing fails cargo-public-api.yml drift gate (job name 'API drift detector (required-failing per G-CORE-9 FREEZE)' + explicit `exit 1` at workflow line 111)", "would_fail_if_no_op": true }
+      ]
+    },
+    "ground_truth_cargo_public_api_invocation_parity": {
+      "discipline_anchor": "feedback_baseline_regen_must_match_ci_tool_invocation",
+      "ci_invocation_per_workflow_line_100": "cargo +nightly public-api --simplified -p <crate> 2>/dev/null",
+      "baselines_audited": 14,
+      "baseline_path_pattern": "docs/public-api/<crate>.txt",
+      "baseline_total_loc_at_head": 20524,
+      "baseline_regen_provenance": "G-CORE-9 row 1 commit 8cc4eddd (initial 14-crate regen using `cargo +nightly public-api --simplified -p <crate>` per L12-R3-MIN-1 closure); integration fix-up #5 (commit 3c32acab) explicitly re-regen via `--simplified` + nightly invocation; fix-up #8 (commit 01c9ee9b) re-regen post fix-up #7's cfg-gating add for with_swapped_scope_for_test; fix-up #11 (commit a1e0e653) regen ts-public-api baseline with EXACT workflow header parity",
+      "drift_gate_structurally_caught": "Yes — branch-protection.yml requires the cargo-public-api.yml workflow + the workflow uses the same invocation as the baseline-regen runbook + explicit `exit 1` on diff at workflow line 111. No `|| true` bypass."
+    },
+    "deferred_md_phantom_destination_audit": {
+      "discipline_anchor": "HARD RULE 12 clause-(b) NAMED-NOW destination + CRITIC-1 fix-up #11 D-22/D-23/D-24 phantom pattern",
+      "active_rows_count": 26,
+      "active_named_destinations": ["G-COMP-1 (Phase-4-Meta-Composing v1-assessment-window)", "G-CORE-PQ-WIRE wave (Row D-26 per Ben 2026-05-24 PM)", "Phase-4-Meta-Composing v1-assessment-window (Row D-15c + others)", "R5-BRIEF-pim-checklist.md (Row D-25 Forward-protection mandate)"],
+      "phantom_destinations_found": 0,
+      "verification_method": "Each row's 'Deferred consumption (X destination):' line checked against the existing-doc/wave-naming registry: G-COMP-1 = Phase-4-Meta-Composing first wave (named at V1-FROZEN-INTERFACE-DEFERRED.md preamble lines 7-16 + 71); G-CORE-PQ-WIRE = Row D-26 wave (named at Ben PM ratification commit aa1250b4); Phase-4-Meta-Composing v1-assessment-window = phase-tag boundary; R5-BRIEF-pim-checklist.md = exists at .addl/phase-4-meta/ pim-checklist work (referenced at L15-MAJOR-2 pim-checklist consolidation). All 26 rows have REAL named destinations.",
+      "forensic_preservation_check": "PASS — D-1/D-2/D-3/D-4/D-6/D-18 retracted rows preserve sibling FORENSIC entries; D-7 + D-22 retracted with revision-history narrative + ~~strikethrough~~",
+      "honest_v1_beta_posture_disclosure": "PASS — every open row carries explicit v1-beta-posture disclosure per HARD RULE 12 clause-(b)"
+    },
+    "cross_lens_cross_confirmation_L11_L12_L18": {
+      "L11_wire_format_lens": "L11-R6-R2 (commit 23fb6730) returned MAJOR-1 (7 phantom byte-pin cite strings in V1-WIRE-FORMAT-INVENTORY.md items 11-24) — same phantom-cite class as L17-r2-MINOR-1 (cite-line drift in V1-FROZEN-INTERFACE.md item 15.d); cross-confirmed pattern signal. L11 process_notes propose §3.6j extension 'cite strings MUST be grep-verified against tree at author-time' — L17 cross-confirms; surfaces as L17-r2-OBS-3 pim-N candidate.",
+      "L12_lens_coverage": "Not separately reviewed at R6-R2 within this scope; L12 cargo-public-api / cross-lang-mirror coverage delegated to the L12 reviewer; L17 ground-truth-verified the CI invocation parity above.",
+      "L18_breaking_change_ledger": "Not separately reviewed at R6-R2 within this scope; Cohort 6 (NEW since R1) catalogs R6-FP-F4 substrate-consumer wiring; Cohort 5 catalogs Row D-26 G-CORE-PQ-WIRE wave. L17 verified Cohort 6 honest-disposition (every entry cites the F4 §S2/§S3a/§S3b/§S3c wiring + 2 new ErrorCode mints).",
+      "compromise_23_retense_attention": "L17-r2-MINOR-3: F3 AAD-binds-total_chunks defense LIVE at d9cdaf93 + Compromise #23 retense flagged as cross-lens-coordination signal (L4 / L8 / L18 likely cover SECURITY-POSTURE.md narrative retense in their normal lens scope; not L17's primary responsibility)."
+    }
+  },
+  "phase_wide_15_items_verification": [
+    { "item": 1, "title": "§8-A Engine visibility cluster (get_node/put_node/get_node_label_only/resolve_subgraph_cid_for_test)", "shipped_surface": "FULLY-LANDED at v1-beta (R6 R1 FP-A Bundle F2, commits 92b5b0a3 + 522ce9dc + integration fix-up #13 3c80546f); 4 methods now `pub(crate) fn read_node` / `pub(crate) fn read_node_label_only` / `pub(crate) fn put_node_inner` / `pub(crate) fn resolve_subgraph_cid_inner`. Verified at crates/benten-engine/src/engine_crud.rs:168 + engine_wait.rs:1053/1092/1187. Row D-7 RETRACTED/CLOSED in DEFERRED.md line 280. napi binding migrated to `read_node_as(&ENGINE_INTERNAL_PRINCIPAL_CID, ...)` per CLAUDE.md baked-in #18. ENGINE_INTERNAL_PRINCIPAL_CID sentinel minted at crates/benten-engine/src/internal_principal.rs:52 + re-exported at crates/benten-engine/src/lib.rs:205. Test-helper re-exports in crates/benten-engine/src/testing.rs cfg-gated by `cfg(any(test, feature = \"test-helpers\"))`.", "verified": true, "r1_concern_status": "R1 noted PARTIAL-LANDED with HARD RULE clause-(b) honest deferral to G-COMP-1; R6-R2 verifies FULLY-LANDED + Row D-7 retracted — R1 concern is OBVIATED" },
+    { "item": 2, "title": "Class-B-β `read_node_as` canonical public read", "shipped_surface": "`Engine::read_node_as` at crates/benten-engine/src/engine_wait.rs:1155 is the principal-bearing public read; `pub fn` retained (the OTHER 4 methods got tightened via F2). napi MUST NOT expose `read_node_as` directly per bindings/napi/INTERNALS.md.", "verified": true, "r1_concern_status": "R1 noted coexistence with un-tightened `get_node`; R6-R2 verifies that path closed at FP-A F2 — the coexistence concern is resolved" },
+    { "item": 3, "title": "Backend-trait SemVer-locks (§4.60-§4.64/§4.43)", "shipped_surface": "Backend traits + non_exhaustive sweep landed; specific per-trait locks named in narrative + cargo-public-api baselines for 14 lib crates carry the structural pin (docs/public-api/benten-*.txt totaling 20,524 LOC at HEAD).", "verified": true },
+    { "item": 4, "title": "D2 v1-canonical-bytes contract frozen as version 1", "shipped_surface": "P-III Ben decision-point; V1-WIRE-FORMAT-INVENTORY.md authored; PR #1331 SnapshotBlob v1→v2 cohort-1 bump landed (no-users-yet override). Row D-9 names 6 hex-pinned byte-pin tests deferred to G-COMP-1.", "verified": true, "cross_lens_observation": "L11-R6-R2-MAJOR-1 surfaces 7 phantom cite-strings in inventory items 11-24; doesn't affect L17 freeze-contract integrity directly, but the inventory document IS the L11 / L17 boundary — L11 will iterate per its own convergence" },
+    { "item": 5, "title": "#989 WriteContext shape frozen (G-CORE-1 canary)", "shipped_surface": "Verified at crates/benten-graph/src/lib.rs:943 `pub struct WriteContext` with `#[non_exhaustive]` + `namespace_did: Option<Cid>` field (line 961); G-CORE-1 canary PR #1304 merged; additive-discipline preserved.", "verified": true },
+    { "item": 6, "title": "#1300 signature + #1301 encryption boundaries + swap matrix + codepoint table frozen", "shipped_surface": "benten-crypto-suite public-API + 10-codepoint table (BLAKE3 0x1e, SHA2_512_256 0x1015, SHA3_256 0x16, HYBRID_ED25519_MLDSA65 0x0001, CLASSICAL_ED25519 0x0002, HYBRID_MLDSA65_SLHDSA 0x0003, HYBRID_X25519_MLKEM768 0x647a, CLASSICAL_X25519 0x6400, NONE_PLAINTEXT 0x0000, HYBRID_MLKEM768_HQC 0x647b reserved, PURE_PQ_MLKEM768_ONLY 0x647c audit-gated). C11b safety gate `try_pure_pq_sole_trust_path` returns AuditNotLandedPurePqRejected at v1-beta. Verified.", "verified": true },
+    { "item": 7, "title": "§4.33 legacy install_plugin* DELETED (Core opening wave)", "shipped_surface": "module_ecosystem::install_plugin* family REMOVED at G-CORE-0 (PR #1311); canonical path = benten_platform_foundation::plugin_lifecycle::install_plugin (verified at plugin_lifecycle.rs:865). No-resurrection invariant intact: 0 occurrences of `fn install_plugin` in module_ecosystem.rs at HEAD.", "verified": true },
+    { "item": 8, "title": "benten-caps v1-API forks decided (#993 SEALED hard-discipline + 3 new G-CORE-8 hooks defaulted)", "shipped_surface": "policy.rs:50-63 `pub(crate) mod sealed { pub trait Sealed {} }` HARD-SEAL via private supertrait; CapabilityPolicy: sealed::Sealed + Send + Sync at policy.rs:356; 3 hooks at policy.rs:510 (check_install_consent) + 534 (check_per_delegation) + 573 (check_write_with_audience). All 3 hooks now CONSUMPTION-WIRED at R6 R1 FP-F4 §S3a/§S3b/§S3c per Row D-3 PARTIAL CLOSE (DEFERRED.md line 154); doc retense in V1-FROZEN-INTERFACE.md line 735 reflects Δv3-2 audience_did = None at sweep sites. InstallPorts.policy: &dyn InstallConsentPolicy port added at plugin_lifecycle.rs:748 + InstallPorts.install_record_replay_check (formerly Option<>-wrapped) dropped to direct &mut at line 723 — both per F4's S2 substantive InstallPorts shape change. Net: external policy authors overriding any of the three hooks now have runtime effect at v1-beta.", "verified": true, "r1_concern_status": "R1 noted Row D-3 consumption-deferred for the 3 hooks; R6-R2 verifies wiring LANDED at FP-F4 — the deferred consumption concern is OBVIATED (Row D-3 PARTIAL-CLOSED; only audience-DID populate-side defers to G-COMP-1)" },
+    { "item": 9, "title": "cargo-public-api baselines committed as v1 surface", "shipped_surface": "14 baselines at docs/public-api/*.txt totaling 20,524 LOC at HEAD (doc claims 20,559 — 35-LOC re-drift since R1; see L17-r2-MINOR-2). cargo-public-api.yml is required-failing (job name line 42 = 'API drift detector (required-failing per G-CORE-9 FREEZE)'; diff step line 111 = explicit `exit 1` on drift). Fix-ups #5 + #8 + #11 regen baselines through the F2/F4 churn.", "verified": true, "minor_note": "L17-r2-MINOR-2 LOC-recount drift covers this" },
+    { "item": 10, "title": "TS/JS @benten/engine public API frozen (incl. #1204 parity gate)", "shipped_surface": "ts-public-api.yml at .github/workflows/ts-public-api.yml is REQUIRED-FAILING at R6-FP-D (R1-MINOR-1 close at commit 36988d1a). Job name = 'TS API drift detector (required-failing per G-CORE-9 FREEZE)'; diff step uses DRIFT_FLAG_FILE tempfile pattern + explicit `exit 1` at line 149 (no `|| true` bypass). Branch-protection.yml line 228 adds this to required-status-checks. Baseline at packages/engine/etc/public-api.txt; fix-up #10 + #11 regen against F4 ErrorCode additions + DSL classes Agent B added.", "verified": true, "r1_concern_status": "R1 noted asymmetric enforcement; R6-R2 verifies CLOSED — both Rust + TS gates now structurally CI-failing-on-drift" },
+    { "item": 11, "title": "META #907 #[non_exhaustive] sweep — MAXIMALIST", "shipped_surface": "160 `pub enum` declarations workspace-wide at HEAD (up from R1's count of 158; 2 new since via FP commits); deliberate carve-outs preserved (Scope EXACTLY-two-arms per item 15(c) verified at crates/benten-caps/src/scope.rs:46 with NO #[non_exhaustive]; PrimitiveKind defensive; benten_graph::GraphError::TxAborted per Fwd-2 #997/#1207). Row D-17 names ~80+ test-cascade deferred to G-COMP-1 (CapWriteContext/ReadContext + extended types per L8-R2-MAJOR-CARRY-2). FP commit fb114dc1 adds #[non_exhaustive] across crypto + drop + graph (L1).", "verified": true, "r1_concern_status": "TypedOutputProjection + KernelOutput closed at G-CORE-9 R2 Bundle R2.8 NOT deferred (R1 confirmed); R6-R2 confirms" },
+    { "item": 12, "title": "G-CORE-8 security-surface public-shape lock (ManifestEnvelopeRecheckOutcome 4-arm + UnresolvedDeny rename)", "shipped_surface": "ManifestEnvelopeRecheckOutcome at manifest_envelope_recheck.rs (#[non_exhaustive] applied + UnresolvedDeny rename). At R6 R1 FP-F4 §S4 (commit f05cdf69 + fbbb8847): ProductionManifestEnvelopeRechecker wired via ProductionEngineBuilder + handshake.rs §4.25 D-6 consumption + apply_atrium_merge per-row + workspace sweep switched to check_write_with_audience. Row D-4 (Production rechecker) + Row D-6 (sync-hydrate) + Row D-18 (empty-DID synthesized-fallback) ALL CLOSED at DEFERRED.md lines 203/257/591. Compromise #26 in SECURITY-POSTURE.md retensed per commit 6f88c643. Substantive cross-peer install verification IS LIVE at v1-beta — major Phase-4-Meta-Core security advance from R1's PARTIAL-LANDED v1-beta posture.", "verified": true, "r1_concern_status": "R1 noted partial-landed posture (only empty-DID structural fail-CLOSED live; substantive per-DID recheck deferred to G-COMP-1); R6-R2 verifies SUBSTANTIVE WIRING LANDED at FP-F4 §S4 — the deferred substantive recheck concern is OBVIATED" },
+    { "item": 13, "title": "Engine↔host runtime-ownership bridged-dual-runtime (§8-C); IPC_METHODS const-allowlist; Renderer trait swappability", "shipped_surface": "benten-renderer-tauri has ZERO tauri/tokio deps (compile-test pin at arch_n_benten_renderer_tauri_dep_direction.rs); IPC_METHODS const-allowlist + Renderer trait at materializer.rs:552; ThinClientBridge at thin_client_bridge.rs:86; cargo-public-api baseline locks runtime-handle-leak structural pin.", "verified": true },
+    { "item": 14, "title": "P2P-interop conformance invariant (mandatory baseline + typed-unsupported-error never silent fallback + additive-codepoint + old-codepoints supported forever + IANA component ID reuse)", "shipped_surface": "Conformance tests at crates/benten-crypto-suite/tests/tf4_gcore3c_full_swap_matrix_strip_resistance_pure_pq_nondefault.rs + tf4_gcore3c_swap_matrix_conformance_additional.rs + tf4_codepoint_0x647c_pure_pq_mlkem_only.rs + tf4_pure_pq_gated_audit_landed.rs. UnsupportedAlgorithm typed-reject at every codepoint dispatcher. #1341 0x647b incident is in-tree precedent. Doc at V1-FROZEN-INTERFACE.md lines 1248-1253 explicitly closes the L14-MIN-2 naming-drift at R6-FP-D (acknowledges earlier-cited p2p_interop_conformance_*.rs family + standalone conformance_baseline.rs did not land under those names; tf4_gcore3c_* IS the substantive suite).", "verified": true, "r1_concern_status": "R1 cited p2p_interop_conformance_*.rs which doesn't exist at HEAD; R6-R2 verifies the doc was retensed at R6-FP-D to acknowledge naming-drift (substance intact under tf4_gcore3c_* family)" },
+    { "item": 15, "title": "Sharing & Confidentiality (S&C) public surface frozen — 10 sub-clauses a-j", "shipped_surface": "ALL 10 sub-clauses have concrete shipped surface at HEAD 3c80546f BUT sub-clause 15.d 'AuthorizationGrant envelope = ONE signed artifact' is contradicted by L17-r2-MAJOR-1 (audience_pubkey unbound in binding_message + ARM-checked + same-attack-class as scope per cross-confirmation with L3-r2-1)", "verified": "partial — see L17-r2-MAJOR-1" }
+  ],
+  "item_15_subclause_verification": [
+    { "sub": "a", "title": "SubgraphSpec primitive (4-thing thin core; 12-primitive irreducibility preserved)", "shipped": "crates/benten-core/src/subgraph_spec/spec.rs:190 `pub struct Spec` (private fields + builder); walker.rs:78 `pub fn walk(spec: &Spec) -> Result<WalkResult, SubgraphSpecError>`; walker.rs:183 `pub fn walker_as_subgraph() -> Subgraph` (fractal-property pin). WalkResult / StructuralPath / SubgraphSpecError shipped. RestrictedSpec → SubgraphSpecRestriction rename landed.", "verified": true, "test_pin": "crates/benten-core/tests/tf3w_walker_is_a_subgraph_no_new_primitive_kind.rs" },
+    { "sub": "b", "title": "RestrictedScope shape (post-rename; 6-dimension product; NAMED-not-opaque extension slots)", "shipped": "crates/benten-caps/src/restricted_spec.rs `pub struct RestrictedScope` with 6 dimensions: roots + edge_allowlist + max_depth + label_allowlist + label_denylist + property_equalities; #[non_exhaustive] applied; no-opaque-arm documented.", "verified": true },
+    { "sub": "c", "title": "Structured UCAN Scope enum — EXACTLY two arms (deliberate carve-out)", "shipped": "crates/benten-caps/src/scope.rs:46 `pub enum Scope { Hashes(Vec<Cid>), RestrictedSelector(RestrictedScope) }`; doc-block above the enum documents structural pin via exhaustive match; deliberately NOT #[non_exhaustive] per item 11 carve-out. Test pin tf3b_no_opaque_selector_arm_structural cited.", "verified": true },
+    { "sub": "d", "title": "AuthorizationGrant envelope = ONE signed artifact + binding-sig-validation-FIRST + GrantKeyMaterial rename", "shipped": "crates/benten-caps/src/authorization_grant.rs:238 `pub struct AuthorizationGrant` with fields ucan + key_material (GrantKeyMaterial @ line 178) + binding_sig + audience_binding + issuer_verifying_key + audience_pubkey; #[non_exhaustive] applied; verify_binding implementation ordering-pinned (binding_sig validated BEFORE UCAN scope + key material per RATIFIED-S&C §R3). L3-r1-1 close at commit 39dd52cf binds scope into AuthorizationGrant binding-message.", "verified": "PARTIAL — see L17-r2-MAJOR-1 (audience_pubkey unbound; freeze-contract 'ONE signed artifact' narrative is contradicted at HEAD)", "minor_obs": "Cite-drift: doc cites authorization_grant.rs:233 for AuthorizationGrant struct (HEAD = 238) + GrantKeyMaterial cite at authorization_grant.rs:166 (HEAD = 178; 12-line drift); surfaces as L17-r2-MINOR-1." },
+    { "sub": "e", "title": "Encryption-class enum (Public + Confidential; #[non_exhaustive])", "shipped": "crates/benten-core/src/encryption_class.rs:36 `pub enum EncryptionClass { Public, Confidential }` with #[non_exhaustive]; EncryptionClassError typed-reject + pub mod codepoint wire table + from_codepoint(u8) -> Result typed dispatch.", "verified": true },
+    { "sub": "f", "title": "Two-path key-derivation (Interpretation B per Spike E; HKDF-SHA256 v1-beta default; \"step\"/\"root\" info-tags)", "shipped": "crates/benten-crypto-suite/src/structural_kdf.rs:124 `pub fn derive_root(k_principal, root_cid) -> StructuralKdfKey` (info = \"root\" || root_cid); line 141 `pub fn derive_step` (info = \"step\" || edge_label || N.cid); StructuralKdfKey zeroize-on-drop. derive_step_without_info_tag_for_test is the test-only escape.", "verified": true },
+    { "sub": "g", "title": "Two-CID mapping + per-chunk-AEAD chunk-size = IROH_BLOCK_SIZE (16 KiB) + AAD-binds-chunk-index", "shipped": "crates/benten-crypto-suite/src/aead.rs:52 `pub const IROH_BLOCK_SIZE: usize = 16 * 1024`; aead.rs:56 `pub const WHOLE_CONTENT_AEAD_THRESHOLD: usize = 64 * 1024`; golden-constant pin at aead.rs:464 `assert_eq!(IROH_BLOCK_SIZE, 16 * 1024)` (R1 cited 443; +21-line drift since R1 — file grew via F3 AAD-binds-total_chunks landing per commit d9cdaf93). AAD layout = 2-tuple (plaintext_cid, chunk_index) extended to 4-segment per F3 close.", "verified": true, "obs": "R1-OBS-2 (layer-distinction clarification benten-graph TwoCidMap durable vs benten-sync TwoCidStore in-memory) NOT addressed in doc; carried as L17-r2-OBS-1. Compromise #23 retensed for F3 close — flag as cross-lens concern at L17-r2-MINOR-3." },
+    { "sub": "h", "title": "SubgraphSpec walker IS a Subgraph shipped once in benten_core; Engine::walk_share_scope wrapper", "shipped": "crates/benten-core/src/subgraph_spec/walker.rs:78 walk + walker.rs:183 walker_as_subgraph; crates/benten-engine/src/engine_share_scope.rs:59 `pub fn walk_share_scope(&self, spec: &Spec) -> Result<WalkResult, EngineError>` delegates to canonical walker; ErrorCode::SubgraphSpecWalkFailed minted (CATALOG 191 → 192); end-to-end test at g_core_9_walk_share_scope_e2e.rs.", "verified": true, "obs": "`walk_share_scope_as` principal-bearing additive overload deferred to G-COMP-1 per Row D-11 (DEFERRED.md line 378); v1-beta ships principal-unbearing only." },
+    { "sub": "i", "title": "Revocation reach documentation (SECURITY-POSTURE.md Compromise #31; documented-design-constant)", "shipped": "docs/SECURITY-POSTURE.md Compromise #31 entry in registry table; body sections retained; OPEN ARCHITECTURAL TRADE-OFF; MITIGATED by tight UCAN nbf/exp + key rotation; stays OPEN at v1-beta + v1-GM.", "verified": true },
+    { "sub": "j", "title": "Resolver evaluation = live-per-request (documented; IVM-cache seam reuses G-CORE-4 CanonicalViews; only frozen-snapshot path is offline-Drop-bundle)", "shipped": "Documented contract at V1-FROZEN-INTERFACE.md §15.j; resolver IS called per request structurally.", "verified": true, "obs": "Verification-mechanism test pin deferred to G-COMP-1 per Row D-10 (DEFERRED.md line 363); structural property in place at v1-beta but regression-defense test pin absent." }
+  ],
+  "deferred_doc_audit": {
+    "total_rows_at_head": 26,
+    "rows_retracted_since_r1": ["D-7 (CLOSED at FP-A F2)", "D-22 (CLOSED at FP-A F1.a-e)"],
+    "rows_partially_closed_since_r1": ["D-1 (CLOSED at FP-F4 §S1)", "D-2 (CLOSED at FP-F4 §S2)", "D-3 (PARTIAL CLOSED at FP-F4 §S3a/§S3b/§S3c; only audience-DID populate-side persists)", "D-4 (CLOSED at FP-F4 §S4)", "D-6 (CLOSED at FP-F4 §S4)", "D-18 (CLOSED at FP-F4 §S4)"],
+    "rows_new_since_r1": ["D-23 (§4-B G-CORE-3 × G-CORE-4 SubgraphSpec live-eval + IVM CanonicalViews subscription invalidation test pin)", "D-24 (§4-C G-CORE-3 × G-CORE-7 manifest-envelope ∩ UCAN-gated SubgraphSpec scope intersection test pin)", "D-25 (V1-BETA-BREAKING-CHANGES.md ledger completion sweep)", "D-26 (G-CORE-PQ-WIRE wave: PQ-hybrid app-layer wire-in for all identity-bearing surfaces — Ben Path A ratification per L2-R6-MAJOR-2 close)"],
+    "rows_with_potentially_invalid_rationale_post_l3_r2_1": ["D-15c (audience_pubkey Option→non-Option promotion — rationale 'cooperating attacker who forges audience_pubkey still cannot pass binding_sig verification' CONTRADICTED by L3-r2-1 attack chain; row must EITHER be CLOSED at L17-r2-MAJOR-1 fix-pass OR have its rationale fully rewritten)"],
+    "doc_honesty_disposition": "PASS-WITH-D-15c-RATIONALE-RETRACT",
+    "forensic_preservation_audit": "FORENSIC entries preserved for D-1 / D-2 / D-3 / D-4 / D-6 / D-18 (each retracted row carries a sibling '### Row D-N (FORENSIC)' entry per pim-13 / §3.12). Row D-7 + Row D-22 retracted with revision-history line 24-36 narrative + ~~strikethrough~~ on title; preserved per dispatch-conventions for forensic context.",
+    "honest_re_v1_beta_posture_at_head": "PASS-WITH-D-15c-EXCEPTION — every open row carries explicit named destination + v1-beta-posture disclosure per HARD RULE 12 clause-(b) EXCEPT D-15c whose rationale is contradicted at HEAD; L17-r2-MAJOR-1 fix-pass folds the L3-r2-1 fix-recipe + retracts D-15c.",
+    "row_count_growth_since_r1": "+5 net (–2 retracted + 5 new + 0 numeric duplicates); growth pattern matches typical R6-FP cycle (new rows surface from FP-tier MAJORs being correctly named-deferred per HARD RULE 12 clause-(b) rather than fix-now-mashed). Healthy signal.",
+    "phantom_destination_audit": "PASS — 0 phantom destinations found across 26 active rows (per CRITIC-1 fix-up #11 D-22/D-23/D-24 pattern detection); all destinations resolve to real waves/docs/sections"
+  },
+  "forward_compat_phase_wide_audit": {
+    "additive_discipline_status": "MOSTLY-CLEAN-WITH-NAMED-EXCEPTIONS + ONE-FREEZE-CONTRACT-INTEGRITY-FINDING-FROM-L17-r2-MAJOR-1",
+    "summary": "Every 'we'll add this later' future hook is structurally additive OR explicitly named as future-SemVer-break in V1-BETA-BREAKING-CHANGES.md Cohorts 4-6 (Cohort 6 new since R1, names the R6 R1 FP-F4 substrate-frozen-but-consumer-unwired wiring). However: L17-r2-MAJOR-1 surfaces a freeze-contract integrity gap — item 15.d's 'ONE signed artifact' narrative is contradicted at HEAD by the audience_pubkey unbound-and-ARM-checked sibling. The L17-r2-MAJOR-1 fix-pass (fold audience_pubkey into binding_message + bump BINDING_SIG_DOMAIN v2→v3) is the proper closure; the alternative path (keep current shape + retract item 15.d narrative to 'envelope is N-signed-artifacts where audience_pubkey is structurally elsewhere' + add D-15c-style row with corrected rationale) is the next-best path but DEGRADES the freeze contract.",
+    "non_additive_future_changes_inventory": [
+      { "row": "D-7 (RETRACTED at FP-A F2)", "type": "visibility-tighten (pub → pub(crate)) — LANDED NOW", "named_in_breaking_changes_ledger": true, "ledger_cohort": "Cohort 2", "honest_disposition": true },
+      { "row": "D-13", "type": "wire-format-coupled HKDF info-tag extension", "named_in_breaking_changes_ledger": true, "ledger_cohort": "Cohort 4", "honest_disposition": true },
+      { "row": "D-19", "type": "wire-format strings + ErrorCode variant rename + 3 ErrorCode mints", "named_in_breaking_changes_ledger": true, "ledger_cohort": "Cohort 5 + the original Bundle 4 ESCALATED entry", "honest_disposition": true, "obs": "R1-OBS-3 noted the G-COMP-1-before-v1-beta tag-sequence cross-reference would help. Carried as L17-r2-OBS-2." },
+      { "row": "D-26 (NEW since R1)", "type": "PQ-hybrid app-layer wire-in for identity-bearing surfaces", "named_in_breaking_changes_ledger": "yes (Cohort 6)", "named_destination": "G-CORE-PQ-WIRE wave (Ben Path A ratification 2026-05-24 PM)", "honest_disposition": true }
+    ],
+    "additive_future_hooks_audit": [
+      { "surface": "item 5 WriteContext field additions (namespace_did precedent)", "additive": true, "guard": "#[non_exhaustive]" },
+      { "surface": "item 6 codepoint table additions", "additive": true, "guard": "additive-codepoint + typed-reject on unknown" },
+      { "surface": "item 8 new CapabilityPolicy defaulted trait methods", "additive": true, "guard": "object-safety + defaulted-method pattern (3 NOW WIRED at FP-F4)" },
+      { "surface": "item 11 #[non_exhaustive] variant additions", "additive": true, "guard": "the attribute IS the additive guarantee" },
+      { "surface": "item 13 IPC_METHODS allowlist additions", "additive": true, "guard": "explicit const update + manifest-review gate" },
+      { "surface": "item 15(b) RestrictedScope NAMED-not-opaque extension slots", "additive": true, "guard": "per-slot typed containment rule" },
+      { "surface": "item 15(c) Scope serde-tag-dispatch future arms", "additive": true, "guard": "deliberate carve-out + serde-tag dispatch enables additive future arms" },
+      { "surface": "item 15(e) EncryptionClass reserved variants (AnonymousGroup / PrivateLocal)", "additive": true, "guard": "#[non_exhaustive] + typed-reject" },
+      { "surface": "item 15(f) KDF codepoint-dispatch future codepoints", "additive": true, "guard": "codepoint-dispatched per CLAUDE.md #5" },
+      { "surface": "item 15(h) walk_share_scope_as principal-bearing variant (Row D-11)", "additive": true, "guard": "additive overload — pub(crate) variant + napi binding addition" }
+    ]
+  },
+  "breaking_changes_ledger_audit": {
+    "doc": "docs/V1-BETA-BREAKING-CHANGES.md",
+    "cohort_count": 6,
+    "cohort_breakdown": [
+      { "cohort": 1, "title": "Wire-format byte-shape changes" },
+      { "cohort": 2, "title": "Public-API shape changes (renames + visibility) — incl. FP-A F2 visibility tighten" },
+      { "cohort": 3, "title": "G-CORE-9 R1 fix-pass additions" },
+      { "cohort": 4, "title": "Wire-format DEFERRED post-v1-beta" },
+      { "cohort": 5, "title": "Public-API DEFERRED post-v1-beta tighten" },
+      { "cohort": 6, "title": "R6 R1 FP-F4 substrate-frozen-but-consumer-unwired wiring (this PR) — NEW since R1" }
+    ],
+    "every_change_ratified": true,
+    "ratification_pattern_audit": "Every entry cites Ben-ratified P-III no-users-yet override OR pre-v1-API-shape ratification OR orchestrator-night-shift-surface-arch-decision per foundational memories per the doc's own §Authority preamble.",
+    "anticipated_addition_post_l17_r2_major_1": "If L17-r2-MAJOR-1 fix-pass lands the BINDING_SIG_DOMAIN v2→v3 bump + audience_pubkey-binding addition: NEW Cohort 1 row (wire-format byte-shape change) + Cohort 7 (or extend Cohort 3) entry for the same; sibling Cohort 2 entry for the binding_message shape change (now 6-segment)"
+  },
+  "findings": [
+    {
+      "id": "L17-r2-frozen-item-15-MAJOR-1",
+      "severity": "MAJOR",
+      "title": "Item 15.d 'AuthorizationGrant envelope = ONE signed artifact' freeze-contract narrative is CONTRADICTED at HEAD — audience_pubkey is unbound in binding_message + ARM-checked at ucan_blobs_protocol; same-attack-class sibling-sweep gap with L3-r1-1 scope (cross-confirmed with L3-r2-1 MAJOR; promoted per same precedent)",
+      "where": "docs/V1-FROZEN-INTERFACE.md §15.d lines 1480-1535 + crates/benten-caps/src/authorization_grant.rs:267 (audience_pubkey field) + crates/benten-caps/src/authorization_grant.rs:395 (binding_message construction; 5 segments not 6) + crates/benten-sync/src/ucan_blobs_protocol.rs:437-499 (ARM 2 + ARM 5 — L3 lens evidence) + docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-15c lines 516-534 (rationale 'cooperating attacker who forges audience_pubkey still cannot pass binding_sig verification' CONTRADICTED)",
+      "what_lens_caught": "Same-attack-class sibling sweep on AuthorizationGrant struct per feedback_d17_same_file_sweep_recurrence: 7 pub fields total; binding_message construction covers 5 (ucan, key_material, audience_binding via Cid bytes, scope via L3-r1-1; binding_sig IS the seal); issuer_verifying_key is structurally bound via Ed25519 signature dispatch (mutating it makes binding_sig fail); audience_pubkey is the ONE field STRUCTURALLY UNBOUND AND ARM-CHECKED — same exact shape as the L3-r1-1 scope hole that R6-FP-B just closed. L3-r2-1 (MAJOR, cross-lens confirmation at commit 2759a519) catches the attack chain from the protocol angle: Eve obtains valid grant G for Alice; mutates G.audience_pubkey = Eve_pk; presents over Eve's iroh connection; ARM 2 (audience_pubkey vs connection EndpointId compare) passes; ARM 5 (verify_binding against grant.audience_binding) passes because audience_pubkey is NOT in binding_message; Eve gets Alice's data. L17 catches it from the freeze-contract angle: item 15.d narrative claims 'ONE signed artifact' but at HEAD the envelope is structurally TWO surfaces (signed-bytes + audience_pubkey side-channel). Row D-15c's defense rationale ('cooperating attacker who forges audience_pubkey still cannot pass binding_sig verification') is INVALID at the live ARM 2 / ARM 5 split per L3-r2-1's evidence.",
+      "disposition_recommendation": "FIX-NOW per HARD RULE 12 clause-(a) — fold audience_pubkey into binding_message as a 6th segment (Option<Vec<u8>> → length-prefixed bytes, mirroring the scope_len_u32_le pattern); BUMP BINDING_SIG_DOMAIN v2 → v3; add tf3b_audience_pubkey_substitution_post_sign_rejected.rs pin (both Some↔Some swap + None↔Some swap shapes); retract Row D-15c's 'defense-in-depth only' framing OR rewrite its rationale to acknowledge the binding-now-covers semantic; add NEW V1-BETA-BREAKING-CHANGES.md entry for the v2→v3 wire-format change; update V1-FROZEN-INTERFACE.md §15.d narrative to reflect 6-segment binding-message (single PR shared with L3-r2-1 closure; the fix-recipe IS identical from both lens angles). Per HARD RULE 12 clause-(c) NO DISAGREE-WITH-EXPLANATION is available — the freeze-contract integrity demands binding-covers-or-not is a YES/NO question + at HEAD the answer is NO for audience_pubkey.",
+      "non_defer_rationale": "HARD RULE 12 clause-(a) does NOT apply (in scope of L17 lens). Clause-(b) cannot apply — Row D-15c already exists as a NAMED destination but its rationale is contradicted, so it can no longer carry the deferral honestly. Clause-(c) does not apply (identical class as L3-r1-1 just closed under the same precedent; the same-class precedent invalidates DISAGREE).",
+      "blocks_freeze": "yes — item 15.d 'ONE signed artifact' narrative is the freeze-contract content; the live shape violates it",
+      "blocks_r6_advance": "yes — strict Q5 termination requires 0 MAJOR + 0 BLOCKER; iterate-to-convergence applies",
+      "subclause_impact": "item 15(d) AuthorizationGrant envelope contract integrity",
+      "fp_pr_shape_estimate": "Shared with L3-r2-1: ~80-120 LOC across authorization_grant.rs (binding_message 5→6 segments + domain v2→v3) + tests (1 new tf3b pin file ~60 LOC + 5 existing pin file domain-tag-v3 updates) + docs (item 15.d retense + Row D-15c retract + V1-BETA-BREAKING-CHANGES.md Cohort 1 row addition). Single FP cycle closes both L3-r2-1 + L17-r2-MAJOR-1."
+    },
+    {
+      "id": "L17-r2-frozen-item-15-MINOR-1",
+      "severity": "MINOR",
+      "title": "Cite-line drift in V1-FROZEN-INTERFACE.md item 15.d — AuthorizationGrant cited at line 233 (HEAD = 238) + GrantKeyMaterial cited at line 166 (HEAD = 178)",
+      "where": "docs/V1-FROZEN-INTERFACE.md:1483 (AuthorizationGrant struct cite) + :1503 (GrantKeyMaterial cite). Source-of-truth: crates/benten-caps/src/authorization_grant.rs:178 (GrantKeyMaterial) + :238 (AuthorizationGrant)",
+      "what_lens_caught": "R6-R1 OBS-1 noted authorization_grant.rs:205 (original) → 233 (R1 close-pass update) drift; R6-R2 finds further drift to 238 (post-FP cascade). Sibling GrantKeyMaterial cite was not updated in the R1 close-pass; HEAD = 178. Cross-confirms with L11-R6-R2-MAJOR-1 phantom byte-pin cite-strings — same class of pattern: freeze-contract docs accumulate cite-string drift as the FP cascade churns. Grep-resolvable + low-severity but tightens the freeze-contract precision posture.",
+      "disposition_recommendation": "FIX-NOW orchestrator-direct (per HARD RULE 12 clause-(a)): single-line sed each (sed -i '' -e 's|authorization_grant.rs:233|authorization_grant.rs:238|' -e 's|authorization_grant.rs:166|authorization_grant.rs:178|' docs/V1-FROZEN-INTERFACE.md). Lower-effort + higher-value fix: switch from `file:line` cites to symbol-relative cites (`authorization_grant.rs::AuthorizationGrant`) which are line-drift-immune — propose as L17-r2-OBS-3 (pim-N candidate cross-confirmed with L11's process_notes).",
+      "blocks_freeze": false,
+      "blocks_r6_advance": false,
+      "subclause_impact": "item 15(d) cite-precision"
+    },
+    {
+      "id": "L17-r2-frozen-item-15-MINOR-2",
+      "severity": "MINOR",
+      "title": "Doc claim 20,559 LOC for public-API baselines at V1-FROZEN-INTERFACE.md:67 — HEAD recount = 20,524 LOC (35-LOC drift since R1 close pass)",
+      "where": "docs/V1-FROZEN-INTERFACE.md:67 `total **20,559 LOC**`",
+      "what_lens_caught": "R6-R1 OBS-5 noted 12-LOC drift (doc 20,571 → R1 HEAD 20,559). At R1 close pass the doc was updated to 20,559 (the HEAD-truth at that time). Since then F2's visibility tighten removed 4 surfaces from benten-engine baseline + fix-up #5/#8/#11 regenned baselines, net-reducing total to 20,524 LOC at HEAD (verified via `wc -l docs/public-api/*.txt | tail -1`). The 35-LOC drift is the F2-cascade-net-reduction signal — not a problem in itself, but the doc claim is now stale. Single-line sed.",
+      "disposition_recommendation": "FIX-NOW orchestrator-direct (per HARD RULE 12 clause-(a)): single-line sed `s|total \\*\\*20,559 LOC\\*\\*|total **20,524 LOC**|`. OR, since the LOC count is forensic-anchor-only (drift gate is the cargo-public-api workflow's actual diff, not the doc-claim count), consider switching the doc to a less-frequently-drifting framing such as 'totaling ~20,500 LOC' (rounded).",
+      "blocks_freeze": false,
+      "blocks_r6_advance": false,
+      "subclause_impact": "item 9 cargo-public-api baseline framing"
+    },
+    {
+      "id": "L17-r2-frozen-item-15-MINOR-3",
+      "severity": "MINOR",
+      "title": "Compromise #23 retense cross-lens cite-of-record — F3 close commit d9cdaf93 lands the substantive AAD-binds-total_chunks fix but the SECURITY-POSTURE.md narrative retense was not audited in this lens-scope",
+      "where": "docs/SECURITY-POSTURE.md (Compromise #23) + crates/benten-crypto-suite/src/aead.rs (F3 AAD layout — total_chunks now bound per commit d9cdaf93)",
+      "what_lens_caught": "Item 15(g) sub-clause verification noted 'AAD layout = 2-tuple (plaintext_cid, chunk_index) extended to bind total_chunks per F3 close' — substantive F3 fix landed at d9cdaf93 but SECURITY-POSTURE.md narrative was not specifically audited from L17's seat (L4-adversarial / L8-non_exhaustive / L18 lens-pairs would cover Compromise #23 retense in their normal lens scope). Surface as MINOR cross-lens cite-of-record.",
+      "disposition_recommendation": "Surface to orchestrator triage as cross-lens-coordination signal — likely no L17-specific action; verify at R6-R3 lens-summary that L4 / L8 / L18 covered Compromise #23 retense in their R6 R2 pass. If not, escalate then. SOFT MINOR (carries no fix-action from L17).",
+      "blocks_freeze": false,
+      "blocks_r6_advance": false,
+      "subclause_impact": "item 15(g) cross-lens cite-of-record"
+    }
+  ],
+  "obs": [
+    {
+      "id": "L17-r2-frozen-item-15-OBS-1",
+      "title": "Sub-clause 15(g) doc could clarify which layer (benten-graph TwoCidMap vs benten-sync TwoCidStore) is durable at v1-beta — R1-OBS-2 not addressed",
+      "where": "docs/V1-FROZEN-INTERFACE.md:1629-1673",
+      "lens": "phase-wide sub-clause precision (carried from R1-OBS-2)",
+      "obs_disposition": "Doc improvement; benten-graph::two_cid_map IS redb-backed (durable); benten-sync::two_cid_store::TwoCidStore is the wave-3e in-memory adapter with named iroh_blobs::FsStore swap-point. Adding a single line distinguishing the two layers + the wave-3e in-memory → production wire-up seam would resolve. Not freeze-contract-blocking; carried to a future R6-FP-doc-precision sweep OR consolidated with L17-r2-MAJOR-1 fix-pass."
+    },
+    {
+      "id": "L17-r2-frozen-item-15-OBS-2",
+      "title": "Row D-19 G-COMP-1-before-v1-beta tag-sequence cross-reference improvement — R1-OBS-3 not addressed (D-7 closed obviating that half of the original observation)",
+      "where": "docs/V1-FROZEN-INTERFACE-DEFERRED.md Row D-19 + docs/V1-BETA-BREAKING-CHANGES.md Cohort 5",
+      "lens": "phase-wide G-COMP-1 vs v1-beta tag sequencing",
+      "obs_disposition": "Row D-19 narrative correct but could explicitly call out the tag-sequence (`phase-4-meta-core-close` → `phase-4-meta-close` → `v1-beta` → `v1-GM`; G-COMP-1 = Phase-4-Meta-Composing is strictly before `v1-beta`). Carried to a future R6-FP-doc-precision sweep."
+    },
+    {
+      "id": "L17-r2-frozen-item-15-OBS-3",
+      "title": "Symbol-relative cite refactor for freeze-contract narrative would reduce line-number drift class-of-bug (cross-confirmed with L11-R6-R2 process_notes)",
+      "where": "Cross-cutting across V1-FROZEN-INTERFACE.md (~30+ `file.rs:LINE` cites) + V1-WIRE-FORMAT-INVENTORY.md (per L11-R6-R2-MAJOR-1)",
+      "lens": "pim-N candidate — line-number cites + file-glob cites in freeze contracts are brittle against the line-drift / phantom-cite class-of-bug",
+      "obs_disposition": "OBSERVATION (pim-N pattern candidate; CROSS-CONFIRMED with L11-R6-R2 process_notes): freeze-contract docs that ride for many rounds of R6-FP churn accumulate cite-string drift. L11 surfaces phantom file-globs (items 11-24); L17 surfaces drifted line-numbers (item 15.d). Both share the §3.6j sweep-completeness gap. Codification candidate: extend §3.6j to mandate 'each file-path / line-number / file-glob cite in the wave's outputs MUST be grep-verified against the tree at author-time'. Workspace already uses symbol-relative cites in many contexts (rustdoc, INTERNALS.md). Threshold for codification: 3+ recurrence — met at L11-R6-R2-MAJOR-1 + L17-r2-MINOR-1 + the underlying L17-r1-OBS-1 + L11-R6-R1 missing-surfaces precedent = 4+ instances inside a single phase."
+    },
+    {
+      "id": "L17-r2-frozen-item-15-OBS-4",
+      "title": "DEFERRED.md row count growth (+5 net) — pattern-induction signal: R6-FP cycles introduce new DEFERRED rows at a healthy clip when correctly applying HARD RULE 12 clause-(b)",
+      "where": "docs/V1-FROZEN-INTERFACE-DEFERRED.md (D-23..D-26 + D-25 new since R1)",
+      "lens": "phase-wide forward-compat additive-discipline meta-observation",
+      "obs_disposition": "OBSERVATION: at R1 the deferred-rows-audit was 21; at R6-R2 it is 26 (–2 retracted + 5 new). The 5 new rows all originate from R6-FP MAJORs being correctly NAMED-DEFERRED per HARD RULE 12 clause-(b) rather than fix-now-mashed inline. Healthy signal: the FP cycle is correctly distinguishing 'substrate ratification' (fix-now) from 'consumer-wiring named-now-deferred-to-Composing' (BELONGS-NAMED-NOW per clause-(b))."
+    }
+  ],
+  "positive_convergence_confirmations": [
+    { "confirmation": "All 15 §1.A.FROZEN items have concrete shipped surface verified at HEAD 3c80546f (integration branch) — item 15.d carries L17-r2-MAJOR-1 freeze-contract integrity finding but the SHAPE of the binding mechanism is shipped (5-segment binding-message + ARM-checks); the GAP is the missing 6th segment for audience_pubkey" },
+    { "confirmation": "All 10 sub-clauses of item 15 (a-j) have concrete shipped surface; 15.d carries the L17-r2-MAJOR-1 audience_pubkey gap" },
+    { "confirmation": "R6-R1 MINOR (ts-public-api required-failing flip) CLOSED at R6-FP-D commit 36988d1a — symmetric Rust + TS gates now structurally CI-failing-on-drift; branch-protection.yml line 226-228 reflects" },
+    { "confirmation": "R6-R1 implicit item 1 PARTIAL-LANDED → R6-R2 FULLY-LANDED via R6-FP-A F2 (commit 92b5b0a3 + integration fix-up #13 3c80546f); Row D-7 RETRACTED/CLOSED" },
+    { "confirmation": "R6-R1 implicit item 12 PARTIAL-LANDED → R6-R2 substantive cross-peer install verification LIVE via R6-FP-F4 §S4 (commit f05cdf69 + fbbb8847); Row D-4 + D-6 + D-18 ALL CLOSED" },
+    { "confirmation": "R6-R1 implicit item 8 Row D-3 (3 hooks consumption-deferred) → R6-R2 CONSUMPTION-WIRED at FP-F4 §S3a/§S3b/§S3c (commits a14692b6 + a4704295 + fbbb8847); item 8 retense in V1-FROZEN-INTERFACE.md line 735 captures Δv3 InstallPorts shape change" },
+    { "confirmation": "R6-R1 Row D-1 (WriteBoundaryChainValidator) + Row D-2 (InstallRecordReplayStore) ALL CLOSED at R6-FP-F4 (commits 31695dda + b32c8e39); FORENSIC entries preserved" },
+    { "confirmation": "Item 15(a) walker_as_subgraph fractal-property landed; CLAUDE.md baked-in #1 (12-primitive irreducibility) preserved — no new PrimitiveKind variant" },
+    { "confirmation": "Item 15(d) GrantKeyMaterial + AeadKeyMaterial type-name collision resolved (rename landed); verify_binding ordering-pin enforced; L3-r1-1 binding-message-binds-scope close at commit 39dd52cf (BUT see L17-r2-MAJOR-1 audience_pubkey sibling gap)" },
+    { "confirmation": "Item 15(f) HKDF info-tag corrections (\"step\"/\"root\" cross-role domain separation per Spike E correction + R0.8) landed in structural_kdf.rs lines 124 + 141" },
+    { "confirmation": "Item 15(g) IROH_BLOCK_SIZE = 16 KiB golden-constant pin at aead.rs:464 (`assert_eq!(IROH_BLOCK_SIZE, 16 * 1024)`); F3 AAD-binds-total_chunks defense LIVE at commit d9cdaf93" },
+    { "confirmation": "Item 15(h) Engine::walk_share_scope wrapper at engine_share_scope.rs:59 delegating to canonical benten_core::subgraph_spec::walker::walk; SubgraphSpecWalkFailed ErrorCode minted" },
+    { "confirmation": "Item 15(i) Compromise #31 entry in SECURITY-POSTURE.md; OPEN ARCHITECTURAL TRADE-OFF posture honest at v1-beta + v1-GM" },
+    { "confirmation": "Item 8 CapabilityPolicy hard-seal LANDED via private Sealed supertrait at policy.rs:50-63; 3 new G-CORE-8 hooks at policy.rs:510/534/573 NOW WIRED" },
+    { "confirmation": "Item 9 cargo-public-api workflow IS required-failing (job name + explicit `exit 1` on diff at workflow line 111; no `|| true` bypass); 14 baselines at docs/public-api/*.txt regenerated via fix-up #5/#8/#11; ground-truth-verified CI invocation `cargo +nightly public-api --simplified -p <crate>` matches the freeze contract's baseline-regen invocation" },
+    { "confirmation": "Item 11 #[non_exhaustive] sweep maximalist applied to 160 pub enums workspace-wide; deliberate carve-outs (Scope EXACTLY-two-arms; PrimitiveKind defensive; GraphError::TxAborted per #997/#1207) preserved per item 15(c) verification" },
+    { "confirmation": "DEFERRED.md is honest about v1-beta posture across 25 of 26 rows (D-15c's rationale is contradicted per L17-r2-MAJOR-1 cross-lens with L3-r2-1; everything else PASSES); 0 phantom destinations; FORENSIC entries preserved for D-1/D-2/D-3/D-4/D-6/D-18 retractions" },
+    { "confirmation": "V1-BETA-BREAKING-CHANGES.md 6-cohort catalog complete (Cohort 6 NEW since R1, names R6-FP-F4 substrate-consumer wiring + 2 new ErrorCode mints); every non-additive future change (Row D-13 wire-format HKDF info-tag extension + Row D-19 wire-format Strategy::C rename + Row D-26 PQ-hybrid app-layer wire-in) named in Cohorts 4-6 with structurally-correct discipline disclosed" }
+  ],
+  "post_completion_state": {
+    "branch": "phase-4-meta-core/r6-r2-l17-frozen-item-15",
+    "base_sha": "3c80546f37adee8cb2c05e1257e4aa883370ab92",
+    "review_artifact": ".addl/phase-4-meta/r6-r2-l17-frozen-item-15.json",
+    "council_advance_recommendation": "ITERATE-TO-CONVERGENCE per CLAUDE.md rule 9 Q5: L17-r2-MAJOR-1 (audience_pubkey freeze-contract integrity, cross-confirmed with L3-r2-1 MAJOR) requires a R6-R2-FP cycle. The fix shares its recipe with L3-r2-1 (fold audience_pubkey into binding_message as 6th segment + bump BINDING_SIG_DOMAIN v2→v3 + retract Row D-15c 'defense-in-depth only' framing). Single FP cycle closes both lenses; the cycle also picks up L17-r2-MINOR-1 (cite-line drift sed) + L17-r2-MINOR-2 (LOC-recount sed) + the 4 OBS items (carried/consolidated). Per Q5 cadence: full council re-review at R6-R3 verifies the EDITED artifact (the fix-pass shipped binding_message + retracted D-15c rationale + updated item 15.d narrative)."
+  }
+}
