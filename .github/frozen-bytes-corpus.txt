@@ -200,6 +200,12 @@ f03_ucan_verify_strict_rejects_malleable_sig_regression
 # was `#[ignore]`d against a destination that shipped two phases ago; it is
 # un-ignored in the same commit and its ARM 2 now reads THIS file.
 materializer_canonical_bytes_determinism_across_runs
+# The meta-gate itself must ride the required lane too, or the recursion does
+# not terminate: with only the companion registered, a coordinated "delete the
+# entry AND lower the floor" passes BOTH required checks and only the
+# non-required `build+test` lane objects. Registered here, the meta-gate reads
+# this file on the required lane, so removing the line above fails it.
+materializer_determinism_canonical_bytes_stable_across_runs
 
 # --- R6 round #1 falsification-sweep closures (E-02 / E-03 / E-04 / W-08b) ---
 # Each closes a surface the sweep proved had NO byte pin anywhere in the

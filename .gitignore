@@ -134,3 +134,7 @@ tests/README.md
 # through a non-sentinel path. Tracked separately as part of the
 # packages/engine vitest cluster investigation.
 packages/engine/:memory:
+
+# Python bytecode from .github/scripts helpers — never a repo artifact.
+__pycache__/
+*.pyc

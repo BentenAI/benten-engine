@@ -10,7 +10,8 @@
 //! ## What this pin asserts
 //!
 //! At Phase-4-Foundation close, the load-bearing top-of-funnel docs
-//! (PRIMER.md, VISION.md, FULL-ROADMAP.md, ARCHITECTURE.md, README.md)
+//! (PRIMER.md, ARCHITECTURE.md, README.md — see the F-073 note at the
+//! doc-list below for why VISION.md and FULL-ROADMAP.md are NOT checked)
 //! all carry the Phase-4-Foundation retense narrative — they mention
 //! the phase as SHIPPED (or in-flight per current state) and the new
 //! v1-platform surface (admin UI v0, plugin manifest, materializer,
