@@ -111,8 +111,8 @@ jobs:
           # S-5 hazard the audit found in ci.yml's T9 gate. If the corpus file
           # is truncated, emptied or commented out, `cargo nextest run` with
           # zero `--test` flags stops meaning what this job's name says. Fail.
-          if [ "${#TARGETS[@]}" -ne 122 ]; then
-            echo "FLOOR VIOLATED: corpus lists ${#TARGETS[@]} targets, expected exactly 122."
+          if [ "${#TARGETS[@]}" -ne 123 ]; then
+            echo "FLOOR VIOLATED: corpus lists ${#TARGETS[@]} targets, expected exactly 123."
             echo "The frozen-bytes corpus must not shrink. If a pin was renamed,"
             echo "update the name; if a surface was genuinely deleted, lower this"
             echo "floor in the SAME commit with a written reason."

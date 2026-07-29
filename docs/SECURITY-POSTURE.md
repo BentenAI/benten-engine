@@ -723,9 +723,9 @@ pre-scan over the raw wire bytes — map keys, list items, byte-string
 length, text length, nesting depth, declared-length amplification, and an
 aggregate item cap — and only then hands the payload to the canonical
 decoder. `testing::deserialize_value_from_js_like` is a thin delegation to
-it, so the harness exercises the shipping checker rather than a parallel
-copy; the 5 R3 contract tests went 0-pass/5-fail → pass, and 12 boundary
-pins were added alongside them (17 total, on the required
+it, so the harness exercises the real checker rather than a parallel copy;
+the 5 R3 contract tests went 0-pass/5-fail → pass, and 12 boundary pins
+were added alongside them (17 total, on the required
 `napi in-process pins (rlib mode)` lane).
 
 Two things this closure does NOT claim, stated so the record does not
@@ -737,13 +737,29 @@ overstate the binary:
   (`NapiInputError`), which discriminates a limit rejection
   (`E_INPUT_LIMIT`) from malformed framing (`E_SERIALIZE`). No frozen
   crate's public API was touched.
-- **The enforced depth is 64, not the documented 128.**
+- **The DAG-CBOR checker does not fire in the shipped cdylib.** It compiles
+  under `napi-export`, but its only callers are `testing::deserialize_*`
+  (`lib.rs:2444`, `:2453`) inside `#[cfg(any(test, feature =
+  "in-process-test"))] mod testing`, and `default = ["napi-export"]` does
+  not enable that feature. **Compiling is not firing.** B8 closed the
+  Phase-1 R3 contract exactly as that contract was written — against
+  `benten_napi::testing::*` — which is a genuine closure of a genuine gap,
+  and is a different claim from production coverage. Wiring a production
+  entry point for the DAG-CBOR path is a named residual. What DOES fire in
+  production today is the JSON path below.
+
+- **The enforced depth is 64 everywhere, and now cannot drift.**
   `NAPI_MAX_DEPTH` is DERIVED from `benten_core::MAX_VALUE_DECODE_DEPTH`
   (byte-pinned at 64), because a napi-side cap of 128 could never fire on
   the CBOR path — the canonical decoder refuses first — i.e. it would have
-  been a defense that looks present and is not. The JSON path in
-  `bindings/napi/src/node.rs` still uses `JSON_MAX_DEPTH = 128`; see the
-  open item recorded under `E_INPUT_LIMIT` in `docs/ERROR-CATALOG.md`.
+  been a defense that looks present and is not.
+  **`JSON_MAX_DEPTH` in `bindings/napi/src/node.rs` was `128` and is now
+  derived from the same constant.** That mismatch was not cosmetic: the
+  JSON path is the LIVE production write path, so a property bag nested
+  65..=128 deep was accepted, hashed and persisted — and then could not be
+  decoded on read. Silent write-side data loss, on a shipped surface,
+  because the boundary admitted a value it could never hand back. Both caps
+  now derive from the decoder's own bound, so they cannot diverge again.
 
 ---
 

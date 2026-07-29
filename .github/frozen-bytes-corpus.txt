@@ -219,3 +219,11 @@ m19_endianness_scanner_platform_foundation
 # record in the same family as an overstated Compromise row. `benten-engine` is
 # already in this job's `-p` list, so this costs no extra crate compile.
 stale_ignore_destination_ratchet
+
+# --- decoder/boundary depth parity (W2 residual: silent write-side data loss) -
+# `node.rs` capped JSON nesting at a literal 128 while the canonical decoder
+# stopped at 64, so a 65..=128-deep property bag was accepted, hashed and
+# persisted, then failed to decode on read. Both caps now derive from
+# `benten_core::MAX_VALUE_DECODE_DEPTH`; this scan stops either being
+# re-literalised, and catches a NEW boundary added with its own number.
+no_boundary_accepts_deeper_than_the_decoder_returns

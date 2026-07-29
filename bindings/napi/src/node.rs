@@ -24,12 +24,18 @@ use crate::error::core_err;
 
 /// Depth cap enforced while walking a JSON tree into `Value`.
 ///
-/// Each level of nested object/array counts as one unit of depth. Strictly
-/// shallower than the napi boundary's theoretical limit — B8 wires a harder
-/// `E_INPUT_LIMIT` check in its in-process-test surface; the Phase-1 class
-/// binding only needs a DoS tripwire so a pathological JS input doesn't
-/// blow the Rust stack.
-const JSON_MAX_DEPTH: usize = 128;
+/// Each level of nested object/array counts as one unit of depth.
+///
+/// DERIVED, never a literal. This was `128` while the canonical decoder
+/// (`benten_core::MAX_VALUE_DECODE_DEPTH`) stopped at 64, so a property bag
+/// nested 65..=128 deep was ACCEPTED on write, hashed, and persisted — and
+/// then could not be decoded on read. Silent write-side data loss: the
+/// boundary admitted a value it could never return.
+///
+/// Never accept what we cannot hand back. Deriving the cap from the decoder's
+/// own bound makes the two unable to drift apart again — the mismatch is now
+/// unrepresentable rather than merely fixed.
+const JSON_MAX_DEPTH: usize = benten_core::MAX_VALUE_DECODE_DEPTH;
 
 /// Map key count ceiling applied to every nested object in the JSON tree.
 const JSON_MAX_MAP_KEYS: usize = 10_000;
