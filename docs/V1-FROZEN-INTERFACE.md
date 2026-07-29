@@ -224,17 +224,28 @@ fail CI on a frozen-surface mutation:
    `feedback_workspace_missing_docs_test_invocation`). Mandatory
    pre-push + CI lane. Every `pub` item carries `///` docs at freeze;
    post-freeze additions inherit the gate.
-5. **CATALOG_VARIANT_COUNT exhaustive-match dual-tripwire** at
-   `crates/benten-errors/tests/stable_shape.rs::catalog_variant_count_matches_enum`.
+5. **CATALOG_VARIANT_COUNT roster pin** at
+   `crates/benten-errors/src/lib.rs::catalog_roster_pin` (the compiler half)
+   + `crates/benten-errors/tests/stable_shape.rs::variant_count_is_pinned`
+   (the round-trip + length half). Both expand from the single
+   `crates/benten-errors/catalog_roster.rs.in`.
    **CATALOG_VARIANT_COUNT = 201 at HEAD `b86dec03`** (192 at the
    G-CORE-9 build-out FREEZE milestone → 197 R6-R2-FP G-COMP-1 cohort 8
    → 198 `E_ROLE_STALE_AT_VERIFY` (F-full w-ms-canary) → 199
    `E_KV_TARGET_NOT_IMMUTABLE` (F-full w-gov-audit; Inv-19) → 200
    `E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH` → 201
    `E_RECIPIENT_KEM_NOT_COMMITTED` (GAP-KDB Shape-B recipient-binding;
-   Inv-23)). Adding or removing an `ErrorCode` variant without updating
-   the list fails to compile or fails the runtime length assertion
-   (`stable_shape.rs` pins `CATALOG_VARIANT_COUNT == 201`).
+   Inv-23)). Adding an `ErrorCode` variant without adding it to
+   `catalog_roster.rs.in` is `error[E0004]: non-exhaustive patterns` in the
+   `benten-errors` lib-test build; adding it to the roster without moving the
+   two length pins fails both of them at 202 != 201.
+   **Corrected 2026-07-27 (F-014).** The prior wording described the
+   `stable_shape.rs::catalog_variant_count_matches_enum` "dual tripwire" as
+   compiler-enforced. It was not: `ErrorCode` is `#[non_exhaustive]` and that
+   test is a downstream crate, so its match carried a mandatory `_ => false`
+   and its "independent count" filtered the list it was counting. A mutation
+   adding a fully-wired throwable variant left 9/9 PASS. The compiler half now
+   lives in the defining crate, where exhaustiveness is real.
 
 > **NEW pim-N candidate REJECTED at triage** (Planner-A's
 > per-`pub`-declaration `// FROZEN: re-open requires Ben sign-off`

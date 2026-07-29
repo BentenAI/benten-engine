@@ -717,14 +717,33 @@ attack are live in Phase 1:
    `E_INPUT_LIMIT` — the check runs during tree-walk so deeply-nested
    payloads cannot evade the cap by fragmenting across many small values.
 
-**Phase-2 completeness.** The canonical on-wire decoder
-(`testing::deserialize_value_from_js_like`) is still a shim pending a
-`CoreError::InputLimit` variant in `benten-core`; the B8 input-validation
-test suite is gated behind `--features in-process-test` and stays red
-until the decoder un-stub lands (coordination is deferred to the error-
-ergonomics work track). The boundary-side caps in this section are the
-Phase-1 defensive line against the allocation vector; the B8 suite will
-add CBOR-level depth / bomb coverage on top.
+**CLOSED 2026-07-29 (R6 round #1, B8).** The DAG-CBOR side of this
+boundary is real. `bindings/napi/src/input_limits.rs` runs a bounded
+pre-scan over the raw wire bytes — map keys, list items, byte-string
+length, text length, nesting depth, declared-length amplification, and an
+aggregate item cap — and only then hands the payload to the canonical
+decoder. `testing::deserialize_value_from_js_like` is a thin delegation to
+it, so the harness exercises the shipping checker rather than a parallel
+copy; the 5 R3 contract tests went 0-pass/5-fail → pass, and 12 boundary
+pins were added alongside them (17 total, on the required
+`napi in-process pins (rlib mode)` lane).
+
+Two things this closure does NOT claim, stated so the record does not
+overstate the binary:
+
+- **The prescribed remedy is not what landed.** The `CoreError::InputLimit`
+  variant named above was never added — `benten-core` is frozen. The code
+  lives in the non-frozen napi crate behind a napi-local error carrier
+  (`NapiInputError`), which discriminates a limit rejection
+  (`E_INPUT_LIMIT`) from malformed framing (`E_SERIALIZE`). No frozen
+  crate's public API was touched.
+- **The enforced depth is 64, not the documented 128.**
+  `NAPI_MAX_DEPTH` is DERIVED from `benten_core::MAX_VALUE_DECODE_DEPTH`
+  (byte-pinned at 64), because a napi-side cap of 128 could never fire on
+  the CBOR path — the canonical decoder refuses first — i.e. it would have
+  been a defense that looks present and is not. The JSON path in
+  `bindings/napi/src/node.rs` still uses `JSON_MAX_DEPTH = 128`; see the
+  open item recorded under `E_INPUT_LIMIT` in `docs/ERROR-CATALOG.md`.
 
 ---
 

@@ -68,6 +68,13 @@ mod error;
 // itself has no napi-rs dep, so it's reachable from both build modes.
 #[cfg(any(feature = "napi-export", feature = "in-process-test", test))]
 mod error_envelope;
+// B8 (Phase-1 R1 security-auditor #7): bounded input validation for the
+// TS -> Rust boundary. Gated exactly like `error_envelope` — reachable from
+// the production cdylib (`napi-export`) AND from the rlib the in-process
+// pins link against (`in-process-test`), because the harness must exercise
+// the shipping checker rather than a parallel test-only copy.
+#[cfg(any(feature = "napi-export", feature = "in-process-test", test))]
+pub mod input_limits;
 // Refinement-audit-2026-05 #1201: thin capacity-primed JSON-object
 // builder shared by the edge/node/subgraph/trace projectors. Gated
 // like its `napi-export` consumers; also reachable under `test` for
@@ -2416,63 +2423,170 @@ pub mod testing {
     //! Only `bindings/napi/tests/input_validation.rs` consumes this module
     //! and it already requires the `in-process-test` feature.
 
-    use benten_core::{Cid, CoreError, Value};
+    use benten_core::{Cid, Value};
 
-    /// B8-i/ii/iii/v — reject oversized / deep / CBOR-bomb payloads before
-    /// full decode. Phase-1 shim: the B8 harness only checks that the error
-    /// code is `ErrorCode::InputLimit`, so we surface the correct code for
-    /// every nontrivial payload. R5 replaces this with a bounded streaming
-    /// decoder that enforces the actual 10K key / depth-128 / 16 MB / 128-
-    /// level-nest limits.
-    pub fn deserialize_value_from_js_like(_bytes: &[u8]) -> Result<Value, CoreError> {
-        // Phase-1 shim. Full streaming decoder with size/depth/bytes caps
-        // lands with B8 proper; until then the harness's assertions about
-        // `ErrorCode::InputLimit` stay red. B8 is tracked separately from
-        // the G8-A napi class surface that this file ships.
-        Err(CoreError::NotFound)
+    use crate::input_limits::{NapiInputError, decode_value_bounded, parse_cid_string_bounded};
+
+    /// B8-i/ii/iii/v — bounded DAG-CBOR decode at the napi boundary.
+    ///
+    /// A thin delegation to [`crate::input_limits::decode_value_bounded`],
+    /// deliberately. The B8 harness must exercise the checker that SHIPS; if
+    /// this ever grows a body of its own, the suite silently stops testing
+    /// the production path. That is exactly how the pre-B8 version of this
+    /// function — an unconditional `Err(CoreError::NotFound)` — sat here
+    /// through several phases while `docs/ERROR-CATALOG.md` described a
+    /// bounded streaming decoder that did not exist.
+    ///
+    /// # Errors
+    ///
+    /// See [`crate::input_limits::decode_value_bounded`].
+    pub fn deserialize_value_from_js_like(bytes: &[u8]) -> Result<Value, NapiInputError> {
+        decode_value_bounded(bytes)
     }
 
-    /// B8-iv — malformed CID rejection.
-    pub fn deserialize_cid_from_js_like(_bytes: &[u8]) -> Result<Cid, CoreError> {
-        Err(CoreError::NotFound)
+    /// B8-iv — malformed-CID rejection at the napi boundary.
+    ///
+    /// # Errors
+    ///
+    /// See [`crate::input_limits::parse_cid_string_bounded`].
+    pub fn deserialize_cid_from_js_like(bytes: &[u8]) -> Result<Cid, NapiInputError> {
+        parse_cid_string_bounded(bytes)
     }
 
-    /// Generate an on-the-wire map with `keys` entries. Shim is opaque — the
-    /// harness only cares that `deserialize_value_from_js_like` rejects it.
+    /// Encode one CBOR head byte plus its argument in the shortest legal
+    /// form (canonical DAG-CBOR integer framing).
+    fn cbor_head(out: &mut Vec<u8>, major: u8, arg: u64) {
+        let base = major << 5;
+        if arg < 24 {
+            out.push(base | u8::try_from(arg).expect("arg < 24"));
+        } else if let Ok(v) = u8::try_from(arg) {
+            out.push(base | 0x18);
+            out.push(v);
+        } else if let Ok(v) = u16::try_from(arg) {
+            out.push(base | 0x19);
+            out.extend_from_slice(&v.to_be_bytes());
+        } else if let Ok(v) = u32::try_from(arg) {
+            out.push(base | 0x1a);
+            out.extend_from_slice(&v.to_be_bytes());
+        } else {
+            out.push(base | 0x1b);
+            out.extend_from_slice(&arg.to_be_bytes());
+        }
+    }
+
+    /// A COMPLETE, well-formed DAG-CBOR map with `keys` entries.
+    ///
+    /// Real bytes, not a stub. The accept side of the key-count boundary
+    /// (`napi_map_limit_boundary_is_exactly_10k`) needs a payload that
+    /// actually decodes, and a stub cannot supply one — the pre-B8 version
+    /// of this fixture returned four `0xff` bytes, which meant the harness
+    /// could not have distinguished a working limit from a decoder that
+    /// rejects everything.
+    ///
+    /// Keys are fixed-width `kNNNNNNN` and emitted in ascending order, so
+    /// the map is in canonical DAG-CBOR key order (length-first, then
+    /// bytewise); values are `Int(0)`. About 10 bytes per entry, so the
+    /// 10 001-key attack fixture is ~100 KB — built by the CALLER before it
+    /// samples RSS, so it does not perturb the allocation tripwire in
+    /// `napi_rejects_oversized_value_map`.
     #[must_use]
     pub fn make_giant_map(keys: usize) -> Vec<u8> {
-        // Four-byte header so the shim sees a "non-empty" payload without
-        // actually materializing `keys` entries.
-        let _ = keys;
-        vec![0xff, 0xff, 0xff, 0xff]
+        let mut out = Vec::with_capacity(keys * 10 + 8);
+        cbor_head(&mut out, 5, u64::try_from(keys).unwrap_or(u64::MAX));
+        for i in 0..keys {
+            let key = format!("k{i:07}");
+            cbor_head(&mut out, 3, u64::try_from(key.len()).unwrap_or(u64::MAX));
+            out.extend_from_slice(key.as_bytes());
+            out.push(0x00); // Int(0)
+        }
+        out
     }
 
-    /// Synthetic deep-list fixture.
+    /// `depth` physically-nested single-element CBOR arrays wrapped around
+    /// `Int(0)` — exactly `depth + 1` bytes, all of them real.
     #[must_use]
     pub fn make_deep_list(depth: usize) -> Vec<u8> {
-        let _ = depth;
-        vec![0xfe]
+        let mut out = Vec::with_capacity(depth + 1);
+        out.extend(std::iter::repeat_n(0x81_u8, depth)); // array(1) x depth
+        out.push(0x00); // Int(0)
+        out
     }
 
-    /// Synthetic oversize-bytes fixture.
+    /// A byte-string HEAD declaring `bytes` bytes with the payload
+    /// deliberately ABSENT — five bytes on the wire for any size.
+    ///
+    /// This is the only shape that tests vector (iii) honestly. A fixture
+    /// that actually carried 16 MiB would prove only that a 16 MiB
+    /// allocation is refused *after* a 16 MiB allocation, which is the
+    /// defense inverted. Refusing on the declared length, with nothing
+    /// behind it, is the property under test — and it is why the harness's
+    /// own comment says the test "must not itself OOM".
     #[must_use]
     pub fn make_giant_bytes(bytes: usize) -> Vec<u8> {
-        let _ = bytes;
-        vec![0xfd]
+        let mut out = Vec::with_capacity(9);
+        cbor_head(&mut out, 2, u64::try_from(bytes).unwrap_or(u64::MAX));
+        out
     }
 
-    /// Synthetic CBOR-bomb fixture.
+    /// Length-prefix amplification fixture — vector (v).
+    ///
+    /// `levels` nested array HEADS, each declaring `u32::MAX` elements,
+    /// with no element bytes behind them: five bytes per level.
+    ///
+    /// READ THIS BEFORE TRUSTING THE NAME. This is NOT `nominal_depth`
+    /// levels of physical nesting, and it does not claim to be. Plain
+    /// DAG-CBOR costs at least one byte per nesting level, so a literally
+    /// 1 000 000-deep payload is at least 1 MB and cannot satisfy the
+    /// harness's own `payload.len() < 16 * 1024` assertion — the two
+    /// requirements in the R3 docstring are arithmetically incompatible.
+    /// The amplification here lives in the DECLARED counts, which is the
+    /// actual attack: a decoder that sizes a buffer from the length prefix
+    /// does `Vec::with_capacity(4_294_967_295)` on the FIRST head — tens of
+    /// gigabytes — from a 40-byte input.
+    ///
+    /// `levels` is clamped to 8, far under `NAPI_MAX_DEPTH`, on purpose: it
+    /// keeps this fixture isolated from the depth vector so the depth test
+    /// and the bomb test fail for two different reasons.
     #[must_use]
     pub fn make_cbor_bomb(nominal_depth: usize) -> Vec<u8> {
-        let _ = nominal_depth;
-        vec![0xfc]
+        let levels = nominal_depth.clamp(1, 8);
+        let mut out = Vec::with_capacity(levels * 5);
+        for _ in 0..levels {
+            cbor_head(&mut out, 4, u64::from(u32::MAX));
+        }
+        out
     }
 
-    /// Process RSS in KB, or `None` if the platform doesn't provide a cheap
-    /// reader.
+    /// Process resident-set size in kB, or `None` where no cheap reader
+    /// exists.
+    ///
+    /// Linux only, via `/proc/self/status`. That is the platform the
+    /// `benten-napi in-process pins (rlib mode)` job runs on
+    /// (`runs-on: ubuntu-24.04`), so the allocation tripwire in
+    /// `napi_rejects_oversized_value_map` is live in the lane that gates
+    /// merges.
+    ///
+    /// On every other platform this returns `None`, and the harness's own
+    /// comment is correct that the assertion then degrades to
+    /// true-regardless. That degradation is real: a local macOS pass is NOT
+    /// evidence the tripwire fired. Do not read one as such.
     #[must_use]
     pub fn rss_kb() -> Option<u64> {
-        None
+        #[cfg(target_os = "linux")]
+        {
+            let status = std::fs::read_to_string("/proc/self/status").ok()?;
+            for line in status.lines() {
+                if let Some(rest) = line.strip_prefix("VmRSS:") {
+                    // "VmRSS:\t   12345 kB"
+                    return rest.split_whitespace().next()?.parse::<u64>().ok();
+                }
+            }
+            None
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            None
+        }
     }
 
     // -----------------------------------------------------------------------

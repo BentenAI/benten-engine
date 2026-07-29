@@ -104,8 +104,21 @@
 // primitive is itself a full-peer native mechanism. Browser tabs / thin-client
 // surfaces do NOT carry the MembershipSet keying glue (the membership-set
 // snapshot reaches them via the thin-client protocol, not the in-bundle crate).
-// This guard fires before the transitive `benten-sync` guard for a clearer
-// diagnostic.
+//
+// ORDERING (measured 2026-07-29 on df0c8287; an earlier version of this comment
+// claimed the opposite): this guard does NOT fire before the transitive
+// `benten-sync` guard — it never fires at all from a whole-crate wasm32 build.
+// `benten-sync` sits in this crate's PLAIN, un-cfg-gated `[dependencies]`, so
+// cargo must compile it first; its own `compile_error!` fires and rustc is never
+// invoked on this file. Verified: a wasm32 probe with the getrandom chain
+// satisfied reports exactly one `crates/benten-sync/src/lib.rs` hit and ZERO
+// hits on this file.
+//
+// The guard is therefore redundant while benten-sync's gate stands, and is kept
+// for one narrow reason: it is the defense that survives benten-sync gaining a
+// wasm32 thin-client shim and dropping its own gate. Because no whole-crate
+// build can observe it, `.github/workflows/wasm-checks.yml` arm (c) compiles
+// THIS FILE ALONE with rustc (no `--extern`) to keep it falsifiable.
 #[cfg(target_arch = "wasm32")]
 compile_error!(
     "benten-membership-set is native-only per CLAUDE.md baked-in #17 (its B-1 \

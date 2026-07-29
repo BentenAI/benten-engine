@@ -20,10 +20,15 @@
 //! (`scripts/drift-detect.ts`).
 //!
 //! Adding a variant requires:
-//! 1. Append a `match` arm in [`ErrorCode::as_str`], [`ErrorCode::as_static_str`],
-//!    and the [`core::str::FromStr`] impl.
-//! 2. Reserve the code in the catalog doc.
-//! 3. Update any `.code()` mapper in the owning crate that may produce it.
+//! 1. Append the identifier to `catalog_roster.rs.in` (the single roster
+//!    shared by the `catalog_roster_pin` unit-test module below and by
+//!    `tests/stable_shape.rs`). Skipping this step does not compile.
+//! 2. Append a `match` arm in [`ErrorCode::as_str`], [`ErrorCode::as_static_str`],
+//!    the [`core::str::FromStr`] impl, and [`ErrorCode::routed_edge_label`].
+//! 3. Bump both roster length pins (`catalog_roster_length_is_pinned` here and
+//!    `variant_count_is_pinned` in `tests/stable_shape.rs`).
+//! 4. Reserve the code in the catalog doc.
+//! 5. Update any `.code()` mapper in the owning crate that may produce it.
 //!
 //! The [`core::str::FromStr`] impl round-trips [`ErrorCode::as_str`] for every
 //! known variant and returns `Err(`[`ParseErrorCodeError`]`)` for unrecognized
@@ -1521,8 +1526,8 @@ pub enum ErrorCode {
 /// firing-codes list we keep extending", which invited mis-extension. The
 /// scope is *frozen at Phase-2a-close*; later phases' firing-site coverage
 /// is pinned by
-/// `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` +
-/// `catalog_variant_count_matches_enum`, not by appending here. This list
+/// `crates/benten-errors/catalog_roster.rs.in` (and the two length pins that
+/// consume it), not by appending here. This list
 /// only ever shrinks if a Phase-2a code is retired.
 pub const FIRING_CODES_AT_PHASE_2A_SNAPSHOT: &[ErrorCode] = &[
     ErrorCode::ExecStateTampered,
@@ -2775,5 +2780,99 @@ impl PartialEq<ErrorCode> for &str {
 impl PartialEq<&str> for ErrorCode {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Catalog-roster exhaustiveness pin (F-014)
+// ---------------------------------------------------------------------------
+
+/// The one place where "the catalog list covers the enum" is checked by the
+/// COMPILER rather than asserted at runtime.
+///
+/// This module exists because the check cannot live in `tests/`. An
+/// integration target is a downstream crate, and `ErrorCode` is
+/// `#[non_exhaustive]`, so every `match` over it out there is forced to carry
+/// a `_` arm. The deleted `catalog_variant_count_matches_enum`
+/// nevertheless advertised itself as an "exhaustive-match dual tripwire": it
+/// carried the mandatory `_ => false` and then "independently counted" by
+/// filtering `ALL_CATALOG_VARIANTS` — the list compared against itself.
+/// Proven inert by mutation (R6 round-#1 falsification sweep, 2026-07-27):
+/// adding a throwable variant with a catalog string and a routing class, and
+/// wiring `as_str` / `as_static_str` / `from_str` / `routed_edge_label` the way
+/// a developer minting a code does, left all 9 tests in that file PASSING,
+/// hard-coded `201` included.
+///
+/// Inside the defining crate `#[non_exhaustive]` is inert, so the `match`
+/// generated below has NO wildcard.
+#[cfg(test)]
+mod catalog_roster_pin {
+    extern crate std;
+
+    use super::ErrorCode;
+
+    /// Expands `catalog_roster.rs.in` into a slice AND a wildcard-free match.
+    ///
+    /// `tests/stable_shape.rs` defines its own `catalog_roster!` and includes
+    /// the SAME file to build `ALL_CATALOG_VARIANTS`, so the two sides cannot
+    /// hold different lists.
+    macro_rules! catalog_roster {
+        ($($variant:ident),+ $(,)?) => {
+            /// Every throwable catalog variant, in mint order.
+            const ROSTER: &[ErrorCode] = &[$(ErrorCode::$variant),+];
+
+            /// Classifies a code as catalog / not-catalog.
+            ///
+            /// The return value is almost beside the point — this function is
+            /// here so that the `match` below exists. It has no `_` arm, so a
+            /// variant added to `ErrorCode` and not to `catalog_roster.rs.in`
+            /// stops the build.
+            fn is_rostered(code: &ErrorCode) -> bool {
+                match code {
+                    // Forward-compat fallback, not a catalog code.
+                    ErrorCode::Unknown(_) => false,
+                    $(ErrorCode::$variant)|+ => true,
+                }
+            }
+        };
+    }
+
+    include!("../catalog_roster.rs.in");
+
+    /// MUTATION THAT MUST MAKE THIS FAIL (both arms were run, 2026-07-27):
+    ///
+    /// 1. Add `Foo` to `ErrorCode` and wire `as_str` / `as_static_str` /
+    ///    `from_str` / `routed_edge_label`, leaving `catalog_roster.rs.in`
+    ///    alone. `cargo nextest run -p benten-errors --lib` then stops with
+    ///    `error[E0004]: non-exhaustive patterns: &ErrorCode::Foo not
+    ///    covered`, pointing at `catalog_roster.rs.in`. With all four
+    ///    accessors wired this is the SOLE remaining compile error — i.e. it
+    ///    is this pin doing the work, not the accessors.
+    /// 2. Then add `Foo,` to `catalog_roster.rs.in`: `ROSTER.len()` becomes
+    ///    202 and this assertion fails, as does `variant_count_is_pinned` in
+    ///    `tests/stable_shape.rs`, because both expand from that one file.
+    ///
+    /// Bumping the number below without step 1 is not a way around it: the
+    /// count is `ROSTER.len()`, and `ROSTER` is generated from the same
+    /// tokens the match consumes.
+    #[test]
+    fn catalog_roster_length_is_pinned() {
+        assert_eq!(
+            ROSTER.len(),
+            201,
+            "catalog roster drift — update this pin, `variant_count_is_pinned` \
+             in tests/stable_shape.rs, docs/ERROR-CATALOG.md and \
+             packages/engine/src/errors.generated.ts in the SAME commit",
+        );
+    }
+
+    /// The `Unknown(String)` fallback is excluded from the roster, and a real
+    /// catalog code is included. This is the only behavioural claim the module
+    /// makes; the enforcement above is the compile step, not this assertion.
+    #[test]
+    fn unknown_fallback_is_not_a_catalog_code() {
+        let unknown = ErrorCode::Unknown(alloc::string::String::from("E_FROM_A_NEWER_PEER"));
+        assert!(!is_rostered(&unknown));
+        assert!(is_rostered(&ErrorCode::InvCycle));
     }
 }

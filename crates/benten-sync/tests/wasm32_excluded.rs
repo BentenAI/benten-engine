@@ -32,16 +32,23 @@
 //!    build attempt with a clear error pointing at CLAUDE.md baked-in
 //!    #17 + the thin-client surface alternative. (Source-side gate.)
 //! 2. **Cargo.toml cfg-gated dependency tables** — iroh + tokio live
-//!    behind `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`,
-//!    so even a downstream consumer that bypasses the lib.rs gate
-//!    cannot resolve the dep chain on wasm32. (Manifest gate.)
+//!    behind `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`.
+//!    NOTE (corrected 2026-07-29, measured): this is NOT a defense. It
+//!    removes iroh/tokio/loro on wasm32, which is exactly what leaves a
+//!    crate that COMPILES. With the lib.rs gate deleted and getrandom's
+//!    js/wasm_js features on, `benten-sync` builds for wasm32 at exit 0.
+//!    Rung 1 is the only thing that actually refuses. (Manifest hygiene.)
 //! 3. **CI at-build-time assertion** — `.github/workflows/wasm-checks.yml`
-//!    job `benten-sync-refuses-wasm32` runs `cargo check --target
-//!    wasm32-unknown-unknown -p benten-sync` and asserts it FAILS
-//!    with the `compile_error!` macro firing. A regression that
-//!    removed the compile_error! while keeping the cfg-gate (or
-//!    vice versa) would silently regress one rung; the CI cell
-//!    catches that. (At-build-time gate.)
+//!    job `benten-sync-refuses-wasm32`, in two arms. Arm (a) runs `cargo
+//!    check --target wasm32-unknown-unknown -p benten-sync` and asserts it
+//!    fails; that is structural only, since the failure comes from
+//!    `getrandom` before rustc reaches our source, and NO mutation of our
+//!    gate changes it. Arm (b) rebuilds the same check in a throwaway probe
+//!    with getrandom's js/wasm_js features enabled — the thing a
+//!    thin-client bundler would do — and asserts the build still fails
+//!    carrying `baked-in #17` attributed to `crates/benten-sync/src/lib.rs`.
+//!    Arm (b) is the falsifiable one: delete the `compile_error!` and the
+//!    probe compiles, which reds the job. (At-build-time gate.)
 //!
 //! This test asserts ALL THREE defenses are present at the source-of-
 //! truth manifests + the CI workflow.

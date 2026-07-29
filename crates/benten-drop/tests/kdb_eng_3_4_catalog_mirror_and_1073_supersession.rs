@@ -110,7 +110,7 @@ fn eng_3_catalog_count_rows_agree_baseline() {
         throwable, regression,
         "the catalog's Throwable-enum-variants count ({throwable}) MUST equal \
          its Regression-list-entries count ({regression}) — the 1:1 mirror \
-         (`catalog_variant_count_matches_enum`)."
+         (`catalog_roster.rs.in` + `src/lib.rs::catalog_roster_pin`)."
     );
     // Post-R5 (GAP-KDB doc-wave): the catalog GREW past the R3 base — the
     // sanity guard flips from "== R3 base (200)" to "> R3 base", a live

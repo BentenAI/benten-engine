@@ -13,22 +13,28 @@
 //!
 //! ## Defense-in-depth (mirrors benten-sync's three rungs)
 //!
-//! 1. **lib.rs `compile_error!`** — fires immediately for any wasm32 build
-//!    attempt with a clear error pointing at CLAUDE.md baked-in #17 + the
-//!    thin-client surface alternative. (Source-side gate; lib.rs ~L50-57.)
+//! 1. **lib.rs `compile_error!`** — present at `src/lib.rs` L109-115. NOTE
+//!    (measured 2026-07-29): it never fires from a whole-crate wasm32 build,
+//!    because the un-cfg-gated `benten-sync` dependency must compile first
+//!    and its own gate fires there. Kept as the defense that survives
+//!    benten-sync one day dropping its gate. (Source-side gate.)
 //! 2. **Cargo.toml native-only dep chain** — the B-1 set includes
-//!    `benten-sync`, whose iroh/tokio transport lives behind
-//!    `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`, so even a
-//!    downstream consumer that bypasses the lib.rs gate cannot resolve the
-//!    transitive dep chain on wasm32. (Manifest gate — transitively via the
-//!    `benten-sync` dependency this crate declares.)
+//!    `benten-sync`. This is a REAL blocker for this crate (unlike the
+//!    cfg-gated-table story in benten-sync's own pin, which is not one):
+//!    benten-sync's `compile_error!` fires while building it as a
+//!    dependency, so this crate can never be reached on wasm32.
+//!    (Transitive gate — and today the operative one.)
 //! 3. **CI at-build-time assertion** — `.github/workflows/wasm-checks.yml`
-//!    job `membership-set-refuses-wasm32` runs `cargo build --target
-//!    wasm32-unknown-unknown -p benten-membership-set` and asserts it FAILS
-//!    with the `compile_error!` macro firing. A regression that removed the
-//!    compile_error! while keeping the dep chain (or vice versa) would
-//!    silently regress one rung; the CI cell catches that. (At-build-time
-//!    gate.)
+//!    job `membership-set-refuses-wasm32`, in three arms. Arm (a) runs
+//!    `cargo build --target wasm32-unknown-unknown -p benten-membership-set`
+//!    and asserts it fails; structural only — it dies in `getrandom` and no
+//!    mutation of either gate changes it. Arm (b) re-runs that with
+//!    getrandom's js/wasm_js features enabled and asserts the failure still
+//!    carries `baked-in #17` from `crates/benten-sync/src/lib.rs` (rung 2,
+//!    falsified by deleting BENTEN-SYNC's gate). Arm (c) compiles
+//!    `src/lib.rs` ALONE with rustc and no `--extern` and asserts this
+//!    crate's own marker appears — the only arm that can observe rung 1,
+//!    falsified by deleting it. (At-build-time gate.)
 //!
 //! This test asserts ALL THREE defenses are present at the source-of-truth
 //! manifests + the CI workflow.

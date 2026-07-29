@@ -213,3 +213,9 @@ materializer_determinism_canonical_bytes_stable_across_runs
 canonical_bytes_v1_two_cid_key_layout
 canonical_bytes_v1_install_record_signing_preimage
 m19_endianness_scanner_platform_foundation
+
+# --- R6 round #1 F-073: freeze-RECORD honesty (not wire bytes) ---
+# An `#[ignore]` arm homed at a destination that already shipped is a false
+# record in the same family as an overstated Compromise row. `benten-engine` is
+# already in this job's `-p` list, so this costs no extra crate compile.
+stale_ignore_destination_ratchet

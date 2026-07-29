@@ -664,7 +664,17 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-1 — pr
 
 Estimated scope: ~50-100 LOC.
 
-### §4.29 phase-3-backlog §7.3.D stale-rationale sweep at pre-tag (Phase-4-Foundation pre-tag)
+### §4.29 phase-3-backlog §7.3.D stale-rationale sweep at pre-tag (Phase-4-Foundation pre-tag) — ⚠️ SUPERSEDED by §4.169
+
+> **SUPERSEDED 2026-07-29 (R6 round #1, F-073).** This row's own destination shipped:
+> Phase-4-Foundation closed at `phase-4-foundation-close` on 2026-05-14 with neither this
+> sweep nor the G26-A wave it defers to having fired — the second consecutive phase in
+> which this cluster's named destination shipped without discharging it. The 84 surviving
+> `phase-3-backlog §7.3.D` ignore arms are re-homed at **§4.169**, which carries the full
+> per-file inventory and a required-lane ratchet. **Do not add new cites to this row** —
+> `stale_ignore_destination_ratchet.rs` fails the build if §4.29 appears in a
+> `Destination:` clause. The `set_property_for_test` rename in the acceptance criteria
+> below is NOT superseded and still needs doing; it moves to §4.169's scope.
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-3 — ~30+ tests cite phase-3-backlog §7.3.D 'next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep'). Phase 3 SHIPPED at tag `phase-3-close` without the cited fix-pass batch firing; the cluster needs sweep-by-batch at the Phase-4-Foundation pre-tag wave. For each cited test: if production surface IS at HEAD, un-ignore + author body; otherwise retarget the cite to v1-assessment-window or this row. Belongs at the pre-tag sweep coupled with the cite-drift G26-A wave.
 
@@ -1806,6 +1816,142 @@ SHAPE-not-SUBSTANCE failure pim-18 §3.6f exists to stop).
 own phase closes with these still open, mint the successor rather than re-pointing at this
 one. Estimated scope: ~300-500 LOC (two CI workflows + one example + one test-only
 constructor + two re-scopings).
+
+---
+
+### §4.169 The 84 `phase-3-backlog §7.3.D` ignore arms — inventoried, ratcheted, NOT closed
+
+**This row is the live receiving destination for every `#[ignore]` arm in the tree
+whose reason cites `phase-3-backlog §7.3.D`.** It is the sibling of §4.168: §4.168
+receives the F-073 *direct* residuals (arms that cited `Phase-4-Foundation pre-tag` /
+`G26-A` / `G26-B wave-10`), this row receives the larger *indirect* cluster that
+§4.29 was supposed to sweep.
+
+**Why it exists.** §4.29 is titled "…stale-rationale sweep at pre-tag
+(**Phase-4-Foundation pre-tag**)" and its own closing instruction was to sweep this
+cluster "coupled with the cite-drift G26-A wave". Phase-4-Foundation SHIPPED at
+`phase-4-foundation-close` on 2026-05-14 with neither the sweep nor the G26-A wave
+firing — the second consecutive phase in which this cluster's named destination
+shipped without discharging it (Phase 3 was the first). §4.29 is therefore marked
+SUPERSEDED and these 84 arms are re-homed here. Per HARD RULE rule-12 clause-(b) the
+destination must EXIST and RECEIVE the entry: the full inventory is enumerated below
+rather than summarised, precisely so this row cannot become a tally mark.
+
+**Enforcement.** `crates/benten-engine/tests/stale_ignore_destination_ratchet.rs`
+(registered on the required `frozen-bytes corpus (v1-beta wire freeze)` lane) holds
+three ratchets: no arm may name the superseded §4.29 in a `Destination:` clause; any
+arm citing a shipped destination must name a live receiving row; and **this
+inventory may shrink but may never grow past 84**. A fourth arm pins the ceiling in
+this heading against the constant in the test, so the row and the code cannot drift.
+
+**Honest status: this row does NOT claim the work is done.** It stops the bleed and
+makes the debt countable. Every arm below is still `#[ignore]`d.
+
+**Measured disposition at r9-base `df0c8287`** (all 13 assertion-bearing arms were
+actually executed with `--run-ignored all`; none was dispositioned on inspection):
+
+- **71 arms are inert placeholders** — 67 `unimplemented!()`/`todo!()` bodies plus 4
+  bare `panic!()` shells. They cannot be un-ignored; there is nothing to run. They
+  are NOT deleted here: unlike the 16 Family-A arms deleted at R6 round #1, green
+  replacement coverage has not been located for each stated obligation, and deleting
+  an obligation whose coverage is unverified is worse than carrying it.
+- **13 arms carry real assertions and ALL 13 FAIL when un-ignored.** Verified by
+  scoped `cargo nextest run --run-ignored all`. Root causes, all confirmed by
+  reading the production surface:
+  - **4 IVM rebuild-equivalence arms** (`view1` / `view2` / `view3` / `view5`
+    `*_rebuild_matches_incremental_state`) — `View::rebuild()` is implemented as
+    *clear state + restore budget* (`crates/benten-ivm/src/views/capability_grants.rs:283`,
+    `.../version_current.rs:268`), which is exactly what its doc comment says it
+    does. There is no event-log replay seam, so a rebuilt view is empty while the
+    incremental one holds an event. The arms pin a contract the seam does not yet
+    provide. **This is a missing seam, not an IVM correctness defect** —
+    `rebuild()` is honest about its Phase-1 scope.
+  - **2 TOCTOU arms** (`benten-caps/tests/toctou_iteration.rs`) — the shared helper
+    `benten_engine::testing::iterate_write_handler(_max)` returns
+    `SubgraphSpec::empty("iterate_write")` and discards its argument
+    (`crates/benten-engine/src/testing.rs:18`), so zero writes occur and the
+    100-write assertion sees 0. Test-scaffolding gap. (The helper is correctly
+    gated behind `#[cfg(any(test, feature = "test-helpers"))]`, so this is not a
+    production leak.)
+  - **3 `requires`-enforcement arms** (`benten-eval`) — fail with `NotFound` /
+    panic inside `crates/benten-engine/src/outcome.rs:311`; same unpopulated-handler
+    scaffolding root cause.
+  - **2 transport arms** (`benten-sync/tests/transport_loopback.rs`) — genuinely
+    blocked on external infrastructure (synthetic-NAT fixture + relay endpoint in
+    CI); the 4 non-ignored siblings in that file pass.
+  - **2 remaining** (`compromises_regression.rs`, `version_current.rs` integration)
+    — same unpopulated-subgraph scaffolding family.
+
+**Inventory (84 arms / 40 files), grouped by crate.**
+
+*`benten-caps` — 2*
+- `crates/benten-caps/tests/toctou_iteration.rs` (2)
+
+*`benten-engine` — 28*
+- `crates/benten-engine/tests/atriums_no_new_primitives.rs` (1)
+- `crates/benten-engine/tests/cap_recheck_in_flight.rs` (1)
+- `crates/benten-engine/tests/emit_broadcast_replicas.rs` (1)
+- `crates/benten-engine/tests/g21_t3_section_d_pins.rs` (1)
+- `crates/benten-engine/tests/hlc_attribution_frame.rs` (1)
+- `crates/benten-engine/tests/integration/compromises_regression.rs` (1)
+- `crates/benten-engine/tests/integration/version_current.rs` (2)
+- `crates/benten-engine/tests/inv_13_dispatch.rs` (2)
+- `crates/benten-engine/tests/manifest_temporal_binding.rs` (4)
+- `crates/benten-engine/tests/no_unauthorized_dyn_error.rs` (1)
+- `crates/benten-engine/tests/prop_no_state_leak.rs` (1)
+- `crates/benten-engine/tests/subscribe_cap_recheck.rs` (5)
+- `crates/benten-engine/tests/subscribe_cap_recheck_concurrency.rs` (1)
+- `crates/benten-engine/tests/subscribe_device_revoke.rs` (1)
+- `crates/benten-engine/tests/ucan_replay_audience.rs` (1)
+- `crates/benten-engine/tests/wait_resume_cross_process.rs` (3)
+- `crates/benten-engine/tests/wait_resume_policy.rs` (1)
+
+*`benten-eval` — 3*
+- `crates/benten-eval/tests/requires_enforcement.rs` (2)
+- `crates/benten-eval/tests/requires_property_call_time_check.rs` (1)
+
+*`benten-ivm` — 5*
+- `crates/benten-ivm/tests/algorithm_b_cross_replica.rs` (1)
+- `crates/benten-ivm/tests/view1_capability_grants.rs` (1)
+- `crates/benten-ivm/tests/view2_event_dispatch.rs` (1)
+- `crates/benten-ivm/tests/view3_content_listing.rs` (1)
+- `crates/benten-ivm/tests/view5_version_current.rs` (1)
+
+*`benten-sync` — 16*
+- `crates/benten-sync/tests/atrium_revoke_order.rs` (4)
+- `crates/benten-sync/tests/graph_encoded_state.rs` (3)
+- `crates/benten-sync/tests/host_atrium_publish_view_result_caps.rs` (5)
+- `crates/benten-sync/tests/rate_limit_consumption.rs` (1)
+- `crates/benten-sync/tests/transport_loopback.rs` (2)
+- `crates/benten-sync/tests/wire_envelope.rs` (1)
+
+*workspace-level test packages — 30*
+- `tests/integration/atrium_browser_thin_client.rs` (2)
+- `tests/integration/atrium_three_peer.rs` (1)
+- `tests/integration/atrium_two_process.rs` (1)
+- `tests/integration_browser_thin_client/atrium_browser_thin_client_g18_a_indexeddb.rs` (2)
+- `tests/phase_3_workspace/cargo_vet_policy_phase_3.rs` (6)
+- `tests/phase_3_workspace/doc_drift_security_posture.rs` (1)
+- `tests/phase_3_workspace/paper_prototype_revalidation.rs` (2)
+- `tests/phase_3_workspace/security_posture_compromises.rs` (10)
+- `tests/phase_3_workspace/thin_client_protocol.rs` (5)
+
+**Acceptance criteria.** (a) The two scaffolding root causes are the highest-leverage
+closures and unblock 5 arms between them: populate
+`benten_engine::testing::iterate_write_handler` so it actually emits `max` WRITE
+steps, and populate the `requires`-enforcement handlers. Neither is blocked on
+anything. (b) The 4 IVM arms close when — and only when — a rebuild-from-event-log
+seam exists; until then their ignore reason is accurate and should be left alone.
+(c) The 2 transport arms stay ignored until CI grows a relay/NAT fixture. (d) The 71
+inert placeholders must each either receive a body or be deleted **against located
+green replacement coverage**, one at a time — a bulk delete would repeat the
+false-closure shape this row exists to prevent. (e) **Do not lower the ratchet
+ceiling to make room.** The ceiling exists to stop growth; if an arm is genuinely
+new work it needs its own row, not a slot in this one.
+
+**If this row's phase closes with these still open, mint the successor rather than
+re-pointing at this one.** That instruction is the entire lesson of §4.29 and it is
+repeated here deliberately. Estimated scope: ~400-700 LOC.
 
 ---
 

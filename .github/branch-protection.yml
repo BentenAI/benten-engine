@@ -139,8 +139,12 @@ protection:
   #   wasm-checks.yml:
   #     - "T8 benten-napi wasm32-unknown-unknown"
   #     - "benten-sync refuses to compile for wasm32-unknown-unknown"
-  #       The latter is the 3-rung baked-in #17 defense rung 1
-  #       (compile-time refusal of sync code in browser bundle).
+  #     - "benten-membership-set refuses to compile for wasm32-unknown-unknown"
+  #       The latter two are the AT-BUILD-TIME rung (rung 3) of the baked-in #17
+  #       defense — rung 1 is the lib.rs `compile_error!`, rung 2 the manifest.
+  #       Each runs a structural arm plus a dependency-satisfied probe arm that
+  #       enables getrandom's js/wasm_js features, which is what a thin-client
+  #       bundler would do; the probe arm is the one a deleted gate falsifies.
   #
   #   wasm-runtime.yml:
   #     - "wasm32-wasip1 build (benten-core, benten-graph)"

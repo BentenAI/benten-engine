@@ -57,24 +57,44 @@ jobs:
         run: cargo check --target wasm32-unknown-unknown -p benten-napi --features benten-engine/browser-backend --no-default-features
 
   # ---------------------------------------------------------------------------
-  # Phase-3 R6 fix-pass Wave B (closes ds-r6-3 MAJOR per
-  # `.addl/phase-3/r6-r1-distributed-systems.json`): at-build-time
-  # assertion that `benten-sync` REFUSES to compile for
-  # wasm32-unknown-unknown per CLAUDE.md baked-in #17.
+  # `benten-sync` REFUSES to compile for wasm32-unknown-unknown per CLAUDE.md
+  # baked-in #17. Originally Phase-3 R6 Wave B (ds-r6-3); rebuilt at R6 round #1
+  # W2 after CE-07 proved the single-arm shape unfalsifiable.
   #
-  # The source-of-truth manifest grep at
-  # `crates/benten-sync/tests/wasm32_excluded.rs` is defense-in-depth
-  # rung 1 (declarative — checks Cargo.toml + lib.rs strings). This
-  # CI cell is rung 2: the build itself MUST fail with the
-  # `compile_error!` macro firing. A regression that removed the
-  # compile_error! while keeping the cfg-gate (or vice versa) would
-  # silently regress one rung; both rungs together close the
-  # defense-in-depth.
+  # WHAT WE ACTUALLY MEASURED (2026-07-29, base df0c8287 — every claim below was
+  # run, not reasoned):
+  #
+  #   * `cargo check --target wasm32-unknown-unknown -p benten-sync` dies inside
+  #     `getrandom` (0.2.17 wants the `js` feature; 0.4.2 wants `wasm_js`)
+  #     BEFORE rustc is ever invoked on `crates/benten-sync/src/lib.rs`.
+  #   * DELETING our `compile_error!` leaves that output byte-identical. So the
+  #     plain build is blind to the gate — it can never fail on its absence.
+  #   * `--keep-going` does NOT help: it builds both getrandom versions, both
+  #     fail, and benten-sync (a DEPENDENT of a failed unit) is never reached.
+  #   * With getrandom's js/wasm_js features on, the ENTIRE rest of the chain
+  #     (benten-crypto-suite, benten-id, libcrux-ml-kem, ml-dsa, slh-dsa,
+  #     ed25519/x25519-dalek, argon2, chacha20poly1305, blake3) compiles for
+  #     wasm32 cleanly, and OUR `compile_error!` is the proximate error.
+  #   * With getrandom satisfied AND our `compile_error!` deleted, benten-sync
+  #     COMPILES for wasm32-unknown-unknown, exit 0.
+  #
+  # The last two points are the load-bearing ones. The cfg-gated
+  # `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]` table does not
+  # block a wasm32 build — it merely drops iroh/tokio/loro, leaving a crate
+  # that builds fine. So the lib.rs `compile_error!` is not defense-in-depth
+  # behind a structural wall; it is the ONLY thing standing between a
+  # thin-client bundler and a wasm32 build of benten-sync. And enabling
+  # `getrandom/js` is precisely what such a bundler does.
+  #
+  # Hence two arms. Arm (a) is the structural observation and asserts NOTHING
+  # about our gate. Arm (b) is the falsifiable one.
   # ---------------------------------------------------------------------------
   benten-sync-refuses-wasm32:
     name: benten-sync refuses to compile for wasm32-unknown-unknown
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # 25 not 10: arm (b) cold-compiles the PQ crypto chain for wasm32 outside
+    # the rust-cache'd ./target dir.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
@@ -86,75 +106,118 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
-      - name: cargo check benten-sync for wasm32 MUST FAIL with compile_error!
-        # Per CLAUDE.md baked-in #17 (full peer vs thin compute surface):
-        # benten-sync (the iroh + Loro Atrium sync crate) is FULL-PEER-ONLY
-        # and MUST NOT compile for wasm32-unknown-unknown. The
-        # `compile_error!` macro at `crates/benten-sync/src/lib.rs` fires
-        # immediately on any wasm32 build attempt with a clear error
-        # citing the architectural commitment.
+      - name: ARM (a) — benten-sync must not build for wasm32 (structural)
+        # HONEST SCOPE: proves only that benten-sync is un-buildable for wasm32
+        # as THIS workspace resolves it. It does not, and is not written to,
+        # establish that our gate is the reason — today the reason is getrandom.
         #
-        # We invert the exit code: cargo check MUST fail, AND its
-        # stderr MUST mention `compile_error!` / `baked-in #17` so we
-        # know the failure is the architectural gate firing (not some
-        # unrelated dep-graph break).
-        #
-        # Closes ds-r6-3 MAJOR per phase-3-backlog §10 v1-window.
+        # NO MUTATION MAKES THIS ARM FAIL. That is stated deliberately rather
+        # than papered over: arm (a) is an observation, arm (b) is the test.
+        # Grepping this arm's output for `compile_error!` is exactly the CE-07
+        # defect (getrandom's own macro satisfies that token), so we do not.
         run: |
           set -uo pipefail
           if output=$(cargo check --target wasm32-unknown-unknown -p benten-sync 2>&1); then
-            echo "::error::benten-sync MUST NOT compile for wasm32-unknown-unknown per CLAUDE.md baked-in #17 — but cargo check succeeded! The compile_error! gate at crates/benten-sync/src/lib.rs has been removed or bypassed."
+            echo "::error::benten-sync BUILT for wasm32-unknown-unknown. Per CLAUDE.md baked-in #17 it must not. Either the compile_error! at crates/benten-sync/src/lib.rs is gone, or a dependency that used to block wasm32 stopped doing so."
             echo "$output"
             exit 1
           fi
-          # Verify the failure was the architectural gate, not something else.
-          #
-          # CE-07 (R6 round #1). The alternation this replaced —
-          # `-E "(compile_error!|baked-in #17|target_arch)"` — certified an
-          # UNRELATED failure as this job's own gate. Delete the
-          # `compile_error!` at crates/benten-sync/src/lib.rs and the wasm32
-          # build still exits 101, on `getrandom`, whose own `compile_error!`
-          # token satisfies the pattern; the job then printed PASSED while the
-          # thing it guards was gone. `target_arch` is even weaker — it appears
-          # in ordinary cfg diagnostics all over the dep graph.
-          #
-          # Two literal, Benten-specific conditions replace it: the marker
-          # string from the macro body AND the source path rustc attributes the
-          # error to. No dependency can satisfy both.
-          #
-          # MUTATION THAT MUST MAKE THIS FAIL: delete the `compile_error!`
-          # block at crates/benten-sync/src/lib.rs:155. The build still fails
-          # (on getrandom), but neither the marker nor the path appears, so
-          # this step exits 1 instead of printing PASSED.
+          echo "PASSED (arm a): benten-sync does not build for wasm32-unknown-unknown in this workspace's resolution. This arm does NOT establish that our own gate is the cause — arm (b) does."
+
+      - name: ARM (b) — with the dep chain satisfied, baked-in #17 is what refuses
+        # THE THREAT THIS MODELS: a thin-client bundler wants benten-sync in a
+        # wasm bundle, hits getrandom, and does the documented thing — turns on
+        # `getrandom/js` (0.2) and `getrandom/wasm_js` (0.4). Every structural
+        # excuse then evaporates and our `compile_error!` is the sole defense.
+        # This arm reproduces that exact situation in a throwaway probe package
+        # and asserts the gate still fires, attributed to our own source file.
+        #
+        # The probe is seeded with the workspace Cargo.lock so every transitive
+        # crate resolves to the SAME version cargo-deny / cargo-audit vetted;
+        # verified locally that seeding preserves the pins (libcrux-ml-kem
+        # =0.0.10, ml-dsa 0.1.0). It lives in RUNNER_TEMP and is never a
+        # workspace member — adding it to `members` would unify `getrandom/js`
+        # into every native workspace build and drag wasm-bindgen/js-sys into
+        # Cargo.lock, which is not a change to make against a frozen interface.
+        #
+        # MUTATION THAT MUST MAKE THIS FAIL: delete the `compile_error!` block
+        # at crates/benten-sync/src/lib.rs:154-164. VERIFIED 2026-07-29 — the
+        # probe then compiles to exit 0, the success branch below fires, red.
+        # Changing the `#[cfg(target_arch = "wasm32")]` predicate, or emptying
+        # the macro's message, fails the marker grep instead. Also verified.
+        run: |
+          set -uo pipefail
+          PROBE="$RUNNER_TEMP/wasm-gate-probe-sync"
+          rm -rf "$PROBE"; mkdir -p "$PROBE/src"; : > "$PROBE/src/lib.rs"
+          cp "$GITHUB_WORKSPACE/Cargo.lock" "$PROBE/Cargo.lock"
+          cat > "$PROBE/Cargo.toml" <<TOML
+          [workspace]
+
+          [package]
+          name = "wasm-gate-probe-sync"
+          version = "0.0.0"
+          edition = "2021"
+          publish = false
+
+          [dependencies]
+          benten-sync = { path = "$GITHUB_WORKSPACE/crates/benten-sync" }
+          getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
+          getrandom_04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
+          TOML
+          cd "$PROBE"
+          if output=$(cargo check --target wasm32-unknown-unknown 2>&1); then
+            echo "::error::benten-sync COMPILED for wasm32-unknown-unknown once getrandom's js/wasm_js features were enabled. The compile_error! gate at crates/benten-sync/src/lib.rs is gone or no longer fires, and nothing else stops a thin-client bundler from shipping this crate to a browser. CLAUDE.md baked-in #17 is unenforced."
+            echo "$output"
+            exit 1
+          fi
           if ! echo "$output" | grep -qF 'baked-in #17'; then
-            echo "::error::benten-sync wasm32 build failed BUT the output does not carry the 'baked-in #17' marker from the compile_error! at crates/benten-sync/src/lib.rs. The gate has been removed, or the build broke earlier for an unrelated reason. Got:"
+            echo "::error::The probe build failed, but not on our gate — the 'baked-in #17' marker from crates/benten-sync/src/lib.rs is absent. Either the gate was removed (and something unrelated happens to be failing), or an upstream dep broke for wasm32 and this arm can no longer see our gate. Do NOT silence this by loosening the grep; that is the CE-07 defect. Got:"
             echo "$output"
             exit 1
           fi
           if ! echo "$output" | grep -qF 'crates/benten-sync/src/lib.rs'; then
-            echo "::error::benten-sync wasm32 build carried the 'baked-in #17' marker but rustc did not attribute it to crates/benten-sync/src/lib.rs — so the marker came from somewhere else. Got:"
+            echo "::error::The 'baked-in #17' marker appeared but rustc did not attribute it to crates/benten-sync/src/lib.rs, so it came from some other crate's gate. Got:"
             echo "$output"
             exit 1
           fi
-          echo "PASSED: benten-sync correctly refuses to compile for wasm32-unknown-unknown via compile_error! gate per CLAUDE.md baked-in #17 (defense-in-depth rung 2)."
+          echo "PASSED (arm b): with getrandom satisfied, benten-sync still refuses to compile for wasm32-unknown-unknown, and the diagnostic is our own baked-in #17 compile_error! at crates/benten-sync/src/lib.rs."
 
   # ---------------------------------------------------------------------------
-  # phase-4-meta-core R6-R2 fix wave (closes F-09 MAJOR): at-build-time
-  # assertion that `benten-membership-set` REFUSES to compile for
-  # wasm32-unknown-unknown per CLAUDE.md baked-in #17. Mirrors the
-  # `benten-sync-refuses-wasm32` cell above.
+  # `benten-membership-set` REFUSES to compile for wasm32-unknown-unknown per
+  # CLAUDE.md baked-in #17. Originally the phase-4-meta-core R6-R2 F-09 cell;
+  # rebuilt at R6 round #1 W2 alongside CE-08.
   #
-  # The membership-set keying primitive's B-1 dep set includes the native-only
-  # `benten-sync` (iroh + Loro + MST), so it is itself full-peer-only. The
-  # source-of-truth manifest grep at
-  # `crates/benten-membership-set/tests/wasm32_excluded.rs` is defense-in-depth
-  # rung 1 (declarative — checks Cargo.toml + lib.rs strings). This CI cell is
-  # rung 3: the build itself MUST fail with the `compile_error!` macro firing.
+  # READ THIS BEFORE EDITING — the ordering here is the opposite of what the
+  # crate's own source comment used to claim, and it is measured, not argued
+  # (2026-07-29, base df0c8287):
+  #
+  #   `benten-membership-set` declares `benten-sync` in its PLAIN
+  #   `[dependencies]` table, un-cfg-gated. cargo must therefore build
+  #   benten-sync FIRST. benten-sync's own `compile_error!` fires, the build
+  #   stops, and rustc is never invoked on
+  #   `crates/benten-membership-set/src/lib.rs` at all.
+  #
+  # So this crate's OWN gate is unreachable from any whole-crate wasm32 build,
+  # today and under every dependency-satisfied variant we tried. It is not
+  # "a clearer diagnostic that fires first" — it never fires. That makes it
+  # genuinely redundant while benten-sync's gate stands, and the reason to keep
+  # it is narrow but real: it is the defense that survives benten-sync one day
+  # gaining a wasm32 thin-client shim and dropping its own gate.
+  #
+  # Three arms, because no single one covers that:
+  #   (a) structural — the whole-crate build fails today. Asserts nothing about
+  #       either gate; no mutation makes it fail.
+  #   (b) dependency-satisfied — with getrandom's js/wasm_js on, the build STILL
+  #       fails on `baked-in #17`, attributed to crates/benten-sync/src/lib.rs.
+  #       Falsified by deleting BENTEN-SYNC's gate, not this crate's.
+  #   (c) this crate's OWN gate, isolated — the only arm that can see it.
   # ---------------------------------------------------------------------------
   membership-set-refuses-wasm32:
     name: benten-membership-set refuses to compile for wasm32-unknown-unknown
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # 25 not 10: arm (b) cold-compiles the PQ crypto chain for wasm32 outside
+    # the rust-cache'd ./target dir.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
@@ -166,43 +229,106 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
-      - name: cargo build benten-membership-set for wasm32 MUST FAIL with compile_error!
-        # Per CLAUDE.md baked-in #17 (full peer vs thin compute surface):
-        # benten-membership-set (the MembershipSet keying primitive, whose B-1
-        # dep set includes the native-only benten-sync) is FULL-PEER-ONLY and
-        # MUST NOT compile for wasm32-unknown-unknown. The `compile_error!`
-        # macro at `crates/benten-membership-set/src/lib.rs` fires immediately
-        # on any wasm32 build attempt with a clear error citing the
-        # architectural commitment.
-        #
-        # We invert the exit code: cargo build MUST fail, AND its stderr MUST
-        # mention `compile_error!` / `baked-in #17` so we know the failure is
-        # the architectural gate firing (not some unrelated dep-graph break).
-        #
-        # Closes F-09 MAJOR per phase-4-meta-core R6-R2 fix wave.
+      - name: ARM (a) — benten-membership-set must not build for wasm32 (structural)
+        # HONEST SCOPE: as with the benten-sync cell, this arm dies inside
+        # getrandom long before any Benten gate is reached, so NO MUTATION MAKES
+        # IT FAIL. It is retained as an observation and deliberately greps
+        # nothing — grepping its output for `compile_error!` is the CE-08 defect.
         run: |
           set -uo pipefail
           if output=$(cargo build --target wasm32-unknown-unknown -p benten-membership-set 2>&1); then
-            echo "::error::benten-membership-set MUST NOT compile for wasm32-unknown-unknown per CLAUDE.md baked-in #17 — but cargo build succeeded! The compile_error! gate at crates/benten-membership-set/src/lib.rs has been removed or bypassed."
+            echo "::error::benten-membership-set BUILT for wasm32-unknown-unknown. Per CLAUDE.md baked-in #17 it must not."
             echo "$output"
             exit 1
           fi
-          # Verify the failure was the architectural gate, not something else.
-          #
-          # CE-08 — the same defect as CE-07 one cell up, and it must be fixed
-          # in both places or the weaker cell becomes the one that matters.
-          # See the benten-sync cell for the full rationale.
-          #
-          # MUTATION THAT MUST MAKE THIS FAIL: delete the `compile_error!`
-          # block at crates/benten-membership-set/src/lib.rs:110.
+          echo "PASSED (arm a): benten-membership-set does not build for wasm32-unknown-unknown in this workspace's resolution. This arm does NOT establish which gate is the cause — arms (b) and (c) do."
+
+      - name: ARM (b) — with the dep chain satisfied, baked-in #17 still refuses
+        # Models the thin-client bundler that enables getrandom/js to force
+        # these crates into a wasm bundle. Asserts the refusal survives it.
+        #
+        # The path asserted below is crates/benten-SYNC/src/lib.rs, on purpose.
+        # That is genuinely where rustc attributes the error, because benten-sync
+        # is an un-cfg-gated dependency of this crate and must build first. We
+        # assert what actually happens rather than what we would prefer to be
+        # true; asserting this crate's own path here would be a check that can
+        # never pass. Arm (c) covers this crate's own gate.
+        #
+        # MUTATION THAT MUST MAKE THIS FAIL: delete the `compile_error!` block at
+        # crates/benten-sync/src/lib.rs:154-164 — benten-sync then compiles, and
+        # this crate's own gate fires instead, so the sync-path grep fails.
+        # VERIFIED 2026-07-29 that the un-mutated probe reports exactly one
+        # crates/benten-sync/src/lib.rs hit and ZERO
+        # crates/benten-membership-set/src/lib.rs hits.
+        run: |
+          set -uo pipefail
+          PROBE="$RUNNER_TEMP/wasm-gate-probe-ms"
+          rm -rf "$PROBE"; mkdir -p "$PROBE/src"; : > "$PROBE/src/lib.rs"
+          cp "$GITHUB_WORKSPACE/Cargo.lock" "$PROBE/Cargo.lock"
+          cat > "$PROBE/Cargo.toml" <<TOML
+          [workspace]
+
+          [package]
+          name = "wasm-gate-probe-ms"
+          version = "0.0.0"
+          edition = "2021"
+          publish = false
+
+          [dependencies]
+          benten-membership-set = { path = "$GITHUB_WORKSPACE/crates/benten-membership-set" }
+          getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
+          getrandom_04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
+          TOML
+          cd "$PROBE"
+          if output=$(cargo check --target wasm32-unknown-unknown 2>&1); then
+            echo "::error::benten-membership-set COMPILED for wasm32-unknown-unknown once getrandom's js/wasm_js features were enabled. BOTH the benten-sync gate and this crate's own gate are gone or no longer fire. CLAUDE.md baked-in #17 is unenforced."
+            echo "$output"
+            exit 1
+          fi
           if ! echo "$output" | grep -qF 'baked-in #17'; then
-            echo "::error::benten-membership-set wasm32 build failed BUT the output does not carry the 'baked-in #17' marker from the compile_error! at crates/benten-membership-set/src/lib.rs. The gate has been removed, or the build broke earlier for an unrelated reason. Got:"
+            echo "::error::The probe build failed, but not on a Benten gate — no 'baked-in #17' marker. Do NOT loosen this grep to make it green; that is the CE-08 defect. Got:"
             echo "$output"
             exit 1
           fi
-          if ! echo "$output" | grep -qF 'crates/benten-membership-set/src/lib.rs'; then
-            echo "::error::benten-membership-set wasm32 build carried the 'baked-in #17' marker but rustc did not attribute it to crates/benten-membership-set/src/lib.rs — so the marker came from somewhere else. Got:"
+          if ! echo "$output" | grep -qF 'crates/benten-sync/src/lib.rs'; then
+            echo "::error::'baked-in #17' fired but NOT from crates/benten-sync/src/lib.rs. Expected: benten-sync is an un-cfg-gated dependency of benten-membership-set, so it must build first and its gate must be the proximate error. If the benten-sync gate was intentionally removed, this arm and the benten-sync cell both need rewriting together. Got:"
             echo "$output"
             exit 1
           fi
-          echo "PASSED: benten-membership-set correctly refuses to compile for wasm32-unknown-unknown via compile_error! gate per CLAUDE.md baked-in #17 (defense-in-depth rung 3)."
+          echo "PASSED (arm b): with getrandom satisfied, benten-membership-set still cannot reach wasm32 — its un-cfg-gated benten-sync dependency refuses first, via baked-in #17."
+
+      - name: ARM (c) — this crate's OWN baked-in #17 gate fires for wasm32
+        # The only arm that can observe this crate's own `compile_error!`, since
+        # arms (a) and (b) both stop at an upstream crate. rustc is invoked
+        # directly on the one source file with NO --extern flags, so the crate's
+        # dependency graph is irrelevant and nothing upstream can mask or supply
+        # the marker.
+        #
+        # This is NOT a source-grep. rustc EVALUATES `#[cfg(target_arch =
+        # "wasm32")]` against the real target during macro expansion; rewriting
+        # the predicate to another arch, or wrapping it in `#[cfg(any())]`, kills
+        # the marker where a grep for the token would still pass.
+        #
+        # WHAT IT DOES NOT PROVE, stated plainly: not that the crate as a whole
+        # is un-buildable (arms a/b), and not that the gate is ever REACHED in a
+        # real build — it is not, per the header above.
+        #
+        # Exit status is deliberately NOT asserted: with no --extern, rustc also
+        # emits ~48 unresolved-crate errors, so it exits non-zero either way. The
+        # marker grep is the entire assertion.
+        #
+        # MUTATION THAT MUST MAKE THIS FAIL: delete the `compile_error!` block at
+        # crates/benten-membership-set/src/lib.rs:109-115. VERIFIED 2026-07-29 —
+        # marker hits go 2 -> 0 while the exit status stays 1, which is exactly
+        # why the exit status is not part of the assertion.
+        run: |
+          set -uo pipefail
+          output=$(rustc --target wasm32-unknown-unknown --edition 2024 \
+            --crate-type lib --emit=metadata -o /dev/null \
+            crates/benten-membership-set/src/lib.rs 2>&1) || true
+          if ! echo "$output" | grep -qF 'benten-membership-set is native-only per CLAUDE.md baked-in #17'; then
+            echo "::error::crates/benten-membership-set/src/lib.rs did not emit its own baked-in #17 compile_error! when compiled for wasm32-unknown-unknown. The gate has been deleted, or its cfg predicate no longer matches wasm32. Got:"
+            echo "$output"
+            exit 1
+          fi
+          echo "PASSED (arm c): this crate's own compile_error! gate is present and its cfg predicate fires for wasm32-unknown-unknown."

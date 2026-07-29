@@ -86,10 +86,13 @@ blake3 = { workspace = true }
 # below. The top-level [dependencies] table above is wasm-safe (no
 # iroh / tokio entries); compilation for wasm32-unknown-unknown still
 # fails fast via the lib.rs `compile_error!` macro per CLAUDE.md
-# baked-in #17, but the cfg-gated tables here ALSO defend against the
-# scenario where a downstream consumer attempts to skip benten-sync's
-# top-level lib.rs gate and pull a single module directly: the deps
-# themselves are not even resolvable on wasm32 builds.
+# baked-in #17. The cfg-gated tables here do NOT add a second line of
+# defense — corrected 2026-07-29 after measuring it. On wasm32 they simply
+# omit iroh/tokio/loro, which is what leaves a crate that compiles: with the
+# lib.rs `compile_error!` deleted and getrandom's js/wasm_js features on,
+# this crate builds for wasm32-unknown-unknown at exit 0. The macro is the
+# only refusal. Treat these tables as manifest hygiene (keeping the native
+# chain out of a wasm resolve), not as a gate.
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # iroh: P2P QUIC transport with holepunch + relay-default per
