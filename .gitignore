@@ -121,6 +121,12 @@ docs/future/*
 !docs/future/phase-4-backlog.md
 !docs/future/kith-decentralized-identity.md
 !docs/future/v1-gate-refactor.md
+# Adopter-driven engine findings. Tracked because it is read BY reviewers and
+# review councils, and because its own §1 banner forbids it being used as a
+# deferral destination — a rule nobody can check inside a gitignored file.
+# F-066 is the precedent: 93 findings were written off as lost because agents
+# cannot read gitignored paths and inferred does-not-exist from cannot-see.
+!docs/future/engine-fit-and-gaps.md
 # F-full doc-wave (R5 TIER-3): the compute-marketplace deferral destination
 # is cited from in-tree code (F-FREEZE-1 / F-DISC-2 doc-coupling tests assert
 # it exists; V1-FROZEN Rows D-28/D-29 name it) — track it (HARD RULE clause-b).
