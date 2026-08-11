@@ -104,7 +104,11 @@ fn collect_rs(dir: &Path, out: &mut Vec<PathBuf>) {
             if !SKIP_DIRS.contains(&name.as_str()) {
                 collect_rs(&path, out);
             }
-        } else if name.ends_with(".rs") && name != SELF_FILE {
+        } else if std::path::Path::new(&name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
+            && name != SELF_FILE
+        {
             out.push(path);
         }
     }
