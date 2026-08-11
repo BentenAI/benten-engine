@@ -18,7 +18,7 @@
 //! nothing derived from attacker-declared lengths.
 //!
 //! The limits mirror the JSON-side limits already enforced in
-//! [`crate::node`] (`JSON_MAX_MAP_KEYS` / `JSON_MAX_BYTES` /
+//! `crate::node` (`JSON_MAX_MAP_KEYS` / `JSON_MAX_BYTES` /
 //! `JSON_MAX_TOTAL_BYTES`) so the two boundary shapes —
 //! `serde_json::Value` in, DAG-CBOR bytes in — agree on what is
 //! acceptable. **Depth is the one place they do not agree**, and the
@@ -67,7 +67,7 @@ use benten_errors::ErrorCode;
 /// first — i.e. a defense that looks present and is not. Deriving it also
 /// means the two cannot drift.
 ///
-/// Note the asymmetry with `JSON_MAX_DEPTH` (128) in [`crate::node`]: that
+/// Note the asymmetry with `JSON_MAX_DEPTH` (128) in `crate::node`: that
 /// path builds a `Value` from an already-materialized `serde_json::Value`
 /// and never runs the CBOR decoder, so 128 is reachable there. See
 /// `NOTES.md` — a `Value` accepted at depth 65..128 by the JSON path
@@ -76,14 +76,14 @@ pub const NAPI_MAX_DEPTH: usize = benten_core::MAX_VALUE_DECODE_DEPTH;
 
 /// Maximum key count of any single `Value::Map`.
 ///
-/// Mirrors `JSON_MAX_MAP_KEYS` in [`crate::node`] and the `map_size`
+/// Mirrors `JSON_MAX_MAP_KEYS` in `crate::node` and the `map_size`
 /// default documented in `docs/ERROR-CATALOG.md`.
 pub const NAPI_MAX_MAP_KEYS: u64 = 10_000;
 
 /// Maximum element count of any single `Value::List`.
 ///
 /// Matches the `list_size` default documented in `docs/ERROR-CATALOG.md`.
-/// The JSON path in [`crate::node`] has no equivalent cap — arrays there
+/// The JSON path in `crate::node` has no equivalent cap — arrays there
 /// are bounded only by the aggregate-byte budget. Noted as an asymmetry
 /// rather than silently changed: widening the JSON path is a behaviour
 /// change to a shipped surface, not part of B8.
@@ -96,13 +96,13 @@ pub const NAPI_MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 /// Maximum length of any single `Value::Text`.
 ///
-/// Mirrors `JSON_MAX_BYTES` in [`crate::node`] and the `text_len` default
+/// Mirrors `JSON_MAX_BYTES` in `crate::node` and the `text_len` default
 /// documented in `docs/ERROR-CATALOG.md`.
 pub const NAPI_MAX_TEXT_BYTES: u64 = 1024 * 1024;
 
 /// Ceiling on the raw payload handed to the boundary.
 ///
-/// Named to mirror `JSON_MAX_TOTAL_BYTES` in [`crate::node`], but it is
+/// Named to mirror `JSON_MAX_TOTAL_BYTES` in `crate::node`, but it is
 /// enforced differently and deliberately so. The JSON path threads a
 /// running `ByteBudget` across the tree because a `serde_json::Value` is
 /// already materialized when it arrives — its leaf bytes are bounded by
@@ -469,7 +469,7 @@ pub fn decode_value_bounded(bytes: &[u8]) -> Result<Value, NapiInputError> {
 /// Parse a multibase base32 CID string (as raw UTF-8 bytes, the shape the
 /// JS boundary hands over) into a [`benten_core::Cid`].
 ///
-/// Delegates the actual parse to [`benten_core::Cid::from_str`] — there is
+/// Delegates the actual parse to `benten_core::Cid::from_str` — there is
 /// exactly one CID parser and this is not a second one — and re-classifies
 /// its typed failures (`E_CID_PARSE` / `E_CID_UNSUPPORTED_CODEC` /
 /// `E_CID_UNSUPPORTED_HASH`) as `E_INPUT_LIMIT`, which is the code the napi
