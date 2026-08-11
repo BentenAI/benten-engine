@@ -95,7 +95,20 @@ Legend — **Shape:** engine / application. **Freeze:** does the v1-beta tag for
 
 ### 3.1 Composition does not compose — relative addressing
 
-**Shape:** engine · **Freeze:** partly — see below · **Status:** OPEN, under investigation
+**Shape:** engine · **Freeze:** narrowed to 4 small pre-tag items · **Status:** ANSWERED —
+design at **`docs/future/binding-grammar.md`** (R0-input; build gets its own ADDL pipeline)
+
+**Resolution summary.** Investigation found not three but **four** partial implementations of
+handler-input binding — the crud specialization, `EvalContext`, the frozen-but-empty wire slot,
+and a fourth nobody had connected: **STREAM already ships a live sigil resolver**
+(`engine_stream.rs:1075` — `$input` and `$input.<field>` resolved against the caller's input),
+and `DSL-SPECIFICATION.md:88` already teaches that convention as the normal way to author
+handlers. The design therefore *generalizes* rather than invents: promote STREAM's grammar to
+the walk, with a boundedness carve (data properties bind; graph-shape/budget properties stay
+static, preserving Inv-8 and install-time consent) and a position-scoped registration-time
+reservation of the `$` namespace on operation nodes. Only the reservation + disclosures are
+pre-tag; the mechanism is post-tag additive. Details, security notes, and the
+considered-and-declined list are in the design doc.
 
 Built-in `crud()` handlers receive their caller's data; user-authored handlers do not. Same
 `engine.call`, same evaluator, one `if` statement apart (`engine.rs:3966-3971`):
@@ -300,7 +313,7 @@ v1-beta without penalty.
 
 | Item | Why now | Status |
 |---|---|---|
-| **Relative-addressing surface shape** (§3.1) — does an op node need a *frozen* way to express "traverse edge E from my anchor"? | If it needs anything on a frozen surface, that is foreclosed. If it is walker-internal plus a property convention, it is free forever. | **UNRESOLVED — the open freeze question** |
+| **Binding-grammar reservation + disclosures** (§3.1) — resolved form of the relative-addressing question | The mechanism is walker-internal + a property convention = free forever. What the tag WOULD foreclose is the clean reservation: (a) freeze-record disclosure of the STREAM sigil grammar (an interpreted mini-language in a frozen wire position, currently named nowhere) + `context_binding_snapshots` intended semantics; (b) position-scoped registration-time `$`-reservation on op-node properties (+ ErrorCode mint); (c) the `InfiniteEmptyProducer` test-driven semantic at `engine_stream.rs:974`, decided deliberately; (d) the stale "first property" resolver comment. Design: `docs/future/binding-grammar.md` §5. | **RESOLVED — 4 small items, owed** |
 | **`Value` inventory clause in the freeze record** (§3.2) | The freeze record does not name the property type of every Node and Edge. Freezing a type system without stating it is the rule-14 shape. Must land with its receiving row in the same commit. The same clause states the decode-bound POSTURE: `MAX_DECODE_BYTES` and the META #629 cluster are policy tripwires, test-pinned not wire-frozen, raisable later with re-derived DoS reasoning — the D-94 Argon2id lesson, so no adopter reads 16 MiB as a wire limit they may not touch. | owed |
 | **`DSL-SPECIFICATION.md:60-67`** (§3.1) — normative claims with zero production writers | A FALSE-RECORD that freezes alongside the API. | owed |
 | **`ENGINE-SPEC` config claim** (§3.7) | Same shape. | owed, verification first |
