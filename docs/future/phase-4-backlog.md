@@ -1988,4 +1988,41 @@ those ride the pre-tag fix waves and must land before `phase-4-meta-core-close`.
 
 ---
 
+### §4.171 IVM aggregation — the abelian fold kernel (the post-tag build)
+
+**This row is the live receiving destination for the IVM aggregation build.** Design of
+record: `docs/future/ivm-aggregation.md` (R0-INPUT — per `feedback_addl_pipeline_full_observance`
+the build runs its own R0→R1 pipeline with that document as input). Origin:
+`docs/future/engine-fit-and-gaps.md` §3.3; decision-log D-106.
+
+**What lands here, in order:**
+1. The fold kernel in benten-ivm under `Strategy::B` — Sum (i128 over `Value::Int`) + Count,
+   optionally grouped; per-view admitted-CID set; `Deleted` handled by subtraction from the
+   event-carried pre-image; commutative-only admission (order-sensitive folds refused typed).
+2. **Engine-side backfill-on-register** (label-index scan → synthesize into the view → attach
+   live with a `tx_id` watermark) + the typed not-backfilled refusal state. Without this a
+   balance view over an existing ledger returns 0, confidently.
+3. **The fail-closed error contract**: the fold marks itself stale before returning any error
+   (the subscriber's non-budget arm logs and leaves views Fresh — `subscriber.rs:307-313`).
+4. Declaration surface: additive `aggregate` field on `UserViewSpecBuilder` +
+   `ViewResult::Aggregates` + engine projection as synthetic `system:ivm:AggregateRow` Nodes
+   with `{group, value: Text(decimal-string), count, skipped}`; TS-side unknown-field
+   rejection in `validateUserViewSpec` (ships in the same change — an old package otherwise
+   silently strips the aggregate and registers a plain listing view) + retire the
+   `types.ts:1063-1065` `project?` FALSE-RECORD; ~3 ErrorCode mints with full mirrors.
+5. Typed-reject registration guards: version-chained input labels (CURRENT moves emit no
+   event); float folds; group keys that are not `Value::Text`; scale mismatch vs the
+   spec-pinned `(property, expected_scale)`.
+6. Later, additively, per demand: `on_change_batch` (tx-atomic application), `group_key`
+   query filter, per-epoch scale normalization; and the Z-set module (~200-400 LOC bespoke,
+   proptest-verified) behind `Strategy::Reserved` iff Min/Max-under-retraction or composed
+   incremental queries become real — never the `dbsp` crate (69-dep scheduler-owning runtime).
+
+**Not this row:** the pre-tag disclosure items (the "views return references, not computed
+values" freeze-record sentence; the `Reserved` rename window surfaced to Ben; the §4.43
+`ChangeEvent` posture citation; the ~30-LOC honesty tail incl. `deferred_to_phase: "Phase 3+"`
+and the stale #1084 cites) — those ride the pre-tag fix waves.
+
+---
+
 (Section structure additive; entries land as Phase 4-Foundation work surfaces them.)

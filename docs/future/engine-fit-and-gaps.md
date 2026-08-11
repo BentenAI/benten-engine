@@ -226,16 +226,31 @@ stay small and copying them is cheap; the zero-copy need lives at the blob tier,
 
 ### 3.3 IVM does not aggregate
 
-**Shape:** engine · **Freeze:** no (additive) · **Status:** OPEN, undispositioned
+**Shape:** engine · **Freeze:** no (additive; disclosure sentences owed) · **Status:**
+DESIGNED — **the gap is still open**: the engine still computes no balance. Design at
+**`docs/future/ivm-aggregation.md`** (R0-input; build gets its own ADDL pipeline); receiving
+row **`phase-4-backlog.md` §4.171**.
 
 `ViewResult` has exactly three variants — `Cids`, `Current`, `Rules` (`view.rs:250`).
 `Projection::apply` is the identity (`algorithm_b.rs:441`). There is no `sum`, `fold`,
 `aggregate` or `reduce` anywhere in `benten-ivm`.
 
-For a ledger this matters more than the numeric type: a balance is an IVM view over an
-append-only set, and the engine will not compute it. `Strategy::Reserved` is already minted for
-Z-set/DBSP, so the path is additive — but it is not built, and any adopter modelling money as
-append-only nodes (which is the correct model) hits this immediately.
+**Design summary.** A bespoke abelian fold kernel (Sum/Count, optionally grouped) rides
+`Strategy::B`, declared by an additive `aggregate` field on the `#[non_exhaustive]`
+`UserViewSpecBuilder`, returning an additive `ViewResult::Aggregates` variant, accumulating in
+i128 and crossing to TS as a decimal string, always. DBSP's algebra is adopted as theory (a
+linear operator is its own incremental version); the `dbsp` crate is declined (69-dep
+scheduler-owning circuit runtime inside a must-not-block post-commit callback). Four
+first-hand-verified facts shaped it: `Deleted` events carry the read-before-delete pre-image,
+so retraction is O(1) — no Z-set machinery needed for Sum/Count; `ChangeKind::Updated` is
+never emitted in production; version-chain CURRENT moves emit **no event**, so versioned
+entities typed-reject at aggregate registration; and sync merges persist the zone as ONE
+`"version"` snapshot node, so **balance views are per-engine at v1** (stated, not hidden). The
+real feature is the correctness contract: backfill-on-register, fail-closed error routing (the
+subscriber today logs fold errors and leaves the view Fresh — the silent-wrong-balance
+channel), the uniqueness-nonce contract on ledger rows (byte-identical deposits dedup to one
+CID), and typed refusal of floats, mixed scales, and order-sensitive folds. §3.2a's
+schema-declared scale is confirmed as what makes balances exact integers.
 
 ### 3.4 Bounded resources under partition — "at most N"
 
