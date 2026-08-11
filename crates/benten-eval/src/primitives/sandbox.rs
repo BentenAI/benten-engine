@@ -66,12 +66,32 @@ pub struct SandboxConfig {
     /// via [`crate::AttributionFrame`] (when wired). Default 4 per the D20
     /// "safety + audibility" tradeoff.
     pub max_nest_depth: u8,
-    /// Phase-3 G17-A1 wave-5b — max wasmtime guest stack size in bytes
-    /// per phase-3-backlog §6.4 + r1-wsa-7 BLOCKER closure. Default
-    /// 512 KiB (matches wasmtime default). Surfaced through the typed
-    /// [`SandboxError::StackOverflow`] variant when exceeded; carried
-    /// in the variant payload so operator dashboards distinguish a
-    /// recursive-runaway guest from a generic invalid module.
+    /// **INERT — setting this field has no effect on enforcement.**
+    ///
+    /// The guest stack ceiling is enforced ONCE PER PROCESS on the
+    /// shared `OnceLock<wasmtime::Engine>` singleton (see
+    /// [`crate::sandbox::instance::ENGINE_MAX_WASM_STACK_BYTES`]).
+    /// wasmtime resolves `max_wasm_stack` at `Engine` construction, so a
+    /// per-call value cannot take effect even in principle — honouring
+    /// one would need a distinct `Engine` per stack size, which
+    /// fragments the module compile cache and breaks the D22 cold-start
+    /// budget. Per-call stack sizing is excluded by design (D3-RESOLVED
+    /// + wsa-20 + D22), not merely unimplemented.
+    ///
+    /// The field is retained rather than removed because
+    /// `SandboxConfig` is part of the frozen v1-beta public surface and
+    /// deleting a `pub` field is a breaking narrowing. It reads back
+    /// whatever you wrote; it configures nothing. The always-correct
+    /// value to read is
+    /// [`crate::sandbox::instance::engine_max_wasm_stack_bytes`].
+    ///
+    /// **History (Phase-3 G17-A1 wave-5b → R6 phase-close):** this field
+    /// was previously threaded into `SandboxError::StackOverflow`'s
+    /// payload, so an overflow at the real 512 KiB ceiling reported the
+    /// caller's *requested* number instead — a diagnostic naming a limit
+    /// that was never enforced. The executor now reports the enforced
+    /// ceiling; `tests/sandbox_stack_overflow.rs` fails if that
+    /// regresses.
     pub max_wasm_stack: u64,
     /// Phase-3 G17-A2 — per-call entropy budget for the `random` host-fn,
     /// in BYTES. Default = [`crate::sandbox::DEFAULT_RANDOM_BUDGET_BYTES_PER_CALL`]
@@ -190,12 +210,21 @@ impl SandboxConfig {
 pub const WALLCLOCK_DEFAULT_MS: u64 = 30_000;
 /// D24 ceiling (5min).
 pub const WALLCLOCK_MAX_MS: u64 = 5 * 60_000;
-/// Phase-3 G17-A1 wave-5b — default wasmtime guest stack size (512 KiB).
-/// Matches wasmtime's `Config::max_wasm_stack` default. Per
-/// phase-3-backlog §6.4 + r1-wsa-7 BLOCKER closure: stack-overflow
+/// Phase-3 G17-A1 wave-5b — the wasmtime guest stack ceiling (512 KiB).
+/// Per phase-3-backlog §6.4 + r1-wsa-7 BLOCKER closure: stack-overflow
 /// traps route to a dedicated [`SandboxError::StackOverflow`] typed
 /// variant (catalog code `E_SANDBOX_STACK_OVERFLOW`).
-pub const MAX_WASM_STACK_DEFAULT: u64 = 512 * 1024;
+///
+/// **This is not merely a default — it is the enforced ceiling**, and it
+/// is process-scoped rather than per-call. It derives from
+/// [`crate::sandbox::instance::ENGINE_MAX_WASM_STACK_BYTES`] (the value
+/// applied to the process-wide `OnceLock<wasmtime::Engine>`) so the two
+/// cannot drift. The `_DEFAULT` name is retained because the constant is
+/// part of the frozen v1-beta public surface; see
+/// [`SandboxConfig::max_wasm_stack`] for why a per-call override cannot
+/// exist.
+pub const MAX_WASM_STACK_DEFAULT: u64 =
+    crate::sandbox::instance::ENGINE_MAX_WASM_STACK_BYTES as u64;
 
 /// Result of a single SANDBOX primitive execution.
 #[derive(Debug, Clone)]
@@ -305,7 +334,14 @@ pub enum SandboxError {
     /// `wasmtime::Trap::StackOverflow` arm).
     #[error("SANDBOX stack overflow: guest exceeded max_wasm_stack ({max_wasm_stack} bytes)")]
     StackOverflow {
-        /// Configured `max_wasm_stack` budget (default 512 KiB).
+        /// The guest stack ceiling **actually enforced** when the
+        /// overflow fired (512 KiB, process-wide — see
+        /// [`crate::sandbox::instance::ENGINE_MAX_WASM_STACK_BYTES`]).
+        ///
+        /// NOT the caller's [`SandboxConfig::max_wasm_stack`], which is
+        /// inert. Reporting the request rather than the enforcement was
+        /// the pre-R6 behaviour and it sent operators after phantom
+        /// bugs; `tests/sandbox_stack_overflow.rs` fails if it returns.
         max_wasm_stack: u64,
     },
     /// Phase-3 G17-A1 wave-5b — SANDBOX guest attempted one of the
@@ -703,6 +739,24 @@ pub fn execute_with_live_cap_check(
     //     poisoned) Store on return so the next SANDBOX call gets a
     //     fresh one.
     let func_ty = func.ty(&store);
+    // ABI GATE — reject an unencodable `run` result type BEFORE invoking
+    // any guest code. `encode_return_values` is the structural backstop,
+    // but by the time it runs the guest has already executed and had its
+    // observable side effects (host-fn `log` writes, entropy draws, fuel
+    // burn). Rejecting here makes the failure side-effect-free and
+    // deterministic, and costs one type inspection.
+    //
+    // This does not narrow any Rust/TS public surface: the rejected
+    // modules are exactly those that previously received a FABRICATED
+    // all-zero result with an `Ok`. Every module that previously got a
+    // correct answer still gets the byte-identical answer.
+    for (index, ty) in func_ty.results().enumerate() {
+        if !val_type_is_encodable(&ty) {
+            return Err(SandboxError::ModuleInvalid {
+                reason: unencodable_result_reason(index, &ty.to_string()),
+            });
+        }
+    }
     let n_results = func_ty.results().len();
     // Phase-3 wave-5c — mark guest active before the call so host-fn
     // trampolines that re-enter the Store while guest_active=true bump
@@ -763,7 +817,16 @@ pub fn execute_with_live_cap_check(
                 wallclock_limit_ms: config.wallclock_ms,
                 memory_limit_bytes: config.memory_bytes,
                 fuel_limit: config.fuel,
-                max_wasm_stack: config.max_wasm_stack,
+                // NOT `config.max_wasm_stack`. That field is a per-call
+                // REQUEST the process-wide `OnceLock<Engine>` cannot
+                // honour (see `ENGINE_MAX_WASM_STACK_BYTES`), so
+                // reporting it produced a diagnostic naming a ceiling
+                // that was never enforced: a caller who set
+                // `max_wasm_stack: 4_000_000` and overflowed at 512 KiB
+                // read "guest exceeded max_wasm_stack (4000000 bytes)"
+                // and went hunting a bug that did not exist. Report the
+                // limit the guest ACTUALLY hit.
+                max_wasm_stack: crate::sandbox::instance::engine_max_wasm_stack_bytes(),
             },
         );
         return Err(mapped);
@@ -775,7 +838,15 @@ pub fn execute_with_live_cap_check(
     //     adopt a richer ABI; for now the bytes are the raw scalar
     //     return values which is what the existing test corpus (echo
     //     handlers, ESC-fixtures) expect.
-    let return_bytes = encode_return_values(&results);
+    //
+    //     "A future revision may adopt a richer ABI" is now load-bearing
+    //     rather than aspirational: it is precisely WHY a `v128` result
+    //     is REJECTED here instead of encoded. Until that richer ABI is
+    //     designed and frozen, an unencodable result fails closed with a
+    //     typed error — it is never fabricated. The ABI gate above
+    //     normally rejects such a module before it runs; this call is
+    //     the backstop that makes fabrication unrepresentable.
+    let return_bytes = encode_return_values(&results)?;
 
     // 14. D17 BACKSTOP — check the return-value bytes against the
     //     CountedSink budget. Catches a host-fn that bypassed the
@@ -1401,21 +1472,112 @@ fn sandbox_module_relative_time_ms() -> u64 {
     u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
+/// Operator-actionable reason for a `run` export whose result type the
+/// SANDBOX ABI cannot encode. Shared by the pre-call ABI gate (which
+/// inspects [`wasmtime::ValType`]) and the [`encode_return_values`]
+/// backstop (which inspects [`wasmtime::Val`]) so both sites emit the
+/// same message for the same defect.
+fn unencodable_result_reason(index: usize, ty_label: &str) -> String {
+    format!(
+        "exported `run` returns `{ty_label}` at result index {index}, which the SANDBOX ABI \
+         cannot encode. The ABI serialises scalar results (i32 / i64 / f32 / f64) \
+         little-endian; `v128` has no ABI encoding, and reference types (funcref / externref / \
+         anyref / exnref / contref) are per-Store handles with no meaningful byte \
+         representation outside the per-call Store that is dropped on return (D3-RESOLVED). \
+         Return a scalar, or write the result into the module's linear memory and return its \
+         offset."
+    )
+}
+
+/// Label the ABI-unencodable [`wasmtime::Val`] shapes for
+/// [`unencodable_result_reason`]. Only ever called from the error path
+/// of [`encode_return_values`]; the scalar arms never reach here.
+fn unencodable_val_label(v: &wasmtime::Val) -> &'static str {
+    match v {
+        wasmtime::Val::V128(_) => "v128",
+        wasmtime::Val::FuncRef(_) => "funcref",
+        wasmtime::Val::ExternRef(_) => "externref",
+        wasmtime::Val::AnyRef(_) => "anyref",
+        wasmtime::Val::ExnRef(_) => "exnref",
+        wasmtime::Val::ContRef(_) => "contref",
+        // A `wasmtime::Val` variant added by a future wasmtime bump.
+        // Unlabelled but still REJECTED — see `encode_return_values`.
+        _ => "unsupported-value-type",
+    }
+}
+
+/// Whether the SANDBOX ABI can encode a `run` export result of this
+/// type. `true` only for the four scalars [`encode_return_values`]
+/// actually serialises.
+///
+/// `V128` (the wasm SIMD proposal, which wasmtime enables BY DEFAULT —
+/// `Config::wasm_simd` is `true` and [`crate::sandbox::instance::shared_engine`]
+/// does not disable it) and every reference type are rejected.
+fn val_type_is_encodable(ty: &wasmtime::ValType) -> bool {
+    matches!(
+        ty,
+        wasmtime::ValType::I32
+            | wasmtime::ValType::I64
+            | wasmtime::ValType::F32
+            | wasmtime::ValType::F64
+    )
+}
+
 /// Encode a wasmtime `Val` results vector to little-endian bytes for
 /// D17 BACKSTOP + SandboxResult.output.
-fn encode_return_values(results: &[wasmtime::Val]) -> Vec<u8> {
+///
+/// # ABI scope — fail closed, never fabricate
+///
+/// Only the four scalars have an encoding under the Phase-2b ABI. Every
+/// other [`wasmtime::Val`] shape returns
+/// [`SandboxError::ModuleInvalid`] rather than bytes.
+///
+/// This arm previously emitted `[0u8; 16]` — sixteen zero bytes and an
+/// `Ok` — for `V128` / `FuncRef` / `ExternRef`, on the reasoning that
+/// "the current corpus doesn't use them". That reasoning does not hold:
+/// the corpus is OUR trusted test input, whereas the guest module is the
+/// UNTRUSTED party, and CLAUDE.md baked-in #16 designates SANDBOX as the
+/// escape hatch for exactly the heavy-math / ML-inference workloads that
+/// reach for wasm SIMD. A guest returning `v128` therefore got a
+/// silently WRONG answer on a path we explicitly invited it onto. Both
+/// `v128` and `funcref` were empirically reachable at this build's
+/// wasmtime feature set (`externref` / `anyref` additionally require the
+/// `gc` cargo feature, which is off, so they fail earlier at
+/// `Module::new`) — but reachability is not what decides this: an
+/// unencodable value must fail closed regardless, because a future
+/// feature-flag change must not be able to silently re-introduce
+/// fabricated results.
+///
+/// The scalar encodings are UNCHANGED and byte-identical; only the
+/// previously-fabricated path is affected.
+///
+/// The catch-all `other` arm rejects rather than encoding, so a
+/// `wasmtime::Val` variant introduced by a future wasmtime bump is
+/// rejected by construction instead of silently acquiring the zero
+/// placeholder.
+///
+/// # Errors
+/// [`SandboxError::ModuleInvalid`] when any result is not one of the
+/// four encodable scalars. Under normal dispatch the pre-call ABI gate
+/// in [`execute_with_live_cap_check`] rejects such a module BEFORE the
+/// guest runs; this is the structural backstop that makes the
+/// fabrication unrepresentable.
+fn encode_return_values(results: &[wasmtime::Val]) -> Result<Vec<u8>, SandboxError> {
     let mut out = Vec::with_capacity(results.len() * 8);
-    for v in results {
+    for (index, v) in results.iter().enumerate() {
         match v {
             wasmtime::Val::I32(n) => out.extend_from_slice(&n.to_le_bytes()),
             wasmtime::Val::I64(n) => out.extend_from_slice(&n.to_le_bytes()),
             wasmtime::Val::F32(bits) => out.extend_from_slice(&bits.to_le_bytes()),
             wasmtime::Val::F64(bits) => out.extend_from_slice(&bits.to_le_bytes()),
-            // V128, FuncRef, ExternRef — current corpus doesn't use them; encode as zero placeholder.
-            _ => out.extend_from_slice(&[0u8; 16]),
+            other => {
+                return Err(SandboxError::ModuleInvalid {
+                    reason: unencodable_result_reason(index, unencodable_val_label(other)),
+                });
+            }
         }
     }
-    out
+    Ok(out)
 }
 
 /// Best-effort extraction of an "unknown import" name from wasmtime's
@@ -1457,6 +1619,141 @@ mod tests {
             SandboxError::MemoryExhausted { limit: 100 },
         ]);
         assert!(matches!(pick, Some(SandboxError::MemoryExhausted { .. })));
+    }
+
+    // -----------------------------------------------------------------
+    // SANDBOX return-ABI: unencodable results fail closed (never zeroed)
+    //
+    // These pin `encode_return_values` DIRECTLY, independent of whether
+    // a wasm module can currently produce the shape. That matters:
+    // `externref` / `anyref` are unreachable through a real module at
+    // this build's wasmtime feature set (the `gc` cargo feature is off,
+    // so `Module::new` rejects them first), but they are reachable
+    // through this encoder the moment that feature flips. The
+    // end-to-end wasm pins live in
+    // `tests/sandbox_unencodable_return_type_rejected.rs`.
+    //
+    // FALSIFICATION for every test in this block: restore the historical
+    // catch-all `_ => out.extend_from_slice(&[0u8; 16])` in
+    // `encode_return_values` (and drop the `?` at its call site). Each
+    // `expect_err` below then fails, because the call returns
+    // `Ok([0u8; 16])` instead.
+    // -----------------------------------------------------------------
+
+    /// Assert an unencodable result is rejected with a reason that names
+    /// both the offending type and its result index.
+    fn assert_unencodable(vals: &[wasmtime::Val], expect_label: &str, expect_index: usize) {
+        let err = encode_return_values(vals)
+            .expect_err("unencodable result MUST NOT encode to fabricated bytes");
+        match err {
+            SandboxError::ModuleInvalid { reason } => {
+                assert!(
+                    reason.contains(expect_label),
+                    "reason must name the offending type `{expect_label}`: {reason}"
+                );
+                assert!(
+                    reason.contains(&format!("result index {expect_index}")),
+                    "reason must name result index {expect_index}: {reason}"
+                );
+            }
+            other => panic!("expected ModuleInvalid, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn encode_return_values_rejects_v128() {
+        // A SIMD lane pattern that is emphatically NOT zero — if this
+        // ever encodes to 16 zero bytes the caller has been handed a
+        // fabricated answer.
+        let v: wasmtime::V128 = 0x1111_1111_2222_2222_3333_3333_4444_4444u128.into();
+        assert_unencodable(&[wasmtime::Val::V128(v)], "v128", 0);
+    }
+
+    #[test]
+    fn encode_return_values_rejects_funcref() {
+        assert_unencodable(&[wasmtime::Val::FuncRef(None)], "funcref", 0);
+    }
+
+    #[test]
+    fn encode_return_values_rejects_externref() {
+        assert_unencodable(&[wasmtime::Val::ExternRef(None)], "externref", 0);
+    }
+
+    #[test]
+    fn encode_return_values_rejects_anyref() {
+        assert_unencodable(&[wasmtime::Val::AnyRef(None)], "anyref", 0);
+    }
+
+    /// The nastiest historical shape: a multi-value return whose FIRST
+    /// result encodes correctly and whose second does not. The old
+    /// catch-all produced `[7,0,0,0] ++ [0u8; 16]` — a plausible-looking
+    /// PARTIALLY-correct answer with no signal that the tail was
+    /// invented. The whole call must fail, and no partial bytes may be
+    /// handed back.
+    #[test]
+    fn encode_return_values_rejects_v128_after_valid_scalar_prefix() {
+        let v: wasmtime::V128 = 0x0101_0101_0202_0202_0303_0303_0404_0404u128.into();
+        assert_unencodable(&[wasmtime::Val::I32(7), wasmtime::Val::V128(v)], "v128", 1);
+    }
+
+    /// Regression guard for the OTHER half of the change: the four
+    /// encodable scalars are byte-identical to the pre-fix encoder, so
+    /// no existing golden or frozen fixture moves.
+    ///
+    /// FALSIFICATION: change any `to_le_bytes()` to `to_be_bytes()` in
+    /// `encode_return_values` — this assertion fails immediately.
+    #[test]
+    fn encode_return_values_scalar_encoding_is_unchanged_little_endian() {
+        let vals = [
+            wasmtime::Val::I32(42),
+            wasmtime::Val::I64(-2),
+            wasmtime::Val::F32(1.0f32.to_bits()),
+            wasmtime::Val::F64(1.0f64.to_bits()),
+        ];
+        let out = encode_return_values(&vals).expect("scalars must still encode");
+        let mut want = Vec::new();
+        want.extend_from_slice(&42i32.to_le_bytes());
+        want.extend_from_slice(&(-2i64).to_le_bytes());
+        want.extend_from_slice(&1.0f32.to_bits().to_le_bytes());
+        want.extend_from_slice(&1.0f64.to_bits().to_le_bytes());
+        assert_eq!(out, want);
+        // Byte-exact literal, so a future refactor cannot quietly
+        // redefine "little-endian" and still pass the mirror above.
+        assert_eq!(
+            out,
+            vec![
+                42, 0, 0, 0, // i32 42
+                254, 255, 255, 255, 255, 255, 255, 255, // i64 -2
+                0, 0, 128, 63, // f32 1.0
+                0, 0, 0, 0, 0, 0, 240, 63, // f64 1.0
+            ]
+        );
+    }
+
+    /// A zero-result `run` still yields empty output (not an error) —
+    /// pins that the fail-closed arm did not over-reach.
+    #[test]
+    fn encode_return_values_empty_results_is_ok_empty() {
+        assert_eq!(
+            encode_return_values(&[]).expect("empty is valid"),
+            Vec::<u8>::new()
+        );
+    }
+
+    /// The pre-call ABI gate's type predicate agrees with the encoder:
+    /// exactly the four scalars are encodable.
+    ///
+    /// FALSIFICATION: add `| wasmtime::ValType::V128` to
+    /// `val_type_is_encodable` — the V128 assertion fails.
+    #[test]
+    fn val_type_is_encodable_matches_the_encoder() {
+        assert!(val_type_is_encodable(&wasmtime::ValType::I32));
+        assert!(val_type_is_encodable(&wasmtime::ValType::I64));
+        assert!(val_type_is_encodable(&wasmtime::ValType::F32));
+        assert!(val_type_is_encodable(&wasmtime::ValType::F64));
+        assert!(!val_type_is_encodable(&wasmtime::ValType::V128));
+        assert!(!val_type_is_encodable(&wasmtime::ValType::FUNCREF));
+        assert!(!val_type_is_encodable(&wasmtime::ValType::EXTERNREF));
     }
 
     #[test]

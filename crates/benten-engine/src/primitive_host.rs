@@ -920,7 +920,10 @@ impl PrimitiveHost for Engine {
         // 4. Construct SandboxConfig + apply per-handler property
         //    overrides. The overrides match the property keys
         //    `SandboxNodeDescription` documents (`fuel`, `wallclock_ms`,
-        //    `output_limit`).
+        //    `output_limit`, `memory_limit`). Note `max_wasm_stack` is
+        //    NOT among them and cannot be: the guest stack ceiling lives
+        //    on the process-wide `OnceLock<wasmtime::Engine>` (see
+        //    `benten_eval::sandbox::ENGINE_MAX_WASM_STACK_BYTES`).
         let mut config = benten_eval::sandbox::SandboxConfig::default();
         if let Some(Value::Int(fuel)) = op.properties.get("fuel") {
             config.fuel = u64::try_from(*fuel).unwrap_or(config.fuel);
@@ -939,6 +942,46 @@ impl PrimitiveHost for Engine {
         }
         if let Some(Value::Int(limit)) = op.properties.get("output_limit") {
             config.output_bytes = u64::try_from(*limit).unwrap_or(config.output_bytes);
+        }
+        // Memory axis — per-handler `memory_limit` (bytes).
+        //
+        // Until the R6 phase-close audit this was the ONLY one of the
+        // four SANDBOX enforcement axes with no production writer:
+        // `SandboxConfig::memory_bytes` was read by the resource limiter
+        // but every production path left it at the 64 MiB default, while
+        // `docs/SANDBOX-LIMITS.md` advertised a `memoryLimitBytes` DSL
+        // override that existed nowhere in the tree. Per CLAUDE.md rule
+        // 15 the doc described the behaviour we want, so the code moved.
+        //
+        // TIGHTEN-ONLY, deliberately asymmetric with `fuel` and
+        // `output_limit` (which accept any value): memory is the D21
+        // priority-1 axis because exhausting it can OOM-kill the host
+        // PROCESS, taking down every other handler sharing it. A handler
+        // may lower its own ceiling; it may not raise the bound that
+        // protects everyone else. An over-ceiling request is ignored and
+        // logged rather than rejected — `memory_limit` is a new property,
+        // so a warn keeps the widening attempt observable without
+        // inventing a typed error the catalog does not carry.
+        if let Some(Value::Int(limit)) = op.properties.get("memory_limit") {
+            let ceiling = config.memory_bytes;
+            match u64::try_from(*limit) {
+                Ok(requested) if requested <= ceiling => config.memory_bytes = requested,
+                Ok(requested) => {
+                    tracing::warn!(
+                        requested_bytes = requested,
+                        enforced_bytes = ceiling,
+                        "SANDBOX per-handler `memory_limit` exceeds the engine ceiling and was \
+                         ignored; the memory axis may only be tightened (see docs/SANDBOX-LIMITS.md)"
+                    );
+                }
+                Err(_) => {
+                    tracing::warn!(
+                        requested = *limit,
+                        enforced_bytes = ceiling,
+                        "SANDBOX per-handler `memory_limit` is negative and was ignored"
+                    );
+                }
+            }
         }
         // Phase-3 G17-A2 — per-manifest `random` host-fn budget override
         // (additive optional `host_fns.random.budget_bytes_per_call` on

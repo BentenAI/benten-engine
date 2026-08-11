@@ -62,7 +62,10 @@ pub use host_fns::{
     HostFnContext, HostFnReturn, HostFnSpec, RESERVED_HOST_ASYNC_CAP, default_host_fns,
     host_fn_names,
 };
-pub use instance::{module_cache_size, module_for_bytes, shared_engine};
+pub use instance::{
+    ENGINE_MAX_WASM_STACK_BYTES, engine_max_wasm_stack_bytes, module_cache_size, module_for_bytes,
+    shared_engine,
+};
 pub use manifest::{
     CapBundle, ManifestError, ManifestRef, ManifestRegistry, ManifestSignature,
     default_manifest_names, default_manifests,

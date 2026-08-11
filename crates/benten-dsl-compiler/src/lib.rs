@@ -1409,7 +1409,7 @@ fn build(handler: HandlerAst) -> Result<CompiledSubgraph, CompileError> {
 /// subclass (`EDslInvalidShape`) regardless of whether the offending
 /// handler was authored via the TS DSL builder or via this Rust dsl-
 /// compiler. Today the pass enforces SANDBOX integer-typed properties
-/// (`fuel`, `wallclock_ms`, `output_limit`) per
+/// (`fuel`, `wallclock_ms`, `output_limit`, `memory_limit`) per
 /// `docs/SANDBOX-LIMITS.md`. Property names are the CANONICAL eval-side
 /// snake_case form per the 24th-p/c-drift acceptance criterion enforced
 /// at `crates/benten-eval/tests/sandbox_handler_args.rs` (the camelCase
@@ -1426,7 +1426,7 @@ fn validate_shapes(handler: &HandlerAst) -> Result<(), CompileError> {
     /// values trip `E_DSL_INVALID_SHAPE`. Names are the canonical eval-side
     /// snake_case form consumed by
     /// `crates/benten-engine/src/primitive_host.rs::execute_sandbox`.
-    const SANDBOX_INT_PROPS: &[&str] = &["fuel", "wallclock_ms", "output_limit"];
+    const SANDBOX_INT_PROPS: &[&str] = &["fuel", "wallclock_ms", "output_limit", "memory_limit"];
 
     // #608 (safe-3) — handler_id MUST be a non-empty, non-whitespace-only
     // identifier. Cross-language rule-mirror (§3.5g): the TS-side DSL

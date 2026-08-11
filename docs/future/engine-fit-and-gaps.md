@@ -310,17 +310,54 @@ primitive, so it does not touch baked-in #1. And it is additive, so it has no de
 
 ### 3.5 SANDBOX has no data channel
 
-**Shape:** engine · **Freeze:** partly · **Status:** OPEN
+**Shape:** engine · **Freeze:** partly · **Status:** the **return** half is CLOSED (code,
+2026-08-11); the **argument** half remains OPEN.
 
 Baked-in #16 designates SANDBOX as the escape hatch for "heavy math, ML inference, custom
-transformers." At HEAD the guest is invoked with an empty argument slice
-(`sandbox.rs`), and results return as little-endian scalars with **`v128` silently encoded as
-sixteen zero bytes** (`sandbox.rs:1432-1436`, comment: *"current corpus doesn't use them; encode
-as zero placeholder"*).
+transformers." Two halves were reported together; they had different answers.
 
-So a wasm SIMD kernel — the obvious way to write the heavy math we explicitly invited — returns
-zeros with no error. **Silent wrong answers on the path we designated for ML inference.** The
-fix (return a typed error) is additive and cheap.
+**Return half — CLOSED.** `encode_return_values` in `crates/benten-eval/src/primitives/sandbox.rs`
+had a catch-all arm commented *"V128, FuncRef, ExternRef — current corpus doesn't use them;
+encode as zero placeholder"* that emitted sixteen zero bytes and an `Ok`. Confirmed against the
+shipped executor before the fix: a module returning
+`v128.const i32x4 0x11111111 0x22222222 0x33333333 0x44444444` returned
+`Ok(SandboxResult { output: [0; 16], .. })`. A wasm SIMD kernel — the obvious way to write the
+heavy math we explicitly invited — got **silent wrong answers on the path we designated for ML
+inference.**
+
+Three corrections to the original report, all ground-truthed:
+
+- The catch-all covered **six** `wasmtime::Val` variants at wasmtime 43, not the three the
+  comment named (`V128`, `FuncRef`, `ExternRef`, `AnyRef`, `ExnRef`, `ContRef`) — the comment
+  was stale across the 40→43 bump.
+- **Two** were reachable, not one: `v128` *and* `funcref` both compiled and executed to sixteen
+  zero bytes. `externref` / `anyref` fail earlier at `Module::new` only because the `gc` cargo
+  feature is off — a feature flag, not a guarantee.
+- The worst shape was multi-value: `(result i32 v128)` returned `[7,0,0,0] ++ [0; 16]`, a
+  **partially** correct answer whose correct leading scalar lends false credibility to sixteen
+  invented bytes.
+
+The load-bearing error in the original reasoning was *"current corpus doesn't use them"*: the
+corpus is OUR trusted test input, whereas the guest module is the UNTRUSTED party. What our
+fixtures happen to return says nothing about what a guest may return.
+
+Fixed per rule 15 (code, not doc) as a pre-call ABI gate plus an encoder backstop, both routing
+to `E_SANDBOX_MODULE_INVALID`; no new ErrorCode was minted because that code already covers
+`run`-entry/ABI incompatibility ("module has no exported `run` function" has always lived
+there). The gate rejects **before** the guest body executes, so the failure is free of
+guest-observable side effects. Scalar encodings are byte-identical, so no golden moved.
+Falsification arms at
+`crates/benten-eval/tests/sandbox_unencodable_return_type_rejected.rs` plus encoder unit tests
+in `primitives::sandbox::tests`; four mutations were run and reported.
+
+Why this class and not merely a wrong number: the sixteen invented zeros **hash to a perfectly
+valid CID**. A content-addressed engine cannot tolerate a silent wrong answer the way a
+request/response service can, because the wrong answer becomes a durable, referencable,
+signed-over identity rather than one bad reply.
+
+**Argument half — still OPEN.** The guest is still invoked with an empty argument slice, so
+there is no inbound data channel. It is the actual "no data channel", it is not a one-line fix,
+and nothing in this wave touches it. This section remains its own tracked record.
 
 Open question for freeze scope: is the host-fn table extensible by third parties post-v1
 without a fork?
@@ -340,15 +377,161 @@ seam.
 
 ### 3.7 Phantom config
 
-**Shape:** engine · **Freeze:** the false claim freezes · **Status:** OPEN
+**Shape:** engine · **Freeze:** the false claim freezes · **Status:** the three EVALUATOR knobs
+and `memory_bytes` are CLOSED (code, 2026-08-11). `max_wasm_stack` is CLOSED as a *diagnostic*
+and recorded as a per-process design property rather than a knob. Two further sites found while
+checking — `output_max_bytes` and `GrantReaderConfig::max_chain_depth` — have their false claims
+struck here and their wiring received at `phase-4-backlog.md` §4.173, which is this section's
+receiving row.
 
-`ENGINE-SPEC` asserts all numeric limits are configurable per capability grant. Five sites
-reportedly have no production writer: `InvariantConfig`, `memory_bytes`, `max_wasm_stack`,
-`max_stack_depth`, `RunOptions::budget`. **[unverified — 5 individual checks owed]**
+The originating report: `ENGINE-SPEC` asserts all numeric limits are configurable per capability
+grant, and five sites reportedly had no production writer — `InvariantConfig`, `memory_bytes`,
+`max_wasm_stack`, `max_stack_depth`, `RunOptions::budget`. All five were checked individually;
+the count was right and one verdict was not (row 5 below).
 
-This is the FALSE-RECORD class from the compromise-ledger audit: a documented guarantee with no
-implementation, which the freeze makes permanent. Fix is code, doc, or both — but per CLAUDE.md
-rule 15 the default is to fix the code.
+**Where the claim actually lives — and a warning for the next reader.** `docs/ENGINE-SPEC.md` is
+**gitignored** (`.gitignore` line 79, local-only). It therefore does **not** materialise in a
+`git worktree`, and a first pass from inside one concluded the file had been retired. It has not.
+Verify against the main checkout before writing any finding about it — inferring
+*does-not-exist* from *cannot-see* is the standing trap here, and this row walked into it.
+
+The live text, in the invariant table and the line under it:
+
+- *"Max operation-subgraph depth (**configurable per capability grant**)"* — invariant 2 row
+- *"Max fan-out per node (configurable)"* / *"Max SANDBOX nesting: configurable"* — invariants 3, 4
+- *"**All numeric limits are configurable per capability grant** — the operator (or community
+  governance) decides the bounds."*
+
+A separate instance of the same claim, the `E_INPUT_LIMIT` fix-hint *"Limits are configurable via
+the engine builder"*, had already been struck as a false record (see the `ERROR-CATALOG.md`
+blockquote and the `V1-FROZEN-INTERFACE.md` baseline-update log).
+
+**"Per capability grant" is the falser half, and it is false on its own terms.** Worth separating,
+because a doc-fix that only softened "configurable" to "partly configurable" would leave the false
+half standing. "Configurable" at least pointed at something real. But *nothing anywhere derives a
+numeric bound from a grant*: `CapBundle` is `{caps, description, signature}` and carries no numeric
+field at all; grants drive an allow/deny intersection, not budget sizing. A reader provisioning
+per-tenant budgets from grants is not mis-tuning a knob — they are building on a mechanism that
+exists at no layer.
+
+**Half of the ENGINE-SPEC sentence is now true and half must come out.** "Configurable" and
+"the operator decides the bounds" are true as of this change — per *engine*, via
+`EngineBuilder::invariant_config`. **"Per capability grant" is false and should stay false**;
+see the recommendation at the end of this section. The owed edit, named here so it is dispositioned
+rather than deferred (HARD-RULE-12 clause (b)) — this row IS the destination, and it receives the
+exact replacement text now:
+
+> **`docs/ENGINE-SPEC.md`, the line under the invariant table.** Replace
+> *"All numeric limits are configurable per capability grant -- the operator (or community
+> governance) decides the bounds."*
+> with
+> *"All numeric limits are configurable per engine, via `EngineBuilder::invariant_config` — the
+> operator decides the bounds at engine-construction time. They are NOT per capability grant:
+> a registered subgraph's validity is a property of its content, not of who is calling it."*
+>
+> **Same file, invariant 2 row.** Replace *"(configurable per capability grant)"* with
+> *"(configurable per engine)"*.
+
+**LANDED in the primary checkout 2026-08-11**, and broader than the minimum above: `ENGINE-SPEC`
+§4.1 is now a full "which of these limits are configurable, and by whom" section enumerating the
+*three* real surfaces (`engine.toml` / operation-Node properties / `EngineBuilder`) plus direct
+`benten-eval` embedding, with the "per capability grant" sentence quoted and struck rather than
+silently deleted — it was load-bearing in two outside evaluations, so a reader returning to it needs
+to see that it was wrong, not merely find it gone. Applying it also surfaced a **fresh** false record
+in the drafted replacement: it described `engine.toml` as "read at `Engine::open`", which is untrue
+(`EngineConfig::load_or_default` has no production caller — see `phase-4-backlog.md` §4.173 B), so
+§4.1(a) now states that the engine has **no functioning operator-facing configuration surface** at
+the freeze.
+
+The minimum replacement text is retained in the blockquote above **on purpose**: the file is
+gitignored, so it exists in exactly one checkout, cannot be recovered from git, and CI can never
+gate it. This tracked row is the only durable record of the correction. **Verification of that edit
+is therefore manual and permanently outside CI** — which is itself the argument in §4.173 E.
+
+**Verdicts on the three evaluator knobs (each checked individually):**
+
+| Knob | Verdict before | What was actually true |
+|---|---|---|
+| `InvariantConfig` | **(b) read, never written outside tests** | Read on every registration — all three of `register_subgraph` / `register_subgraph_replace` / `register_subgraph_aggregate` called `sg.validate(&cfg)`. But each built `InvariantConfig::default()` **inline**, so no `Engine` caller could supply one. The only non-default constructions in the tree were `SubgraphBuilderExt::build_validated_with_max_depth` (a test-support builder whose sole caller is `crates/benten-eval/tests/invariant_2_depth.rs`) and test bodies. |
+| `max_stack_depth` | **(b) read, never written outside tests** | Read in `Evaluator::step` on the real dispatch path. The single engine-side `Evaluator::new()` left it at the literal `64` and never assigned it; the only writer in the tree was `crates/benten-eval/tests/evaluator_stack.rs`. |
+| `RunOptions::budget` | **(b) written, but only from a test-gated source** | The engine *did* populate it — from `EngineInner::test_iteration_budget`, whose only setter `Engine::testing_set_iteration_budget` is `#[cfg(any(test, feature = "iteration-budget-test-grade"))]`. In a default build the field is permanently `None`, so the budget was always `DEFAULT_ITERATION_BUDGET`. `RunOptions` itself is honest as a *library* surface — a downstream crate driving `Evaluator::run_with` could always set it. The Engine could not. |
+
+None of the three was verdict (c); every one is read on a real path. The defect was the missing
+writer, which is why the fix is code.
+
+**The fix (code, per rule 15).** Two additive `EngineBuilder` methods —
+`invariant_config(InvariantConfig)` and `iteration_budget(u64)` — stored on `EngineInner` and
+consumed at the four sites that previously hardcoded. The frame cap is **derived**, not exposed:
+
+> `Evaluator::step` pushes one frame per non-terminal step and pops only on a `"terminal"` edge,
+> so `max_stack_depth` is operationally *"nodes walkable along one path"* — the **same quantity**
+> Inv-2 `max_depth` bounds at registration (`longest.len() > max_depth`). Both were the literal
+> `64`, agreeing **by coincidence**. Raising `max_depth` alone would have let a 100-node handler
+> register cleanly and then die at call time with `EvalError::StackOverflow`. That is not
+> hypothetical: deleting the derive line makes
+> `raised_max_depth_registers_and_walks_a_100_node_chain` fail with exactly that error. So the
+> engine derives the runtime cap from `max_depth` — one knob, and the mismatch is
+> unrepresentable.
+
+Falsification arms at `crates/benten-engine/tests/engine_evaluator_limits_are_configurable.rs`;
+each test names the exact one-line revert that breaks it, and all three mutations were run.
+
+**Recommendation: do NOT make "per capability grant" true.** DISAGREE-with-reason, recorded so it
+is decided rather than left dangling. Per-grant numeric limits would mean the bound a subgraph is
+validated against depends on *who is calling*, so the same registered handler would be valid for
+one principal and invalid for another. Handler identity is content-addressed; validity would stop
+being a property of the content. Nothing in the tree has ever implemented per-grant limits, and
+the one live assertion of it is the ENGINE-SPEC line above, whose correction is specified there.
+Ben's call if he wants it built; the recommendation is to strike the claim and keep limits
+per-engine.
+
+**Not changed, with reason:** `Engine::register_crud` still calls the eval-side
+`build_validated()` (hardcoded default config). Its subgraph is a fixed 2-node READ→RESPOND
+shape, so the only configured bound that could ever reject it is `max_nodes < 2` — degenerate.
+Threading the config there would require a new `build_validated_with_config` on `benten-eval`'s
+**frozen** public surface for no reachable behaviour difference. DISAGREE-with-reason, recorded
+here rather than deferred.
+
+**The SANDBOX pair — a separate surface, closed in the same wave, opposite answers.** Rule 15 asks
+which one we would write from scratch today, and `memory_bytes` and `max_wasm_stack` answer
+differently. That difference *is* the split.
+
+| Knob | Verdict before | Disposition |
+|---|---|---|
+| `memory_bytes` | **(b) read, never written outside tests.** Reaches `SandboxResourceLimiter`, so it looked wired. The one production construction (`primitive_host.rs::execute_sandbox`) applied per-handler overrides for `fuel` / `wallclock_ms` / `output_limit` and the manifest random budget — never memory. Every production SANDBOX call had always run at exactly 64 MiB, while the doc advertised a DSL override (`memoryLimitBytes`) whose string occurred in **two places in the repository, both in that one doc file**. | **CODE moved.** ~25 LOC mirroring the `output_limit` block: `memory_limit` read per-handler and applied **tighten-only**, joined to `SANDBOX_INT_PROPS` for `E_DSL_INVALID_SHAPE` typing, mirrored as `memoryLimitBytes` on both `SandboxArgs` variants. Tighten-only is deliberately asymmetric with `fuel`/`output_limit`: exhausting memory OOM-kills the host **process**, taking every other handler with it, so a handler may lower its own ceiling and must not raise the bound protecting everyone else. Over-ceiling requests are ignored **and `tracing::warn!`-logged** — the codebase already rejected silent clamping at `wsa-g7a-mr-3`. |
+| `max_wasm_stack` | **(b) and worse — accepted-then-ignored.** The enforced ceiling is set on the process-wide `OnceLock<wasmtime::Engine>` in `sandbox/instance.rs`; the field was consumed at exactly one place, populating the `SandboxError::StackOverflow { max_wasm_stack }` **error payload**. Proven by execution, not by reading: a guest run with `max_wasm_stack: 4_000_000` overflowed at 512 KiB and reported *"guest exceeded max_wasm_stack (4000000 bytes)"*. An operator raising the knob to fix an overflow got a message confirming a limit that was never in force — a bug hunt with no bug at the end of it. | **DOC was right; the CODE was lying in the diagnostic.** This is the narrow case rule 15 permits: we genuinely do not want a per-call stack override, because `max_wasm_stack` is a `wasmtime::Config` setting fixed for an `Engine`'s life, so per-call variation means a fresh `wasmtime::Engine` per call — discarding the module cache the singleton exists to hold. Recorded as a design property so nobody "fixes" it without pricing the cache loss. The *diagnostic* half was a code bug regardless: `ENGINE_MAX_WASM_STACK_BYTES` is now the single source of truth, `MAX_WASM_STACK_DEFAULT` **derives** from it (the two independent 512 KiB literals become one, so divergence is unrepresentable rather than merely tested-against), and the executor passes the **enforced** ceiling into the error payload. The field keeps an `INERT` rustdoc; removing a `pub` field would be a breaking narrowing of the frozen surface. |
+
+Falsification arms at `crates/benten-engine/tests/sandbox_memory_limit_per_handler.rs` and
+`crates/benten-eval/tests/sandbox_stack_overflow.rs`; three mutations were run.
+
+**Two more sites found while checking, neither in the original five.** Both are receiving-row
+entries at `phase-4-backlog.md` §4.173, and both have their false *claims* struck in this same
+commit — the disclosure never waits on the wiring.
+
+- **`output_max_bytes` is validated at registration and never read at runtime.**
+  `invariants/sandbox_output.rs` reads the node property and rejects declarations above the 16 MiB
+  ceiling; the runtime budget comes from a **differently named** property, `output_limit`, feeding
+  `SandboxConfig::output_bytes` (default 1 MiB). A handler declaring `output_max_bytes: 4_000_000`
+  passes registration and then silently runs under 1 MiB. The `InvariantConfig::max_sandbox_output_bytes`
+  rustdoc asserted that the runtime `CountedSink` enforces the per-node value — **a FALSE-RECORD in
+  a rustdoc**, the rule-14 shape in the place reviewers are least likely to look. That sentence, and
+  its twin in `invariants::sandbox_output`, are struck here. The *behaviour* fix is a genuine fork
+  and is **surfaced, not decided**: making the runtime honour `output_max_bytes` widens budgets for
+  handlers that declare it, while typed-rejecting the inert declaration narrows an accepted input
+  set on the freeze branch. §4.173 A.1 holds the decision.
+- **`GrantReaderConfig::max_chain_depth`** (default 64) is written only by
+  `crates/benten-caps/tests/grant_reader_max_chain_depth.rs`, against a synthetic harness its own
+  rustdoc labels a "test harness". A sixth phantom, sitting in the capability subsystem
+  specifically — which is exactly where a reader who believed the "per capability grant" sentence
+  would have gone looking. §4.173 C.
+
+**`docs/ENGINE-SPEC.md`'s untrackedness is itself a finding, and it is Ben's call.** Re-tracking
+publishes ~49 KB of internal-audience prose, which is a publication decision, not an orchestration
+one. The repo has re-tracked four docs for exactly this reason (`SECURITY-POSTURE`,
+`INVARIANT-COVERAGE`, `HOST-FUNCTIONS`, `DSL-SPECIFICATION`), each because a HARD-RULE clause-(b)
+destination must exist in fresh clones — and this section is a fifth instance, since it cites an
+untracked file as its evidence and CI can therefore never gate the correction. Options and costs
+are laid out at §4.173 E. No default is assumed.
 
 ---
 
@@ -359,8 +542,21 @@ Recorded so nobody re-litigates them.
 - **NaN / ±Inf rejection is correctly scoped.** `Value::to_canonical()` rejects them at
   hash time only. A `-inf` attention mask inside a wasm guest never touches it. Correct
   engineering for a content-addressed system — do not relax it.
-- **The iteration budget is reachable.** An automated pass claimed a stack-depth guard fires
-  first. It does not; the walker is iterative and the budget check is inside the flat loop.
+- ~~**The iteration budget is reachable.** An automated pass claimed a stack-depth guard fires
+  first. It does not; the walker is iterative and the budget check is inside the flat loop.~~
+  **RETRACTED 2026-08-11 — this bullet was itself wrong, and it belongs in §3 not §4.** The
+  automated pass was right. The budget check *is* inside the flat loop, but that does not make it
+  the binding guard: `Evaluator::step` runs first on every iteration and pushes one frame per
+  non-terminal step, popping only on `"terminal"`. So `max_stack_depth` is a step counter in
+  disguise, and it is **64** while `DEFAULT_ITERATION_BUDGET` is **100 000**. Driving
+  `Evaluator::run_with` over a two-node graph with a back-edge returns
+  `EvalError::StackOverflow` at `stack.len() == 64`; the budget is never consulted. Through the
+  `Engine` the same 64 binds from the other side — Inv-2 rejects any handler whose longest path
+  exceeds `max_depth` (also 64), so a walk performs at most 64 steps and the flat budget cannot
+  be reached at the default configuration. **What is true:** both guards exist, both are now
+  operator-reachable (§3.7), and the flat budget becomes the operative bound only when
+  `EngineBuilder::iteration_budget` lowers it or `max_depth` is raised past it. Treating the
+  100 000 default as a live runtime backstop is the part to stop repeating.
 - **Verifiable compute is considered, not built.** `BUSINESS-PLAN.md:145` names redundant
   execution, reputation and selective audit; `PLATFORM-DESIGN.md:331` names TEE attestation. No
   Rust implements any of it. The engine verifies *what* was executed (module bytes
@@ -379,7 +575,7 @@ v1-beta without penalty.
 | **Binding-grammar reservation + disclosures** (§3.1) — resolved form of the relative-addressing question | The mechanism is walker-internal + a property convention = free forever. What the tag WOULD foreclose is the clean reservation: (a) freeze-record disclosure of the STREAM sigil grammar (an interpreted mini-language in a frozen wire position, currently named nowhere) + `context_binding_snapshots` intended semantics; (b) position-scoped registration-time `$`-reservation on op-node properties (+ ErrorCode mint); (c) the `InfiniteEmptyProducer` test-driven semantic at `engine_stream.rs:974`, decided deliberately; (d) the stale "first property" resolver comment. Design: `docs/future/binding-grammar.md` §5. | **RESOLVED — 4 small items, owed** |
 | **`Value` inventory clause in the freeze record** (§3.2) | The freeze record does not name the property type of every Node and Edge. Freezing a type system without stating it is the rule-14 shape. Must land with its receiving row in the same commit. The same clause states the decode-bound POSTURE: `MAX_DECODE_BYTES` and the META #629 cluster are policy tripwires, test-pinned not wire-frozen, raisable later with re-derived DoS reasoning — the D-94 Argon2id lesson, so no adopter reads 16 MiB as a wire limit they may not touch. | owed |
 | **`DSL-SPECIFICATION.md:60-67`** (§3.1) — normative claims with zero production writers | A FALSE-RECORD that freezes alongside the API. | owed |
-| **`ENGINE-SPEC` config claim** (§3.7) | Same shape. | owed, verification first |
+| **`ENGINE-SPEC` config claim** (§3.7) | Same shape. | **DONE** — 5 checks + 2 more found (§3.7); §4.1 rewritten in the primary checkout 2026-08-11. **Applied to an untracked file**, so it rode no tracked patch and CI can never gate it; the replacement text is preserved verbatim at §3.7 as the only durable record. Re-tracking `ENGINE-SPEC` is a publication call for Ben (§4.173 E). |
 
 Explicitly **not** now-or-never, despite being proposed or considered as such:
 - `#[non_exhaustive]` on `Value` and peers — our own freeze contract (`V1-FROZEN-INTERFACE.md`

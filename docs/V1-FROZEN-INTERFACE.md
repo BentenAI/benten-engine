@@ -1150,6 +1150,29 @@ crates. See build-backlog row 1 for the regeneration procedure.
 - `cargo +stable clippy --workspace --all-targets -- -D warnings`
   orthogonal catch on missing-docs / unused-pub.
 
+**Baseline-update log (Rust surface).**
+
+- **2026-08-11, R6 fix-wave — `docs/public-api/benten-engine.txt`, ADDITIVE, exactly 4
+  added lines** (the `EngineBuilder` block appears twice in `--simplified` output, so the
+  two new methods show as 2 lines each): `EngineBuilder::invariant_config(self,
+  benten_eval::InvariantConfig) -> Self` and `EngineBuilder::iteration_budget(self, u64)
+  -> Self`. **Zero removals, zero renames, zero signature changes.** Regenerated with CI's
+  exact pipeline (`cargo +nightly public-api --simplified -p benten-engine`, stderr
+  dropped); never hand-edited.
+  **Why:** `benten_eval::InvariantConfig` was documented as "configurable invariant
+  thresholds" while all three engine registration paths hardcoded
+  `InvariantConfig::default()` inline, and the engine's only iteration-budget writer was
+  the cfg-gated `Engine::testing_set_iteration_budget` — i.e. two FALSE RECORDS of the
+  rule-14 shape, which a freeze makes permanent. Per rule 15 the fix is the CODE. The
+  runtime frame cap (`Evaluator::max_stack_depth`) is deliberately **derived** from
+  `InvariantConfig::max_depth` rather than exposed as a third knob, because the two bound
+  the same quantity and previously agreed only by both being the literal `64`.
+  **Freeze-pin check:** both new signatures are grep-clean of `tauri::Runtime` /
+  `tokio::runtime::Handle` / `with_runtime`, so the §"Runtime-handle-leak structural pin
+  via cargo-public-api baseline" defense on this exact `EngineBuilder` block is unaffected.
+  Default-configuration behaviour is byte-identical to the pre-change engine. Full record +
+  verdict table + falsification mutations: `docs/future/engine-fit-and-gaps.md` §3.7.
+
 **Composing-phase escape valve:**
 A new pub item = baseline-update PR; reviewed against the freeze
 contract; Composing may add but never remove or rename without HALT-AND-

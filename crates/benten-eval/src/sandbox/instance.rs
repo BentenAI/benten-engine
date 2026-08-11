@@ -39,6 +39,54 @@ use wasmtime::{Config, Engine, Module};
 /// argues for it).
 pub const MODULE_CACHE_MAX_ENTRIES: usize = 256;
 
+/// The guest call-stack ceiling **actually enforced** by the SANDBOX
+/// runtime, in bytes (512 KiB — wasmtime's own `Config::max_wasm_stack`
+/// default).
+///
+/// # This limit is PROCESS-wide, not per-call
+///
+/// It is applied to the shared-`Engine` singleton inside
+/// [`shared_engine`], which is a `OnceLock` — constructed at first
+/// SANDBOX use and never reconstructed. wasmtime resolves
+/// `max_wasm_stack` at `Engine` construction time, so **no per-call
+/// value can change it, even in principle**. Honouring a per-call stack
+/// size would require one `wasmtime::Engine` per distinct size;
+/// `Module`s are not portable across `Engine`s, so that would fragment
+/// the compile cache (see [`module_for_bytes`]) and blow the D22
+/// cold-start budget (≤2 ms p95 Linux x86_64) that the shared-Engine
+/// discipline exists to meet. Per-call stack sizing is therefore
+/// excluded BY DESIGN (D3-RESOLVED + wsa-20 + D22), not merely
+/// unimplemented.
+///
+/// # Why this constant exists
+///
+/// It is the single source of truth for the enforced ceiling. Before it,
+/// the enforced value was a bare `512 * 1024` literal in
+/// [`shared_engine`] while [`crate::sandbox::MAX_WASM_STACK_DEFAULT`]
+/// carried an INDEPENDENT `512 * 1024` literal — and the executor
+/// reported the caller's per-call *request* in
+/// `SandboxError::StackOverflow` rather than either of them. A caller
+/// who set `SandboxConfig::max_wasm_stack = 4_000_000` and overflowed at
+/// 512 KiB was told "guest exceeded max_wasm_stack (4000000 bytes)".
+/// Both values now derive from this constant, so the enforced limit and
+/// the reported limit cannot diverge — the mismatch is unrepresentable
+/// rather than merely tested-against.
+///
+/// Read it as a `u64` (the type the error payload uses) via
+/// [`engine_max_wasm_stack_bytes`].
+pub const ENGINE_MAX_WASM_STACK_BYTES: usize = 512 * 1024;
+
+/// The enforced guest call-stack ceiling as a `u64`.
+///
+/// This is the value operators must see in
+/// `SandboxError::StackOverflow` — the limit the guest actually hit, not
+/// a per-call request the process-wide `Engine` could never honour. See
+/// [`ENGINE_MAX_WASM_STACK_BYTES`] for why the limit is process-scoped.
+#[must_use]
+pub fn engine_max_wasm_stack_bytes() -> u64 {
+    ENGINE_MAX_WASM_STACK_BYTES as u64
+}
+
 /// Process-wide shared [`wasmtime::Engine`] (D3-RESOLVED + wsa-20).
 ///
 /// Constructed at first call via [`shared_engine`]; reused across all
@@ -75,7 +123,16 @@ pub fn shared_engine() -> &'static Engine {
         // async API surface (see workspace Cargo.toml `wasmtime` entry).
         // Defense-in-depth: cap stack size so ESC-5 (recursion-overflow)
         // surfaces as a wasmtime trap, not a host-process abort.
-        cfg.max_wasm_stack(512 * 1024);
+        //
+        // This is the ONLY place the guest stack ceiling is enforced, and
+        // because SHARED_ENGINE is a OnceLock it is set exactly once per
+        // process. `SandboxConfig::max_wasm_stack` cannot influence it —
+        // see ENGINE_MAX_WASM_STACK_BYTES for the full rationale. Naming
+        // the constant (rather than repeating the literal) is
+        // load-bearing: the executor reports the SAME constant in
+        // `SandboxError::StackOverflow`, so the enforced limit and the
+        // reported limit cannot drift apart.
+        cfg.max_wasm_stack(ENGINE_MAX_WASM_STACK_BYTES);
         Engine::new(&cfg).expect("wasmtime Engine construction failed")
     })
 }

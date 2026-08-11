@@ -130,8 +130,16 @@ pub struct MapCallErrorContext {
     /// Fuel ceiling configured for the call (used for
     /// `FuelExhausted.limit`).
     pub fuel_limit: u64,
-    /// `max_wasm_stack` ceiling configured for the call (used for
-    /// `StackOverflow.max_wasm_stack` per Phase-3 G17-A1 wave-5b).
+    /// The guest stack ceiling **actually enforced** by the wasmtime
+    /// `Engine` (used for `StackOverflow.max_wasm_stack` per Phase-3
+    /// G17-A1 wave-5b).
+    ///
+    /// Callers MUST pass
+    /// [`crate::sandbox::instance::engine_max_wasm_stack_bytes`], NOT a
+    /// per-call `SandboxConfig::max_wasm_stack` request — the latter is
+    /// inert (the ceiling lives on the process-wide `OnceLock<Engine>`),
+    /// so passing it makes the error report a limit that was never
+    /// applied.
     pub max_wasm_stack: u64,
 }
 

@@ -429,9 +429,21 @@ pub enum ErrorCode {
     /// hybrid reserves the API as a typed-error no-op until Phase 8
     /// marketplace work lifts the deferral.
     SandboxManifestRegistrationDeferred,
-    /// SANDBOX module bytes failed wasmtime's structural validation
-    /// (malformed module, type mismatch, OOB section, etc.). Maps the
-    /// wasmtime trap classes that are NOT a budget exhaustion.
+    /// EITHER (a) SANDBOX module bytes failed wasmtime's structural
+    /// validation (malformed module, type mismatch, OOB section, etc.) —
+    /// the wasmtime trap classes that are NOT a budget exhaustion — OR
+    /// (b) the bytes are valid wasm but the module's exported `run`
+    /// entry does not fit the SANDBOX ABI.
+    ///
+    /// Class (b) is NOT new: this variant has always also covered
+    /// "module has no exported `run` function" plus store/linker setup
+    /// failures (`set_fuel`, host-fn registration), none of which are
+    /// wasmtime-side structural validation. The wording is widened here
+    /// so the record stops understating the variant's real domain, and
+    /// to name the return-ABI arm: a `run` export whose RESULT TYPE the
+    /// ABI cannot encode — `v128` (wasm SIMD) or any reference type — is
+    /// REJECTED with this code rather than being encoded as a zero
+    /// placeholder.
     SandboxModuleInvalid,
     /// SANDBOX nested-dispatch denied. D19-RESOLVED rename from
     /// `E_SANDBOX_REENTRANCY_DENIED` per wsa-7 + r1-security convergence:

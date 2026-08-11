@@ -1572,7 +1572,9 @@ pub const benten_eval::sandbox::host_fns::RESERVED_HOST_ASYNC_CAP: &str
 pub fn benten_eval::sandbox::host_fns::default_host_fns() -> alloc::sync::Arc<alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_eval::sandbox::host_fns::HostFnSpec>>
 pub fn benten_eval::sandbox::host_fns::host_fn_names() -> &'static [&'static str]
 pub mod benten_eval::sandbox::instance
+pub const benten_eval::sandbox::instance::ENGINE_MAX_WASM_STACK_BYTES: usize
 pub const benten_eval::sandbox::instance::MODULE_CACHE_MAX_ENTRIES: usize
+pub fn benten_eval::sandbox::instance::engine_max_wasm_stack_bytes() -> u64
 pub fn benten_eval::sandbox::instance::hash_module_bytes(&[u8]) -> benten_eval::sandbox::instance::ModuleCidHash
 pub fn benten_eval::sandbox::instance::module_cache_size() -> usize
 pub fn benten_eval::sandbox::instance::module_for_bytes(&[u8]) -> core::result::Result<alloc::sync::Arc<wasmtime::runtime::module::Module>, wasmtime_internal_core::error::error::Error>
@@ -2352,6 +2354,7 @@ impl core::marker::UnsafeUnpin for benten_eval::sandbox::fingerprint::WallclockT
 impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::sandbox::fingerprint::WallclockTaintedAddress
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::sandbox::fingerprint::WallclockTaintedAddress
 pub const benten_eval::sandbox::DEFAULT_RANDOM_BUDGET_BYTES_PER_CALL: u64
+pub const benten_eval::sandbox::ENGINE_MAX_WASM_STACK_BYTES: usize
 pub const benten_eval::sandbox::FINGERPRINT_COLLAPSE_THRESHOLD: u32
 pub const benten_eval::sandbox::MAX_WASM_STACK_DEFAULT: u64
 pub const benten_eval::sandbox::RESERVED_HOST_ASYNC_CAP: &str
@@ -2360,6 +2363,7 @@ pub const benten_eval::sandbox::WALLCLOCK_MAX_MS: u64
 pub fn benten_eval::sandbox::default_host_fns() -> alloc::sync::Arc<alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_eval::sandbox::host_fns::HostFnSpec>>
 pub fn benten_eval::sandbox::default_manifest_names() -> &'static [&'static str]
 pub fn benten_eval::sandbox::default_manifests() -> alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_eval::sandbox::manifest::CapBundle>
+pub fn benten_eval::sandbox::engine_max_wasm_stack_bytes() -> u64
 pub fn benten_eval::sandbox::execute(&[u8], benten_eval::sandbox::manifest::ManifestRef, &benten_eval::sandbox::manifest::ManifestRegistry, benten_eval::primitives::sandbox::SandboxConfig, &[alloc::string::String], &benten_eval::exec_state::AttributionFrame) -> core::result::Result<benten_eval::primitives::sandbox::SandboxResult, benten_eval::primitives::sandbox::SandboxError>
 pub fn benten_eval::sandbox::execute_with_live_cap_check(&[u8], benten_eval::sandbox::manifest::ManifestRef, &benten_eval::sandbox::manifest::ManifestRegistry, benten_eval::primitives::sandbox::SandboxConfig, &[alloc::string::String], &benten_eval::exec_state::AttributionFrame, core::option::Option<benten_eval::primitives::sandbox::LiveCapCheck>) -> core::result::Result<benten_eval::primitives::sandbox::SandboxResult, benten_eval::primitives::sandbox::SandboxError>
 pub fn benten_eval::sandbox::host_fn_names() -> &'static [&'static str]

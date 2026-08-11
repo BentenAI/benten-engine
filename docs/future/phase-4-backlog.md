@@ -2122,4 +2122,94 @@ record §5.2); the `WriteContext::enforce_system_zone` zero-caller false-record
 
 ---
 
+### §4.173 Numeric-limit configurability — the accepted-then-ignored knobs and the unbuilt operator surface
+
+**This row is the live receiving destination for everything §3.7 of
+`docs/future/engine-fit-and-gaps.md` verified and did not fix.** Origin: that section, whose
+per-knob verdict table is the evidence and is not repeated here. The disclosure half (rewriting
+`ENGINE-SPEC` §4.1 + the multi-tenancy qualifier) is done separately and is **not** this row.
+
+**Context in one line:** `ENGINE-SPEC` asserted *"All numeric limits are configurable per capability
+grant"*; nothing derives a numeric bound from a grant, and only one limit (SANDBOX wallclock) has any
+operator surface at all.
+
+**A. The two accepted-then-ignored knobs — code fixes, rule 15, and neither is a narrowing.**
+
+1. **`output_max_bytes` is validated at registration and never read at runtime.**
+   `invariants/sandbox_output.rs` reads the node property and rejects declarations above the 16 MiB
+   ceiling. The runtime budget comes from a *differently named* property — `output_limit` — feeding
+   `SandboxConfig::output_bytes`, default 1 MiB. A handler declaring `output_max_bytes: 4_000_000`
+   passes registration and silently runs under 1 MiB. **The `InvariantConfig::max_sandbox_output_bytes`
+   rustdoc claims the runtime `CountedSink` enforces the per-node value; it does not** — a
+   FALSE-RECORD in a rustdoc. Fix: make the runtime read the property registration validates (or
+   typed-reject the inert one). Accepting a second spelling is additive; silently ignoring a declared
+   budget is the defect.
+2. **`SandboxConfig::max_wasm_stack` is reported but not enforced.** The enforced value is
+   hardcoded on the process-wide `OnceLock<wasmtime::Engine>` in `sandbox/instance.rs`; the field is
+   consumed only to populate the `SandboxError::StackOverflow` error payload. Setting it changes the
+   error text, not the limit. **Do not "fix" this by making it per-call** — `max_wasm_stack` is a
+   `wasmtime::Config` setting fixed for an `Engine`'s life, so per-call variation costs the module
+   cache the singleton exists to hold. The correct fix is to stop the two from being able to diverge:
+   source the payload from the same constant the `Config` uses, so the reported number cannot lie.
+
+**B. The operator surface that does not exist.** *Partly closed in the same wave that opened this
+row:* `EngineBuilder::invariant_config` and `EngineBuilder::iteration_budget` give a deployment the
+Inv-2/3/5/6 + sandbox-nest + sandbox-output bounds and the Inv-8 step budget at construction time.
+That is the right home for structural bounds — an operator should not be able to relax a structural
+invariant from a text file — so what remains here is the genuinely *operational* tail, plus the
+knobs the builder does not reach.
+
+**`engine.toml` is worse off than "carries only one section" — it is not loaded at all.**
+`EngineConfig::load_or_default` has **no production caller**: outside its own module the type appears
+only as a re-export in `benten-engine`'s `lib.rs`, and `Engine::open` → `EngineBuilder::new().open(path)`
+never invokes it. The parser, the `ENGINE_TOML_WALLCLOCK_MAX_HARD_CAP` 1-hour cap, the `tracing::warn!`
+on widening and the typed `E_ENGINE_CONFIG_INVALID` are all real, tested code reachable only from
+tests. So dropping an `engine.toml` next to a deployment changes nothing, silently. Two false records
+ride on this and are **fixed as disclosure in this same wave** (`docs/SANDBOX-LIMITS.md` gained a
+known-gap callout, `ENGINE-SPEC` §4.1(a) was corrected): the `E_ENGINE_CONFIG_INVALID` catalog entry
+describes a code that cannot fire on a production path, and the `E_SANDBOX_WALLCLOCK_EXCEEDED` /
+`E_SANDBOX_WALLCLOCK_INVALID` fix-hints instruct operators to relax an `engine.toml` ceiling — an
+action with no effect. **The wiring itself is the open item**: one call in the builder's `open` path,
+plus deciding precedence against `EngineBuilder` methods (a). Until it lands, the honest statement is
+that the engine has **no functioning operator-facing configuration surface at all**.
+
+Still a recompile after the builder work: evaluator stack depth 64 (now *derived* from Inv-2
+`max_depth` rather than independently settable) and the wasm guest stack (structurally — see A.2).
+SANDBOX memory left this list in the same wave: 64 MiB is now a ceiling, tightenable per-handler via
+the `memory_limit` property. Extending `engine.toml` is purely additive (new optional keys, absent ⇒
+built-in default) and therefore has no tag deadline — but *wiring the loader at all* is a live gap,
+not an extension. **Two constraints inherited from the existing `[sandbox]` design, which got this right
+and should not be re-litigated per-knob:** every relaxation needs its own hard cap with a typed
+load-time failure (the `ENGINE_TOML_WALLCLOCK_MAX_HARD_CAP` shape), and relaxing past a built-in
+security bound warns at startup. A config loader that lets an operator set `max_nodes = u32::MAX`
+silently is worse than no loader.
+
+**C. `GrantReaderConfig::max_chain_depth`** (default 64) — written only by a test, against a harness
+its own rustdoc calls a "test harness". Either wire it to a real reader or retense the rustdoc; per
+rule 15 price the code fix first. Small, and it sits in the capability subsystem, which is precisely
+where a reader who believed the "per capability grant" sentence would have gone looking.
+
+**D. Do NOT build "limits per capability grant" as stated.** Recorded so a future reader does not
+treat the corrected sentence as a spec. Grants are cap-string sets (`CapBundle` = `{caps,
+description, signature}`); making them carry numeric budgets is a wire-format change to a signed
+artifact plus an attenuation semantics question (does a delegated grant's budget subtract from its
+parent's, or shadow it?) that nobody has answered. It is a design problem, not a wiring problem, and
+it is **out of scope** until someone wants it for a named use case. The per-tenant-budget use case
+from the museum evaluation is served by §4.172's allowance indirection, which is a different and
+better-understood mechanism.
+
+**E. `docs/ENGINE-SPEC.md` is default-untracked — surfaced for Ben, not decided.** It is gitignored
+("internal-audience in current form"), so it is absent from every worktree and fresh clone. Three
+costs: reviewers in worktrees cannot see claims made about it and may infer they do not exist;
+corrections cannot ride tracked-file patches; CI can never gate its accuracy. The repo has re-tracked
+four docs for exactly this reason (`SECURITY-POSTURE`, `INVARIANT-COVERAGE`, `HOST-FUNCTIONS`,
+`DSL-SPECIFICATION`), each because a HARD-RULE clause-(b) destination must exist in fresh clones —
+and this row is now a fifth instance of the same pattern, since §3.7 cites the untracked file as its
+evidence. **But re-tracking publishes ~49 KB of internal-audience prose, which is a publication
+decision and Ben's call, not an orchestration one.** Options: re-track as-is (precedent exists,
+content unchanged, visibility restored); rewrite-then-track (slower, cleaner); leave untracked and
+accept that this class of claim is permanently un-gatable. No default is assumed here.
+
+---
+
 (Section structure additive; entries land as Phase 4-Foundation work surfaces them.)

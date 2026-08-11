@@ -192,6 +192,8 @@ pub fn benten_engine::builder::EngineBuilder::capability_policy(self, alloc::box
 pub fn benten_engine::builder::EngineBuilder::capability_policy_grant_backed(self) -> Self
 pub fn benten_engine::builder::EngineBuilder::capability_policy_ucan_durable(self) -> Self
 pub fn benten_engine::builder::EngineBuilder::change_stream_capacity(self, usize) -> Self
+pub fn benten_engine::builder::EngineBuilder::invariant_config(self, benten_eval::InvariantConfig) -> Self
+pub fn benten_engine::builder::EngineBuilder::iteration_budget(self, u64) -> Self
 pub fn benten_engine::builder::EngineBuilder::ivm_max_work_per_update(self, u64) -> Self
 pub fn benten_engine::builder::EngineBuilder::monotonic_source(self, alloc::sync::Arc<dyn benten_eval::time_source::MonotonicSource>) -> Self
 pub fn benten_engine::builder::EngineBuilder::new() -> Self
@@ -3152,6 +3154,8 @@ pub fn benten_engine::builder::EngineBuilder::capability_policy(self, alloc::box
 pub fn benten_engine::builder::EngineBuilder::capability_policy_grant_backed(self) -> Self
 pub fn benten_engine::builder::EngineBuilder::capability_policy_ucan_durable(self) -> Self
 pub fn benten_engine::builder::EngineBuilder::change_stream_capacity(self, usize) -> Self
+pub fn benten_engine::builder::EngineBuilder::invariant_config(self, benten_eval::InvariantConfig) -> Self
+pub fn benten_engine::builder::EngineBuilder::iteration_budget(self, u64) -> Self
 pub fn benten_engine::builder::EngineBuilder::ivm_max_work_per_update(self, u64) -> Self
 pub fn benten_engine::builder::EngineBuilder::monotonic_source(self, alloc::sync::Arc<dyn benten_eval::time_source::MonotonicSource>) -> Self
 pub fn benten_engine::builder::EngineBuilder::new() -> Self

@@ -827,6 +827,7 @@ export interface RandomHostFnOverride {
  *   - `fuel`             = `1_000_000` (D24 + dx-r1-2b-5)
  *   - `wallclockMs`      = `30_000` (D24)
  *   - `outputLimitBytes` = `1_048_576` (D15 trap-loudly default)
+ *   - `memoryLimitBytes` = `67_108_864` (64 MiB; tighten-only)
  *
  * Pin source: `packages/engine/test/sandbox.test.ts`.
  */
@@ -841,6 +842,15 @@ export interface SandboxArgsByName {
   wallclockMs?: number;
   /** Per-call output bound in bytes (default `1_048_576`). */
   outputLimitBytes?: number;
+  /**
+   * Per-call linear-memory bound in bytes (default `67_108_864` = 64 MiB).
+   *
+   * **Tighten-only.** A value at or below the 64 MiB engine ceiling
+   * applies; a value ABOVE it is ignored and logged, because memory is
+   * the one axis whose exhaustion can OOM-kill the host process shared
+   * by every other handler. See `docs/SANDBOX-LIMITS.md` §2.
+   */
+  memoryLimitBytes?: number;
   /**
    * MUST NOT co-occur with `module`-by-name. The discriminated-union
    * type system rejects setting `caps` on this variant; flagged by the
@@ -875,6 +885,15 @@ export interface SandboxArgsByCaps {
   wallclockMs?: number;
   /** Per-call output bound in bytes (default `1_048_576`). */
   outputLimitBytes?: number;
+  /**
+   * Per-call linear-memory bound in bytes (default `67_108_864` = 64 MiB).
+   *
+   * **Tighten-only.** A value at or below the 64 MiB engine ceiling
+   * applies; a value ABOVE it is ignored and logged, because memory is
+   * the one axis whose exhaustion can OOM-kill the host process shared
+   * by every other handler. See `docs/SANDBOX-LIMITS.md` §2.
+   */
+  memoryLimitBytes?: number;
 }
 
 /**
