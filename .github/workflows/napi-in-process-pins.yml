@@ -175,9 +175,26 @@ jobs:
           # `--features in-process-test` from the run step above -> every
           # target is filtered out by required-features, cargo still exits 0,
           # and this step reports all 17 missing.
+          #
+          # STRIP ANSI FIRST — this step reported "all 17 NEVER RUN" on six
+          # consecutive runs while the log plainly showed all 17 running green.
+          # `CARGO_TERM_COLOR: always` (line 59) makes cargo emit
+          # `ESC[1mESC[92m     RunningESC[0m tests/foo.rs`, so the reset sequence
+          # sits BETWEEN "Running" and " tests/" and a fixed-string grep for
+          # "Running tests/foo.rs" can never match. The gate was therefore
+          # UNPASSABLE — the mirror of a tautology, and worse on a freeze branch,
+          # because a check that always fails teaches everyone to read its red as
+          # background noise. (It did: the failure cause silently changed from
+          # "B8 not built" to this, and the second defect rode along unnoticed
+          # behind the first.) Strip here rather than setting COLOR=never on the
+          # run step, so humans keep the coloured log and the assertion stops
+          # depending on how it was rendered.
+          sed -e 's/\x1b\[[0-9;]*m//g' /tmp/napi-in-process-run.log \
+            > /tmp/napi-in-process-run.plain.log
+
           missing=0
           while IFS= read -r t; do
-            if ! grep -qF "Running tests/${t}.rs" /tmp/napi-in-process-run.log; then
+            if ! grep -qF "Running tests/${t}.rs" /tmp/napi-in-process-run.plain.log; then
               echo "::error::in-process-test target '${t}' was NEVER RUN (no 'Running tests/${t}.rs' line)."
               missing=$((missing + 1))
             fi
@@ -191,9 +208,9 @@ jobs:
           # A binary that runs zero tests is also a silent pass. `input_validation`
           # and the six cap_*/install_module_* guards all carry #[test] fns, so a
           # global zero here means the harness, not the pins, changed.
-          if grep -qE 'running 0 tests' /tmp/napi-in-process-run.log; then
+          if grep -qE 'running 0 tests' /tmp/napi-in-process-run.plain.log; then
             echo "::error::At least one in-process-test binary ran 0 tests. A gated pin file has been emptied or its #[test] fns removed."
-            grep -nE 'Running tests/|running 0 tests' /tmp/napi-in-process-run.log
+            grep -nE 'Running tests/|running 0 tests' /tmp/napi-in-process-run.plain.log
             exit 1
           fi
 
