@@ -562,7 +562,7 @@ export declare class ETransformSyntax extends BentenError {
 }
 export declare class EInputLimit extends BentenError {
     static readonly code = "E_INPUT_LIMIT";
-    static readonly fixHint = "The TS \u2192 Rust boundary rejects oversized or pathologically-nested inputs to prevent DoS. Default limits: Value::Map 10K keys, Value::List 10K items, Value::Bytes 16MB, Value::Text 1MB, nesting depth 128, subgraph pre-parse bytes 1MB. Limits are configurable via the engine builder. Either simplify the input or raise the relevant limit explicitly with a capability-grant-authorized override.";
+    static readonly fixHint = "The TS \u2192 Rust boundary rejects oversized or pathologically-nested inputs to prevent DoS, in a pre-scan over the raw wire bytes that runs BEFORE the canonical decoder is handed anything (for an allocation attack the allocation *is* the attack, so a check that runs after the tree is built has already lost). Enforced limits: `Value::Map` 10 000 keys, `Value::List` 10 000 items, `Value::Bytes` 16 MiB, `Value::Text` 1 MiB, total payload 16 MiB, aggregate item count 1 000 000, nesting depth 64, and any collection header declaring more children than the remaining bytes can hold. Either simplify the input or split the call. The limits are fixed constants \u2014 there is no configuration knob for them.";
     constructor(message: string, context?: Record<string, unknown>);
 }
 export declare class ESerialize extends BentenError {

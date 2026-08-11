@@ -1236,10 +1236,31 @@ agree" at every CI run.
   literals on crypto-touching types (PQ-hybrid JS-shape widening
   invariant).
 
+**Baseline-update log (item-10 manifest-review record).**
+
+- **2026-08-11, R6 fix-wave.** `packages/engine/etc/public-api.txt` updated —
+  **exactly two changed lines**, both the `EInputLimit.fixHint` string value.
+  **No structural drift:** the 203-class `CATALOG_CODES` set, every `code`
+  literal, and every signature are byte-identical, so the LOCKED contract in the
+  table above (catalog membership + regen determinism) is untouched. The prose
+  changed because the prior value was a **false record** — it advertised
+  "Limits are configurable via the engine builder" (no builder method, no config
+  struct exists) and "nesting depth 128" (the canonical decoder stops at 64, and
+  the napi cap is now derived from it). Per rule 15, a frozen baseline is not a
+  reason to preserve a false statement in an artifact that ships to consumers;
+  the honest value is the one that goes in. Regenerated with CI's exact pipeline
+  (`tsc 5.9.3 --emitDeclarationOnly --removeComments`, `LC_ALL=C` file sort),
+  never hand-edited. Provenance now lives in the `ERROR-CATALOG.md` blockquote,
+  which is doc-only and does not reach the published package.
+
 **Composing-phase escape valve:**
 - New TS export = ADDITIVE; baseline-update PR; reviewed against the
   freeze.
 - Removing/renaming = HALT-AND-SURFACE.
+- **A `fixHint` / doc-prose value change is NOT a structural change** — it is a
+  baseline-update with the diff shown in the log above. It still requires the
+  regenerated baseline in the same commit, because the detector diffs the whole
+  declaration text.
 - Backward-compatible additions (new optional fields on existing
   interfaces with `#[non_exhaustive]`-equivalent TS shape) can land with
   explicit regenerate + R6 review.
