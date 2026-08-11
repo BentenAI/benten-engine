@@ -739,7 +739,7 @@ overstate the binary:
   crate's public API was touched.
 - **The DAG-CBOR checker does not fire in the shipped cdylib.** It compiles
   under `napi-export`, but its only callers are `testing::deserialize_*`
-  (`lib.rs:2444`, `:2453`) inside `#[cfg(any(test, feature =
+  (`lib.rs`) inside `#[cfg(any(test, feature =
   "in-process-test"))] mod testing`, and `default = ["napi-export"]` does
   not enable that feature. **Compiling is not firing.** B8 closed the
   Phase-1 R3 contract exactly as that contract was written — against

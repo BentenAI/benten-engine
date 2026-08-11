@@ -61,8 +61,8 @@ two separate mis-framings during this analysis.
 `README.md` ("Bounded by construction… guaranteed to terminate") and baked-in #4 are literally
 true and stay true under dynamic operands. Termination rests on three mechanisms and **none of
 them reads an operand value**: DAG structure validated at registration (Inv-1, Kahn
-cycle-detect), a cumulative step budget (`evaluator.rs:279`, a counter), and a frame-stack cap
-(`lib.rs:909`). A dynamic BRANCH condition changes *which* forward edge is taken, never
+cycle-detect), a cumulative step budget (`evaluator.rs`, a counter), and a frame-stack cap
+(`lib.rs`). A dynamic BRANCH condition changes *which* forward edge is taken, never
 *whether* it is forward. **A value cannot increase the number of edges.**
 
 These sentences should stop being cited as a reason operands must be static. They do not say
@@ -136,7 +136,7 @@ on — does not carry data across its one joint.
 
 **Evidence it is unbuilt rather than designed out:**
 - `input: Node` is threaded through `call_handler` → `dispatch_call` → and then underscore-bound
-  at `run_inner` (`evaluator.rs:225`). A parameter threaded three layers and discarded is not a
+  at `run_inner` (`evaluator.rs`). A parameter threaded three layers and discarded is not a
   design.
 - `EvalContext` (the `$input` / `$result` / `$item` / `$index` binding container) is complete,
   unit-tested, `pub use`d, and appears 56× in the frozen `docs/public-api/benten-eval.txt` —
@@ -265,7 +265,7 @@ not re-decide it.
 
 **Two corrections to the summary below, from the spectrum pass** (both ORCH-verified at source):
 (a) on the WRITE-primitive path — the one an admission check sits on — `CapWriteContext.actor_cid`
-is never populated (`primitive_host.rs:623-625`), so the policy sees a **scope**, not a
+is never populated (`primitive_host.rs`), so the policy sees a **scope**, not a
 **principal**: single-owner exclusivity rests on non-syncing local grants plus operational
 discipline, not on engine-enforced principal ownership, and the record must say so. (b) The
 borrow-on-demand question resolves as a *continuum*, not a rival design — deal 100% of C to one

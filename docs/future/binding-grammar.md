@@ -22,7 +22,7 @@ none aware of the others:
 Fifth piece: `docs/DSL-SPECIFICATION.md:88,90` teaches the convention as the normal way to
 author handlers — `.read({ by: "cid", value: "$input.cid" })`,
 `.write({ properties: { post_cid: "$input.cid" } })`. Only STREAM would honor it today; the
-general walk drops handler input on the floor (`evaluator.rs:225` `_input`, `call.rs:127`
+general walk drops handler input on the floor (`evaluator.rs` `_input`, `call.rs:127`
 `Node::empty()`).
 
 Phase-1's plan named this deliverable **E3, "Core of Phase 1"**, with a must-pass

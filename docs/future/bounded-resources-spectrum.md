@@ -240,7 +240,7 @@ Recorded so nobody re-imports them:
 | ledger claim | ORCH verdict |
 |---|---|
 | *"redb's blocking single-writer lock" — **REFUTED**, it is a fail-fast typed error `[verified-here]`* | **THE REFUTATION IS WRONG.** redb 4.1.0's own doc on `Database::begin_write`, verbatim: *"Only a single write may be in progress at a time. If a write is in progress, this function will block until it completes."* `bounded-resources.md`'s blocking-lock claim stands `[ORCH-verified]` |
-| *"`check_write` discards the actor `[verified-here]`"* | **TRUE ONLY FOR ONE PATH, false as stated.** `engine.rs:1407` sets `ctx.actor_cid = peer_actor_cid` on the sync-merge per-row recheck, and `engine_wait.rs:893` populates it on WAIT resumption. But `primitive_host.rs:623-625` — **the WRITE-primitive path an admission check would sit on** — builds `CapWriteContext::default()`, sets `label` and `device_cid`, and never sets `actor_cid` `[ORCH-verified]`. **The finding survives on the path that matters; its generality does not.** |
+| *"`check_write` discards the actor `[verified-here]`"* | **TRUE ONLY FOR ONE PATH, false as stated.** `engine.rs:1407` sets `ctx.actor_cid = peer_actor_cid` on the sync-merge per-row recheck, and `engine_wait.rs:893` populates it on WAIT resumption. But `primitive_host.rs` — **the WRITE-primitive path an admission check would sit on** — builds `CapWriteContext::default()`, sets `label` and `device_cid`, and never sets `actor_cid` `[ORCH-verified]`. **The finding survives on the path that matters; its generality does not.** |
 
 Both were marked `[verified-here]`, i.e. an agent claimed to have checked them personally. That is
 the §3.5n case exactly: **a claim's confidence label is not evidence.** The genuinely useful
