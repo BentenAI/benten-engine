@@ -134,6 +134,10 @@ docs/future/*
 # R0-input design record for IVM aggregation (fit-gaps §3.3); cited as the
 # named destination by engine-fit-and-gaps §3.3 and phase-4-backlog §4.171.
 !docs/future/ivm-aggregation.md
+# R0-input design record for bounded resources (fit-gaps §3.4); canonical
+# tracked home for the executionPolicy taxonomy (PLATFORM-DESIGN.md is
+# local-only); cited by engine-fit-and-gaps §3.4 and phase-4-backlog §4.172.
+!docs/future/bounded-resources.md
 # F-full doc-wave (R5 TIER-3): the compute-marketplace deferral destination
 # is cited from in-tree code (F-FREEZE-1 / F-DISC-2 doc-coupling tests assert
 # it exists; V1-FROZEN Rows D-28/D-29 name it) — track it (HARD RULE clause-b).

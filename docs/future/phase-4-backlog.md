@@ -2025,4 +2025,48 @@ and the stale #1084 cites) — those ride the pre-tag fix waves.
 
 ---
 
+### §4.172 Bounded resources — single-owner admission (the post-tag build)
+
+**This row is the live receiving destination for the bounded-resource build.** Design of
+record: `docs/future/bounded-resources.md` (R0-INPUT; the build runs its own R0→R1 pipeline).
+Origin: `docs/future/engine-fit-and-gaps.md` §3.4; decision-log D-107.
+
+**What lands here, in order:**
+1. The one new engine mechanism: an additive in-tx count read
+   (`Transaction::count_by_property`-shaped) + the graph-layer bound check sitting BELOW all
+   three write-entry families (`Engine::transaction` wrapper, direct `backend.transaction`
+   callers incl. `create_node`/`append_version`, the privileged `put_node_with_context`
+   family) + the `BoundExceeded { limit, current, available }` outcome arm. Placement
+   invariant: admission state is read inside the serialization domain of the commit that
+   writes it — the falsification arms in the record §2 are the acceptance tests.
+2. Bound declaration (`bound:decl`) + ownership record (`bound:ownership`, epoch-chained) +
+   override label/scope — data + existing capability machinery. **REQUIREMENT: each bound's
+   admission and override labels map to a dedicated sync zone** (the per-row merge recheck is
+   zone-granular; without this coupling the enforcement story has an oversell-shaped hole).
+3. `executionPolicy: owner` dispatch value; annotation home = system:-zone companion spec node
+   (outside handler content identity — decided in the record §5.1).
+4. Owner-side admission service (single-flight queue; `Transport::Http` wire framing —
+   declared-unbuilt at `thin_client.rs:607-615`; command handler → `call_as`).
+5. ErrorCode mints (~2: bound-exceeded with `{available, bound, owner_did}`;
+   owner-unreachable with `available` ABSENT — never a stale number presented as live) + full
+   mirrors.
+6. Handler UX front-end (BRANCH pre-check + `ON_REFUSED` edge) — permanently advisory, waits
+   on §4.170 (binding grammar) + §4.171 (the fold as reporting read).
+7. Hardening interlocks inherited: thread-keyed blocking TxGuard (same-thread nested → error,
+   cross-thread → queue); the pre-existing active-call frame cross-contamination under
+   concurrent walks (`engine.rs:873, 3887-3936`).
+8. Named rows: namespaced-bounds (per-DID partition story — namespaced writes skip
+   PROP_INDEX_TABLE today); counter-cache revisit-iff k ≫ 10³; **escrow revisit-iff
+   `C > 3·n·q_p99` AND measured multi-homed demand** (Bailis theorem recorded in the design —
+   escrow relocates coordination, nothing removes it).
+9. R1 verification items from the record §8: merge-recheck authority binding in relay
+   topologies; WAIT-suspension × buffered-ops interplay; quantity representation
+   (row-per-unit vs qty property); sync-ingress re-validation.
+
+**Not this row:** the pre-tag items — the freeze-record disclosure sentence (drafted in the
+record §5.2); the `WriteContext::enforce_system_zone` zero-caller false-record
+(wire/delete/retense before the tag — post-tag removal is a narrowing); both ride W-REC.
+
+---
+
 (Section structure additive; entries land as Phase 4-Foundation work surfaces them.)

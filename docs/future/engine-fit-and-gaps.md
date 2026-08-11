@@ -254,7 +254,29 @@ schema-declared scale is confirmed as what makes balances exact integers.
 
 ### 3.4 Bounded resources under partition — "at most N"
 
-**Shape:** engine · **Freeze:** no (dispatch policy, not wire) · **Status:** OPEN, undispositioned
+**Shape:** engine · **Freeze:** no structural (disclosure + one false-record fix owed) ·
+**Status:** DESIGNED — **the gap is still open**: the engine still admits the oversell. Design
+at **`docs/future/bounded-resources.md`** (R0-input; build gets its own ADDL pipeline; also the
+canonical tracked home for the `executionPolicy` taxonomy, since `PLATFORM-DESIGN.md` is
+local-only); receiving row **`phase-4-backlog.md` §4.172**.
+
+**Design summary.** Single-owner admission: a bound is data (`bound:decl`), exactly one engine
+— the declared `UptimePolicy::AlwaysOn` peer — holds the admit grant, and the check runs
+**inside the commit's own serialization domain**: an additive in-transaction count read at the
+graph layer, below all THREE write-entry families (the `Engine::transaction` cap-hook wrapper,
+direct `backend.transaction` callers incl. `create_node` and `append_version` — the sync-merge
+terminal write — and the privileged `put_node_with_context` family). redb's single-writer lock
+is the serial point; the write-through contract plus the Inv-13 in-tx read precedent make the
+check sound with ONE structural addition. The §3.3 fold is the REPORTING read, never the
+enforcement read (it updates post-commit — stale by every in-flight tx); the
+enforcement-vs-reporting split is stated once for both records. Ownership is an exclusive
+write-capability (the record is discovery and audit; the grant is law), with a load-bearing
+REQUIREMENT that each bound's labels map to a dedicated sync zone (the per-row merge recheck
+is zone-granular). Refusal is a typed domain outcome carrying `{available, bound, owner_did}`;
+the manager override is a first-class attributed write through the same guard — "never exceed
+silently," stated positively. Escrow/bounded-counter CRDTs declined on the museum's 204K-booking
+measurement with a recorded revisit-iff (`C > 3·n·q_p99` AND measured multi-homed demand) and
+the Bailis theorem (coordination relocates, never removes).
 
 CRDT convergence guarantees everyone agrees on the set; it does not guarantee the set satisfies
 a bound. Two offline tills each sell the last seat, both writes are valid, both survive the
