@@ -108,7 +108,34 @@ jobs:
             --ignore RUSTSEC-2026-0222 \
             --ignore RUSTSEC-2026-0247 \
             --ignore RUSTSEC-2026-0248 \
-            --ignore RUSTSEC-2026-0251
+            --ignore RUSTSEC-2026-0251 \
+            --ignore RUSTSEC-2023-0126
+            # ---- AUDIT-ONLY (deliberately NOT in deny.toml) ----
+            # RUSTSEC-2023-0126 (`im` OrdSet aliasing violation) is `informational
+            # = "unsound"`. cargo-audit DENIES the unsound class; cargo-deny's
+            # version-2 default only WARNS on it. That asymmetry is the whole
+            # point of this belt-and-suspenders lane — the two tools have
+            # different policies and the stricter one is here. Listing this id in
+            # deny.toml would only produce a permanent `advisory-not-detected`
+            # warning, so the mirror is documented rather than literal; deny.toml
+            # carries a comment pointing back here (§3.5g item 4).
+            #
+            # SUBSTANCE, stated plainly because "unsound" undersells it: inserting
+            # into an `im::OrdSet` can violate Rust's aliasing rules — Miri reports
+            # a stacked-borrows violation in `sized_chunks::Chunk::force_copy()`.
+            # That is undefined behaviour reachable from safe code, category
+            # memory-corruption. `patched = []` and bodil/im-rs was archived
+            # 2026-05-03, so there is NO fix to take. It reaches us only through
+            # loro's internal persistent collections (loro 1.12 -> loro-internal ->
+            # im); Benten has no direct `im` usage and never constructs an OrdSet.
+            # VERIFIED 2026-08-11: bumping to loro-internal 1.13.9 does NOT drop
+            # `im`, so the upstream bump is not a closure path today — closure
+            # needs loro to replace `im` outright. Tracked at phase-4-backlog §3.6.
+            #
+            # RUSTSEC-2026-0253 (`lru` use-after-free on panic in `pop()`) is NOT
+            # listed: it was FIXED, not suppressed — `cargo update -p lru` took
+            # 0.18.0 -> 0.18.2 (the patched release). Transitive via
+            # iroh-relay 1.0.0-rc.0. A patch that exists gets taken.
             # RUSTSEC-2026-0222 (wasmtime store/type-index confusion between
             # engines, LOW): mirror of deny.toml. UNREACHABLE — benten-eval holds
             # ONE process-wide OnceLock<Engine> and has exactly one Engine::new

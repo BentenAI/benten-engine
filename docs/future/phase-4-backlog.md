@@ -128,6 +128,17 @@ All are **informational-only unmaintained advisories** (no exploit class). The c
 
 The `im` cluster is one transitive group via `loro 1.12 → loro-internal → im → {bitmaps, sized-chunks}`; Benten has no direct dependency on any of the three and cannot bump them independently.
 
+**Two more surfaced on the `cargo-audit` belt-and-suspenders lane, which denies the `unsound` class that cargo-deny only warns on — and they resolved in opposite directions, which is the point:**
+
+| Advisory | Crate | Disposition |
+|---|---|---|
+| RUSTSEC-2026-0253 | lru 0.18.0 (use-after-free on a panicking `Drop` during `pop()`) | **FIXED** — `cargo update -p lru` → 0.18.2, the patched release. Transitive via `iroh-relay 1.0.0-rc.0`. A patch that exists gets taken. |
+| RUSTSEC-2023-0126 | im (aliasing violation in `OrdSet` insertion) | **suppressed, audit-lane only** — no fix exists |
+
+**RUSTSEC-2023-0126 deserves stating plainly, because "unsound" undersells it.** Inserting into an `im::OrdSet` can violate Rust's aliasing rules — Miri reports a stacked-borrows violation in `sized_chunks::Chunk::force_copy()` where a shared borrow is invalidated by a unique borrow before the read through it completes. That is **undefined behaviour reachable from safe code**, filed under `memory-corruption`. `patched = []`, and `bodil/im-rs` was archived by its owner on 2026-05-03, so there is nothing to bump to. It reaches us only through loro's internal persistent collections; Benten has no direct `im` usage and never constructs an `OrdSet`. **Verified 2026-08-11: bumping `loro-internal` 1.12.0 → 1.13.9 does NOT drop `im`** — so the routine upstream-bump closure path does not apply here, and closure requires loro to replace `im` outright. The bump was reverted rather than taken, since it moves the CRDT layer without closing anything.
+
+The `im` ignore lives in `supply-chain.yml` **only**, with a comment in `deny.toml` explaining the asymmetry: an id cargo-deny never detects would generate a permanent `advisory-not-detected` warning and train us to skim past those. The §3.5g item-4 mirror is satisfied by documentation rather than a literal duplicate — deliberately, and both files say so.
+
 All four ignored in `deny.toml [advisories].ignore` **and** `supply-chain.yml` cargo-audit `--ignore` (§3.5g item 4 dual-config mirror). **Action: drop the wasmtime ignore when the runtime bump lands** (the guard test then becomes optional, not obsolete); **drop the `im` trio** when a loro release removes `im`.
 
 ### §3.4 Phase 4-Meta inherited carries from Phase 3

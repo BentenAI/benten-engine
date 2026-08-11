@@ -160,6 +160,24 @@ ignore = [
     { id = "RUSTSEC-2026-0247", reason = "bitmaps unmaintained (informational, archived upstream); transitive via loro 1.12 -> loro-internal -> im -> bitmaps; no direct Benten dependency; closure requires an upstream loro release dropping `im`, tracked at docs/future/phase-4-backlog.md §3.6" },
     { id = "RUSTSEC-2026-0248", reason = "im unmaintained (informational, bodil/im-rs archived); transitive via loro 1.12 -> loro-internal -> im; no direct Benten dependency; closure requires an upstream loro release dropping `im`, tracked at docs/future/phase-4-backlog.md §3.6" },
     { id = "RUSTSEC-2026-0251", reason = "sized-chunks unmaintained (informational, archived upstream); transitive via loro 1.12 -> loro-internal -> im -> sized-chunks; no direct Benten dependency; closure requires an upstream loro release dropping `im`, tracked at docs/future/phase-4-backlog.md §3.6" },
+
+    # ---- ONE ID IS SUPPRESSED IN supply-chain.yml AND DELIBERATELY NOT HERE ----
+    # RUSTSEC-2023-0126 (`im` OrdSet aliasing violation) is
+    # `informational = "unsound"`. cargo-audit DENIES that class; cargo-deny's
+    # version-2 default only WARNS on it, so this file does not need — and must
+    # not carry — an ignore entry for it: an id cargo-deny never detects would
+    # generate a permanent `advisory-not-detected` warning and train us to skim
+    # past those. The §3.5g item-4 dual-config mirror is therefore satisfied by
+    # DOCUMENTATION here rather than by a literal duplicate entry; the full
+    # rationale (real UB reachable from safe code, no patch, crate archived,
+    # loro-1.13.9 bump verified NOT to drop it) lives next to the cargo-audit
+    # --ignore in .github/workflows/supply-chain.yml. Do not "fix the mirror" by
+    # adding it here without first checking whether cargo-deny's unsound policy
+    # has changed.
+    #
+    # Also NOT here because it was FIXED rather than suppressed:
+    # RUSTSEC-2026-0253 (`lru` use-after-free on panic in `pop()`, transitive via
+    # iroh-relay) — closed by `cargo update -p lru` 0.18.0 -> 0.18.2.
 ]
 
 # ---------------------------------------------------------------------------
