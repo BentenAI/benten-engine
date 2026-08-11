@@ -92,11 +92,24 @@ it to **sharing** and not to **execution**. That asymmetry looks accidental.
 ## 3. Findings
 
 Legend — **Shape:** engine / application. **Freeze:** does the v1-beta tag foreclose it?
+**Status vocabulary (deliberately narrow, because "answered" was caught doing two jobs):**
+- **OPEN** — gap confirmed, no settled design.
+- **DESIGNED** — investigation concluded and a design record exists; **the gap itself is still
+  open**. Says nothing about code.
+- **ANSWERED** — no engine change needed; the supporting pattern *ships today*. The strongest
+  claim available short of LANDED, and reserved for it.
+- **LANDED** — the change is in, with the commit named.
+
+A status may only move rightward with evidence. "The design is written" never justifies
+ANSWERED — that conflation is the record-overstates-the-binary shape (CLAUDE.md rule 14) that
+this project spent its freeze phase hunting, and it was caught once in this very document.
 
 ### 3.1 Composition does not compose — relative addressing
 
-**Shape:** engine · **Freeze:** narrowed to 4 small pre-tag items · **Status:** ANSWERED —
-design at **`docs/future/binding-grammar.md`** (R0-input; build gets its own ADDL pipeline)
+**Shape:** engine · **Freeze:** narrowed to 4 small pre-tag items · **Status:** DESIGNED —
+**the gap is still open**: user handlers still drop caller input, and nothing is built. Design
+at **`docs/future/binding-grammar.md`** (R0-input; build gets its own ADDL pipeline); receiving
+row **`phase-4-backlog.md` §4.170**; the 4 pre-tag items ride the W-REC wave.
 
 **Resolution summary.** Investigation found not three but **four** partial implementations of
 handler-input binding — the crud specialization, `EvalContext`, the frozen-but-empty wire slot,

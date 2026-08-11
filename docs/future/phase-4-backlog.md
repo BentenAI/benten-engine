@@ -1955,4 +1955,37 @@ repeated here deliberately. Estimated scope: ~400-700 LOC.
 
 ---
 
+### §4.170 Binding grammar — E3 completion (the post-tag build)
+
+**This row is the live receiving destination for the binding-grammar build.** Design of
+record: `docs/future/binding-grammar.md` (R0-INPUT — per `feedback_addl_pipeline_full_observance`
+the build runs its own R0→R1 pipeline with that document as input). Origin:
+`docs/future/engine-fit-and-gaps.md` §3.1 ("composition does not compose"); decision-log D-105.
+
+**What lands here, in order:**
+1. The general sigil resolver in the walk (`$input`, `$input.<field>` at v1), resolved at
+   property-read time under the boundedness carve (data properties bind; graph-shape/budget
+   properties — CALL `target`/`call_op`, ITERATE `max` — never do; preserves Inv-8 exactly).
+2. CALL passes its staged input instead of `Node::empty()` (`call.rs:127`) — the callee's
+   `$input` binds; handler composition carries data across its one joint.
+3. WAIT snapshots live bindings into `context_binding_snapshots` (`exec_state.rs:272`) — the
+   frozen slot reserved for exactly this, currently always written empty.
+4. **STREAM unification (MANDATORY):** `resolve_stream_source` (`engine_stream.rs:1075`)
+   retires into the general resolver. Two resolvers for one grammar is the GCS-16 dual-home
+   drift class in semantics rather than bytes.
+5. **crud harvest (OPTIONAL, last, canary-style):** re-express `subgraph_for_crud`'s
+   clone-and-patch as `properties: "$input"` on a stored template — deletes the per-call
+   specialization machinery and shrinks the documented arch-10 registered-vs-walked CID
+   divergence. crud is the most-exercised path in the engine; it moves only after the general
+   mechanism is proven.
+6. Further sigils (`$result`, `$item`, `$index`, `$results`, `$error`) additively, per
+   position, as ITERATE/error-path integration is designed. The `$` namespace is reserved
+   pre-tag (see the pre-tag items in `binding-grammar.md` §5, folded into the W-REC wave).
+
+**Not this row:** the four PRE-tag items (freeze-record disclosure, position-scoped `$`
+reservation + ErrorCode, the `InfiniteEmptyProducer` decision, the stale resolver comment) —
+those ride the pre-tag fix waves and must land before `phase-4-meta-core-close`.
+
+---
+
 (Section structure additive; entries land as Phase 4-Foundation work surfaces them.)

@@ -125,8 +125,9 @@ with `$input`/`$input.<field>`). Consequences:
    builds the full map. The code is right; fix the comment (rule 15 micro-case).
 
 Everything else — the general resolver, CALL threading, WAIT snapshots, STREAM unification,
-crud harvest, further sigils — is post-tag additive, with this document as the R0-input and a
-receiving row in `docs/future/phase-4-backlog.md`.
+crud harvest, further sigils — is post-tag additive, with this document as the R0-input and
+**`docs/future/phase-4-backlog.md` §4.170** as the receiving row (it exists and carries the
+ordered build list — not a forward reference).
 
 ## 6. What this closes
 
