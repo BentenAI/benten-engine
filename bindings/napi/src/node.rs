@@ -128,7 +128,13 @@ fn json_to_value(
     budget: &mut ByteBudget,
 ) -> napi::Result<Value> {
     if depth > JSON_MAX_DEPTH {
-        return Err(input_limit("value tree exceeds 128-level depth limit"));
+        // Message is DERIVED for the same reason the constant is: a literal here
+        // silently outlived the bound it described (it said 128 while the cap was
+        // already 64), which is the incomplete-sweep shape — fix the constant,
+        // leave the sentence that quotes it.
+        return Err(input_limit(&format!(
+            "value tree exceeds {JSON_MAX_DEPTH}-level depth limit"
+        )));
     }
     match v {
         serde_json::Value::Null => Ok(Value::Null),

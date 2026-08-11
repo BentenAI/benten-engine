@@ -126,6 +126,40 @@ ignore = [
     # R6 round-7); mirror in supply-chain.yml cargo-audit --ignore (§3.5g item 4).
     { id = "RUSTSEC-2026-0194", reason = "quick-xml quadratic-runtime duplicate-attribute DoS (HIGH 7.5); transitive via tauri 2.11 -> plist AND iroh 1.0.0-rc.0 -> netdev -> plist -> quick-xml; reachable ONLY for local OS-plist parsing (macOS Info.plist / netdev interface enumeration), never remote/untrusted XML; plist pins quick-xml ^0.39.2 so not bumpable without upstream plist/tauri/iroh release; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri/iroh upstream plist -> quick-xml >=0.41 bump)" },
     { id = "RUSTSEC-2026-0195", reason = "quick-xml unbounded namespace-declaration allocation DoS (HIGH 7.5); transitive via tauri 2.11 -> plist AND iroh 1.0.0-rc.0 -> netdev -> plist -> quick-xml; reachable ONLY for local OS-plist parsing (macOS Info.plist / netdev interface enumeration), never remote/untrusted XML; plist pins quick-xml ^0.39.2 so not bumpable without upstream plist/tauri/iroh release; closure tracked at docs/future/phase-4-backlog.md §3.6 (Tauri/iroh upstream plist -> quick-xml >=0.41 bump)" },
+
+    # RUSTSEC-2026-0222: wasmtime "Stores can mix up type indices between
+    # engines" (GHSA-hgjw-h833-99q9, CVSS 3.1 AV:L/AC:H/PR:H/UI:R/S:U/C:L/I:L/A:L
+    # — LOW). Suppressed on STRUCTURAL UNREACHABILITY, not on severity and not
+    # on cost. The advisory's precondition is two or more live `Engine`
+    # instances whose `Store`s can be confused; `benten-eval`'s SANDBOX runtime
+    # holds a single process-wide `OnceLock<Engine>`
+    # (`sandbox::instance::SHARED_ENGINE`) and has exactly one `Engine::new`
+    # call site in the whole crate, so there is no second engine to mix indices
+    # with. That premise is ENFORCED, not merely asserted, by
+    # `crates/benten-eval/tests/exactly_one_wasmtime_engine_per_process.rs` —
+    # adding a second construction site fails CI naming the file and line, with
+    # the failure message pointing back at this entry.
+    # NOT patchable in place: patched ranges are >=24.0.12/<25, >=36.0.13/<37,
+    # >=46.0.2/<47, >=47.0.3 — there is NO fix in the 43.x line we pin, so the
+    # remediation is a 3-major bump (43 -> 46/47) of the wasm runtime. That bump
+    # is a real change to SANDBOX behaviour and belongs in a window where the
+    # conformance lanes can absorb a regression, NOT on the interface-freeze
+    # branch. Surfaced to Ben 2026-08-11; closure tracked at
+    # `docs/future/phase-4-backlog.md §3.6`. Remove this entry when the bump
+    # lands (the guard test above then becomes optional, not obsolete).
+    { id = "RUSTSEC-2026-0222", reason = "wasmtime store/type-index confusion between engines (LOW, AV:L/AC:H/PR:H/UI:R); UNREACHABLE — benten-eval holds ONE process-wide OnceLock<Engine> with exactly one Engine::new site, enforced by crates/benten-eval/tests/exactly_one_wasmtime_engine_per_process.rs; no patch exists in the pinned 43.x line (fixes are >=46.0.2 / >=36.0.13), so remediation is a 3-major runtime bump deferred off the freeze branch; closure tracked at docs/future/phase-4-backlog.md §3.6" },
+
+    # RUSTSEC-2026-0247 / -0248 / -0251: `bitmaps`, `im`, `sized-chunks`
+    # unmaintained advisories (informational — no exploit class; rust-sec flags
+    # them because bodil/im-rs is archived). All three arrive as ONE transitive
+    # cluster via loro 1.12 -> loro-internal -> im -> {bitmaps, sized-chunks};
+    # `im` is loro's persistent-collection dependency, not ours, and Benten has
+    # no direct dependency on any of the three. Not separately bumpable: closure
+    # requires an upstream loro release that drops or replaces `im`. Tracked at
+    # `docs/future/phase-4-backlog.md §3.6` on the loro upstream bump cycle.
+    { id = "RUSTSEC-2026-0247", reason = "bitmaps unmaintained (informational, archived upstream); transitive via loro 1.12 -> loro-internal -> im -> bitmaps; no direct Benten dependency; closure requires an upstream loro release dropping `im`, tracked at docs/future/phase-4-backlog.md §3.6" },
+    { id = "RUSTSEC-2026-0248", reason = "im unmaintained (informational, bodil/im-rs archived); transitive via loro 1.12 -> loro-internal -> im; no direct Benten dependency; closure requires an upstream loro release dropping `im`, tracked at docs/future/phase-4-backlog.md §3.6" },
+    { id = "RUSTSEC-2026-0251", reason = "sized-chunks unmaintained (informational, archived upstream); transitive via loro 1.12 -> loro-internal -> im -> sized-chunks; no direct Benten dependency; closure requires an upstream loro release dropping `im`, tracked at docs/future/phase-4-backlog.md §3.6" },
 ]
 
 # ---------------------------------------------------------------------------

@@ -104,7 +104,24 @@ jobs:
             --ignore RUSTSEC-2025-0100 \
             --ignore RUSTSEC-2026-0173 \
             --ignore RUSTSEC-2026-0194 \
-            --ignore RUSTSEC-2026-0195
+            --ignore RUSTSEC-2026-0195 \
+            --ignore RUSTSEC-2026-0222 \
+            --ignore RUSTSEC-2026-0247 \
+            --ignore RUSTSEC-2026-0248 \
+            --ignore RUSTSEC-2026-0251
+            # RUSTSEC-2026-0222 (wasmtime store/type-index confusion between
+            # engines, LOW): mirror of deny.toml. UNREACHABLE — benten-eval holds
+            # ONE process-wide OnceLock<Engine> and has exactly one Engine::new
+            # site; the advisory needs two engines. That premise is enforced by
+            # crates/benten-eval/tests/exactly_one_wasmtime_engine_per_process.rs,
+            # so this suppression cannot silently outlive its own justification.
+            # No patch exists in the pinned 43.x line (fixes: >=46.0.2, >=36.0.13);
+            # remediation is a 3-major runtime bump held off the freeze branch.
+            # RUSTSEC-2026-0247 + -0248 + -0251 (bitmaps / im / sized-chunks
+            # unmaintained, informational): one transitive cluster via
+            # loro 1.12 -> loro-internal -> im; no direct Benten dependency;
+            # closure requires an upstream loro release dropping `im`.
+            # All four: closure tracked at phase-4-backlog.md §3.6.
             # RUSTSEC-2026-0194 + RUSTSEC-2026-0195 (quick-xml DoS, HIGH 7.5):
             # mirror of deny.toml [advisories].ignore (§3.5g item 4 dual-config
             # mirror). quick-xml transitive via tauri 2.11 -> plist AND

@@ -115,6 +115,21 @@ All are **informational-only unmaintained advisories** (no exploit class). The c
 
 `quick-xml` is transitive via **both** `tauri 2.11 → plist 1.9` **and** `iroh 1.0.0-rc.0 → netwatch → netdev → plist`. `plist` uses it **only** to parse **local OS-generated property lists** (macOS `Info.plist` / network-interface enumeration) — never remote or untrusted-user XML — so the malicious-XML input both advisories require is not reachable on any Benten attack surface. **Not bumpable in isolation:** `plist 1.9.0` pins `quick-xml ^0.39.2`, so `quick-xml ≥0.41.0` requires upstream `plist`/`tauri`/`iroh` releases (verified `cargo update -p quick-xml --precise 0.41.0` fails on the plist requirement 2026-07-02). Ignored in `deny.toml [advisories].ignore` **and** `supply-chain.yml` cargo-audit `--ignore` (§3.5g item 4 dual-config mirror). **v1-assessment-window action: drop BOTH ignores** the moment the tauri/iroh dep-bump cycle pulls `plist` onto `quick-xml ≥0.41.0`. (Cross-ref: iroh-version-bump cycle at `phase-3-backlog.md §9`.)
 
+**wasmtime store-confusion + loro `im` cluster (added 2026-08-11, Phase-4-Meta-Core R6 — the fix-wave re-gate on `ceb027ba`).** Four further advisories fired when the freeze branch was re-gated. They split into two categories and neither is informational-unmaintained-only:
+
+| Advisory | Crate | Severity | Why suppressed | Upstream closure |
+|---|---|---|---|---|
+| RUSTSEC-2026-0222 | wasmtime 43.0.2 (stores mix up type indices **between engines**) | LOW (`AV:L/AC:H/PR:H/UI:R`) | **structurally unreachable** — one process-wide engine | bump to ≥46.0.2 (no fix exists in 43.x) |
+| RUSTSEC-2026-0247 | bitmaps | informational unmaintained | transitive, no direct dep | upstream loro release dropping `im` |
+| RUSTSEC-2026-0248 | im | informational unmaintained | transitive, no direct dep | upstream loro release dropping `im` |
+| RUSTSEC-2026-0251 | sized-chunks | informational unmaintained | transitive, no direct dep | upstream loro release dropping `im` |
+
+**RUSTSEC-2026-0222 is the one that matters, and it is suppressed on reachability rather than severity or cost.** The advisory's precondition is *two or more live `Engine` instances* whose `Store`s can be confused. `benten-eval` holds a single process-wide `OnceLock<Engine>` (`sandbox::instance::SHARED_ENGINE`) and has **exactly one `Engine::new` call site in the crate**, so the precondition cannot arise. That premise is **enforced, not asserted** — `crates/benten-eval/tests/exactly_one_wasmtime_engine_per_process.rs` fails CI (naming file and line, and pointing back at the `deny.toml` entry) if a second construction site ever appears, so the suppression cannot silently outlive its own justification. **Patched ranges are `>=24.0.12/<25`, `>=36.0.13/<37`, `>=46.0.2/<47`, `>=47.0.3` — there is NO fix in the pinned 43.x line**, so remediation is a 3-major bump of the SANDBOX runtime. That is a real behavioural change to the wasm engine and belongs in a window where the conformance lanes can absorb a regression, not on the interface-freeze branch. **Surfaced to Ben 2026-08-11.**
+
+The `im` cluster is one transitive group via `loro 1.12 → loro-internal → im → {bitmaps, sized-chunks}`; Benten has no direct dependency on any of the three and cannot bump them independently.
+
+All four ignored in `deny.toml [advisories].ignore` **and** `supply-chain.yml` cargo-audit `--ignore` (§3.5g item 4 dual-config mirror). **Action: drop the wasmtime ignore when the runtime bump lands** (the guard test then becomes optional, not obsolete); **drop the `im` trio** when a loro release removes `im`.
+
 ### §3.4 Phase 4-Meta inherited carries from Phase 3
 
 - wasmtime Component-Model re-evaluation (Phase-3 D-PHASE-3-6 + D-PHASE-3-16 + r1-wsa-12)
