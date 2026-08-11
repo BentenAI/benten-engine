@@ -258,7 +258,20 @@ schema-declared scale is confirmed as what makes balances exact integers.
 **Status:** DESIGNED — **the gap is still open**: the engine still admits the oversell. Design
 at **`docs/future/bounded-resources.md`** (R0-input; build gets its own ADDL pipeline; also the
 canonical tracked home for the `executionPolicy` taxonomy, since `PLATFORM-DESIGN.md` is
-local-only); receiving row **`phase-4-backlog.md` §4.172**.
+local-only); receiving row **`phase-4-backlog.md` §4.172**. **The design-space map for every
+OTHER regime — Ben's "one system for the tills AND all kinds of decentralized balancing" — is
+`docs/future/bounded-resources-spectrum.md`**, which sits above the museum-regime record and does
+not re-decide it.
+
+**Two corrections to the summary below, from the spectrum pass** (both ORCH-verified at source):
+(a) on the WRITE-primitive path — the one an admission check sits on — `CapWriteContext.actor_cid`
+is never populated (`primitive_host.rs:623-625`), so the policy sees a **scope**, not a
+**principal**: single-owner exclusivity rests on non-syncing local grants plus operational
+discipline, not on engine-enforced principal ownership, and the record must say so. (b) The
+borrow-on-demand question resolves as a *continuum*, not a rival design — deal 100% of C to one
+peer and escrow **is** single-owner; the guard should therefore be written
+`count(rows attributed to me) < allowance(me)`, which costs nothing today and is what keeps one
+mechanism from forking into two.
 
 **Design summary.** Single-owner admission: a bound is data (`bound:decl`), exactly one engine
 — the declared `UptimePolicy::AlwaysOn` peer — holds the admit grant, and the check runs

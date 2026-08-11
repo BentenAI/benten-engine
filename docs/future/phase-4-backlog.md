@@ -2055,7 +2055,34 @@ and the stale #1084 cites) — those ride the pre-tag fix waves.
 
 **This row is the live receiving destination for the bounded-resource build.** Design of
 record: `docs/future/bounded-resources.md` (R0-INPUT; the build runs its own R0→R1 pipeline).
-Origin: `docs/future/engine-fit-and-gaps.md` §3.4; decision-log D-107.
+Origin: `docs/future/engine-fit-and-gaps.md` §3.4; decision-log D-107 + D-108.
+
+**Design-space map for every other regime: `docs/future/bounded-resources-spectrum.md`** (D-108) —
+the whole "at most N" taxonomy, six mechanism families scored by trust model and winning regime.
+Three things from it that bind this row:
+
+1. **Write the guard as `count(rows attributed to me) < allowance(me)`, not `count(all) < C`.**
+   Identical under exclusivity, free today, and it *is* the escrow continuum — dealing 100% of C to
+   one peer makes escrow literally this design. Hardcoding `count(all) < C` is the single decision
+   that forks one mechanism into two. Make the allowance a **node CID indirection**, not an inline
+   integer, and **reserve the epoch/fencing integer** on the ownership record — epoch, not time, is
+   the reclaim primitive, and it needs no clock.
+2. **A per-property `mergeStrategy` slot is the one genuine now-or-never in the whole space.**
+   Property merge is locked to LWW at the sync layer; escrow needs a non-LWW rights ledger and
+   compensation needs a converging count, so freezing "properties are LWW, period" with no
+   annotation slot forecloses **both leaderless families** regardless of the bound declaration.
+   Single-owner is the one family that never touches the CRDT property layer, which is exactly why
+   the museum-regime record does not carry this. **Reserve the SLOT, never a strategy.**
+3. **Correct the ownership claim.** On the WRITE-primitive path `CapWriteContext.actor_cid` is
+   never populated (`primitive_host.rs:623-625`, ORCH-verified), so the policy sees a scope, not a
+   principal. Exclusivity rests on non-syncing local grants + operational discipline. Also state
+   zone-coupling in its **writer-partition** form and price it honestly — `n` zones × `n` anchors ×
+   fork-refusing version chains, not "free".
+
+**Also received here (pre-tag, small):** `AtriumHandle::register_peer_did` has **zero production
+callers** while its rustdoc states the G16-D handshake wires it in the present tense — so sync
+attribution falls back to synthetic `node-id:NNN` strings in production. Wire it or retense it;
+per rule 15 price the code fix first.
 
 **What lands here, in order:**
 1. The one new engine mechanism: an additive in-tx count read

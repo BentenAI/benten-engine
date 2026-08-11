@@ -138,6 +138,11 @@ docs/future/*
 # tracked home for the executionPolicy taxonomy (PLATFORM-DESIGN.md is
 # local-only); cited by engine-fit-and-gaps §3.4 and phase-4-backlog §4.172.
 !docs/future/bounded-resources.md
+# The design-space map above the museum-regime record (fit-gaps §3.4, widened to
+# the whole "at most N" taxonomy). Tracked for the same reason as its siblings:
+# it is cited BY bounded-resources.md and phase-4-backlog §4.172, and §8 records
+# two refuted-refutations a future reviewer must be able to read.
+!docs/future/bounded-resources-spectrum.md
 # F-full doc-wave (R5 TIER-3): the compute-marketplace deferral destination
 # is cited from in-tree code (F-FREEZE-1 / F-DISC-2 doc-coupling tests assert
 # it exists; V1-FROZEN Rows D-28/D-29 name it) — track it (HARD RULE clause-b).
