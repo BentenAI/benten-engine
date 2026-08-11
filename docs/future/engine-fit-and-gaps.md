@@ -36,6 +36,27 @@ as products, and they hit the same three things: numerics that `Value` does not 
 layer that does not aggregate, and composition that does not compose. When unrelated workloads
 fail the same way, the gap is in the engine rather than in the fit.
 
+> ### ★ THE STRONGER INFERENCE — A BEN DECISION, NOT A TECHNICAL ITEM (added 2026-08-11)
+>
+> The paragraph above stops one step short. If two **randomly-arriving, unrelated** outside
+> evaluations both hit binding, aggregation and rich types, then **most real applications
+> will** — which reframes all three from adopter-specific gaps into **v1 completeness
+> questions**.
+>
+> CLAUDE.md baked-in #15 defines v1 as the platform: installable and usable end-to-end. So the
+> question that follows is: **does `v1-beta` ship with composition that does not compose and an
+> IVM layer that cannot sum a column?** A handler that cannot receive its caller's input is not
+> an exotic limitation — it is the joint where applications get built.
+>
+> Options: **(a)** tag as planned and treat both as Composing builds — the tag freezes the
+> *interface*, and both gaps are additive with no wire change; **(b)** pull one or both into
+> Core; **(c)** split — the binding-grammar reservation pre-tag (already planned) with the
+> build after.
+>
+> **ORCH lean: (a).** But "is this shippable as v1" is precisely the judgment baked-in #15
+> reserves for Ben, so this is recorded as an OPEN decision rather than a settled one, and it
+> should not be allowed to resolve by expiry at the tag.
+
 ---
 
 ## 2. Conceptual clarifications — corrections to how we describe the engine
@@ -123,6 +144,29 @@ reservation of the `$` namespace on operation nodes. Only the reservation + disc
 pre-tag; the mechanism is post-tag additive. Details, security notes, and the
 considered-and-declined list are in the design doc.
 
+> ### ⚠️ THE DESIGN RECORD COVERS ONE HALF OF THIS GAP (added 2026-08-11)
+>
+> Relative addressing is **two** things: (a) a handler saying *"the node I was given"*, and
+> (b) getting from that anchor to related nodes. `binding-grammar.md` answers (a) — `$input`
+> and `$input.<field>` give the anchor and **property access**. It gives **no edge traversal**,
+> and READ confirms the hole: it resolves by `cid` or by `label`, and there is no *"read the
+> node at the end of edge E from node N."*
+>
+> That matters because the composition model this section exists to serve puts **edges** at the
+> centre — handlers that create and interpret *custom node AND edge types*. A handler that can
+> name its input but cannot walk an edge from it still cannot traverse the edge types the model
+> is built on.
+>
+> **The answer was named during the originating investigation and then dropped from the record:**
+> `SubgraphSpec` (Roots / Expansion / Inclusion / Termination) IS traversal-from-anchors,
+> already ratified for Sharing & Confidentiality. The plausible complete shape is **a binding
+> names the root and a SubgraphSpec-shaped expression performs the traversal** — we gave the
+> engine relative addressing for *sharing* and not for *execution*, and that asymmetry looks
+> accidental. `binding-grammar.md` does not mention `SubgraphSpec` anywhere; it should.
+>
+> Status is unchanged (DESIGNED, never LANDED) — what was wrong was the *scope* the record
+> implied, not its status. **A related pre-tag verification is now owed; see §5.**
+
 Built-in `crud()` handlers receive their caller's data; user-authored handlers do not. Same
 `engine.call`, same evaluator, one `if` statement apart (`engine.rs:3966-3971`):
 `subgraph_for_crud` does `input.properties.clone()`; `subgraph_for_spec` takes `_input: &Node`.
@@ -186,6 +230,32 @@ meaning the schema declares.
 Nothing here is now-or-never. The honest caveat: nothing yet validates an instance `Value`
 against its declared `Scalar` — that is a missing implementation over shipped machinery, not a
 missing concept, and it needs no wire change.
+
+**Three sharpenings (2026-08-11), all of which belong in any reply to an adopter:**
+
+1. **`Decimal` is NOT a minted `Scalar`.** The shipped set is exactly eight — `Text`, `Int`,
+   `Float`, `Bool`, `Bytes`, `BytesCid`, `TimestampHlc`, `Null`. "The third member of a
+   two-member family" implies this and never states it. **The pattern ships; the member does
+   not.** Minting it is additive and post-tag-safe, but this section must not be read as "you
+   can do this today."
+
+2. **Scale belongs in the SCHEMA (per-field), never in the value (per-instance) — and that is
+   why our answer BEATS the variant that was asked for.** If scale rides on the value, then
+   1.50 as `(unscaled 150, scale 2)` and 1.5 as `(unscaled 15, scale 1)` are different bytes →
+   different CIDs → **the same amount has two identities**, and content-addressed equality and
+   dedup silently break. A `Value::Decimal` variant necessarily carries its own scale, so it
+   would have shipped exactly that bug. This resolves the RDF tension flagged during the
+   typed-values pass (*is `"1.50"^^xsd:decimal` the same term as `"1.5"^^xsd:decimal`?*) and
+   never closed: in a system where the CID is the identity, canonical scale is not a nicety.
+   Mechanically supported today — schema fields are Nodes with property bags, so a `scale`
+   property needs no vocabulary change.
+
+3. **The museum's objection does not "dissolve" — it becomes buildable.** They objected that
+   scale-in-schema "moves it into metadata that nothing validates." Today nothing does. The
+   difference from Versai is **structural, not yet actual**: a column comment can *never* be
+   enforced; a Benten schema is content-addressed graph structure the walker already traverses,
+   so it *can* be. State it that way; the stronger phrasing was an overstatement made in
+   conversation while this document stayed correct.
 
 **One pre-tag item — a disclosure, not a mechanism:** `benten_core::Value` is named nowhere in
 the freeze record. Freezing a type system without stating it is the rule-14 shape. See §5.
@@ -535,6 +605,25 @@ are laid out at §4.173 E. No default is assumed.
 
 ---
 
+### 3.8 The question nobody asked — does the engine handle their VOLUME?
+
+**Shape:** engine · **Freeze:** no · **Status:** OPEN — *and honestly labelled: this is an
+unasked question, not a known problem.*
+
+The museum evaluation cited **1.76 million real transaction rows** against a 248-table schema.
+We answered all three of their asks and never asked whether the engine handles their **scale**.
+
+A balance fold over 1.76M rows is O(n) with no aggregation, and even once §3.3's abelian fold
+lands, the backfill-on-register path walks them once. redb keeps a 1 GiB page cache by default
+so a hot scan is served from RAM rather than disk — but a cached O(n) scan is still O(n). The
+engine's query and index story at that row count is **unexamined by us**.
+
+This is the class of question that decides an adoption rather than shaping a design, and it
+should be checked *before* we tell anyone the engine fits. Related and already recorded: §3.3
+(no aggregation) is the mechanism that would make this a non-question.
+
+---
+
 ## 4. Things that are fine, checked because we suspected otherwise
 
 Recorded so nobody re-litigates them.
@@ -562,6 +651,23 @@ Recorded so nobody re-litigates them.
   Rust implements any of it. The engine verifies *what* was executed (module bytes
   BLAKE3-rechecked) and has nothing for verifying *that* it was. Worth stating explicitly in
   the docs, since it is otherwise inferred wrongly in both directions.
+- **Inv-8 is NOT inert — the worry is refuted.** The relative-addressing investigation flagged
+  in passing that Inv-8 "may be inert: it analyses property key `handler` while `call.rs`
+  dispatches on `target`," and never chased it. Chased 2026-08-11: the DSL compiler defines
+  `KEY_CALL_HANDLER = "handler"` and `SubgraphBuilder::call_handler` sets `"handler"` on the
+  node, so production CALL nodes carry the key Inv-8 reads. The invariant is live.
+  **Narrow residual, stated as a question rather than a claim:** `call.rs` also dispatches on
+  `target` + `call_op` (the typed-call form) — whether Inv-8's multiplicative budget covers
+  *that* shape is unverified. One check, worth doing pre-tag, not worth asserting either way.
+- **`Cid::from_blake3_digest` keeps its name — DECIDED, was Ben-deferred** (Surf-1 #1033,
+  resolved 2026-08-11 at `e032ee05`). The LLM evaluation flagged it as the one genuinely live
+  freeze question, and the code's own doc comment had deferred it. The constructor stamps
+  `MULTIHASH_BLAKE3` + `BLAKE3_DIGEST_LEN` unconditionally, so a codec-neutral `from_digest`
+  would *misdescribe* it. Baked-in #5's rule is that a frozen **slot** must never be named for
+  an algorithm — which is why `benten_ivm::Strategy` kept the variant name `Reserved` rather
+  than `ZSet` — but this is an **implementation** and names itself accurately. Agility arrives
+  by ADDING `from_<algorithm>_digest` constructors, additive and post-tag-safe, never by
+  vaguening this one into a name that lies. Byte layout unchanged either way.
 
 ---
 
@@ -576,6 +682,16 @@ v1-beta without penalty.
 | **`Value` inventory clause in the freeze record** (§3.2) | The freeze record does not name the property type of every Node and Edge. Freezing a type system without stating it is the rule-14 shape. Must land with its receiving row in the same commit. The same clause states the decode-bound POSTURE: `MAX_DECODE_BYTES` and the META #629 cluster are policy tripwires, test-pinned not wire-frozen, raisable later with re-derived DoS reasoning — the D-94 Argon2id lesson, so no adopter reads 16 MiB as a wire limit they may not touch. | owed |
 | **`DSL-SPECIFICATION.md:60-67`** (§3.1) — normative claims with zero production writers | A FALSE-RECORD that freezes alongside the API. | owed |
 | **`ENGINE-SPEC` config claim** (§3.7) | Same shape. | **DONE** — 5 checks + 2 more found (§3.7); §4.1 rewritten in the primary checkout 2026-08-11. **Applied to an untracked file**, so it rode no tracked patch and CI can never gate it; the replacement text is preserved verbatim at §3.7 as the only durable record. Re-tracking `ENGINE-SPEC` is a publication call for Ben (§4.173 E). |
+
+**Owed VERIFICATION, added 2026-08-11 — is READ's addressing set frozen closed?** (§3.1)
+The originating investigation asked: *"does relative addressing need anything in the frozen
+surface — a way for an op node to express traverse-edge-E-from-my-anchor — or is it entirely
+internal to the walker plus a property convention?"* That was answered **for bindings**
+(walker-internal plus the position-scoped `$` reservation) and **never for traversal**. READ
+accepts two addressing modes today (`cid`, `label`). A third is *probably* an additive new
+accepted property value — but whether READ's accepted-property set is itself part of the frozen
+surface **has not been checked**, and it is the one part of relative addressing the tag could
+foreclose. If additive → nothing owed and say so. If frozen-closed → now-or-never.
 
 Explicitly **not** now-or-never, despite being proposed or considered as such:
 - `#[non_exhaustive]` on `Value` and peers — our own freeze contract (`V1-FROZEN-INTERFACE.md`
