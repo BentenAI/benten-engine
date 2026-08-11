@@ -131,7 +131,13 @@ on — does not carry data across its one joint.
 needs deciding pre-tag is whether an op node needs a *frozen* way to express "traverse edge E
 from my anchor," or whether that is entirely internal to the walker plus a property convention.
 
-### 3.2 Rich value types — decimal, timestamp, big integer, set
+### 3.2 Rich value types — TWO findings, not one
+
+Both evaluations asked "types beyond what `Value` supports" as if it were one question. It is
+two, with different mechanisms — and merging them makes the answer look like "add a type" when
+it is really "declare a meaning" plus "don't inline the blob."
+
+#### 3.2a Numeric interpretation — decimal, bf16/f32, timestamp, big integer, set
 
 **Shape:** engine, resolved · **Freeze:** no · **Status:** ANSWERED — pattern already shipped
 
@@ -147,7 +153,9 @@ declared by a schema Node (`docs/SCHEMA-DRIVEN-RENDERING.md:52`). `Scalar` is
 `#[non_exhaustive]` with a comment from our own pre-tag F-22 sweep: *"a future scalar kind lands
 additively"* (`vocab.rs:161`), and unknown scalars typed-reject via
 `E_SCHEMA_VOCAB_SCALAR_UNKNOWN`. **A decimal is the third member of a two-member family, and one
-of the existing two is a timestamp.**
+of the existing two is a timestamp.** The museum's 3-scale money and the LLM project's
+bf16/f32 activations are the same finding: bits an existing variant already carries, whose
+meaning the schema declares.
 
 Nothing here is now-or-never. The honest caveat: nothing yet validates an instance `Value`
 against its declared `Scalar` — that is a missing implementation over shipped machinery, not a
@@ -155,6 +163,40 @@ missing concept, and it needs no wire change.
 
 **One pre-tag item — a disclosure, not a mechanism:** `benten_core::Value` is named nowhere in
 the freeze record. Freezing a type system without stating it is the rule-14 shape. See §5.
+
+#### 3.2b Bulk data — tensors, media, anything ≥ tens of KiB
+
+**Shape:** engine, resolved · **Freeze:** no · **Status:** ANSWERED — out-of-line, never inline
+
+The LLM project's second problem is not a type problem: `Bytes(Vec<u8>)` is owned, so every
+read of an inlined 285 MB tensor is a copy, against a machine achieving ~26 GB/s. No scalar
+interpretation touches that — it is a memory-access question.
+
+**The answer is the two-tier shape every content-addressed system converged on** (git trees vs
+blobs; IPFS DAG nodes vs chunked files; iroh docs vs blobs): small canonical inline properties,
+and bulk behind a CID reference. Benten already has all the pieces — the `bytes-cid` scalar (a
+`Value::Bytes` that *means* "a CID," one of the two shipped interpretations), `two_cid_map`
+(plaintext-CID → stored-CID), chunked at-rest AEAD splitting at `IROH_BLOCK_SIZE` (16 KiB,
+deliberately aligned with iroh's wire layer), and the §4.62 blob-store trait. **Identity
+composes:** the node's CID covers the reference, and the reference is the hash of the content —
+integrity over 285 MB without ever decoding 285 MB into a `Value`.
+
+**The decode bound is the tripwire that enforces this, and it is policy, not wire.**
+`Subgraph::MAX_DECODE_BYTES = 16 MiB` (`subgraph.rs:571`) and the META #629 bound cluster are
+**test-pinned** (`canonical_bytes_v1_const_values_core.rs:87` asserts the literal), which makes
+changing one a deliberate re-pin with re-derived DoS reasoning — not a wire break. Its job is to
+make "you inlined a blob" fail fast rather than degrade slowly: it is the amount of allocation
+an attacker-supplied byte string can force before rejection, and it is why the LLM project's
+per-expert granularity (3,840 × ~3.3 MB) is right and tensor-granular (285 MB) is structurally
+rejected. **Raising it was considered and declined** — it would hand an adversary bigger forced
+allocations while making the copy problem it nominally serves *worse*, and a 285 MB node would
+be a 285 MB sync unit fighting a 16 KiB-chunked transport.
+
+**Considered and declined as a pre-tag change:** switching `Bytes(Vec<u8>)` to a cheap-clone
+payload (`Arc<[u8]>` / `bytes::Bytes`). Pre-tag is genuinely the only window (a payload-type
+change on the frozen enum is HALT-AND-SURFACE after), but with bulk out-of-line, inline bytes
+stay small and copying them is cheap; the zero-copy need lives at the blob tier, which is not
+`Value` and is not frozen. Recorded so it reads as decided, not missed.
 
 ### 3.3 IVM does not aggregate
 
@@ -259,13 +301,19 @@ v1-beta without penalty.
 | Item | Why now | Status |
 |---|---|---|
 | **Relative-addressing surface shape** (§3.1) — does an op node need a *frozen* way to express "traverse edge E from my anchor"? | If it needs anything on a frozen surface, that is foreclosed. If it is walker-internal plus a property convention, it is free forever. | **UNRESOLVED — the open freeze question** |
-| **`Value` inventory clause in the freeze record** (§3.2) | The freeze record does not name the property type of every Node and Edge. Freezing a type system without stating it is the rule-14 shape. Must land with its receiving row in the same commit. | owed |
+| **`Value` inventory clause in the freeze record** (§3.2) | The freeze record does not name the property type of every Node and Edge. Freezing a type system without stating it is the rule-14 shape. Must land with its receiving row in the same commit. The same clause states the decode-bound POSTURE: `MAX_DECODE_BYTES` and the META #629 cluster are policy tripwires, test-pinned not wire-frozen, raisable later with re-derived DoS reasoning — the D-94 Argon2id lesson, so no adopter reads 16 MiB as a wire limit they may not touch. | owed |
 | **`DSL-SPECIFICATION.md:60-67`** (§3.1) — normative claims with zero production writers | A FALSE-RECORD that freezes alongside the API. | owed |
 | **`ENGINE-SPEC` config claim** (§3.7) | Same shape. | owed, verification first |
 
-Explicitly **not** now-or-never, despite being proposed as such: `#[non_exhaustive]` on `Value`
-and peers — our own freeze contract (`V1-FROZEN-INTERFACE.md` §"Composing-phase escape valve")
-states that *adding* `#[non_exhaustive]` is additive and permitted in Composing.
+Explicitly **not** now-or-never, despite being proposed or considered as such:
+- `#[non_exhaustive]` on `Value` and peers — our own freeze contract (`V1-FROZEN-INTERFACE.md`
+  §"Composing-phase escape valve") states that *adding* `#[non_exhaustive]` is additive and
+  permitted in Composing.
+- Raising `MAX_DECODE_BYTES` — test-pinned policy, not wire; and raising it is the wrong move
+  regardless (§3.2b).
+- `Bytes(Vec<u8>)` → cheap-clone payload — the one item where pre-tag genuinely IS the only
+  window, evaluated on that basis and **deliberately declined** (§3.2b): bulk belongs
+  out-of-line, so the zero-copy need never reaches `Value`.
 
 ---
 
