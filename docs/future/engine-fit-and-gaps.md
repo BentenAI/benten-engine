@@ -270,23 +270,45 @@ interpretation touches that — it is a memory-access question.
 
 **The answer is the two-tier shape every content-addressed system converged on** (git trees vs
 blobs; IPFS DAG nodes vs chunked files; iroh docs vs blobs): small canonical inline properties,
-and bulk behind a CID reference. Benten already has all the pieces — the `bytes-cid` scalar (a
-`Value::Bytes` that *means* "a CID," one of the two shipped interpretations), `two_cid_map`
-(plaintext-CID → stored-CID), chunked at-rest AEAD splitting at `IROH_BLOCK_SIZE` (16 KiB,
-deliberately aligned with iroh's wire layer), and the §4.62 blob-store trait. **Identity
-composes:** the node's CID covers the reference, and the reference is the hash of the content —
-integrity over 285 MB without ever decoding 285 MB into a `Value`.
+and bulk behind a CID reference. **The recommendation stands. Everything this section originally
+said in support of it was wrong, and it is corrected in place below rather than quietly edited.**
 
-**The decode bound is the tripwire that enforces this, and it is policy, not wire.**
-`Subgraph::MAX_DECODE_BYTES = 16 MiB` (`subgraph.rs:571`) and the META #629 bound cluster are
-**test-pinned** (`canonical_bytes_v1_const_values_core.rs:87` asserts the literal), which makes
-changing one a deliberate re-pin with re-derived DoS reasoning — not a wire break. Its job is to
-make "you inlined a blob" fail fast rather than degrade slowly: it is the amount of allocation
-an attacker-supplied byte string can force before rejection, and it is why the LLM project's
-per-expert granularity (3,840 × ~3.3 MB) is right and tensor-granular (285 MB) is structurally
-rejected. **Raising it was considered and declined** — it would hand an adversary bigger forced
-allocations while making the copy problem it nominally serves *worse*, and a 285 MB node would
-be a 285 MB sync unit fighting a 16 KiB-chunked transport.
+> ### ⚠️ FALSE-RECORD, corrected 2026-08-12 — this section was stamped ANSWERED on evidence that
+> does not exist. The error is ORCH's and it reached adopter-facing text.
+>
+> **Clause 1 — "Benten already has all the pieces."** Checked all four. `bytes-cid` is a *schema
+> interpretation* of a `Value::Bytes`, not a storage tier. `two_cid_map` is a **sync/encryption**
+> plaintext-CID → stored-CID mapping, not storage. `IROH_BLOCK_SIZE` chunking is **per-chunk
+> AEAD**, a crypto layout. And the only blob facility, `RedbBlobBackend`, stores blobs **AS NODES**
+> (`blob_cid` + `blob_bytes`, a `Value::Bytes` round-tripped through DAG-CBOR) in the
+> **privileged** `system:ModuleBytes` zone, with an **O(N) linear scan** decoding every node body
+> in the zone. It exists to close Compromise #17 for SANDBOX module bytes. **None of the four is
+> an out-of-line tier. There is no general out-of-line tier.**
+>
+> **Clause 2 — "the decode bound is the tripwire that enforces this."** `MAX_DECODE_BYTES` is on
+> **`Subgraph`** and guards subgraph decode only. There is **no per-node body bound at all** on
+> the native Rust write path — `put_node` has no length check. So nothing makes "you inlined a
+> blob" fail fast from Rust; a 285 MB node encodes, hashes and persists.
+>
+> **What actually bounds it, and it is 16× tighter and in a different subsystem:**
+> `MAX_MST_MESSAGE_BYTES` = **1 MiB**, receiver-side in `benten-sync`'s MST diff protocol, inside
+> a 4 MiB frame cap — both byte-pinned in the frozen-bytes corpus. That is a **sync** bound, not a
+> storage one, and it rejects this section's own recommended granularity (3.3 MB per expert) too.
+>
+> **The correct conclusion, which the mistaken evidence was pointing at anyway:** bulk content
+> must not travel the MST diff path at all. Weights are not graph deltas; they are immutable
+> content wanting a blob protocol with flow control, resumption and range requests — which is
+> what **iroh-blobs** does, and iroh is already a dependency. Raising the MST caps would be the
+> wrong fix: they are receiver-side DoS bounds on an untrusted path, and raising them raises
+> attacker leverage to serve a use case that should not be there. On a blob channel the 1 MiB cap
+> never applies and per-expert granularity works after all.
+>
+> **Disposition:** split this row. **§3.2b-i — the adopter pattern (small nodes + CID reference to
+> out-of-line bulk) is ANSWERED**, with the mechanism named correctly: today that means the bytes
+> live outside the engine and the graph holds a manifest of CIDs, which works now and needs
+> nothing new. **§3.2b-ii — a first-class engine blob tier is OPEN**, and the freeze question is
+> owed (a new backend trait is additive; `Value` cannot grow regardless, which is *why* the tier
+> is not freeze-forced).
 
 **Considered and declined as a pre-tag change:** switching `Bytes(Vec<u8>)` to a cheap-clone
 payload (`Arc<[u8]>` / `bytes::Bytes`). Pre-tag is genuinely the only window (a payload-type
