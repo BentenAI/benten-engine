@@ -2122,6 +2122,56 @@ record §5.2); the `WriteContext::enforce_system_zone` zero-caller false-record
 
 ---
 
+### §4.174 THE COMPOSITION-COMPLETENESS TRIO — sequencing (Ben-prioritised 2026-08-12)
+
+**This row does not receive work. It ORDERS three rows that do** — §4.170 (binding grammar),
+§4.171 (IVM aggregation), §4.172-adjacent addressing — and records why they are now the first
+Composing work rather than three items among many.
+
+**Why these three, together.** Two unrelated outside evaluations — a museum revenue system and an
+LLM inference runtime — arrived within days and hit the same three gaps. That convergence
+reframes them from adopter requests into **v1 completeness questions** (see
+`engine-fit-and-gaps.md` §1). And a fourth signal points at the same place: **SANDBOX-frequency**.
+SANDBOX was designed as the pressure valve and as the test of whether the twelve primitives cover
+enough. Reaching for it constantly is evidence — but of *these three gaps*, not of a missing
+thirteenth primitive. Handlers cannot name what they were given, cannot traverse an edge, and
+cannot fold a column, so authors escape to the one place arbitrary logic is possible. **Closing
+the trio should reduce SANDBOX dependence measurably, and that is a falsifiable prediction worth
+recording now so it can be checked later.**
+
+**Sequence, with the dependency that fixes it:**
+
+1. **BINDING (§4.170) first.** It unblocks the other two and one more besides. A handler that can
+   name its input is the precondition for a data-dependent `BRANCH` (`condition_value` is
+   normatively specified in `DSL-SPECIFICATION.md` with zero production writers), and it is the
+   precondition for **SANDBOX's missing data channel** — the guest is invoked with an empty
+   argument slice because the handler's own input is dropped at `run_inner`, so the wasm boundary
+   cannot be handed something the handler never received. SANDBOX's channel is not a separate
+   feature; it is this gap at the wasm boundary and likely falls out of the same work.
+2. **ADDRESSING second.** The traversal half of relative addressing — READ resolves a `cid` or a
+   `label` and cannot follow an edge. Ben's own framing is the sharper one: the graph-native
+   delivery of an input is an **edge to the input node**, and a handler cannot traverse it. See
+   `engine-fit-and-gaps.md` §3.1 for why the binding-grammar record covers only the anchor half,
+   and `SubgraphSpec` as the shape already ratified for sharing and withheld from execution.
+3. **AGGREGATION (§4.171) third.** Independent of the first two mechanically, but sequenced last
+   because it is the one with a complete design record and no pre-tag component. Note it is the
+   one an adopter is *most* exposed to today: the museum's entire money model is "balances are
+   IVM views over append-only entries," which the engine cannot compute.
+
+**Pre-tag exposure is small and already identified — the tag is NOT blocked by this priority:**
+
+| item | pre-tag obligation |
+|---|---|
+| binding | the position-scoped `$` reservation (narrowing, no post-tag valve) + 3 disclosures — `binding-grammar.md` §5 |
+| addressing | ONE verification: is READ's accepted-property set frozen closed, or is a third addressing mode additive? — `engine-fit-and-gaps.md` §5 |
+| aggregation | **none** |
+
+**What this row does NOT decide:** whether any of the three moves into Core. Ben's standing
+position is that Core and Composing are both pre-v1, so placement follows what makes engineering
+sense rather than urgency. Recorded as Composing-first with the two pre-tag reservations above.
+
+---
+
 ### §4.173 Numeric-limit configurability — the accepted-then-ignored knobs and the unbuilt operator surface
 
 **This row is the live receiving destination for everything §3.7 of

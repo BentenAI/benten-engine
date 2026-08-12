@@ -118,6 +118,51 @@ All mismatch errors route through the self-stale channel (§2) — the view refu
 
 **The honest limits, plainly:** (1) views select by label only — model posted-vs-draft as separate labels; (2) **a balance view is per-engine at v1** — entries synced in from peers arrive as zone snapshots, not as ledger-labeled nodes, and will not appear in your balance until zone hydration lands (named dependency); (3) versioned/editable entities cannot be aggregated at v1 — registration refuses them; (4) **aggregation makes invariants observable, never enforced.** Balance non-negativity, capacity bounds, and uniqueness all need a write-admission check *reading* the view — that is §3.4's `executionPolicy`, which has zero implementation hits at HEAD (`engine-fit-and-gaps.md:248-249`); referential integrity is not an aggregate at all. (The "129 SQL invariants" figure appears nowhere in `engine-fit-and-gaps.md`; the honest answer is per-shape, and the enforcement half is unbuilt — we say so rather than let "balance views" read as "balance constraints.")
 
+## 7b. Should the fold itself be graph-native? (Ben, 2026-08-12)
+
+**The question:** back IVM aggregation — and maybe view *formation* too — with graph-native logic,
+so a view's fold is a handler rather than Rust inside `benten-ivm`. Conceptually this is the
+meta-circular thesis pointed at views, and it deserves a real answer rather than a reflex.
+
+**Formation is ALREADY declarative, and that half is settled.** `UserViewSpec` is a spec — an id,
+an input pattern, a `Strategy` — not code. You do not write a view, you *declare* one. What the
+spec lacks is a **fold field**; the shape it would slot into already exists. So "make formation
+graph-native" is largely done, and the real question is only about the fold.
+
+**Maintenance cannot be a graph walk, and the reason is structural rather than performance
+squeamishness.** Three independent blockers, any one of which is sufficient:
+
+1. **The fold runs in a must-not-block post-commit callback.** Putting an evaluator run there
+   places an arbitrary-length computation inside the write path. This is the identical objection
+   that declined the `dbsp` crate in §6 — a scheduler-owning runtime in a callback — and it
+   applies with more force to a full graph walk.
+2. **Re-entrancy against a blocking lock.** A handler fold would issue READs through the engine
+   while the engine is mid-commit, and redb's `begin_write` **blocks** rather than failing fast.
+   That is a deadlock shape, not a slowdown.
+3. **Cost per changed row.** A graph walk versus an `i128` add, once per delta. Over the museum's
+   1.76M-row corpus the difference is not a constant factor worth arguing about.
+
+Termination, notably, is *not* a blocker — handlers are bounded by construction, so a fold
+expressed as a handler would provably halt. The problem is where it runs, not whether it stops.
+
+**The synthesis, and it is the same split the engine uses everywhere else: the graph DECLARES,
+the engine EXECUTES.** A view declares its fold as a composition drawn from a **closed set of
+engine-provided abelian operations** (`sum`, `count`, `min`, `max`, grouped or not). That is
+graph-native *formation* — content-addressed, inspectable, shareable, versioned — with a native
+*implementation* in the hot path. Extensibility comes from adding operations to the set
+(additive, post-tag-safe), never from running arbitrary code in the commit path.
+
+**One candidate vehicle worth evaluating at build time rather than inventing a fold language:**
+`TRANSFORM` already ships a primitive with its own grammar and a bounded, non-re-entrant
+evaluator. If a view's projection is expressible in that grammar, the fold declaration may be
+able to reuse it outright — which would make the aggregation surface a generalization of a
+shipped fragment rather than a new one, matching how §3.1 and §3.4 both resolved.
+
+**Where this leaves the arbitrary-fold idea:** not rejected, relocated. A user-defined fold that
+runs *outside* the commit path — a batch recomputation, a periodic rollup, an analytical view
+materialized on demand — has none of the three blockers and is a legitimate later shape. What
+cannot happen is arbitrary graph logic on the incremental maintenance path.
+
 ## 8. Considered and declined
 
 - **Adopting `dbsp` (or differential-dataflow) wholesale** — §6: total runtime-model impedance, 69-dep trust surface, 0.x churn under a permanent freeze.
