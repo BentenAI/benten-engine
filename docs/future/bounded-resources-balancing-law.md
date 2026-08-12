@@ -178,6 +178,38 @@ And the spawner mechanism itself, same law, one exponent, both semantics (**re-r
 
 **Whether the spawner idea pays is a property of a fact about the world that nobody has measured: when a node is unreachable, does its demand walk away or move to a peer?** That is one question to the museum and it decides an 80× difference in the value of the mechanism.
 
+#### 4.2.1 ANSWERED for the museum — and the answer generalises better than the question did (Ben, 2026-08-12)
+
+> *"Two tills at the front desk and one dies — the line would mostly just back up on the other
+> till."*
+
+So the museum is the **failover** column, and that is the column where **single-owner goes from
+LAST (0.7019) to FIRST (0.9721, beating even ORACLE)**. Their own topology is the strongest
+argument for the recommendation we were already making — a better foundation than "your
+coordination-cost numbers preferred it." And availability-weighting is not discredited for them
+either: it earns **+0.0667** under failover against +0.0008 under the harness's semantics.
+
+**The refinement that matters more than the answer: co-location is the discriminator, and it
+attaches to a bound's HOLDER-CLUSTER, not to an install.** Two tills at one front desk share a
+queue — the customer is standing there and steps sideways, so demand fails over for free. Two
+tills at *different sites* do not share a queue: if the annex till is down, nobody drives across
+town. **One museum therefore has both** — front desk is failover, a satellite site or a school
+outreach event is walk-away. Ask an adopter *"do these holders share a queue?"*, per bound, rather
+than *"does your demand fail over?"*, per deployment.
+
+**Honest limit on the 80× figure.** Both comparisons above are *harness-semantics vs
+failover-semantics*. The harness modelled an offline node that keeps serving its own customers
+from its own stock — which is **neither** realistic option. So we have a measurement for failover
+and **none for walk-away**; the 80× is failover-vs-instrument-artifact, not
+failover-vs-walk-away. Irrelevant for the museum now that the question is answered; still open
+for the satellite regime and for any general claim.
+
+**And the shape is not discredited by not being needed here** (Ben's point, recorded because it
+is the correct inference and the opposite one is tempting): rate limits, license seats, quotas
+and multi-site inventory are walk-away or partially-walk-away regimes, and they are precisely
+where availability-weighted placement would earn its keep. A mechanism this deployment does not
+need is not a mechanism the design space does not need.
+
 ### 4.3 "Park your surplus at a stable peer" is structurally dead — invert it
 
 The only law that implemented Ben's rule as stated instrumented it: **6 pushes in 400 rounds even with every threshold gutted.** The branch requires free stock above target, and the intermittent-and-hungry nodes — exactly the ones the rule protects — are never above target. Parking requires surplus; they have none. Measured effect on service across five configurations: 0.9349 → 0.9365 on `intermit`, and *identical to four decimals* on `death` and `partition`.
