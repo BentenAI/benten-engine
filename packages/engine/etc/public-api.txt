@@ -897,12 +897,12 @@ export declare class ESandboxManifestRegistrationDeferred extends BentenError {
 }
 export declare class ESandboxModuleInvalid extends BentenError {
     static readonly code = "E_SANDBOX_MODULE_INVALID";
-    static readonly fixHint = "Module bytes failed wasmtime structural validation (malformed module, type mismatch, OOB section, OOB linear-memory read, recursion-depth overflow, etc.). Audit the module compiler output. ESC-1 / ESC-3 / ESC-5 / ESC-11 / ESC-12 escape vectors all route here.";
+    static readonly fixHint = "One of two classes. **(a) Structural validation** \u2014 module bytes failed wasmtime structural validation (malformed module, type mismatch, OOB section, OOB linear-memory read, recursion-depth overflow, etc.). Audit the module compiler output. ESC-1 / ESC-3 / ESC-5 / ESC-11 / ESC-12 escape vectors all route here. **(b) SANDBOX-ABI incompatibility** \u2014 the bytes are valid wasm, but the module's exported `run` entry does not fit the ABI: there is no `run` export at all, or `run` returns a result type the ABI cannot encode. The return ABI serialises scalar results (`i32` / `i64` / `f32` / `f64`) little-endian; a `v128` (wasm SIMD) result, or any reference type (`funcref` / `externref` / `anyref` / `exnref` / `contref`), is REJECTED with this code rather than encoded \u2014 return a scalar, or write the result into the module's linear memory and return its offset. Store/linker setup failures (`set_fuel`, host-fn registration) also route here. Class (b) is long-standing; it is spelled out here because the prior wording named only class (a) and so understated the code's real domain.";
     constructor(message: string, context?: Record<string, unknown>);
 }
 export declare class ESandboxStackOverflow extends BentenError {
     static readonly code = "E_SANDBOX_STACK_OVERFLOW";
-    static readonly fixHint = "SANDBOX guest module's call stack exceeded the configured `max_wasm_stack` ceiling (default 512 KiB; matches wasmtime's `Config::max_wasm_stack` default). Distinct from `E_SANDBOX_FUEL_EXHAUSTED` (CPU-bound runaway) and `E_SANDBOX_MODULE_INVALID` (structural validation failure) \u2014 stack-overflow-via-recursion is its own observable class so operator dashboards can distinguish a benign-but-buggy recursive guest from a generic invalid module. Either reduce module recursion depth, raise `SandboxConfig::max_wasm_stack`, or audit for adversarial recursion. Phase-3 G17-A1 wave-5b mints the dedicated typed variant per phase-3-backlog \u00A76.4 + r1-wsa-7 BLOCKER closure (the prior R6FP-G1 r6-wsa-8 BELONGS-NAMED-NOW deferral is honored here).";
+    static readonly fixHint = "SANDBOX guest module's call stack exceeded the configured `max_wasm_stack` ceiling (default 512 KiB; matches wasmtime's `Config::max_wasm_stack` default). Distinct from `E_SANDBOX_FUEL_EXHAUSTED` (CPU-bound runaway) and `E_SANDBOX_MODULE_INVALID` (structural validation failure) \u2014 stack-overflow-via-recursion is its own observable class so operator dashboards can distinguish a benign-but-buggy recursive guest from a generic invalid module. Either reduce module recursion depth or audit for adversarial recursion. **Raising `SandboxConfig::max_wasm_stack` does NOT work and never did**: the ceiling is applied to the process-wide `OnceLock<wasmtime::Engine>` at first SANDBOX use, and wasmtime resolves `max_wasm_stack` at `Engine` construction, so the per-call field is inert (it is retained only because removing a `pub` field would be a breaking narrowing of the frozen v1-beta surface). The enforced ceiling is `benten_eval::sandbox::ENGINE_MAX_WASM_STACK_BYTES`, and the error payload reports that enforced value, not your request. Phase-3 G17-A1 wave-5b mints the dedicated typed variant per phase-3-backlog \u00A76.4 + r1-wsa-7 BLOCKER closure (the prior R6FP-G1 r6-wsa-8 BELONGS-NAMED-NOW deferral is honored here).";
     constructor(message: string, context?: Record<string, unknown>);
 }
 export declare class ESandboxEscapeAttempt extends BentenError {
@@ -1823,6 +1823,7 @@ export interface SandboxArgsByName {
     fuel?: number;
     wallclockMs?: number;
     outputLimitBytes?: number;
+    memoryLimitBytes?: number;
     caps?: never;
 }
 export interface SandboxArgsByCaps {
@@ -1832,6 +1833,7 @@ export interface SandboxArgsByCaps {
     fuel?: number;
     wallclockMs?: number;
     outputLimitBytes?: number;
+    memoryLimitBytes?: number;
 }
 export type SandboxArgs = SandboxArgsByName | SandboxArgsByCaps;
 export type SandboxOptions = SandboxArgs;
