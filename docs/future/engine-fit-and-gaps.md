@@ -434,7 +434,34 @@ without a fork?
 
 ### 3.6 Custodial → self-sovereign identity handoff
 
-**Shape:** engine · **Freeze:** no · **Status:** CARRIED — Fork B must-nails
+**Shape:** engine · **Freeze:** ⚠️ **YES — corrected 2026-08-11; the previous "no" was never
+checked** · **Status:** CARRIED to Fork B for the DESIGN, but with a now-or-never component
+
+> **The "Freeze: no" above was an assumption stated as a fact, on the document whose job is
+> tracking exactly that. Checked 2026-08-11; it is wrong.**
+>
+> The custodial handoff **is** a rotation: `previous_did` = the organisation's custodial DID,
+> `next_did` = the person's self-sovereign root, signed by the old (custodial) key. That is
+> literally `benten_id::did_rotation::RotationAttestation`.
+>
+> And that structure is frozen three ways over: it is a **signed wire structure** (Ed25519 over
+> the canonical bytes of the `previous_did` / `next_did` / `superseded_at` tuple), it appears
+> **57 times in the frozen `docs/public-api/benten-id.txt` baseline**, and its canonical bytes
+> have **two entries in the frozen-bytes corpus** — a REQUIRED CI check. Yet it is named
+> **nowhere** in `V1-FROZEN-INTERFACE.md` or `V1-WIRE-INVENTORY.md`. Same shape as
+> `benten_core::Value`: freezing de facto while the record does not mention it.
+>
+> **So the signing tuple locks at the tag.** Anything the custodial flow needs beyond those
+> three fields cannot be added afterwards without a wire break. The concrete instance:
+> **nothing distinguishes "custody was deliberately handed over" from "a key was compromised"** —
+> both are `AttestationKind::SupersededBy`. A hosted product handing users their sovereignty and
+> an incident response are semantically opposite events with identical wire encodings, and for
+> an organisation with audit obligations that distinction plausibly matters. Post-tag it can
+> only live out-of-band, forever.
+>
+> This does not change Fork B: the rotation-survival and multi-device *design* still belongs in
+> Composing. What changes is that the **tuple's adequacy is a pre-tag question**, and it was
+> hiding behind an unverified "no".
 
 An organisation mints and custodies a user DID; the person later installs their own engine and
 the custodial key signs a rotation to their self-sovereign root. This is how anyone joins a
@@ -682,6 +709,16 @@ v1-beta without penalty.
 | **`Value` inventory clause in the freeze record** (§3.2) | The freeze record does not name the property type of every Node and Edge. Freezing a type system without stating it is the rule-14 shape. Must land with its receiving row in the same commit. The same clause states the decode-bound POSTURE: `MAX_DECODE_BYTES` and the META #629 cluster are policy tripwires, test-pinned not wire-frozen, raisable later with re-derived DoS reasoning — the D-94 Argon2id lesson, so no adopter reads 16 MiB as a wire limit they may not touch. | owed |
 | **`DSL-SPECIFICATION.md:60-67`** (§3.1) — normative claims with zero production writers | A FALSE-RECORD that freezes alongside the API. | owed |
 | **`ENGINE-SPEC` config claim** (§3.7) | Same shape. | **DONE** — 5 checks + 2 more found (§3.7); §4.1 rewritten in the primary checkout 2026-08-11. **Applied to an untracked file**, so it rode no tracked patch and CI can never gate it; the replacement text is preserved verbatim at §3.7 as the only durable record. Re-tracking `ENGINE-SPEC` is a publication call for Ben (§4.173 E). |
+
+**NOW-OR-NEVER, added 2026-08-11 — the `RotationAttestation` signing tuple** (§3.6). Its
+canonical bytes are byte-pinned (two frozen-bytes-corpus entries, a REQUIRED check) and its type
+is in the frozen `benten-id` public-api baseline, yet it is named in **neither**
+`V1-FROZEN-INTERFACE.md` nor `V1-WIRE-INVENTORY.md`. Two things are owed pre-tag: **(a)** the
+freeze-record disclosure (same shape as the `Value` clause above), and **(b)** a deliberate
+decision on whether `(previous_did, next_did, superseded_at)` is *sufficient* — specifically
+whether a rotation needs to distinguish deliberate custody-transfer from key-compromise, since
+both are `SupersededBy` today and the distinction cannot be added post-tag. This was concealed
+by a "Freeze: no" in §3.6 that nobody had verified.
 
 **Owed VERIFICATION, added 2026-08-11 — is READ's addressing set frozen closed?** (§3.1)
 The originating investigation asked: *"does relative addressing need anything in the frozen
