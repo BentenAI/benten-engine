@@ -187,3 +187,66 @@ cannot happen is arbitrary graph logic on the incremental maintenance path.
 - The version-chain and sync-merge questions from the R0 brief — resolved with first-hand evidence (CURRENT moves emit no event, `engine_diagnostics.rs:~592`; merges deliver one `"version"` snapshot node, `engine.rs:1768-1783`), and turned into the two disclosed v1 scope boundaries.
 - The `types.ts:1063-1065` `project?` FALSE-RECORD — flagged for retirement in the same change that touches the TS mirror (rule 14/15).
 - Insight #2 from the brief, corrected to its true form: the ledger case does not need insert-only to be exact — retractions arrive pre-weighted; what it needs is the nonce contract, the backfill, and the fail-closed error channel.
+
+---
+
+## 10. THE APP-LAYER ALTERNATIVE — aggregation as a subgraph, not an engine feature (Ben, 2026-08-12)
+
+**This section may supersede the entire design above. It should be tested before §4.171 is built.**
+
+**Ben's proposal:** do not build aggregation into the view layer at all. A fold is a **subgraph
+triggered on change** that updates a **canonical node whose current version holds the running
+total**.
+
+### It dodges every structural objection §7b raises
+
+§7b rejected graph-native folds on three grounds. All three were about *where the fold runs* — the
+must-not-block post-commit callback — and **SUBSCRIBE delivery is after commit and asynchronous**:
+
+| §7b blocker | under SUBSCRIBE |
+|---|---|
+| runs in a must-not-block callback | ✗ — delivery is post-commit and async |
+| re-entrancy: READs mid-commit against redb's BLOCKING write lock | ✗ — the commit is already done |
+| graph walk vs `i128` add per delta | still true, but now off the write path |
+
+### And it is strictly better for the motivating adopter
+
+A balance that is a real node with a **version chain** is **auditable** — every revision visible,
+with what caused it. A museum with statutory audit obligations wants that far more than a number
+inside a view. It also composes with their own model (money as append-only nodes) rather than
+sitting beside it.
+
+### The one hard problem, and it has a Benten-native answer
+
+**Concurrent update.** Two entries commit at once, two handler runs both read the old total, both
+write — a lost update. The answer is already shipped: **the balance node's version chain IS the
+fold.** Each version records `(previous_total + delta, consumed_entry_cid)`; concurrent writes
+branch the chain and surface `VersionError::Branched`; merge means re-folding the branch. The
+`consumed_entry_cid` also makes each step **idempotent**, so a redelivered event cannot
+double-count.
+
+### Why this changes the sequencing rather than merely adding an option
+
+CLAUDE.md's foundational rule — *push application-layer composition before engine extension*
+([[feedback_engine_primitives_vs_application_layer]]) — says the burden is on the ENGINE feature
+to prove the app-layer pattern insufficient, not the reverse. **We have not attempted that proof.**
+§4.171 was designed straight to a kernel without asking whether SUBSCRIBE + handler + version
+chains already does the job.
+
+**Recommended disposition:** build the PATTERN first, on a real corpus; add the abelian-fold kernel
+only if the pattern demonstrably fails. What would constitute failure, named in advance so the
+test is honest:
+
+1. Branch-merge churn under realistic write concurrency makes the chain unusable.
+2. Read latency for "the current balance" is dominated by chain traversal rather than a CURRENT
+   pointer read.
+3. The backfill problem is worse, not better (see below).
+4. Delivery gaps: SUBSCRIBE misses an event and the total silently diverges with no detector.
+
+**Item 4 is the real risk** and it is the same class as the hazard recorded in
+`engine-fit-strengths.md`: **a view registered over an existing corpus never reads it — it returns
+empty and stays empty.** The subgraph pattern inherits that exactly. Whatever is built, the
+backfill-on-register contract is the load-bearing part, not the arithmetic.
+
+**Unchanged either way:** both shapes need **binding** first — the handler must receive the changed
+node. Sequencing in `phase-4-backlog.md` §4.174 stands.

@@ -94,6 +94,24 @@ reading ITERATE `max` and resolving CALL's callee. Its own comment (`invariants/
 names the attack: a subgraph claiming a cheap callee then pointing at an expensive one at
 runtime. That is a genuine constraint on any dynamic-operand design.
 
+### 2.4 Intrinsic goes in the node; extrinsic goes in an edge (added 2026-08-12)
+
+> **Anything that is a property of the THING goes in the node. Anything that is a property of the
+> DEPLOYMENT goes in an edge.**
+
+The node's CID must be stable across deployments, so any fact that differs per-install cannot live
+inside it. This single rule resolves two questions that looked unrelated:
+
+- **A device-lowerable handler.** "This handler is lowerable to a GPU" is intrinsic — it travels
+  with the subgraph and is part of its CID. "Run it on *that* device" is extrinsic — an edge to a
+  device node. Put the placement inside the subgraph and the same handler acquires a different CID
+  on every machine, destroying dedup and sharing.
+- **Model weights.** *Granularity* (how the weights are cut into nodes) is intrinsic. *Sharding*
+  (which machine holds which CIDs) is extrinsic. They are independent: a layer-sharded deployment
+  can still store per-tensor nodes, because a shard is just "the set of CIDs machine A holds."
+
+Worth promoting into `ARCHITECTURE.md` with the three clarifications above.
+
 ### 2.3 The gap is relative addressing, not "dataflow"
 
 Calling this "missing dataflow" imports a values-on-wires model that does not fit. What is
@@ -480,6 +498,28 @@ checked** · **Status:** CARRIED to Fork B for the DESIGN, but with a now-or-nev
 > an incident response are semantically opposite events with identical wire encodings, and for
 > an organisation with audit obligations that distinction plausibly matters. Post-tag it can
 > only live out-of-band, forever.
+>
+> **DECIDED 2026-08-12 — change NOTHING in the tuple; the pre-tag obligation is DISCLOSURE only.**
+> Three shapes were weighed: add a `reason`/`kind` enum to the signed tuple; add a generic
+> `context: Option<Cid>` extension slot; or leave the tuple alone and carry handover semantics in a
+> separate content-addressed record that REFERENCES the rotation.
+>
+> The enum is the trap. A `reason: CustodyTransfer` field is **the old key asserting its own
+> motive** — a self-declared value nothing verifies, frozen into permanent bytes. That is precisely
+> the `UptimePolicy` shape: a declared field that reads as a guarantee and enforces nothing, which
+> this project has now found FOUR instances of in one week.
+>
+> And the deeper reason: **what they want to prove is not cryptographically provable.** "The
+> organisation destroyed its copy" cannot be attested BY the organisation — a signature saying "I
+> destroyed it" is worth nothing. It is evidenced two ways only: a signed *policy commitment* (a
+> separate artifact, additive forever), and **the key never being used again**. The second is
+> already free — once rotated, any use of the old key is a detectable protocol violation. So their
+> feared failure ("an organisation retains silent access") is not silent; it is detectable by
+> design, if someone looks. The missing piece is the LOOKING, which is a watch in Composing, not a
+> field in the wire.
+>
+> The tuple stays minimal and correct: it attests one thing — *this key authorised that successor*.
+> Rule-12 clause (c), DISAGREE-with-reason, not a deferral.
 >
 > This does not change Fork B: the rotation-survival and multi-device *design* still belongs in
 > Composing. What changes is that the **tuple's adequacy is a pre-tag question**, and it was

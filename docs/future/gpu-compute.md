@@ -470,3 +470,114 @@ R3, R6, R7, R10.
   `EvalContext` is a **fourth fragment** of that same Phase-1 E3 family, surfaced here), §2.3's
   structural objection dissolves into "expressible but wrong." The command-buffer argument stands
   alone, which is why the conclusion is robust to it.
+
+---
+
+# ADDENDUM — the subgraph IS the program (Ben, 2026-08-12)
+
+**This addendum materially revises §"graph-native dispatch" above, and partially reopens the
+kernel-sharing question the security dimension closed. It was written after the pass, out of a
+reframe from Ben that the pass never considered.**
+
+## 1. The pass analysed the wrong mechanism
+
+Everything above evaluates **graph-mediated dispatch** — the graph deciding each step, at some
+frequency, with the runtime executing between decisions. On that framing the conclusion is
+correct and well-evidenced: yes at the turn, no inside the token, because a per-token decision
+forces a GPU→CPU sync and the whole pre-encoded-command-buffer design exists to eliminate exactly
+that stall.
+
+Ben's framing is different and better: **hand the device the whole subgraph, and see the result of
+the walk when it finishes.** The graph is not a driver. It is the **source**, and the pre-encoded
+command buffer is its **compilation target**.
+
+That is how every GPU framework already works — PyTorch graphs, XLA/HLO, MLIR, TVM. Build a
+graph, lower it, run it. Under this framing **Benten's subgraph is the IR**, and the tension the
+pass identified simply does not arise: there are no per-step decisions because there are no steps,
+only one lowering.
+
+**ORCH correction owed here.** I told Ben per-token graph logic was affordable at ~40 Hz and
+therefore fine. That was wrong, and the reason I gave for it being fine was also the wrong reason.
+It is not about whether 40 graph walks per second is fast — it is that each one forces a pipeline
+stall. The pass was right and I was wrong; the IR reframe is what actually resolves it, not the
+frequency argument.
+
+## 2. It needs no new primitives — custom node types plus a lowering handler
+
+Per Ben's own model of the engine: applications are composed from the primitives as handlers that
+create and interpret **custom node and edge types**, with the interpretation rules living in the
+handler. A GPU program is therefore custom node types (`matmul`, `rmsnorm`, `softmax`, …) plus a
+handler that lowers them. **The nodes are data; the handler is the compiler; the command buffer is
+the output.** Baked-in #1 is untouched.
+
+And the compiled artifact **caches by the subgraph's CID** — free, because the subgraph is already
+content-addressed. Same program, same CID, same command buffer.
+
+## 3. This partially rescues the sharing story §"kernel containment" closed
+
+That section's refusal stands **for arbitrary peer-authored MSL**, and the three kills are
+unchanged: no containment after dispatch, a hang takes the whole device, and accepting peer MSL
+feeds attacker-controlled text to a closed-source shader frontend in-process at full engine
+privilege.
+
+But a **peer-authored graph over a fixed op vocabulary that WE lower** is a materially different
+risk. A hostile graph can only request bad-but-valid tensor ops, and shapes, total FLOPs and
+memory are all **statically boundable at compile time, before anything reaches the device**. That
+is a real containment boundary where MSL had none. It is not a licence to accept arbitrary
+graphs — it is a reason the question is worth re-asking under the new framing rather than treated
+as settled by the MSL answer.
+
+## 4. Marking the region: intrinsic annotation + extrinsic edge + CALL as the boundary
+
+Ben's question was whether the handler is marked as GPU-bound or attached to a GPU node by an
+edge. **Both, and they are different kinds of fact:**
+
+- **The annotation is INTRINSIC** — "this handler is lowerable to a device" is a property of the
+  computation. It travels with the subgraph, it is part of its CID, and it means the same thing on
+  an M1 and on a CUDA box.
+- **The placement edge is EXTRINSIC** — "run it on *that* device" is a property of THIS deployment.
+  It must live outside the subgraph, or the same handler acquires a different CID on every
+  machine, destroying dedup and sharing.
+
+**The region boundary is CALL.** A GPU region is a handler; calling it is the boundary; the result
+returns through the ordinary return path. Ben's *"when the GPU logic is done it returns here and
+connects to this graph logic"* is literally CALL returning — no new delimiting mechanism, no
+annotating individual nodes and computing maximal connected regions.
+
+**The marker must be VERIFIED AT REGISTRATION, not merely declared.** A GPU-marked handler
+containing a node type the lowerer does not know is a typed reject at registration — the same
+fail-closed shape as `E_SCHEMA_VOCAB_SCALAR_UNKNOWN`. This is not optional polish: this project
+has found **four** declared-but-never-read fields in one week (`UptimePolicy`,
+`SandboxConfig::max_wasm_stack`, `output_max_bytes`, and `CapabilityEnvelope`'s dimension set), and
+an unverified device marker would be the fifth — failing at dispatch time on hardware that is
+hard to debug, instead of at registration where the author is standing.
+
+**Net new surface: exactly one piece.** The annotation (new, registration-verified). The placement
+edge, CALL, and the extension mechanism (baked-in #19) all exist.
+
+## 5. The principle this generalises into
+
+> **Anything that is a property of the THING goes in the node. Anything that is a property of the
+> DEPLOYMENT goes in an edge.** The node's CID must be stable across deployments, so any fact that
+> differs per-install cannot live inside it.
+
+This is the same split that separates **granularity** (intrinsic — how the weights are cut into
+nodes) from **sharding** (extrinsic — which machine holds which CIDs), and it resolves both
+questions with one rule. Worth promoting into `ARCHITECTURE.md` alongside the §2 clarifications in
+`engine-fit-and-gaps.md`.
+
+## 6. Node granularity, revised: per-tensor, chunked to uniform size
+
+The expert-granular split (3,840 × 3.3 MB) was right for an MoE model — and the model that
+actually needs distribution is **dense** (E4B; the MoE is 26B-A4B at 14.424 GB). So the split
+changes:
+
+- **Per-layer** (35 × ~95 MB) — too coarse for dedup, too large for scheduling.
+- **Per-tensor** — the natural unit: it is what GGUF stores, and it is the boundary a fine-tune
+  changes or does not, so dedup works there. **658 tensors, ~5 MB average.**
+- The outlier is the embedding / `lm_head` at **285 MB**, so per-tensor alone is not uniform.
+
+**Recommended: per-tensor, with oversized tensors chunked to a uniform ceiling (8–16 MB)** —
+roughly 900–1,000 nodes, all under one bound. Uniformity is worth paying for: predictable
+transfer scheduling, predictable memory, and a simple blob store. Chunk to a target size rather
+than following natural boundaries exactly.

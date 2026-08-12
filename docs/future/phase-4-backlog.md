@@ -2166,6 +2166,38 @@ recording now so it can be checked later.**
 | addressing | ONE verification: is READ's accepted-property set frozen closed, or is a third addressing mode additive? — `engine-fit-and-gaps.md` §5 |
 | aggregation | **none** |
 
+**AMENDMENT 2026-08-12 — aggregation may not be an engine feature at all.** Ben proposed that a
+fold is a **subgraph triggered on change** that mints a new version of a canonical total-node,
+rather than a kernel inside `benten-ivm`. SUBSCRIBE delivery is post-commit and asynchronous, which
+dodges all three structural blockers §4.171's design rests on, and a version-chained balance is
+*more* auditable — which the motivating adopter (statutory audit obligations) values more than a
+number in a view. CLAUDE.md's app-layer-before-engine-extension rule puts the burden on the ENGINE
+feature to prove the pattern insufficient, and **we never attempted that proof**. So step 3 becomes
+**"build the pattern, then decide"**, with the four named failure conditions in
+`ivm-aggregation.md` §10 as the test. The sequencing is unchanged — both shapes need binding first.
+
+**BLOB TIER (§3.2b-ii) — direction recorded 2026-08-12, build deferred:**
+- **`iroh-blobs` is the named likely crate** for the bulk transport: flow control, resumption,
+  range requests, verified streaming, and it aligns with `IROH_BLOCK_SIZE` which the AEAD layer
+  already pins. **It is NOT currently a dependency** — it appears only in *prose* inside Cargo.toml
+  descriptions in three manifests, which ORCH misread as a dependency entry.
+- **Do not add the dependency yet.** It lands a new tree onto a freeze branch mid-convergence where
+  `cargo-deny` and `cargo-audit` are required checks and four advisories fired this week, and
+  §3.2b-ii has no design and no consumer. Wire it in Composing **with** the extent surface, which
+  is the thing that actually needs it.
+- **`V1-FROZEN-INTERFACE.md` §4.62 is a FALSE-RECORD and rides W-REC (#47).** It freezes
+  `BlobBackend` naming `put_blob`/`get_blob`/`has_blob` at `blob_backend_trait.rs`. The real trait
+  is `get`/`put`/`is_persistent`/`delete`/`list_cids` in `blob_backend.rs`. **None of those three
+  methods exists and neither does that file.** Fix the RECORD, not the code — `put_blob`/`get_blob`
+  are stale names for methods that exist under different spellings.
+- **EXCEPT `has_blob`, which is a genuine gap.** ORCH-verified: there is **no existence check on the
+  trait at all**, so "do I already hold this blob?" requires fetching it. For partial model fetch —
+  "which of these ~1,000 CIDs do I have?" — that is exactly the wrong shape. Additive; belongs with
+  the tier.
+- **Node granularity for bulk: per-tensor, chunked to a uniform 8–16 MB ceiling** (~900–1,000 nodes
+  for a 14 GB model). Supersedes the expert-granular recommendation, which was right for an MoE
+  model and the model that needs distribution is dense. See `gpu-compute.md` §6.
+
 **What this row does NOT decide:** whether any of the three moves into Core. Ben's standing
 position is that Core and Composing are both pre-v1, so placement follows what makes engineering
 sense rather than urgency. Recorded as Composing-first with the two pre-tag reservations above.
