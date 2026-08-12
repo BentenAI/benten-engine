@@ -694,6 +694,31 @@ are laid out at §4.173 E. No default is assumed.
 
 ---
 
+### 3.7b Host-function extensibility — DECIDED, Ben-authorised 2026-08-12
+
+**Shape:** engine · **Freeze:** disclosure owed · **Status:** ANSWERED (commitment made)
+
+The LLM evaluation asked twice (§3 and §6.2): *"can a third party add a host function post-v1
+without forking, and is the host-fn table in freeze scope?"* Answering with our documentation's
+state would have been useless to them; this is the commitment.
+
+**Yes, additively, via the documented extension path.** Baked-in #19 already settles the shape:
+engine-level extensions are **Rust crates compile-time linked**, and "trust is you compiled this
+in." A host function is exactly that category — it runs at engine privilege with no sandbox
+between it and the process, so it belongs to #19 (compile-time trust) and never to #18 (the
+three-layer consent model for subgraph plugins). Adding one is building your own engine binary
+with your crate linked in, which is the documented model rather than a fork.
+
+**Owed pre-tag, disclosure only:** the host-fn table is named in NEITHER `V1-FROZEN-INTERFACE.md`
+nor `V1-WIRE-INVENTORY.md` — the same silent-freeze shape as `benten_core::Value` and
+`RotationAttestation`. Name it, and name it **additive-open**: the table is a registry, additions
+are additive, and `HostFnSpec` / `HostFnBehavior` take `#[non_exhaustive]` in Composing (which is
+their §1.1 ask, answered in the same stroke).
+
+**Recorded because it was authorised in conversation and would otherwise have evaporated** — see
+`feedback_decide_in_conversation_record_immediately`, codified out of three such losses in one
+session.
+
 ### 3.8 The question nobody asked — does the engine handle their VOLUME?
 
 **Shape:** engine · **Freeze:** no · **Status:** OPEN — *and honestly labelled: this is an
