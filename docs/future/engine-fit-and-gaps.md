@@ -736,6 +736,30 @@ This is the class of question that decides an adoption rather than shaping a des
 should be checked *before* we tell anyone the engine fits. Related and already recorded: §3.3
 (no aggregation) is the mechanism that would make this a non-question.
 
+**FRAMING CORRECTION — 2026-08-12, Ben.** He asked whether this question is fairly framed *given*
+IVM plus everything expressible as custom node types, custom edge types, and handlers composed of
+the twelve primitives. **It is not, and the unfairness is mine.** "An O(n) fold over 1.76M rows"
+describes a system with no aggregation of any kind, which is a statement about **today's IVM**
+rather than about the engine's reach. Two things make it unfair:
+
+1. **O(n)-forever is not the steady state under either aggregation shape.** With §3.3's abelian
+   fold *or* §3.3 §10's app-layer pattern (a subgraph triggered on change minting a new version of
+   a canonical total-node), steady state is **O(1) per new entry** and the corpus is walked
+   **once**, at backfill. Framing a one-time cost as a recurring one inflates it by the corpus
+   size. The §10 pattern needs **no engine feature at all** — which means the volume question
+   cannot honestly be gated on §3.3 shipping.
+2. **The fold is not the interesting cost anyway.** The questions that actually decide the
+   adoption are storage at 1.76M nodes (on-disk size, index size, open time, memory at rest), the
+   one-time backfill, the real **query** paths at that scale, and **ingest** through the real write
+   path (single-writer redb, blocking `begin_write`, a hash per node). None of those is the fold,
+   and I named none of them.
+
+What survives the correction is the honest core: **we have never measured any of it.** The
+question stays OPEN — but it is now the right question. Measurement is in flight
+(`wf-museum-close`), with numbers-not-produced-by-running forbidden. The one hazard already on
+record and worth carrying into the answer: a view registered over an existing corpus **never reads
+it and stays empty**, so backfill-on-register is the load-bearing contract, not the arithmetic.
+
 ---
 
 ## 4. Things that are fine, checked because we suspected otherwise
@@ -806,6 +830,72 @@ decision on whether `(previous_did, next_did, superseded_at)` is *sufficient* �
 whether a rotation needs to distinguish deliberate custody-transfer from key-compromise, since
 both are `SupersededBy` today and the distinction cannot be added post-tag. This was concealed
 by a "Freeze: no" in §3.6 that nobody had verified.
+
+**NOW-OR-NEVER, added 2026-08-12 — the VC verify family is a matrix with only the diagonal
+filled.** Ben asked whether `verify_in_trust_domain` should accept expired credentials. Checking
+the family turned a one-function complaint into a structural one.
+
+There are three independent verification dimensions — **clock** (`expirationDate` +
+`issuanceDate`), **trust-domain** (issuer allow-list), **revocation** (`credentialStatus.id` in a
+registry) — and five entry points, **all five in the frozen `benten-id` public-api baseline**
+(`docs/public-api/benten-id.txt`). Each composed entry point adds exactly ONE dimension to the
+clock-free `verify`. **No function checks two.**
+
+| entry point | signature | clock | trust-domain | revocation | production callers |
+|---|---|---|---|---|---|
+| `verify` | ✓ | ✗ | ✗ | ✗ | the primitive the others compose |
+| `verify_at` | ✓ | **✓** | ✗ | ✗ | `typed_call_dispatch.rs` — the one that got it right |
+| `verify_with_registry` | ✓ | ✗ | ✗ | **✓** | **none** (own test only) |
+| `verify_in_trust_domain` | ✓ | ✗ | **✓** | ✗ | **none in Rust — reaches adopters only via napi** |
+| `verify_bytes_in_trust_domain` | ✓ | ✗ | **✓** | ✗ | delegates to the above |
+
+So there is **no way today to verify a credential against a trust domain *and* a clock** — which
+is precisely the pair an offline reciprocity gate needs (is this issuer a partner institution, and
+is the membership still valid). The museum would reach this through napi, where
+`bindings/napi/src/identity.rs` puts the two methods adjacent with a reader-hostile asymmetry:
+`verifyAt` advertises *"rejects expired credentials"*, and `verifyInTrustDomain` is silent about
+what it does not check. A JS caller gets `true` for an expired credential from a method whose name
+reads like a complete verify.
+
+That `verify_at` is the one variant with a real caller — and is guarded by a regression test
+naming the exact "silently called `verify` instead of `verify_at`" bug — is evidence this class is
+known and was closed once, on one path, without generalizing.
+
+**DECISION (needs Ben — permanent, and only free before the tag).** Make the clock a **required
+parameter** on the composed entry points rather than adding a sixth function:
+
+- `verify_in_trust_domain(vc, trust_domain, now)`
+- `verify_with_registry(vc, issuer, registry, now)`
+- `verify_bytes_in_trust_domain(bytes, trust_domain, now)`
+- `verify` stays clock-free and its rustdoc says **signature-and-issuer only** — it is the honest
+  primitive, not a shortcut
+- `verify_at` unchanged; napi mirrors all of it; `INTERNALS.md` says "Four verifier entry points"
+  above a list of five
+
+**Why the signature change and not an additive `verify_in_trust_domain_at`.** The additive sibling
+is the greedy-sum answer: six functions, still no revocation+clock pair, and a 2³ end-state of
+eight. Rule 15's question — *if we were writing this from scratch today, which would we write?* —
+answers plainly: one clock-free primitive plus composed entries that cannot skip the timed gate.
+Requiring the parameter makes the fail-open shape **unrepresentable** rather than merely
+documented, which is the same move as the W2 depth-cap derivation. Blast radius is two Rust test
+callers, one napi method, one INTERNALS line, one baseline regen. **This is a permanent breaking
+signature change to a frozen-baseline surface: free today, impossible after the tag.** Rides
+**W-WIRE** as its fifth item. The alternative — ship as-is and document the omission — is the
+cheap green, and on a freeze it ratifies the weaker behaviour forever.
+
+**And no: "expired" does NOT include "revoked."** They are different mechanisms with different
+error variants (`VcError::Expired` vs `VcError::Revoked`) and different reachability. Expiry is
+**self-contained** — determinable from the credential bytes plus a clock, with no network.
+Revocation requires consulting a registry keyed by `credentialStatus.id`, and today
+`RevocationRegistry` is an in-memory `HashSet<String>` behind a mutex that **nothing durable ever
+populates**. A credential can be unexpired-and-revoked (the entire point of revocation) or
+expired-and-never-revoked (natural end of life); neither implies the other.
+
+**The consequence for the museum is engineering advice, not a caveat:** at a genuinely offline
+gate, revocation is *unobservable*. Nothing can be consulted. **Short expiry is therefore the only
+offline-safe revocation mechanism** — the exposure window equals the credential lifetime, and it
+is theirs to choose. A day-scoped reciprocity credential re-minted on each sync is enforceable
+offline; a year-scoped one with a revocation list is not.
 
 **Owed VERIFICATION, added 2026-08-11 — is READ's addressing set frozen closed?** (§3.1)
 The originating investigation asked: *"does relative addressing need anything in the frozen
