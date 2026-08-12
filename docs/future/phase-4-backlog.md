@@ -141,6 +141,22 @@ The `im` ignore lives in `supply-chain.yml` **only**, with a comment in `deny.to
 
 All four ignored in `deny.toml [advisories].ignore` **and** `supply-chain.yml` cargo-audit `--ignore` (§3.5g item 4 dual-config mirror). **Action: drop the wasmtime ignore when the runtime bump lands** (the guard test then becomes optional, not obsolete); **drop the `im` trio** when a loro release removes `im`.
 
+**A fifth landed 2026-08-12 — RUSTSEC-2026-0255, `sized-chunks` panic-safety, and it is the SECOND `unsound` in this cluster.** Several methods (`Chunk::clear` / `drop_left` / `drop_right`, `InlineArray::clear`, `RingBuffer::clear` / `drop_left` / `drop_right`) drop elements *before* updating the length metadata, so an element whose `Drop` panics skips the update and leaves already-dropped elements recorded as live — use-after-free / double-free, **reachable from safe Rust** via `catch_unwind` with a panicking element `Drop`. Affects `<=0.7.0`; **no patched version exists.** Same transitive path (`sized-chunks 0.6.5` ← `im 15.1.0` ← `loro-internal 1.12` ← `loro` ← `benten-sync`); Benten constructs none of the affected containers, and the trigger additionally needs an element type whose `Drop` panics — loro's internal types, not ours. Suppressed audit-lane-only for the same tool-asymmetry reason as `-0126`.
+
+> **⚠️ SURFACED FOR BEN — the count now says something the individual rows do not.** This archived
+> crate family is at **five advisories reached through one dependency**: two `unsound`
+> (memory-corruption class — `-0126`, `-0255`) and three `unmaintained` (`-0247`, `-0248`,
+> `-0251`). **None has a fix and none can get one** — `bodil/im-rs` was archived by its owner
+> 2026-05-03. Each individual suppression is correct on reachability, and I would write each one
+> again. What has changed is that *"wait for loro to drop `im`"* is now carrying five items with
+> **no upstream clock**, and the 2026-08-11 check confirmed the routine bump path is closed
+> (`loro-internal` 1.13.9 still pulls `im`). This is a rule-14 shape forming: a growing set of
+> ledger rows whose stated closure condition is an event nobody has committed to. It does **not**
+> block the tag — reachability is genuinely absent today. The question for Ben is whether Composing
+> should carry an explicit item to either (a) press/track loro's `im` removal upstream, or (b)
+> evaluate the CRDT dependency itself, rather than letting the row count grow silently. Recorded
+> rather than decided, per surface-arch-decisions-under-auth.
+
 ### §3.4 Phase 4-Meta inherited carries from Phase 3
 
 - wasmtime Component-Model re-evaluation (Phase-3 D-PHASE-3-6 + D-PHASE-3-16 + r1-wsa-12)
@@ -931,6 +947,34 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R4 br-r6-r4-1 MINOR + R6-R5 br-r6-r5
 **Acceptance criteria (R6-FP-5 sharpening + tag-time decision).** Path (a) FIX: ~50-150 LOC test-harness rewrite: drop `--native-binary` from `Command::new("tauri-driver")` args; pass binary path via `fantoccini::Capabilities` with `tauri:options.application` key; verify the new shape against an actual tauri-driver subprocess on Linux + WebKitGTK. Path (b) EXPLICITLY-ACCEPT-AT-TAG: phase-4-foundation-close tag ships with webview-e2e ubuntu RED known-bug-non-required (matches the §4.46 / §4.47 DISAGREE-WITH-EXPLANATION precedent); the production integrator binary at `tools/benten-admin-shell/src/lib.rs` is UNAFFECTED — the bug is purely in E2E test subprocess invocation. **Decision deferred to phase-4-foundation-close pre-tag review.**
 
 **Not v1-gate-blocker** because: (a) admin-shell-e2e.yml documented non-required for merge; (b) production code path unaffected (Tauri integrator binary works correctly when launched directly); (c) test infrastructure issue, not platform-shippable defect.
+
+> **⚠️ ESCALATION 2026-08-12 — the deferral's destination has already shipped, and this row is now
+> overdue at its SECOND tag.** The acceptance criteria above say *"Decision deferred to
+> **phase-4-foundation-close** pre-tag review."* That tag shipped 2026-05-14. No decision was
+> recorded, neither path was taken, and the lane is still red on `phase-4-meta-core/r9-base`
+> today with the identical error — verified this session: `Error: unused arguments left:
+> ["--native-binary", …]` then `tauri-driver did not bind port 4444 within 10s`. A deferral whose
+> named destination passes without receiving the entry is exactly the clause-(b) failure
+> HARD-RULE-12 forbids; the destination existed, it just was not honoured.
+>
+> **This is also the canonical "a gate that has never once passed is a defect in the gate" case.**
+> The row itself states the test *cannot* pass as shipped. It has therefore been red across two
+> phase-close arcs, and its red carries **zero information** — nobody can tell from it whether the
+> admin shell works. That is the same shape as the napi-pins lane that hid a second defect for four
+> runs behind a grep that could never match.
+>
+> **Disposition: path (a), DO-NOW, not another deferral.** Cost is not a defer trigger, and the
+> two stated blockers have both weakened: the flag set is now *known* (`--port / --native-port /
+> --native-host / --native-driver`, and the launch path goes through `fantoccini::Capabilities`
+> with `tauri:options.application`), and validation no longer needs a local Linux box because the
+> lane itself is the Linux runner — an iteration is a push. A second, cheaper sub-fix is owed
+> regardless of path: **`cargo install tauri-driver --locked` at `admin-shell-e2e.yml` is
+> unpinned**, so the harness silently re-targets whatever version publishes next; pin it, so the
+> next CLI change is a deliberate bump rather than a new mystery red. Routed to **W-MINOR**.
+>
+> If Ben prefers path (b) instead, it must be recorded as an explicit accepted-red **with the lane
+> disabled or renamed to say so** — an always-red required-looking lane is worse than an absent
+> one, and leaving it silently red is not path (b), it is the absence of a decision.
 
 ### §4.50 `Engine::*` `_for_test` suffix in production-consumed APIs cleanup (Phase-4-Meta)
 
