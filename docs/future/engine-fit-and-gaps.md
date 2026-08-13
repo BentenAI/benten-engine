@@ -721,8 +721,16 @@ session.
 
 ### 3.8 The question nobody asked — does the engine handle their VOLUME?
 
-**Shape:** engine · **Freeze:** no · **Status:** OPEN — *and honestly labelled: this is an
-unasked question, not a known problem.*
+**Shape:** engine · **Freeze:** no · **Status:** **ANSWERED 2026-08-12 — MEASURED.** Full record:
+`docs/future/museum-fit-close.md`. Volume is **not a constraint**: their entire 94-month corpus,
+1,735,000 nodes, occupies **2.28 GB**, opens in **16 ms**, rests in **75–85 MB** RSS, answers a
+by-CID read in **0.29 ms**, folds end-to-end in **30 s**, and costs **~6 ms** to write a till line —
+on an 8 GB laptop. Nothing about their scale should influence the decision. Their companion
+question (can IVM/handlers express the 159 invariants) resolves to: **they can run every check
+today in host code, cannot yet *enforce* at the write path, and the gate is exactly one feature —
+binding grammar (§3.1), which gates ~119 of 159.** **No second store in the product**; Postgres
+stays a differential oracle with an end date at migration parity. Three ORCH findings the probes
+missed are recorded below.
 
 The museum evaluation cited **1.76 million real transaction rows** against a 248-table schema.
 We answered all three of their asks and never asked whether the engine handles their **scale**.
@@ -759,6 +767,45 @@ question stays OPEN — but it is now the right question. Measurement is in flig
 (`wf-museum-close`), with numbers-not-produced-by-running forbidden. The one hazard already on
 record and worth carrying into the answer: a view registered over an existing corpus **never reads
 it and stays empty**, so backfill-on-register is the load-bearing contract, not the arithmetic.
+
+**A second unfairness, found by the measurement pass:** `1,758,248` is the **whole database across
+248 tables**, of which 124 are empty and the largest single entity is ~440k rows. We repeated their
+headline number as though it described one hot table. It does not.
+
+**THREE ORCH-VERIFIED FINDINGS the two probes and the adversarial verifier all missed** — each
+ground-truthed personally at `ec541a63` per §3.5n, and each changes an answer:
+
+1. **A FALSE-RECORD on the FROZEN public API — `Engine::subscribe_with_handler`.** Its rustdoc
+   claimed the `Named(_)` route *"routes change events through the named handler subgraph"* and
+   *"returns the engine-side `Subscription` handle."* The body validates, records into
+   `HandlerRouteLog`, and returns `Ok(())`. The second claim is false in a way the **frozen
+   baseline itself disproves**: `docs/public-api/benten-engine.txt` records the signature as
+   `-> Result<(), EngineError>`, so no handle can be returned. The honest description existed all
+   along — in the sibling `emit_with_handler`'s *body comment*, which states the engine-side/eval-side
+   asymmetry outright. **The codebase knew; only the public doc overstated**, and it was going to
+   ship that way with the tag. This is rule-14's FALSE-RECORD bucket, not a deferral.
+   **CLOSED 2026-08-12** (doc→code disclosure per rule 15); wiring the engine-surface dispatch is
+   the code→doc half and stays a build.
+2. **The best number in the volume report describes a surface no application can reach.** The
+   0.43 ms indexed property lookup goes through `PrimitiveHost::get_by_property`, which is declared
+   on the trait and implemented for `Engine` — and **no primitive executor calls it**, so no
+   handler can reach it, and `Engine` exposes no inherent forwarder, so it is absent from the frozen
+   `benten-engine` public API. Same for `read_view` / `put_edge` / `delete_edge`. This **inverts the
+   modelling advice** we would otherwise have given: handler-side reach wants CID-valued properties,
+   host-side reach wants edges (`edges_from` is public; property lookup is not) — so an adopter
+   should **write both** until forwarders exist. Adding `Engine` read forwarders belongs in no
+   record yet.
+3. **Views neither backfill nor persist.** `register_view` pushes onto an in-memory `Vec`, and view
+   state is an in-memory `BTreeSet<Cid>`. So "register the view before migrating" is **not** a
+   workaround for the no-backfill hazard — it survives exactly one process lifetime. Disclosure owed
+   with the `Value`-inventory clause.
+
+**One verifier recommendation REJECTED with reason:** lengthening the Postgres oracle's clock past
+binding grammar. The oracle's job completes at migration parity — converting a rule to a write-path
+refusal does not retire its detector, it turns the detector into a **zero-row assertion**. The gap
+that genuinely escapes (false *refusals* — writes wrongly blocked) is not caught by Postgres either
+without dual-writing; the right control there is a typed rejection log, not a second store on a
+longer lease.
 
 ---
 

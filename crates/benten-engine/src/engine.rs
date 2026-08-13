@@ -2551,13 +2551,37 @@ impl<B: GraphBackend> EngineGeneric<B> {
 
     /// Phase-3 G14-D wave-5a: register a SUBSCRIBE consumer with
     /// explicit [`crate::handler_router::HandlerRoute`] routing per
-    /// seq-major-8 LOAD-BEARING. `Named(handler_id)` routes change
-    /// events through the named handler subgraph; `DefaultFanOut`
-    /// uses the existing on_change broadcast.
+    /// seq-major-8 LOAD-BEARING.
     ///
-    /// Returns the engine-side [`crate::engine_subscribe::Subscription`]
-    /// handle for `Named(_)` routes; for `DefaultFanOut` callers are
-    /// expected to use the existing [`Self::on_change`] entry point.
+    /// **What this entry point does today — read this before designing
+    /// against it.** It VALIDATES the pattern and (for `Named`) that the
+    /// handler is registered, then RECORDS the routing decision into
+    /// [`crate::handler_router::HandlerRouteLog`]. It does **NOT** invoke
+    /// the named handler subgraph, and it returns `()` — there is no
+    /// subscription handle to hold, drop, or cancel. `DefaultFanOut`
+    /// likewise only records; the actual broadcast is [`Self::on_change`].
+    ///
+    /// This mirrors the same seam in [`Self::emit_with_handler`], whose
+    /// in-body comment has always stated the asymmetry: the **eval**-side
+    /// `benten_eval::primitives::emit::execute` `Named` arm DOES invoke the
+    /// subgraph via `host.call_handler`; the **engine**-surface dispatch was
+    /// wave-paired to G16-D (pim-4 §3.10) and is not wired here. Until it is,
+    /// engine-surface `Named` routing is observable only through the route
+    /// log — which is exactly what the wave-5a closed-claim test asserts.
+    ///
+    /// **Record correction (2026-08-12, pre-freeze).** The prior wording on
+    /// this function claimed it "routes change events through the named
+    /// handler subgraph" and "returns the engine-side
+    /// [`crate::engine_subscribe::Subscription`] handle for `Named(_)`
+    /// routes." Both were false, and the second was false in a way the
+    /// signature on this very line disproves: the return type is
+    /// `Result<(), EngineError>` and is recorded as such in the frozen
+    /// `docs/public-api/benten-engine.txt` baseline, so no handle can be
+    /// returned. The honest description existed all along in the sibling's
+    /// body comment; only the public rustdoc overstated. Corrected per
+    /// HARD-RULE-15 (doc→code for the disclosure, immediately) — wiring the
+    /// engine-surface subgraph dispatch is the code→doc half and remains a
+    /// build, tracked at `docs/future/phase-4-backlog.md` §4.174.
     ///
     /// # Errors
     /// Returns [`EngineError`] when the named handler isn't registered
