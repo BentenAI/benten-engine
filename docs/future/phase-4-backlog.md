@@ -157,6 +157,27 @@ All four ignored in `deny.toml [advisories].ignore` **and** `supply-chain.yml` c
 > evaluate the CRDT dependency itself, rather than letting the row count grow silently. Recorded
 > rather than decided, per surface-arch-decisions-under-auth.
 
+**CodeQL false-positive posture — a FALSE-RECORD corrected 2026-08-13.** Two `critical`
+`rust/hard-coded-cryptographic-value` alerts fired on PR #1382 against Argon2id salt fixtures inside
+the `#[cfg(test)] mod tests` block of `crates/benten-crypto-suite/src/vault.rs`. Both are genuine
+false positives (production requires a fresh OS-CSPRNG salt per the `serialize_vault` contract) and
+both are **dismissed with reason** — the only mechanism available, since this repo's
+`github/codeql-action` setup does not honour inline `// codeql[...]` suppression comments.
+
+The finding worth keeping is not the two alerts. `.github/codeql/codeql-config.yml` opened with
+*"test code is excluded repo-wide from CodeQL"*, and that claim was **false**: the mechanism is
+`paths-ignore`, which is path-based, while Rust's dominant unit-test idiom puts tests **inside** the
+source file. **MEASURED at `97f689e2`: 142 source files under `crates/*/src/` and `bindings/*/src/`
+carry an inline `#[cfg(test)]` module, and exactly ONE is matched by any pattern in that file.** The
+config predicted these false positives would not recur "campaign-wide"; they recurred by exactly the
+route its own mechanism cannot cover. Header corrected in place with the measurement.
+
+**Explicitly NOT fixed by a `query-filters` exclusion of the rule.** That would also suppress a real
+hard-coded salt or key on a production path — the exact thing the query exists to catch. A dismissed
+alert is a decision with a written reason attached; a query-filter is the same decision with the
+reason thrown away. Recurring dismissals are the accepted cost, and the alternative worth
+considering in Composing is narrowing the *query* rather than the *paths*.
+
 ### §3.4 Phase 4-Meta inherited carries from Phase 3
 
 - wasmtime Component-Model re-evaluation (Phase-3 D-PHASE-3-6 + D-PHASE-3-16 + r1-wsa-12)

@@ -1,6 +1,35 @@
 # CodeQL configuration for the Benten Engine (Rust).
 #
-# WHY THIS FILE EXISTS — test code is excluded repo-wide from CodeQL.
+# WHY THIS FILE EXISTS — test code in test FILES is excluded from CodeQL.
+#
+# ⚠️ RECORD CORRECTION 2026-08-13. This header previously opened "test code is
+# excluded repo-wide from CodeQL." That was FALSE, and it was falsified by the
+# thing it predicted would not happen: `rust/hard-coded-cryptographic-value`
+# fired twice, at critical severity, on Argon2id salt fixtures inside the
+# `#[cfg(test)] mod tests` block of `crates/benten-crypto-suite/src/vault.rs`.
+#
+# The mechanism below is PATH-based, and Rust's dominant unit-test idiom puts
+# tests INSIDE the source file they test. MEASURED at 97f689e2: **142 source
+# files under `crates/*/src/` and `bindings/*/src/` contain an inline
+# `#[cfg(test)]` module, and exactly ONE of them is matched by any pattern
+# here.** So 141 files' worth of unit-test code is scanned as production code,
+# and no path pattern can reach it — `paths-ignore` cannot filter by attribute.
+#
+# This does NOT weaken production coverage (the opposite: more is scanned than
+# the header claimed). What it means practically:
+#   * Crypto/replay/signature fixtures written inline WILL keep producing
+#     false positives, and each one must be dismissed per-alert as "used in
+#     tests" — that is the only mechanism available, since this repository's
+#     github/codeql-action setup does not honour inline `// codeql[...]`
+#     suppression comments either.
+#   * Do NOT "fix" this with a `query-filters` exclusion of
+#     `rust/hard-coded-cryptographic-value`. That would also suppress a REAL
+#     hard-coded salt or key on a production path, which is precisely the
+#     finding this query exists to catch. A noisy true query beats a quiet
+#     broken one.
+#   * A dismissed alert is a decision with a written reason attached; a
+#     query-filter is the same decision with the reason discarded.
+# Tracked at `docs/future/phase-4-backlog.md` §3.6.
 #
 # Test fixtures legitimately use hard-coded cryptographic values. The F3
 # durable-replay-marker tests (e.g.
@@ -29,6 +58,10 @@
 # suppress alerts whose source location is test code.
 
 paths-ignore:
+  # NOTE: these reach test FILES only. Inline `#[cfg(test)] mod tests` blocks
+  # inside `src/*.rs` are NOT reachable by any pattern here — see the record
+  # correction above, and do not add a pattern that tries.
+  #
   # Rust integration / e2e tests live in per-crate `tests/` directories.
   - "**/tests/**"
   # Conventional unit-test module / helper file naming.
