@@ -99,12 +99,10 @@ fn sandbox_escape_linmem_grow_to_limit_kills() {
     let bytes = load_fixture("linmem_grow_to_limit.wat");
     let registry = ManifestRegistry::new();
     let attribution = dummy_attribution();
-    let cfg = SandboxConfig {
-        memory_bytes: 1024 * 1024, // 1 MiB cap; loop grows by 1 page per iter
-        fuel: 100_000_000,
-        wallclock_ms: 60_000,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.memory_bytes = 1024 * 1024; // 1 MiB cap; loop grows by 1 page per iter
+    cfg.fuel = 100_000_000;
+    cfg.wallclock_ms = 60_000;
     let err = execute(
         &bytes,
         ManifestRef::named("compute-basic"),
@@ -150,11 +148,9 @@ fn sandbox_escape_infinite_loop_fuel_bound() {
     let bytes = load_fixture("infinite_loop.wat");
     let registry = ManifestRegistry::new();
     let attribution = dummy_attribution();
-    let cfg = SandboxConfig {
-        fuel: 50_000,
-        wallclock_ms: 60_000,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.fuel = 50_000;
+    cfg.wallclock_ms = 60_000;
     let err = execute(
         &bytes,
         ManifestRef::named("compute-basic"),
@@ -177,10 +173,8 @@ fn sandbox_escape_recursive_call_overflow_traps() {
     let attribution = dummy_attribution();
     // Generous fuel so the stack-overflow path is observed (not fuel
     // path).
-    let cfg = SandboxConfig {
-        fuel: 100_000_000,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.fuel = 100_000_000;
     let err = execute(
         &bytes,
         ManifestRef::named("compute-basic"),
@@ -207,11 +201,9 @@ fn sandbox_escape_fuel_overflow_regression_held() {
     let bytes = load_fixture("fuel_overflow_regression.wat");
     let registry = ManifestRegistry::new();
     let attribution = dummy_attribution();
-    let cfg = SandboxConfig {
-        fuel: 100_000,
-        wallclock_ms: 60_000,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.fuel = 100_000;
+    cfg.wallclock_ms = 60_000;
     let err = execute(
         &bytes,
         ManifestRef::named("compute-basic"),
@@ -254,10 +246,8 @@ fn sandbox_escape_fuel_refill_via_host_fn_denied() {
     .unwrap();
     let registry = ManifestRegistry::new();
     let attribution = dummy_attribution();
-    let cfg = SandboxConfig {
-        testing_inject_attack: TestEscAttackInjection::Esc7ReEntryAttempt,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.testing_inject_attack = TestEscAttackInjection::Esc7ReEntryAttempt;
 
     let err = execute_with_live_cap_check(
         &bytes,
@@ -520,10 +510,8 @@ fn sandbox_escape_trap_in_fuel_callback_denied() {
     .unwrap();
     let registry = ManifestRegistry::new();
     let attribution = dummy_attribution();
-    let cfg = SandboxConfig {
-        testing_inject_attack: TestEscAttackInjection::Esc13FuelMeterCallbackTrap,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.testing_inject_attack = TestEscAttackInjection::Esc13FuelMeterCallbackTrap;
 
     let err = execute_with_live_cap_check(
         &bytes,

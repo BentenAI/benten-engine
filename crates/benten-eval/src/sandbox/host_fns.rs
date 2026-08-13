@@ -55,6 +55,7 @@ impl Default for CapRecheckPolicy {
 /// `kv:read` per-call read budget).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum HostFnBehavior {
     /// `time` host-fn — returns monotonic time coarsened to N ms.
     /// D1 + sec-pre-r1-06 §2.1 + ESC-16 — closes timezone leak +
@@ -91,6 +92,7 @@ pub enum HostFnBehavior {
 
 /// Declarative spec for a single host-fn entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct HostFnSpec {
     /// Stable name, matches the `[host_fn.<name>]` TOML key (and the
     /// import-name a SANDBOX module uses to call it).

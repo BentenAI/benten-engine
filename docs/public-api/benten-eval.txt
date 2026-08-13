@@ -809,7 +809,7 @@ impl core::marker::Unpin for benten_eval::primitives::sandbox::SandboxError
 impl core::marker::UnsafeUnpin for benten_eval::primitives::sandbox::SandboxError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::primitives::sandbox::SandboxError
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::primitives::sandbox::SandboxError
-pub struct benten_eval::primitives::sandbox::SandboxConfig
+#[non_exhaustive] pub struct benten_eval::primitives::sandbox::SandboxConfig
 pub benten_eval::primitives::sandbox::SandboxConfig::fuel: u64
 pub benten_eval::primitives::sandbox::SandboxConfig::max_nest_depth: u8
 pub benten_eval::primitives::sandbox::SandboxConfig::max_wasm_stack: u64
@@ -1468,7 +1468,7 @@ impl core::marker::Unpin for benten_eval::sandbox::host_fns::CapRecheckPolicy
 impl core::marker::UnsafeUnpin for benten_eval::sandbox::host_fns::CapRecheckPolicy
 impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::sandbox::host_fns::CapRecheckPolicy
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::sandbox::host_fns::CapRecheckPolicy
-pub enum benten_eval::sandbox::host_fns::HostFnBehavior
+#[non_exhaustive] pub enum benten_eval::sandbox::host_fns::HostFnBehavior
 pub benten_eval::sandbox::host_fns::HostFnBehavior::KvRead
 pub benten_eval::sandbox::host_fns::HostFnBehavior::KvRead::per_call_read_cap: u64
 pub benten_eval::sandbox::host_fns::HostFnBehavior::LogSink
@@ -1540,7 +1540,7 @@ impl<'a> core::marker::Unpin for benten_eval::sandbox::host_fns::HostFnContext<'
 impl<'a> core::marker::UnsafeUnpin for benten_eval::sandbox::host_fns::HostFnContext<'a>
 impl<'a> !core::panic::unwind_safe::RefUnwindSafe for benten_eval::sandbox::host_fns::HostFnContext<'a>
 impl<'a> !core::panic::unwind_safe::UnwindSafe for benten_eval::sandbox::host_fns::HostFnContext<'a>
-pub struct benten_eval::sandbox::host_fns::HostFnSpec
+#[non_exhaustive] pub struct benten_eval::sandbox::host_fns::HostFnSpec
 pub benten_eval::sandbox::host_fns::HostFnSpec::behavior: benten_eval::sandbox::host_fns::HostFnBehavior
 pub benten_eval::sandbox::host_fns::HostFnSpec::bypass_output_budget: bool
 pub benten_eval::sandbox::host_fns::HostFnSpec::cap_recheck: benten_eval::sandbox::host_fns::CapRecheckPolicy
@@ -1746,7 +1746,7 @@ impl core::marker::Unpin for benten_eval::primitives::sandbox::SandboxError
 impl core::marker::UnsafeUnpin for benten_eval::primitives::sandbox::SandboxError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::primitives::sandbox::SandboxError
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::primitives::sandbox::SandboxError
-pub struct benten_eval::sandbox::primitives_sandbox::SandboxConfig
+#[non_exhaustive] pub struct benten_eval::sandbox::primitives_sandbox::SandboxConfig
 pub benten_eval::sandbox::primitives_sandbox::SandboxConfig::fuel: u64
 pub benten_eval::sandbox::primitives_sandbox::SandboxConfig::max_nest_depth: u8
 pub benten_eval::sandbox::primitives_sandbox::SandboxConfig::max_wasm_stack: u64
@@ -1946,7 +1946,7 @@ impl core::marker::Unpin for benten_eval::sandbox::escape_defenses::EscVector
 impl core::marker::UnsafeUnpin for benten_eval::sandbox::escape_defenses::EscVector
 impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::sandbox::escape_defenses::EscVector
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::sandbox::escape_defenses::EscVector
-pub enum benten_eval::sandbox::HostFnBehavior
+#[non_exhaustive] pub enum benten_eval::sandbox::HostFnBehavior
 pub benten_eval::sandbox::HostFnBehavior::KvRead
 pub benten_eval::sandbox::HostFnBehavior::KvRead::per_call_read_cap: u64
 pub benten_eval::sandbox::HostFnBehavior::LogSink
@@ -2196,7 +2196,7 @@ impl<'a> core::marker::Unpin for benten_eval::sandbox::host_fns::HostFnContext<'
 impl<'a> core::marker::UnsafeUnpin for benten_eval::sandbox::host_fns::HostFnContext<'a>
 impl<'a> !core::panic::unwind_safe::RefUnwindSafe for benten_eval::sandbox::host_fns::HostFnContext<'a>
 impl<'a> !core::panic::unwind_safe::UnwindSafe for benten_eval::sandbox::host_fns::HostFnContext<'a>
-pub struct benten_eval::sandbox::HostFnSpec
+#[non_exhaustive] pub struct benten_eval::sandbox::HostFnSpec
 pub benten_eval::sandbox::HostFnSpec::behavior: benten_eval::sandbox::host_fns::HostFnBehavior
 pub benten_eval::sandbox::HostFnSpec::bypass_output_budget: bool
 pub benten_eval::sandbox::HostFnSpec::cap_recheck: benten_eval::sandbox::host_fns::CapRecheckPolicy
@@ -2265,7 +2265,7 @@ impl core::marker::Unpin for benten_eval::sandbox::manifest::ManifestSignature
 impl core::marker::UnsafeUnpin for benten_eval::sandbox::manifest::ManifestSignature
 impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::sandbox::manifest::ManifestSignature
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::sandbox::manifest::ManifestSignature
-pub struct benten_eval::sandbox::SandboxConfig
+#[non_exhaustive] pub struct benten_eval::sandbox::SandboxConfig
 pub benten_eval::sandbox::SandboxConfig::fuel: u64
 pub benten_eval::sandbox::SandboxConfig::max_nest_depth: u8
 pub benten_eval::sandbox::SandboxConfig::max_wasm_stack: u64

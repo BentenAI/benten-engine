@@ -54,10 +54,8 @@ fn sandbox_output_limit_routes_inv_7_via_counted_sink_primary() {
     )
     .unwrap();
     let registry = ManifestRegistry::new();
-    let cfg = SandboxConfig {
-        output_bytes: 1024 * 1024,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.output_bytes = 1024 * 1024;
     let attribution = dummy_attribution();
     let err = execute(
         &bytes,
@@ -122,10 +120,8 @@ fn sandbox_output_aggregate_across_host_fns_enforces_inv_7() {
     )
     .unwrap();
     let registry = ManifestRegistry::new();
-    let cfg = SandboxConfig {
-        output_bytes: 500_000,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.output_bytes = 500_000;
     let attribution = dummy_attribution();
     let err = execute(
         &bytes,
@@ -168,10 +164,8 @@ fn sandbox_output_at_exact_limit_succeeds() {
     let registry = ManifestRegistry::new();
     // 180_000 + 4 (return value bytes) — return value adds to BACKSTOP
     // count but the PRIMARY consumed is exactly limit.
-    let cfg = SandboxConfig {
-        output_bytes: 180_004,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.output_bytes = 180_004;
     let attribution = dummy_attribution();
     let res = execute(
         &bytes,

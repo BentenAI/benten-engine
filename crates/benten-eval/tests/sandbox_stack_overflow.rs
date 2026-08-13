@@ -127,12 +127,10 @@ fn sandbox_stack_overflow_reports_enforced_ceiling_not_inert_config_request() {
     let bytes = recursive_overflow_fixture();
     let registry = ManifestRegistry::new();
     let attribution = dummy_attribution();
-    let cfg = SandboxConfig {
-        // Generous fuel so the STACK path is observed, not the fuel path.
-        fuel: 100_000_000,
-        max_wasm_stack: DELIBERATELY_WRONG_REQUEST,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    // Generous fuel so the STACK path is observed, not the fuel path.
+    cfg.fuel = 100_000_000;
+    cfg.max_wasm_stack = DELIBERATELY_WRONG_REQUEST;
     let err = execute(
         &bytes,
         ManifestRef::named("compute-basic"),

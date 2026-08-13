@@ -1111,6 +1111,21 @@ trait ValueRender {
     }
     fn null(&self) -> String;
     fn bytes(&self, len: usize) -> String;
+    /// Render a [`Value`] variant this build does not know how to render.
+    ///
+    /// `Value` is `#[non_exhaustive]` (applied pre-freeze so a ninth variant
+    /// stays additive for downstream crates), so `render_value`'s match needs a
+    /// wildcard arm. The arm must NOT be silent: rendering an unknown variant
+    /// as empty or `null` would be invisible data loss in a UI, which is the
+    /// same failure class the engine rejects at codepoint dispatch (never a
+    /// silent fallback on an unknown algorithm). This surfaces it instead.
+    ///
+    /// Defaulted so adding a renderer cannot accidentally omit it — but note
+    /// the default is NOT valid JSON, so a format with syntax **must**
+    /// override it, exactly as [`ValueRender::bytes`] already does.
+    fn unsupported(&self) -> String {
+        "[unsupported value]".to_string()
+    }
     /// Join already-rendered list items into the list representation.
     fn list(&self, items: &[String]) -> String;
     /// Compose an already-rendered map of `(key, rendered_value)` pairs.
@@ -1138,6 +1153,13 @@ fn render_value<R: ValueRender>(v: &Value, r: &R) -> String {
                 .collect();
             r.map(&pairs)
         }
+        // `Value` is `#[non_exhaustive]`; a variant added in a later release
+        // lands here. Surfaced visibly rather than dropped — see
+        // `ValueRender::unsupported`. Unreachable today by construction (all
+        // eight variants are matched above), which is why the pin at
+        // `value_render_unsupported_is_wellformed_per_format` exercises the
+        // renderers directly instead of trying to synthesise a ninth variant.
+        _ => r.unsupported(),
     }
 }
 
@@ -1197,6 +1219,11 @@ impl ValueRender for JsonRender {
     }
     fn bytes(&self, len: usize) -> String {
         format!("\"[bytes:{len}]\"")
+    }
+    /// MUST override the default: the bare marker is not valid JSON. Same
+    /// reason `bytes` quotes its own marker.
+    fn unsupported(&self) -> String {
+        "\"[unsupported value]\"".to_string()
     }
     fn list(&self, items: &[String]) -> String {
         format!("[{}]", items.join(","))
@@ -1917,5 +1944,53 @@ mod inline_canary {
                 _ => panic!("schema_compiler emitted unexpected variant: {k:?}"),
             }
         }
+    }
+
+    /// `Value` is `#[non_exhaustive]` (applied pre-freeze so a ninth variant is
+    /// additive for downstream crates), so `render_value` carries a wildcard arm
+    /// that routes to [`ValueRender::unsupported`].
+    ///
+    /// The arm itself is unreachable today by construction — all eight variants
+    /// are matched above it — so this exercises the renderers directly. That is
+    /// the honest testable half: what can break is not the arm, it is a renderer
+    /// emitting a marker that is malformed for its own format.
+    ///
+    /// **would-FAIL-on-revert:** delete `JsonRender::unsupported` and the default
+    /// trait method takes over, emitting the bare `[unsupported value]` — which
+    /// is not valid JSON, and the `serde_json::from_str` assertion below fails.
+    /// That is exactly the bug the override exists to prevent, and it is silent
+    /// without this pin because no current input reaches the arm.
+    #[test]
+    fn value_render_unsupported_is_wellformed_per_format() {
+        // Positive control: the marker is non-empty everywhere. A renderer that
+        // returned "" would satisfy "valid JSON" vacuously for the plain formats
+        // and silently drop the value — the failure this whole arm exists to stop.
+        for (name, got) in [
+            ("html", HtmlRender.unsupported()),
+            ("plaintext", PlaintextRender.unsupported()),
+            ("json", JsonRender.unsupported()),
+        ] {
+            assert!(
+                !got.trim().is_empty(),
+                "{name} renderer must SURFACE an unknown Value kind, not drop it"
+            );
+        }
+
+        // The substantive arm: JSON must stay parseable. The default trait
+        // method is deliberately not valid JSON, so this pins the override.
+        let json = JsonRender.unsupported();
+        let parsed: serde_json::Value = serde_json::from_str(&json)
+            .expect("JsonRender::unsupported MUST emit valid JSON — the defaulted marker is not");
+        assert!(
+            parsed.as_str().is_some_and(|s| s.contains("unsupported")),
+            "the JSON marker must remain self-describing; got {json}"
+        );
+
+        // And it must not be confusable with a real Value::Null rendering.
+        assert_ne!(
+            JsonRender.unsupported(),
+            JsonRender.null(),
+            "an unknown kind must be distinguishable from a genuine null"
+        );
     }
 }

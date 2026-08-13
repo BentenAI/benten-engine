@@ -356,6 +356,24 @@ pub(crate) fn value_to_json(v: &Value) -> serde_json::Value {
         }
         Value::List(items) => serde_json::Value::Array(items.iter().map(value_to_json).collect()),
         Value::Map(map) => value_map_to_json(map),
+        // `Value` is `#[non_exhaustive]`; a variant added in a later release
+        // lands here. It is deliberately NOT `null`: this is the language
+        // boundary, and mapping an unrecognised kind to `null` would hand a JS
+        // caller a value indistinguishable from a real `Value::Null` — a silent
+        // wrong answer at exactly the seam where the two languages stop
+        // agreeing. The sentinel object is self-describing and machine-
+        // detectable, so a consumer can assert on it rather than discover it as
+        // a missing field. It intentionally does NOT round-trip through
+        // `json_to_value`: a kind this build cannot represent must not be
+        // silently reconstructed as one it can.
+        _ => {
+            let mut obj = serde_json::Map::with_capacity(1);
+            obj.insert(
+                "__benten_unsupported_value_kind__".to_string(),
+                serde_json::Value::Bool(true),
+            );
+            serde_json::Value::Object(obj)
+        }
     }
 }
 

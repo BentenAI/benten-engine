@@ -50,6 +50,7 @@ use wasmtime::{Caller, Engine, Linker, Store};
 /// [`SandboxConfig::default`]; per-handler overrides come through
 /// `SubgraphSpec.primitives` (G12-D widening).
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct SandboxConfig {
     /// Per-call fuel budget (wasmtime units). dx-r1-2b-5 default 1_000_000.
     pub fuel: u64,

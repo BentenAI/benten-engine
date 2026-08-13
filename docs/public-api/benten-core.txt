@@ -717,7 +717,7 @@ pub fn benten_core::subgraph_spec::walker_as_subgraph() -> benten_core::subgraph
 pub mod benten_core::testing
 pub fn benten_core::testing::canonical_test_node() -> benten_core::Node
 pub mod benten_core::value
-pub enum benten_core::value::Value
+#[non_exhaustive] pub enum benten_core::value::Value
 pub benten_core::value::Value::Bool(bool)
 pub benten_core::value::Value::Bytes(alloc::vec::Vec<u8>)
 pub benten_core::value::Value::Float(f64)
@@ -1059,7 +1059,7 @@ impl core::marker::Unpin for benten_core::subgraph::PrimitiveKind
 impl core::marker::UnsafeUnpin for benten_core::subgraph::PrimitiveKind
 impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph::PrimitiveKind
 impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph::PrimitiveKind
-pub enum benten_core::Value
+#[non_exhaustive] pub enum benten_core::Value
 pub benten_core::Value::Bool(bool)
 pub benten_core::Value::Bytes(alloc::vec::Vec<u8>)
 pub benten_core::Value::Float(f64)
