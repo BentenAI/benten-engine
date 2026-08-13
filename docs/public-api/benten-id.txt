@@ -1042,9 +1042,9 @@ pub const benten_id::vc::VC_CONTEXT_V1: &str
 pub const benten_id::vc::VC_TYPE_BASE: &str
 pub fn benten_id::vc::verify(&benten_id::vc::Credential, &benten_id::did::Did) -> core::result::Result<(), benten_id::errors::VcError>
 pub fn benten_id::vc::verify_at(&benten_id::vc::Credential, &benten_id::did::Did, u64) -> core::result::Result<(), benten_id::errors::VcError>
-pub fn benten_id::vc::verify_bytes_in_trust_domain(&[u8], &benten_id::vc::TrustDomain) -> core::result::Result<(), benten_id::errors::VcError>
-pub fn benten_id::vc::verify_in_trust_domain(&benten_id::vc::Credential, &benten_id::vc::TrustDomain) -> core::result::Result<(), benten_id::errors::VcError>
-pub fn benten_id::vc::verify_with_registry(&benten_id::vc::Credential, &benten_id::did::Did, &benten_id::vc::RevocationRegistry) -> core::result::Result<(), benten_id::errors::VcError>
+pub fn benten_id::vc::verify_bytes_in_trust_domain(&[u8], &benten_id::vc::TrustDomain, u64) -> core::result::Result<(), benten_id::errors::VcError>
+pub fn benten_id::vc::verify_in_trust_domain(&benten_id::vc::Credential, &benten_id::vc::TrustDomain, u64) -> core::result::Result<(), benten_id::errors::VcError>
+pub fn benten_id::vc::verify_with_registry(&benten_id::vc::Credential, &benten_id::did::Did, &benten_id::vc::RevocationRegistry, u64) -> core::result::Result<(), benten_id::errors::VcError>
 #[non_exhaustive] pub enum benten_id::DeviceAttestationError
 pub benten_id::DeviceAttestationError::BadSignature
 pub benten_id::DeviceAttestationError::DecodeFailed

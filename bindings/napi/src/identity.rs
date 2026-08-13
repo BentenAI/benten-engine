@@ -237,15 +237,29 @@ impl JsVerifiableCredential {
         }
     }
 
-    /// Verify under a trust-domain allow-list of issuer DIDs.
+    /// Verify under a trust-domain allow-list of issuer DIDs, at a given
+    /// epoch second (rejects expired credentials).
+    ///
+    /// `nowSecs` is required rather than optional. The previous shape took
+    /// only the allow-list and silently skipped `expirationDate`, which sat
+    /// directly beside `verifyAt` — a method whose own doc advertises
+    /// "rejects expired credentials" — so the pair read as though the choice
+    /// between them were about trust domains, when it was also, invisibly,
+    /// about whether expiry was checked at all. An offline gate calling this
+    /// would have admitted long-expired credentials. Made required before the
+    /// v1-beta freeze, because afterwards the shape is permanent.
     #[napi]
-    pub fn verify_in_trust_domain(&self, trusted_issuer_dids: Vec<String>) -> Result<bool> {
+    pub fn verify_in_trust_domain(
+        &self,
+        trusted_issuer_dids: Vec<String>,
+        now_secs: i64,
+    ) -> Result<bool> {
         let dids = trusted_issuer_dids
             .into_iter()
             .map(RustDid::from_string_for_test_fixture)
             .collect::<Vec<_>>();
         let trust_domain = RustTrustDomain::new(dids);
-        match rust_vc_verify_in_trust_domain(&self.inner, &trust_domain) {
+        match rust_vc_verify_in_trust_domain(&self.inner, &trust_domain, now_secs.max(0) as u64) {
             Ok(()) => Ok(true),
             Err(e) => Err(Error::from_reason(format!(
                 "vc verify_in_trust_domain failed: {e}"

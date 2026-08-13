@@ -222,7 +222,11 @@ fn vc_verify_bytes_rejects_oversized_envelope_before_decode() {
     // an allocation on the VC-verify path.
     let trust_domain = TrustDomain::empty();
     let oversized = vec![0u8; MAX_VC_ENVELOPE_BYTES + 1];
-    let result = verify_bytes_in_trust_domain(&oversized, &trust_domain);
+    // `now` is irrelevant here by construction: the byte cap must fire BEFORE
+    // any decode, so no `expirationDate` exists to compare against yet. If a
+    // future refactor moved the cap after the decode, this call would start
+    // depending on the clock — which is itself a signal worth keeping visible.
+    let result = verify_bytes_in_trust_domain(&oversized, &trust_domain, 1_000_000_000);
     match result {
         Err(VcError::EnvelopeTooLarge { got, max }) => {
             assert_eq!(got, MAX_VC_ENVELOPE_BYTES + 1, "reports observed length");

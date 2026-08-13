@@ -908,7 +908,7 @@ That `verify_at` is the one variant with a real caller — and is guarded by a r
 naming the exact "silently called `verify` instead of `verify_at`" bug — is evidence this class is
 known and was closed once, on one path, without generalizing.
 
-**DECISION (needs Ben — permanent, and only free before the tag).** Make the clock a **required
+**DECISION — RATIFIED BY BEN 2026-08-12 AND LANDED.** Make the clock a **required
 parameter** on the composed entry points rather than adding a sixth function:
 
 - `verify_in_trust_domain(vc, trust_domain, now)`
@@ -926,9 +926,20 @@ answers plainly: one clock-free primitive plus composed entries that cannot skip
 Requiring the parameter makes the fail-open shape **unrepresentable** rather than merely
 documented, which is the same move as the W2 depth-cap derivation. Blast radius is two Rust test
 callers, one napi method, one INTERNALS line, one baseline regen. **This is a permanent breaking
-signature change to a frozen-baseline surface: free today, impossible after the tag.** Rides
-**W-WIRE** as its fifth item. The alternative — ship as-is and document the omission — is the
-cheap green, and on a freeze it ratifies the weaker behaviour forever.
+signature change to a frozen-baseline surface: free today, impossible after the tag.** The
+alternative — ship as-is and document the omission — is the cheap green, and on a freeze it
+ratifies the weaker behaviour forever.
+
+**LANDED 2026-08-12.** All three signatures changed and each now composes `verify_at`; `verify`
+stays clock-free with rustdoc naming it signature-and-issuer-only; the napi mirror moved with it
+(its doc now explains why `nowSecs` is required, since the adjacent `verifyAt` advertised the
+expiry check and `verifyInTrustDomain` was silent about skipping it). **Falsification run, not
+assumed:** reverting the two composed entries to the clock-free `verify` makes exactly the two new
+substantive arms in `crates/benten-id/tests/vc.rs` fail and leaves the other five passing — so the
+pins are non-vacuous and scoped. The frozen baseline was regenerated with CI's own
+`cargo +nightly public-api --simplified -p benten-id` and the diff is **exactly the three signature
+lines**, no collateral drift. `INTERNALS.md` also said "Four verifier entry points" above a list of
+five; corrected in the same pass.
 
 **And no: "expired" does NOT include "revoked."** They are different mechanisms with different
 error variants (`VcError::Expired` vs `VcError::Revoked`) and different reachability. Expiry is

@@ -155,13 +155,20 @@ pattern to copy, not a component to reuse.
    `claim_value: String`, and the struct is **not** `#[non_exhaustive]`. A membership needs tier,
    member-since, reciprocal category, household count, member number — today those concatenate into
    one signed string with no schema. **This is a wire shape and the tag freezes it.** See §4.
-2. **No single call does allow-list + expiry.** ORCH re-read all five entry points:
-   `verify_at` is the *only* one that checks expiry, and it takes one expected issuer, so it cannot
-   check a list. `verify_in_trust_domain` and `verify_with_registry` both call bare `verify`.
-   **A gate calling `verifyInTrustDomain` accepts expired memberships**, and a gate that adds
-   revocation checking loses expiry checking too. Both are in the frozen `docs/public-api/benten-id.txt`
-   baseline. This is the single most likely way someone ships an insecure gate believing they used
-   the safe API.
+2. ~~**No single call does allow-list + expiry.**~~ **CLOSED 2026-08-12 — Ben ratified breaking the
+   signature pre-tag.** The finding as written was correct: `verify_at` was the only entry point
+   that checked expiry and it takes a single expected issuer, so it could not check a list;
+   `verify_in_trust_domain` and `verify_with_registry` both composed the bare clock-free `verify`,
+   so a gate calling `verifyInTrustDomain` accepted expired memberships and a gate that added
+   revocation checking lost expiry checking. **`now` is now a REQUIRED parameter on all three
+   composed entry points** (`verify_in_trust_domain`, `verify_with_registry`,
+   `verify_bytes_in_trust_domain`), each composing `verify_at`; `verify` stays clock-free as the
+   honest signature-and-issuer primitive. Chosen over an additive `_at` twin because the twin
+   leaves the wrong function public and still cannot pair revocation with a clock — requiring the
+   parameter makes the silent skip *unrepresentable* rather than documented. The napi mirror moved
+   with it. Two mutation-proven arms in `crates/benten-id/tests/vc.rs` fail on revert and no others
+   do; the frozen baseline was regenerated with CI's own invocation and the diff is exactly the
+   three signature lines.
 3. **The graph-level `vc_verify` requires the issuer up front** — `{credential, expected_issuer_did,
    now}`, no allow-list arm, no decode-then-verify. **A handler cannot express the reciprocal check
    today.**
@@ -276,9 +283,10 @@ not need a new `Value` variant** — §3.2a already settled that the reference i
 
 ## 5. Open questions for Ben
 
-1. **`verify_in_trust_domain`** — break the signature pre-tag (my prediction: yes; it is a
-   correctness defect on a public gate API and this is the last window), or freeze it and ship an
-   additive `_at` twin later?
+1. ~~**`verify_in_trust_domain`** — break the signature pre-tag, or freeze it and ship an additive
+   `_at` twin later?~~ **ANSWERED 2026-08-12: break it, and Ben ratified.** The prediction ("yes;
+   it is a correctness defect on a public gate API and this is the last window") held. Landed —
+   see §3 item 2 above for the shape and the evidence.
 2. **`CredentialSubject`** — widen to a typed `Value` pre-tag, or accept the concatenated-string
    shape as the permanent v1 wire? An adopter is about to build a membership on it either way.
 3. **Do we want an out-of-line blob tier at all for v1**, or do we state "bulk lives outside the

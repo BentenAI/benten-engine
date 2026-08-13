@@ -482,13 +482,23 @@ pub fn verify_at(vc: &Credential, expected_issuer: &Did, now: u64) -> Result<(),
     verify(vc, expected_issuer)
 }
 
-/// Verify a VC against the issuer DID, consulting `registry` to
-/// reject revoked credentials. Returns [`VcError::Revoked`] if the
+/// Verify a VC against the issuer DID at `now`, consulting `registry`
+/// to reject revoked credentials. Returns [`VcError::Revoked`] if the
 /// `credentialStatus.id` is listed in the registry.
+///
+/// `now` is REQUIRED — see the module note on
+/// [`verify_in_trust_domain`] for why the composed entry points cannot
+/// skip the timed gate. Revocation and expiry are INDEPENDENT: a
+/// credential can be unexpired-and-revoked (the entire point of a
+/// revocation registry) or expired-and-never-revoked (natural end of
+/// life). Checking one has never implied the other, and a caller
+/// consulting a revocation registry while ignoring `expirationDate`
+/// has a bug essentially every time.
 pub fn verify_with_registry(
     vc: &Credential,
     expected_issuer: &Did,
     registry: &RevocationRegistry,
+    now: u64,
 ) -> Result<(), VcError> {
     if let Some(status) = &vc.claims.credential_status
         && registry.is_revoked(&status.id)
@@ -497,20 +507,60 @@ pub fn verify_with_registry(
             status_id: status.id.clone(),
         });
     }
-    verify(vc, expected_issuer)
+    verify_at(vc, expected_issuer, now)
 }
 
-/// Verify a VC under a [`TrustDomain`] allow-list. Rejects with
-/// [`VcError::IssuerNotTrusted`] if the issuer is not on the list,
-/// independent of signature validity.
-pub fn verify_in_trust_domain(vc: &Credential, trust_domain: &TrustDomain) -> Result<(), VcError> {
+/// Verify a VC under a [`TrustDomain`] allow-list at `now`. Rejects
+/// with [`VcError::IssuerNotTrusted`] if the issuer is not on the
+/// list, independent of signature validity.
+///
+/// # Why `now` is a required parameter
+///
+/// Pre-freeze audit (2026-08-12) found this family was a matrix with
+/// only the diagonal filled: three independent dimensions — clock
+/// (`expirationDate` + `issuanceDate`), trust-domain allow-list, and
+/// revocation registry — across five entry points, where every
+/// composed entry added exactly ONE dimension to the clock-free
+/// [`verify`] and **no entry point checked two**. There was therefore
+/// no way to verify a credential against a trust domain *and* a clock,
+/// which is precisely the pair an offline reciprocity gate needs.
+///
+/// The fix is a required parameter rather than a sixth function.
+/// Adding `verify_in_trust_domain_at` alongside the existing shape
+/// would leave six functions, still no revocation-plus-clock pair, and
+/// a combinatorial end state of eight. Requiring `now` makes the
+/// silent-skip **unrepresentable** instead of merely documented — the
+/// caller cannot forget the timed gate, because the compiler will not
+/// let them. [`verify`] remains clock-free as the honest signature-and
+/// -issuer primitive these compose; that is the one place skipping the
+/// clock is a deliberate choice rather than an omission.
+///
+/// This is a breaking signature change, taken deliberately before the
+/// v1-beta interface freeze because after the freeze it is permanent.
+/// The engine has no ambient clock by commitment (see
+/// `E_UCAN_CLOCK_NOT_INJECTED`), so `now` is injected here for the same
+/// reason it is injected everywhere else: a verifier that reads the
+/// wall clock itself cannot be tested against time, and cannot be
+/// audited for what it did at a past instant.
+///
+/// **Expiry is not revocation.** Expiry is determinable entirely
+/// offline from the credential plus a clock. Revocation requires
+/// consulting [`RevocationRegistry`] — see [`verify_with_registry`].
+/// At a genuinely offline gate revocation is unobservable, so a short
+/// `expirationDate` is the only offline-enforceable bound on a
+/// credential's life.
+pub fn verify_in_trust_domain(
+    vc: &Credential,
+    trust_domain: &TrustDomain,
+    now: u64,
+) -> Result<(), VcError> {
     if !trust_domain.contains(&vc.claims.issuer) {
         return Err(VcError::IssuerNotTrusted {
             issuer: vc.claims.issuer.clone(),
         });
     }
     let issuer = Did::from_string_for_test_fixture(vc.claims.issuer.clone());
-    verify(vc, &issuer)
+    verify_at(vc, &issuer, now)
 }
 
 /// Verify raw canonical bytes (untrusted-input path) under a
@@ -522,6 +572,7 @@ pub fn verify_in_trust_domain(vc: &Credential, trust_domain: &TrustDomain) -> Re
 pub fn verify_bytes_in_trust_domain(
     bytes: &[u8],
     trust_domain: &TrustDomain,
+    now: u64,
 ) -> Result<(), VcError> {
     // Fail-closed total-byte cap (Compromise #28 / META #629): reject an
     // over-large blob BEFORE `serde` allocates the decoded `Credential`.
@@ -533,7 +584,7 @@ pub fn verify_bytes_in_trust_domain(
     }
     let vc: Credential =
         serde_ipld_dagcbor::from_slice(bytes).map_err(|_| VcError::DecodeFailed)?;
-    verify_in_trust_domain(&vc, trust_domain)
+    verify_in_trust_domain(&vc, trust_domain, now)
 }
 
 #[cfg(test)]
