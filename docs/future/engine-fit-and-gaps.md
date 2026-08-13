@@ -966,9 +966,37 @@ surface **has not been checked**, and it is the one part of relative addressing 
 foreclose. If additive → nothing owed and say so. If frozen-closed → now-or-never.
 
 Explicitly **not** now-or-never, despite being proposed or considered as such:
-- `#[non_exhaustive]` on `Value` and peers — our own freeze contract (`V1-FROZEN-INTERFACE.md`
-  §"Composing-phase escape valve") states that *adding* `#[non_exhaustive]` is additive and
-  permitted in Composing.
+- ~~`#[non_exhaustive]` on `Value` and peers — our own freeze contract states that *adding* it is
+  additive and permitted in Composing.~~ **⚠️ THIS ROW WAS WRONG. Corrected 2026-08-13; the item is
+  now OPEN FOR BEN and is now-or-never in substance.** I cited one half of a sentence that concedes
+  the opposite in its own parenthetical. `V1-FROZEN-INTERFACE.md` §11's escape valve reads,
+  verbatim: *"ADDING `#[non_exhaustive]` to a type that doesn't have it = additive + permitted in
+  Composing **(caveat: technically SemVer-breaking for external direct-struct-literal construction,
+  so the migration path must be tested)**."* **"Additive" and "SemVer-breaking" cannot both be
+  true**, and on Rust semantics the caveat is the correct half: adding the attribute breaks
+  downstream struct-literal construction and downstream exhaustive `match`. That is exactly the
+  class of break the freeze exists to prevent, so post-tag it is a major bump — which makes it
+  now-or-never in every sense that matters to an adopter. The freeze document contradicting itself
+  on a freeze rule is the rule-14 shape, and it survived because I quoted the convenient clause
+  instead of reading the sentence.
+
+  **The adopter who raised it was right, and the cost is MEASURED, not estimated.** Adding
+  `#[non_exhaustive]` to all four (`benten_core::value::Value`,
+  `benten_eval::sandbox::host_fns::{HostFnSpec, HostFnBehavior}`,
+  `benten_eval::primitives::sandbox::SandboxConfig`) and building the workspace breaks **exactly one
+  site**: `crates/benten-platform-foundation/src/materializer.rs`'s `render_value`, which matches
+  `Value` exhaustively across a crate boundary. Nothing else in the workspace moves —
+  `#[non_exhaustive]` does not constrain the defining crate, so intra-crate matching is untouched.
+  Total cost: four attribute lines plus one match arm. `PrimitiveKind` already carries the
+  attribute, so the pattern is established rather than novel.
+
+  **The one real design question is what that new arm should render**, and it should not be silent.
+  `render_value` returns `String`, so an unknown variant cannot fail closed the way our codepoint
+  dispatch does (baked-in #5: typed-reject on unknown, never a silent fallback). Rendering a new
+  variant as null or empty would be silent data loss in a UI; the arm should render a visibly
+  unsupported marker. **DECISION FOR BEN: add the four pre-tag (ORCH recommends yes — four lines,
+  one arm, and the alternative is a permanent major-bump requirement to ever extend `Value`), and
+  choose the placeholder text for the new arm.**
 - Raising `MAX_DECODE_BYTES` — test-pinned policy, not wire; and raising it is the wrong move
   regardless (§3.2b).
 - `Bytes(Vec<u8>)` → cheap-clone payload — the one item where pre-tag genuinely IS the only

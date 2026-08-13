@@ -1445,10 +1445,24 @@ verification at HEAD):
 - New `pub enum` / `pub struct` in Composing MUST default to
   `#[non_exhaustive]` per the freeze policy; carve-out requires explicit
   registry entry + Ben sign-off.
-- ADDING `#[non_exhaustive]` to a type that doesn't have it = additive +
-  permitted in Composing (caveat: technically SemVer-breaking for
-  external direct-struct-literal construction, so the migration path
-  must be tested).
+- ADDING `#[non_exhaustive]` to a type that doesn't have it is
+  **SemVer-BREAKING for external consumers, not additive.** It breaks
+  downstream struct-literal construction AND downstream exhaustive
+  `match`. **Corrected 2026-08-13** — this clause previously read
+  "additive + permitted in Composing (caveat: technically
+  SemVer-breaking …)", which asserts both halves of a contradiction and
+  invites a reader to quote the convenient one. Someone did: the
+  adopter-ledger row dismissing an external request to add the attribute
+  to four types pre-tag cited only the un-caveated half.
+  **The caveat was the true half.** Note the asymmetry with the
+  neighbouring rules: this is the one direction the escape valve does
+  NOT cover, because "permitted in Composing" is only meaningful for
+  changes that do not break the consumers the freeze protects.
+  Consequence: **adding it after the tag costs a major bump**, so any
+  type that may ever gain a variant or field wants the attribute
+  BEFORE the freeze. The defining crate is unaffected either way —
+  `#[non_exhaustive]` constrains downstream crates only, so
+  intra-workspace exhaustive matching keeps compiling.
 - REMOVING `#[non_exhaustive]` from a frozen item = HALT-AND-SURFACE.
 
 ---
