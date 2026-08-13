@@ -1005,6 +1005,37 @@ Explicitly **not** now-or-never, despite being proposed or considered as such:
 
 ---
 
+## 5b. The replies — WRITTEN AND PLACED 2026-08-13
+
+Both response documents are placed in the adopters' own repositories, internal reviewer notes
+stripped (kept separately under `/tmp/adopter-replies/NOTES-*.md`):
+
+- `/Users/benwork/Documents/versai/design/BENTEN-ENGINE-RESPONSE.md` — 942 lines
+- `/Users/benwork/Documents/rusty-gemma/BENTEN-ENGINE-RESPONSE.md` — 2,064 lines
+
+Each carries a closing disposition index mapping **every** numbered ask to a status and a section,
+so nothing either party wrote can be silently dropped. Both were adversarially verified, and ORCH
+independently ground-truthed the load-bearing claims before placement.
+
+**⚠️ THE FINDING WE OWE OURSELVES — the museum's false premises all trace to a document that is not
+in the repository.** VERIFIED: `docs/PLATFORM-DESIGN.md` and `docs/ENGINE-SPEC.md` **exist locally
+and are gitignored** — untracked, so no CI check gates them and no reader can diff them against the
+code. The museum evaluation cites `PLATFORM-DESIGN.md` §1.2/§3.1/§3.2/§3.4/§3.5 as engine
+documentation and diffed it against source wherever source was visible. **Every load-bearing false
+premise they hold traces to that one file** — including "edges are add-wins" and "move is an atomic
+CRDT operation", neither of which exists (`add_wins` has **zero hits across every crate**, and
+`benten-sync/src` mentions "edge" four times across three files, all prose, with no `Edge` type at
+all). This is the same shape as the `ENGINE-SPEC` config claim recorded at §3.7: **an untracked doc
+rides no patch, so CI can never gate it, and it drifts silently while being read as authoritative.**
+Two adopters have now been misled by exactly this. Re-tracking these files is a publication call for
+Ben (§4.173 E) and it is no longer only a hygiene question.
+
+**Owed regardless of whether either adopter proceeds:** write ONE of the museum's invariants out as
+an actual subgraph, end to end. The ~119-of-159 figure that gates their adoption decision is
+**unvalidated** — no one has expressed a single rule in the real primitives, which is precisely how
+the input-binding gap survived two full analysis passes. `till_opening_count_matches_denomination_sum`
+is the cheapest candidate; it either confirms the number or finds the next missing joint.
+
 ## 6. Sources
 
 - `/Users/benwork/Documents/versai/design/benten-engine-asks.md`, `benten-fit.md`,
