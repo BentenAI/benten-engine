@@ -976,6 +976,27 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R4 br-r6-r4-1 MINOR + R6-R5 br-r6-r5
 > disabled or renamed to say so** — an always-red required-looking lane is worse than an absent
 > one, and leaving it silently red is not path (b), it is the absence of a decision.
 
+> **✅ PATH (a) LANDED 2026-08-13 — Ben ratified DO-NOW.** Three changes:
+> **(1)** `--native-binary` dropped; `tauri-driver` now receives only `--port`. **(2)** The
+> application under test is named where tauri-driver actually looks for it — the WebDriver session
+> capability **`tauri:options.application`**, passed through `fantoccini::ClientBuilder::capabilities`
+> so it lands in the `alwaysMatch` block. **(3)** `cargo install tauri-driver` is **pinned** to
+> `--version '^2'`; it was unpinned, so every run silently re-targeted the newest publish — the
+> drift class that delivers a contract change as a mystery red instead of a deliberate bump. A
+> `tauri-driver --help` step now records the accepted flag set into the same run that would fail,
+> so the next contract change carries its own evidence.
+>
+> Compiles clean under `--features tauri`. **Validation is the lane itself** — the test
+> self-skips on macOS (upstream WKWebView has no embedded-webview WebDriver binding), so a local
+> run proves nothing and the Linux runner is the only real verifier. That was named as a blocker in
+> the original acceptance criteria; it was never actually one, since the lane *is* the Linux runner
+> and an iteration is a push.
+>
+> **The rustdoc on `admin_shell_binary_path` now states plainly that the flag never existed**, so
+> the next reader does not re-derive it. Worth keeping as the standing example: the failure
+> presented as *"did not bind port 4444"* because the rejected flag killed the process before it
+> listened, and that surface symptom is what got diagnosed — twice — as a startup race.
+
 ### §4.50 `Engine::*` `_for_test` suffix in production-consumed APIs cleanup (Phase-4-Meta)
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R4 cag-r6-r4-2 MINOR). `SubgraphBuilder::set_property_for_test` retains `_for_test` suffix despite production consumption by `schema_compiler::emit`. DX hazard — engineers reading the symbol expect test-only scope; production use signals confusion about the API's stability contract.

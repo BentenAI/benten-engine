@@ -184,7 +184,21 @@ jobs:
           key: ${{ runner.os }}-cargo-admin-shell-e2e-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install tauri-driver
-        run: cargo install tauri-driver --locked
+        # PINNED (2026-08-13). Previously unpinned, so every run silently
+        # re-targeted whatever version had most recently published — which is
+        # the class of drift that lets a CLI contract change arrive as a
+        # mystery red rather than a deliberate bump. Pin to the 2.x line that
+        # matches the Tauri 2.x runtime this shell builds against; bumping is
+        # then an explicit, reviewable edit.
+        run: cargo install tauri-driver --locked --version '^2'
+
+      - name: Record the tauri-driver CLI contract
+        # The harness passes ONLY --port, and names the application under test
+        # via the `tauri:options.application` session capability. Printing
+        # --help makes the accepted flag set visible in the log, so if a future
+        # version changes the contract the evidence is in the same run that
+        # fails rather than requiring a re-run with logging added.
+        run: tauri-driver --help || true
 
       - name: Build benten-admin-shell with tauri feature
         run: cargo build --release -p benten-admin-shell --features tauri --bin benten-admin-shell
