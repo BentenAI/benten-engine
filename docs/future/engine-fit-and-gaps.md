@@ -1068,6 +1068,64 @@ reachable without it — but relative addressing is not a nice-to-have second: *
 for an entire rule family we had booked as binding-gated.** Aggregation's placement as third is
 confirmed by measurement rather than assumed.
 
+## 5c. THE REFRAME — this is not a list of gaps, it is one missing SIDE
+
+Ben, 2026-08-13, on seeing the invariant result: *"does this point to more gaps in what the engine
+should be capable of in the spirit of actually building these apps as obvious things people would
+want so obviously critical for the engine to succeed?"*
+
+**Yes — and the honest statement is stronger than "more gaps."** MEASURED at `875c3deb`, the
+executor-reachable surface of `PrimitiveHost`:
+
+| host method | declared | called by a primitive executor |
+|---|---|---|
+| `read_node` (by CID) | ✓ | **✓** |
+| `get_by_label` | ✓ | **✓** |
+| `put_node` / `delete_node` | ✓ | **✓** |
+| `call_handler` / `emit_event` | ✓ | **✓** |
+| `get_by_property` | ✓ | **✗ zero** |
+| `read_view` | ✓ | **✗ zero** |
+| `put_edge` / `delete_edge` | ✓ | **✗ zero** |
+| `edges_from` / `edges_to` | **not declared at all** | — |
+
+**Every edge operation and every indexed or derived read is unreachable from a handler.** A subgraph
+can fetch a node by address, scan a label, write nodes, call, and emit. It cannot follow a
+relationship in either direction, cannot look up by property, cannot read a view. The engine whose
+thesis is *"the graph evaluates itself"* has a walker that cannot walk relationships — what a
+handler actually sees is a key-value store with a label index.
+
+**Why this reframes the three gaps.** Binding, relative addressing and aggregation were collected as
+*three adopter requests*. They are better understood as **a partial enumeration of the minimum viable
+read side**, discovered piecemeal because each adopter hit a different part of the same hole.
+
+**The evidence that these are table stakes rather than requests:** the edge-traversal gap was on
+nobody's list. No adopter asked for it. It surfaced only when we tried the single most ordinary
+thing a graph application does — *walk from this thing to its related things and check something.*
+Nobody requests that feature for the same reason nobody requests that a database support `WHERE`.
+
+**It also explains SANDBOX-frequency better than the trio did.** The stated test of "are twelve
+primitives enough" was whether people constantly reach for the escape hatch. They do. We read that as
+evidence for the trio. The sharper reading: **SANDBOX is the only place relational work can happen at
+all**, because the primitives cannot express it.
+
+**And it re-opens a framing correction we made.** We told the museum their "1.76M rows" volume worry
+was unfairly framed, because steady state is O(1) per delta. That is still true *for the fold*. But a
+handler that must find related rows today has exactly one tool — `get_by_label` — so relationship
+traversal **is** an O(n) label scan per lookup. The O(n) concern was misplaced, not absent; it lives
+one layer down from where they put it.
+
+**What this does and does not change for the freeze.** Almost all of it is **additive** — new
+`PrimitiveHost` methods, new executor call sites, new READ addressing modes — so the tag is not
+blocked by the size of the hole. **The one exception is now load-bearing rather than minor: is
+READ's accepted-property set frozen CLOSED?** (§5's owed verification.) If it is closed, adding a
+traversal addressing mode later is a wire break, and this reframe turns that from a tidy-up into the
+single most consequential pre-tag check we have left.
+
+**The method finding, which may outlast the specific gaps.** Three gaps came from adopters
+*describing* what they wanted. The fourth came from *building* — one rule, one afternoon. That is a
+far higher-yield detector than analysis, and we have now run it exactly once. Expect more, and find
+them the same way: **build the obvious thing and see what stops you.**
+
 ## 6. Sources
 
 - `/Users/benwork/Documents/versai/design/benten-engine-asks.md`, `benten-fit.md`,
