@@ -1126,6 +1126,65 @@ single most consequential pre-tag check we have left.
 far higher-yield detector than analysis, and we have now run it exactly once. Expect more, and find
 them the same way: **build the obvious thing and see what stops you.**
 
+## 5d. THE ROOT — the walk is built; the WIRING is not
+
+Ben, 2026-08-13: *"we kinda just haven't actually built the execution side/the actual walking the
+graph?"* The walking is built. **Dataflow is not.** These are six observations of one absence.
+
+**What IS built, and it is real.** VERIFIED at `crates/benten-eval/src/evaluator.rs`: `run_inner`
+builds a `next_by_edge: HashMap<(node, label), node>` from the subgraph's edges, picks the root as
+the node with no incoming edges, and walks labelled edges — `next`, `ok`, typed error edges — until
+termination. Control flow is genuinely graph-shaped and genuinely walked. `StepResult` carries
+`next`, `edge_label` **and `output: Value`**, so each executor really does produce a value.
+
+**What is NOT built.** VERIFIED, and it is two greps:
+1. **`.output` appears exactly twice in the whole evaluator** — `outputs: r.output.clone()` into a
+   trace record, and `output: last.output` as the handler's final return. **Nowhere else.**
+2. **Every primitive executor's signature is `execute(op, host)`** (branch takes only `op`). Checked
+   all of them — `read`, `transform`, `call`, `emit`, `iterate`, `branch`, `respond`, `subscribe`,
+   `stream`, `sandbox`. **Not one receives a prior step's output.**
+
+So every operation executes against **its own static properties plus storage**, and every
+intermediate value is computed, written to the trace, and dropped. **The edges carry control. They
+do not carry data.**
+
+**This is one gap, seen six ways.** Everything we have catalogued separately collapses into it:
+
+| what we called it | what it actually is |
+|---|---|
+| a handler cannot read its caller's input | the entry-point case |
+| `CALL` passes `Node::empty()` to every callee | the call case |
+| `BRANCH` reads `op.properties["condition_value"]` | **it cannot branch on data because no data arrives** |
+| `TRANSFORM` only folds rows baked into its own node | the invariant build had to bake them in — nothing at runtime can put them there |
+| IVM "cannot aggregate" for enforcement | a fold needs values to flow |
+| no edge traversal from a handler | even a successful read could not be handed onward |
+
+**And storage is not an escape hatch, because of content-addressing.** The obvious workaround —
+"op N writes, op N+1 reads it back" — cannot work here: a node's CID is *derived from its content*,
+so op N+1 cannot know at graph-construction time the address of something op N has not written yet.
+WRITE produces a CID; nothing downstream can learn it. The loop is closed.
+
+**It explains SANDBOX-frequency completely, and less flatteringly than the trio did.** SANDBOX is
+**the only primitive shaped like a function** — takes an input, returns an output, in one unit. It
+is not that people prefer the escape hatch; it is the only construct in which *"compute something
+from something"* is expressible at all.
+
+**What this means for the roadmap.** The trio was three adopter asks; §5c reframed it as a missing
+read side; this is the floor under both. There are **two** things, not three and not five:
+**(a) dataflow between operations** — values travelling the edges the walker already follows; and
+**(b) relational read** — traversal, property lookup, view read (§5c). Binding grammar
+(`binding-grammar.md`) is the design record for (a) and its scope is much larger than "a handler
+sees its caller's input": that is one case of the general absence.
+
+**Honest scope note.** "Not Turing complete: DAGs only" (baked-in #4) constrains *shape*, not
+dataflow — a DAG whose edges carry values is still a DAG. Nothing in the settled architecture
+forecloses (a); it simply was never built.
+
+**Freeze impact: still mostly additive**, and this sharpens §5c's exception rather than adding new
+ones. Threading a value into executors changes internal signatures, not the wire; the frozen risk
+remains whether READ's accepted-property set is closed, plus the position-scoped `$` reservation the
+binding grammar needs. **That check is now the most consequential pre-tag item we have.**
+
 ## 6. Sources
 
 - `/Users/benwork/Documents/versai/design/benten-engine-asks.md`, `benten-fit.md`,
