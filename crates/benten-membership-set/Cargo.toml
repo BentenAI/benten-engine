@@ -54,6 +54,10 @@ blake3 = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 serde_bytes = { workspace = true }
 serde_ipld_dagcbor = { workspace = true }
+# R19 secret-hygiene: zeroize-on-drop for the transient `GroupAadInputs.k_set`
+# group-key copy (aad). Drop-behavior + Debug redaction only — no wire /
+# serialization change (`GroupAadInputs` is not (de)serialized).
+zeroize = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

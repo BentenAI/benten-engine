@@ -95,6 +95,15 @@ jobs:
           - { os: ubuntu-24.04-arm, leg: linux-arm64,   target: aarch64-unknown-linux-gnu,  rust: "1.95.0" }
           - { os: ubuntu-24.04-arm, leg: linux-arm64,   target: aarch64-unknown-linux-gnu,  rust: stable   }
     runs-on: ${{ matrix.os }}
+    env:
+      # F-060. The four `rust: "1.95.0"` legs never compiled on 1.95: the
+      # dtolnay action sets the rustup DEFAULT, and the repo-root
+      # rust-toolchain.toml (`channel = "stable"`) outranks a default. Every
+      # bare `cargo` step below therefore ran on floating stable, making the
+      # MSRV half of this matrix a duplicate of the stable half.
+      # `RUSTUP_TOOLCHAIN` outranks the toolchain file. On the `stable` legs
+      # this expands to `stable` and is a no-op, so one line covers both.
+      RUSTUP_TOOLCHAIN: ${{ matrix.rust }}
     # Raised 25 -> 50: the slowest legs (macos-x86_64, linux-x86_64 @ stable)
     # running `cargo nextest run` with PROPTEST_CASES=1024 on the grown
     # workspace consistently exceed 25min and were GitHub-killed at the
@@ -129,6 +138,23 @@ jobs:
         uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2
         with:
           tool: cargo-nextest
+
+      - name: Assert the pinned toolchain is actually in effect
+        # F-060 falsification pin, MSRV legs only. See the `RUSTUP_TOOLCHAIN`
+        # note on the job `env:` above.
+        #
+        # MUTATION THAT MUST MAKE THIS FAIL: delete the `RUSTUP_TOOLCHAIN`
+        # line from the job `env:`. The 1.95.0 legs silently fall back to
+        # floating stable and this step exits 1.
+        if: matrix.rust != 'stable'
+        run: |
+          set -euo pipefail
+          actual="$(cargo --version)"
+          echo "$actual"
+          case "$actual" in
+            *" 1.95."*) echo "OK: MSRV 1.95 toolchain is in effect." ;;
+            *) echo "::error::MSRV leg is not testing MSRV — expected cargo 1.95.x, got: $actual"; exit 1 ;;
+          esac
 
       - name: cargo fmt --check
         # fmt + clippy only on stable to avoid MSRV-chasing lint churn; the
@@ -396,10 +422,28 @@ jobs:
   cross-leg-determinism:
     name: cross-leg byte-equality gate (T9)
     needs: [build-and-test, wasm-runtime]
+    # S-4 (CI-integrity audit 2026-07-26). Without `if: always()` this job is
+    # SKIPPED whenever any `build-and-test` matrix leg or `wasm-runtime`
+    # fails or is cancelled — and GitHub reports a skipped job to branch
+    # protection as SUCCESS. This is a REQUIRED context, so it was silently
+    # satisfying the merge gate while producing no verdict at all. Verified
+    # live on the r9-base freeze run 29879772757: two macOS legs died, this
+    # gate reported `skipping`, and the board read green.
+    #
+    # `always()` rather than `!cancelled()` is deliberate: a run cancelled on
+    # the current head SHA must not launder into a pass either.
+    if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      # First step after checkout so an already-red upstream costs seconds,
+      # not the 25-minute budget.
+      - name: Assert every upstream job succeeded
+        uses: ./.github/actions/assert-needs-succeeded
+        with:
+          needs-json: ${{ toJSON(needs) }}
 
       - name: Download all CID artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -411,22 +455,59 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          shopt -s nullglob
+
+          # S-5 (CI-integrity audit 2026-07-26). EXPECTED_LEGS is derived from
+          # this workflow's own job matrix and must be kept in sync with it by
+          # hand — so any change to the leg set is a deliberate, reviewed edit
+          # rather than a silently-smaller comparison.
+          #
+          #   build-and-test   8  (ci.yml matrix `include`: {macos-arm64,
+          #                        macos-x86_64, linux-x86_64, linux-arm64}
+          #                        x {1.95.0, stable}; artifact name
+          #                        `cid-<leg>-<rust>`)
+          #   wasm-runtime     1  (artifact name `cid-wasm32-wasip1`)
+          #                   ---
+          #   EXPECTED_LEGS    9
+          EXPECTED_LEGS=9
+
           declare -A legs
           for dir in cids/cid-*; do
             leg=$(basename "$dir" | sed 's/^cid-//')
             file=$(find "$dir" -type f -name '*.txt' | head -n 1)
             if [ -z "$file" ]; then
-              echo "WARN: no .txt inside $dir"
-              continue
+              # Was `WARN` + `continue`, which dropped the leg from the
+              # comparison and still let the gate declare success.
+              echo "MISSING CID: artifact directory $dir contains no .txt file."
+              echo "A leg uploaded an empty artifact; the cross-leg comparison"
+              echo "would be silently weaker. Failing instead of warning."
+              exit 1
             fi
             value=$(tr -d '[:space:]' < "$file")
             legs[$leg]="$value"
           done
 
-          echo "Legs observed (${#legs[@]}):"
+          echo "Legs observed (${#legs[@]}), expected ${EXPECTED_LEGS}:"
           for leg in "${!legs[@]}"; do
             printf '  %-40s %s\n' "$leg" "${legs[$leg]}"
           done
+
+          # Leg-count floor, ported from the sibling gate in determinism.yml.
+          # Without it, a leg whose artifact never landed is simply absent
+          # from `legs`; the gate compares whatever did arrive and prints OK.
+          # This is not hypothetical: on the r9-base freeze run 29879772757
+          # only 7 of these 9 artifacts existed (cid-macos-arm64-1.95.0's
+          # upload step failed outright; the macos-x86_64 @ stable leg was
+          # timeout-cancelled during `cargo nextest run`, before it reached
+          # the CID step). An unfloored gate would have compared 7 legs and
+          # reported success with both macOS toolchain legs unverified.
+          if [ "${#legs[@]}" -ne "$EXPECTED_LEGS" ]; then
+            echo "LEG-COUNT FLOOR FAILED: expected exactly ${EXPECTED_LEGS} legs, observed ${#legs[@]}."
+            echo "Either an upload step failed (check the build+test / wasm32 jobs"
+            echo "for a red or cancelled leg), or the job matrix changed without"
+            echo "updating EXPECTED_LEGS above. Both must be deliberate."
+            exit 1
+          fi
 
           reference_leg=""
           reference_value=""
@@ -474,8 +555,21 @@ jobs:
     # compiled binary). If we ever publish prebuilt napi binaries, this
     # dependency can be dropped for a truly cold install path.
     needs: [build-and-test]
+    # S-4 (CI-integrity audit 2026-07-26). See the note on
+    # `cross-leg-determinism` above: without `if: always()` this REQUIRED
+    # context is SKIPPED when a `build-and-test` leg dies, and a skipped job
+    # is reported to branch protection as SUCCESS. Confirmed on the r9-base
+    # freeze run 29879772757, where it reported `skipping`.
+    if: always()
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      # First step after checkout so an already-red upstream costs seconds,
+      # not the 25-minute budget.
+      - name: Assert every upstream job succeeded
+        uses: ./.github/actions/assert-needs-succeeded
+        with:
+          needs-json: ${{ toJSON(needs) }}
 
       - name: Install Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4

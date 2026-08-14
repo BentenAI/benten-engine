@@ -4,6 +4,9 @@ pub use benten_graph::WriteAuthority
 pub mod benten_graph::aead_wrap
 #[non_exhaustive] pub enum benten_graph::aead_wrap::AeadError
 pub benten_graph::aead_wrap::AeadError::Authentication(alloc::string::String)
+pub benten_graph::aead_wrap::AeadError::ChunkCountExceedsInput
+pub benten_graph::aead_wrap::AeadError::ChunkCountExceedsInput::count: usize
+pub benten_graph::aead_wrap::AeadError::ChunkCountExceedsInput::max: usize
 pub benten_graph::aead_wrap::AeadError::CiphertextTooShort
 pub benten_graph::aead_wrap::AeadError::CiphertextTooShort::got: usize
 pub benten_graph::aead_wrap::AeadError::KeyMismatch
@@ -802,7 +805,6 @@ pub fn benten_graph::redb_backend::RedbBackend::scoped(&self, benten_core::Cid) 
 pub fn benten_graph::redb_backend::RedbBackend::snapshot(&self) -> core::result::Result<benten_graph::SnapshotHandle, benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::subscriber_count(&self) -> usize
 pub fn benten_graph::redb_backend::RedbBackend::transaction<F, R>(&self, F) -> core::result::Result<R, benten_graph::GraphError> where F: core::ops::function::FnOnce(&mut benten_graph::transaction::Transaction<'_>) -> core::result::Result<R, benten_graph::GraphError>
-pub fn benten_graph::redb_backend::RedbBackend::transaction_with_deny_on_commit<F, R>(&self, F) -> core::result::Result<R, benten_graph::GraphError> where F: core::ops::function::FnOnce(&mut benten_graph::transaction::Transaction<'_>) -> core::result::Result<R, benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::two_cid_lookup(&self, &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Cid>, benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::two_cid_lookup_scoped(&self, &benten_core::Cid, &benten_graph::WriteContext) -> core::result::Result<core::option::Option<benten_core::Cid>, benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::two_cid_lookup_with_namespace(&self, &benten_core::Cid) -> core::result::Result<core::option::Option<(benten_core::Cid, core::option::Option<benten_core::Cid>)>, benten_graph::GraphError>
@@ -1335,7 +1337,6 @@ pub fn benten_graph::redb_backend::RedbBackend::scoped(&self, benten_core::Cid) 
 pub fn benten_graph::redb_backend::RedbBackend::snapshot(&self) -> core::result::Result<benten_graph::SnapshotHandle, benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::subscriber_count(&self) -> usize
 pub fn benten_graph::redb_backend::RedbBackend::transaction<F, R>(&self, F) -> core::result::Result<R, benten_graph::GraphError> where F: core::ops::function::FnOnce(&mut benten_graph::transaction::Transaction<'_>) -> core::result::Result<R, benten_graph::GraphError>
-pub fn benten_graph::redb_backend::RedbBackend::transaction_with_deny_on_commit<F, R>(&self, F) -> core::result::Result<R, benten_graph::GraphError> where F: core::ops::function::FnOnce(&mut benten_graph::transaction::Transaction<'_>) -> core::result::Result<R, benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::two_cid_lookup(&self, &benten_core::Cid) -> core::result::Result<core::option::Option<benten_core::Cid>, benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::two_cid_lookup_scoped(&self, &benten_core::Cid, &benten_graph::WriteContext) -> core::result::Result<core::option::Option<benten_core::Cid>, benten_graph::GraphError>
 pub fn benten_graph::redb_backend::RedbBackend::two_cid_lookup_with_namespace(&self, &benten_core::Cid) -> core::result::Result<core::option::Option<(benten_core::Cid, core::option::Option<benten_core::Cid>)>, benten_graph::GraphError>

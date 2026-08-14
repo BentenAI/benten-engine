@@ -72,14 +72,14 @@ fn materializer_walks_only_existing_12_primitives_no_extension() {
 
     let mat = HtmlJsonMaterializer;
     let out = mat
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: cid,
-            walk_principal: alice,
-            cap_recheck: allow_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            cid,
+            alice,
+            allow_all_cap_recheck(),
+            Vec::new(),
+        ))
         .unwrap();
 
     let dispatched = out.dispatched_primitive_kinds();

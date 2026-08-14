@@ -447,12 +447,27 @@ mod serde_bytes_fixed {
 impl Cid {
     /// Construct a Benten CIDv1 from a 32-byte BLAKE3 digest.
     ///
-    /// **Pre-v1 API note (Surf-1 #1033):** the `blake3` in this
-    /// constructor name hardcodes the hash-codec choice into what becomes
-    /// a v1-frozen surface. Whether to keep this name or adopt a
-    /// codec-neutral spelling (e.g. `from_digest`) is a pre-v1 API
-    /// decision deferred to Ben (coupled to the #995 Cid-shape decision);
-    /// the byte layout is frozen regardless of the spelling chosen.
+    /// **Naming DECIDED pre-v1 (Surf-1 #1033, resolved 2026-08-11) — keep the
+    /// algorithm in the name.** The open question was whether `blake3` here
+    /// hardcodes a codec choice into a v1-frozen surface, and whether a
+    /// codec-neutral `from_digest` would be better. It would not: this
+    /// constructor stamps `MULTIHASH_BLAKE3` + `BLAKE3_DIGEST_LEN`
+    /// unconditionally, so a neutral name would *misdescribe* it — implying any
+    /// digest is acceptable to something that accepts exactly one.
+    ///
+    /// This is consistent with, not contrary to, the crypto-agility contract
+    /// (CLAUDE.md baked-in #5). That contract's rule is that a frozen **slot**
+    /// must never be named for an algorithm — which is why `benten_ivm::Strategy`
+    /// keeps the variant name `Reserved` rather than `ZSet`. A slot holds a
+    /// future choice; this constructor *is* one implementation and names it. The
+    /// permanent commitment is the multiformats framing (CIDv1 / multicodec /
+    /// multihash), and the framing is what stays open here: **agility arrives by
+    /// ADDING `from_<algorithm>_digest` constructors (additive, post-tag-safe) —
+    /// never by vaguening this one.** A pre-blessed fallback such as SHA3-256
+    /// (multihash `0x16`) would land as its own constructor beside this one.
+    ///
+    /// The byte layout was frozen regardless of the spelling, so nothing about
+    /// the wire changed with this decision.
     pub fn from_blake3_digest(digest: [u8; 32]) -> Self {
         let mut buf = [0u8; CID_LEN];
         buf[0] = CID_V1;

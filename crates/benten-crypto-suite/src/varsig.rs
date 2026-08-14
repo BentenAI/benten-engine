@@ -6,7 +6,7 @@
 //! [`VarsigError::UnsupportedCodepoint`], NOT a silent classical
 //! fallback).
 //!
-//! # Wire format (G-CORE-2 internal; G-CORE-9 freezes for v1)
+//! # Wire format (G-CORE-2 internal; FROZEN at G-CORE-9 phase-close for v1)
 //!
 //! ```text
 //! [magic (1 B = 0xb5) | version (1 B = 0x01) | codepoint (2 B BE) | payload (variable)]

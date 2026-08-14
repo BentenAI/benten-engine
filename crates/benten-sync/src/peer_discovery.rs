@@ -214,7 +214,10 @@ pub async fn bind_atrium_peer(
     // wrapping; instead the wave-6b entry point owns the binding +
     // returns our typed `Endpoint`.
 
-    let secret_bytes = keypair.secret_bytes_for_test();
+    // Production accessor is `secret_bytes_unprotected` (D-74/75/76 moved the
+    // `secret_bytes_for_test` alias behind a `#[cfg(...)]` gate — a
+    // `_for_test`-named accessor must not be a production call site).
+    let secret_bytes = keypair.secret_bytes_unprotected();
     let secret = SecretKey::from_bytes(&secret_bytes);
     let peer_id = PeerId::from_public_key(keypair.public_key());
 

@@ -66,7 +66,6 @@ pub fn benten_sync::crdt::LoroDoc::op_log_targets(&self) -> alloc::vec::Vec<bent
 pub fn benten_sync::crdt::LoroDoc::set_property(&self, &str, impl core::convert::Into<alloc::string::String>, benten_core::hlc::BentenHlc) -> benten_sync::crdt::CrdtResult<()>
 pub fn benten_sync::crdt::LoroDoc::to_canonical_bytes(&self) -> benten_sync::crdt::CrdtResult<alloc::vec::Vec<u8>>
 pub fn benten_sync::crdt::LoroDoc::winning_attribution(&self) -> alloc::collections::btree::set::BTreeSet<u64>
-pub fn benten_sync::crdt::LoroDoc::with_peer_id(u64) -> core::option::Option<Self>
 impl core::clone::Clone for benten_sync::crdt::LoroDoc
 pub fn benten_sync::crdt::LoroDoc::clone(&self) -> Self
 impl core::default::Default for benten_sync::crdt::LoroDoc
@@ -152,32 +151,10 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::errors::AtriumTran
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::errors::AtriumTransportError
 pub type benten_sync::errors::AtriumTransportResult<T> = core::result::Result<T, benten_sync::errors::AtriumTransportError>
 pub mod benten_sync::gossip_transport
-pub struct benten_sync::gossip_transport::MockGossipTransport
-impl benten_sync::gossip_transport::MockGossipTransport
-pub fn benten_sync::gossip_transport::MockGossipTransport::new() -> Self
-impl benten_sync::gossip_transport::GossipTransport for benten_sync::gossip_transport::MockGossipTransport
-pub fn benten_sync::gossip_transport::MockGossipTransport::notify(&mut self, [u8; 32])
-pub fn benten_sync::gossip_transport::MockGossipTransport::subscribe(&mut self, [u8; 32])
-pub fn benten_sync::gossip_transport::MockGossipTransport::would_deliver(&self, [u8; 32]) -> bool
-impl core::default::Default for benten_sync::gossip_transport::MockGossipTransport
-pub fn benten_sync::gossip_transport::MockGossipTransport::default() -> benten_sync::gossip_transport::MockGossipTransport
-impl core::fmt::Debug for benten_sync::gossip_transport::MockGossipTransport
-pub fn benten_sync::gossip_transport::MockGossipTransport::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Freeze for benten_sync::gossip_transport::MockGossipTransport
-impl core::marker::Send for benten_sync::gossip_transport::MockGossipTransport
-impl core::marker::Sync for benten_sync::gossip_transport::MockGossipTransport
-impl core::marker::Unpin for benten_sync::gossip_transport::MockGossipTransport
-impl core::marker::UnsafeUnpin for benten_sync::gossip_transport::MockGossipTransport
-impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::gossip_transport::MockGossipTransport
-impl core::panic::unwind_safe::UnwindSafe for benten_sync::gossip_transport::MockGossipTransport
 pub trait benten_sync::gossip_transport::GossipTransport
 pub fn benten_sync::gossip_transport::GossipTransport::notify(&mut self, [u8; 32])
 pub fn benten_sync::gossip_transport::GossipTransport::subscribe(&mut self, [u8; 32])
 pub fn benten_sync::gossip_transport::GossipTransport::would_deliver(&self, [u8; 32]) -> bool
-impl benten_sync::gossip_transport::GossipTransport for benten_sync::gossip_transport::MockGossipTransport
-pub fn benten_sync::gossip_transport::MockGossipTransport::notify(&mut self, [u8; 32])
-pub fn benten_sync::gossip_transport::MockGossipTransport::subscribe(&mut self, [u8; 32])
-pub fn benten_sync::gossip_transport::MockGossipTransport::would_deliver(&self, [u8; 32]) -> bool
 pub mod benten_sync::handshake
 #[non_exhaustive] pub enum benten_sync::handshake::HandshakeError
 pub benten_sync::handshake::HandshakeError::AudienceMismatch
@@ -386,6 +363,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::handshake::Session
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::handshake::Session
 pub const benten_sync::handshake::DEFAULT_REPLAY_WINDOW_MS: u64
 pub const benten_sync::handshake::LAYER_D_BUCKET_SECS: u64
+pub const benten_sync::handshake::MAX_HANDSHAKE_PAYLOAD_BYTES: usize
 pub fn benten_sync::handshake::initiate_nonce(&benten_sync::handshake_wire::HandshakeFrame) -> benten_sync::handshake::HandshakeResult<[u8; 32]>
 pub fn benten_sync::handshake::sync_hydrate_consume_recheck_outcome(benten_errors::ErrorCode, &str, &str) -> benten_sync::handshake::HandshakeResult<()>
 pub type benten_sync::handshake::HandshakeResult<T> = core::result::Result<T, benten_sync::handshake::HandshakeError>
@@ -507,6 +485,7 @@ impl core::marker::UnsafeUnpin for benten_sync::handshake_wire::WithPeerId
 impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::handshake_wire::WithPeerId
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::handshake_wire::WithPeerId
 pub const benten_sync::handshake_wire::HANDSHAKE_WIRE_VERSION: u8
+pub const benten_sync::handshake_wire::MAX_HANDSHAKE_FRAME_BYTES: usize
 pub mod benten_sync::light_client
 #[non_exhaustive] pub enum benten_sync::light_client::LightClientError
 pub benten_sync::light_client::LightClientError::BandwidthBudgetExceeded
@@ -632,7 +611,6 @@ pub benten_sync::mst::MerkleProof::target_key: alloc::string::String
 impl benten_sync::mst::MerkleProof
 pub fn benten_sync::mst::MerkleProof::approximate_bytes(&self) -> usize
 pub fn benten_sync::mst::MerkleProof::reconstruct_root(&self) -> benten_sync::mst::MstCid
-pub fn benten_sync::mst::MerkleProof::with_tampered_node(&self) -> Self
 impl core::clone::Clone for benten_sync::mst::MerkleProof
 pub fn benten_sync::mst::MerkleProof::clone(&self) -> benten_sync::mst::MerkleProof
 impl core::cmp::Eq for benten_sync::mst::MerkleProof
@@ -862,6 +840,9 @@ impl core::marker::Unpin for benten_sync::mst_proto::MstDiffSession
 impl core::marker::UnsafeUnpin for benten_sync::mst_proto::MstDiffSession
 impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::mst_proto::MstDiffSession
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::mst_proto::MstDiffSession
+pub const benten_sync::mst_proto::MAX_MST_FRAME_BYTES: usize
+pub const benten_sync::mst_proto::MAX_MST_MESSAGES_PER_FRAME: usize
+pub const benten_sync::mst_proto::MAX_MST_MESSAGE_BYTES: usize
 pub const benten_sync::mst_proto::MST_DIFF_WIRE_VERSION: u8
 pub mod benten_sync::peer_discovery
 pub enum benten_sync::peer_discovery::BootstrapMode
@@ -955,6 +936,7 @@ impl core::marker::Unpin for benten_sync::peer_id::PeerIdDecodeError
 impl core::marker::UnsafeUnpin for benten_sync::peer_id::PeerIdDecodeError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::peer_id::PeerIdDecodeError
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::peer_id::PeerIdDecodeError
+pub const benten_sync::peer_id::MAX_PEER_ID_CBOR_BYTES: usize
 pub mod benten_sync::transport
 pub enum benten_sync::transport::TransportKind
 pub benten_sync::transport::TransportKind::Direct
@@ -1159,59 +1141,6 @@ pub fn benten_sync::transport::Endpoint::peer_id(&self) -> benten_sync::peer_id:
 pub async fn benten_sync::transport::Endpoint::transport_status(&self) -> benten_sync::transport::TransportStatus
 pub type benten_sync::transport_trait::TransportAddr = <benten_sync::transport::Endpoint as benten_sync::transport_trait::TransportEndpoint>::Addr
 pub mod benten_sync::two_cid_store
-pub enum benten_sync::two_cid_store::GenError
-pub benten_sync::two_cid_store::GenError::StaleKPrincipalGeneration
-pub benten_sync::two_cid_store::GenError::StaleKPrincipalGeneration::current: u32
-pub benten_sync::two_cid_store::GenError::StaleKPrincipalGeneration::stanza: u32
-pub benten_sync::two_cid_store::GenError::StaleRecipientKeyGeneration
-pub benten_sync::two_cid_store::GenError::StaleRecipientKeyGeneration::current: u32
-pub benten_sync::two_cid_store::GenError::StaleRecipientKeyGeneration::stanza: u32
-impl core::clone::Clone for benten_sync::two_cid_store::GenError
-pub fn benten_sync::two_cid_store::GenError::clone(&self) -> benten_sync::two_cid_store::GenError
-impl core::cmp::Eq for benten_sync::two_cid_store::GenError
-impl core::cmp::PartialEq for benten_sync::two_cid_store::GenError
-pub fn benten_sync::two_cid_store::GenError::eq(&self, &benten_sync::two_cid_store::GenError) -> bool
-impl core::fmt::Debug for benten_sync::two_cid_store::GenError
-pub fn benten_sync::two_cid_store::GenError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::StructuralPartialEq for benten_sync::two_cid_store::GenError
-impl core::marker::Freeze for benten_sync::two_cid_store::GenError
-impl core::marker::Send for benten_sync::two_cid_store::GenError
-impl core::marker::Sync for benten_sync::two_cid_store::GenError
-impl core::marker::Unpin for benten_sync::two_cid_store::GenError
-impl core::marker::UnsafeUnpin for benten_sync::two_cid_store::GenError
-impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::two_cid_store::GenError
-impl core::panic::unwind_safe::UnwindSafe for benten_sync::two_cid_store::GenError
-pub struct benten_sync::two_cid_store::DualCidStore
-impl benten_sync::two_cid_store::DualCidStore
-pub fn benten_sync::two_cid_store::DualCidStore::local_cid(&self, &benten_sync::two_cid_store::DualCid) -> core::option::Option<benten_sync::two_cid_store::DualCid>
-pub fn benten_sync::two_cid_store::DualCidStore::new() -> Self
-pub fn benten_sync::two_cid_store::DualCidStore::put_dual(&mut self, benten_sync::two_cid_store::DualCid, benten_sync::two_cid_store::DualCid, benten_sync::two_cid_store::DualCid)
-pub fn benten_sync::two_cid_store::DualCidStore::resolve_blob(&self, &benten_sync::two_cid_store::DualCid) -> core::option::Option<benten_sync::two_cid_store::DualCid>
-impl core::default::Default for benten_sync::two_cid_store::DualCidStore
-pub fn benten_sync::two_cid_store::DualCidStore::default() -> benten_sync::two_cid_store::DualCidStore
-impl core::fmt::Debug for benten_sync::two_cid_store::DualCidStore
-pub fn benten_sync::two_cid_store::DualCidStore::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Freeze for benten_sync::two_cid_store::DualCidStore
-impl core::marker::Send for benten_sync::two_cid_store::DualCidStore
-impl core::marker::Sync for benten_sync::two_cid_store::DualCidStore
-impl core::marker::Unpin for benten_sync::two_cid_store::DualCidStore
-impl core::marker::UnsafeUnpin for benten_sync::two_cid_store::DualCidStore
-impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::two_cid_store::DualCidStore
-impl core::panic::unwind_safe::UnwindSafe for benten_sync::two_cid_store::DualCidStore
-pub struct benten_sync::two_cid_store::Stanza
-pub benten_sync::two_cid_store::Stanza::k_principal_generation: u32
-pub benten_sync::two_cid_store::Stanza::recipient_key_generation: u32
-impl core::clone::Clone for benten_sync::two_cid_store::Stanza
-pub fn benten_sync::two_cid_store::Stanza::clone(&self) -> benten_sync::two_cid_store::Stanza
-impl core::fmt::Debug for benten_sync::two_cid_store::Stanza
-pub fn benten_sync::two_cid_store::Stanza::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Freeze for benten_sync::two_cid_store::Stanza
-impl core::marker::Send for benten_sync::two_cid_store::Stanza
-impl core::marker::Sync for benten_sync::two_cid_store::Stanza
-impl core::marker::Unpin for benten_sync::two_cid_store::Stanza
-impl core::marker::UnsafeUnpin for benten_sync::two_cid_store::Stanza
-impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::two_cid_store::Stanza
-impl core::panic::unwind_safe::UnwindSafe for benten_sync::two_cid_store::Stanza
 pub struct benten_sync::two_cid_store::TwoCidStore
 impl benten_sync::two_cid_store::TwoCidStore
 pub fn benten_sync::two_cid_store::TwoCidStore::ciphertext_bytes(&self, &benten_core::Cid) -> core::option::Option<alloc::vec::Vec<u8>>
@@ -1231,12 +1160,6 @@ impl core::marker::Unpin for benten_sync::two_cid_store::TwoCidStore
 impl core::marker::UnsafeUnpin for benten_sync::two_cid_store::TwoCidStore
 impl core::panic::unwind_safe::RefUnwindSafe for benten_sync::two_cid_store::TwoCidStore
 impl core::panic::unwind_safe::UnwindSafe for benten_sync::two_cid_store::TwoCidStore
-pub fn benten_sync::two_cid_store::all_wire_serialization_surfaces(&benten_sync::two_cid_store::DualCid) -> alloc::vec::Vec<alloc::vec::Vec<u8>>
-pub fn benten_sync::two_cid_store::blind_set_cid(&benten_sync::two_cid_store::DualCid, &[u8; 32]) -> benten_sync::two_cid_store::DualCid
-pub fn benten_sync::two_cid_store::plaintext_cid(&[u8]) -> benten_sync::two_cid_store::DualCid
-pub fn benten_sync::two_cid_store::reseal(&[u8], u8) -> (benten_sync::two_cid_store::DualCid, benten_sync::two_cid_store::DualCid)
-pub fn benten_sync::two_cid_store::verify_stanza_generation(&benten_sync::two_cid_store::Stanza, u32, u32) -> core::result::Result<(), benten_sync::two_cid_store::GenError>
-pub type benten_sync::two_cid_store::DualCid = [u8; 32]
 pub mod benten_sync::ucan_blobs_protocol
 #[non_exhaustive] pub enum benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError
 pub benten_sync::ucan_blobs_protocol::UcanBlobsHandlerError::BindingSigInvalid

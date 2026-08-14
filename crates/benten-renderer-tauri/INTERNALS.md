@@ -190,7 +190,7 @@ Several knowable forward-looking surfaces touch this crate:
 
 **Admin UI v0 method-name allowlist growth.** The 8-method allowlist at HEAD is the v0 minimum-viable surface. Adding methods (e.g. real `engine.put_node_as`, `plugin.uninstall`, `plugin.fork`) requires explicit baseline update + admin UI v0 manifest review per the drift-detector contract. The `docs/public-api/benten-renderer-tauri.json::_anticipated_method_set` array is the authoritative review surface — each addition is a manifest-bypass-risk review point.
 
-**Tauri-shell-vs-browser-tab is a deployment choice, not an architectural shape change.** Per CLAUDE.md #17, the three deployment shapes are first-class siblings, not a primary + fallback pair. Future shape additions (e.g. Electron fallback if Tauri 2.x webview-variance bites) compose against the same `Renderer` trait + `DidKeyedSession` bridge contract. The shape isn't crate-bound — it's trait-impl-bound — so a 13th crate `benten-renderer-electron` would be a sibling, not a refactor.
+**Tauri-shell-vs-browser-tab is a deployment choice, not an architectural shape change.** Per CLAUDE.md #17, the three deployment shapes are first-class siblings, not a primary + fallback pair. Future shape additions (e.g. Electron fallback if Tauri 2.x webview-variance bites) compose against the same `Renderer` trait + `DidKeyedSession` bridge contract. The shape isn't crate-bound — it's trait-impl-bound — so a future `benten-renderer-electron` crate would be a sibling, not a refactor.
 
 ---
 

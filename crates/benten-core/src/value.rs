@@ -77,6 +77,7 @@ use crate::CoreError;
 /// preserving variant identity.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(untagged)]
+#[non_exhaustive]
 pub enum Value {
     /// CBOR null.
     Null,

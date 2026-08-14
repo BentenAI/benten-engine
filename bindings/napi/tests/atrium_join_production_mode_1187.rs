@@ -47,12 +47,16 @@ fn join_engine_bound_path_uses_production_not_loopback() {
     );
 
     // Negative half: prove the two configs are observably distinct
-    // so the pin actually catches a regression back to `for_test()`.
-    let test_cfg = AtriumConfig::for_test();
-    assert_eq!(test_cfg.mode, AtriumMode::Loopback);
+    // so the pin actually catches a regression back to Loopback.
+    // `AtriumConfig::default()` yields the Loopback config (identical to
+    // the now-`test-helpers`-gated `for_test()`); it's the honest public
+    // API and — unlike a struct literal — works across the crate boundary
+    // (`AtriumConfig` is `#[non_exhaustive]`).
+    let loopback = AtriumConfig::default();
+    assert_eq!(loopback.mode, AtriumMode::Loopback);
     assert_ne!(
-        prod.mode, test_cfg.mode,
-        "production() and for_test() must yield distinct modes — \
+        prod.mode, loopback.mode,
+        "production() and a Loopback config must yield distinct modes — \
          otherwise the #1187 mis-wire would be invisible"
     );
 }

@@ -60,16 +60,24 @@
 #![allow(dead_code)]
 
 // R5: wired to the LIVE vault surface (serde_ipld_dagcbor + XChaCha20-Poly1305).
+// R11 MC-6: the frame header now persists the Argon2id salt + params.
 use benten_crypto_suite::vault::{
-    DecodedVault, SYMMETRIC_AEAD_12B_CODEPOINT, VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT,
-    VAULT_XNONCE_LEN as FROZEN_XNONCE_LEN, VaultError, VaultPayload, decode_vault,
-    decode_vault_strict, serialize_vault,
+    Argon2idParams, DAK_HKDF_INFO_TAG, DecodedVault, OWASP_DEFAULT, SYMMETRIC_AEAD_12B_CODEPOINT,
+    VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT, VAULT_XNONCE_LEN as FROZEN_XNONCE_LEN, VaultError,
+    VaultPayload, decode_vault, decode_vault_strict, derive_dak, open_vault, serialize_vault,
 };
+
+/// A deterministic fixture salt (R11 MC-6: persisted in the frame header).
+fn fixture_salt() -> [u8; 16] {
+    [0x5Au8; 16]
+}
 
 /// Adapter: the real `serialize_vault` returns `Result`; the test calls a
 /// `_for_test`-shaped fn returning the bytes (panics on the infallible path).
+/// R11 MC-6: threads the fixture salt + OWASP params into the frame header.
 fn serialize_vault_for_test(payload: &VaultPayload, dak: &[u8; 32]) -> Vec<u8> {
-    serialize_vault(payload, dak).expect("vault serialize is infallible for the fixture")
+    serialize_vault(payload, &fixture_salt(), OWASP_DEFAULT, dak)
+        .expect("vault serialize is infallible for the fixture")
 }
 
 fn decode_vault_for_test(bytes: &[u8], dak: &[u8; 32]) -> Result<DecodedVault, VaultError> {
@@ -168,6 +176,44 @@ fn xnonce_codepoint_with_12_byte_nonce_is_rejected() {
     );
 }
 
+/// R13 F-12 — vault format-version policy pin (NAMED-carry Row D-72). The
+/// production `parse_vault_frame` currently rejects ANY `bytes[1] !=
+/// ENVELOPE_FORMAT_VERSION_V2` UNIFORMLY with `MalformedCbor` — it does NOT
+/// yet distinguish `got > V2` ("newer vault; the reader is stale, please
+/// upgrade") from `got < V2` ("stale vault; reject"). There is no extant V3,
+/// so a differentiated policy is deferred to v1-Composing (Row D-72). This
+/// pin LOCKS the current uniform-reject baseline so the future differentiated
+/// policy is a DELIBERATE change against a documented pin, not a silent drift.
+/// would-FAIL if a future edit changed the not-V2 rejection shape without
+/// updating this pin + Row D-72.
+#[test]
+fn f_va_12_non_v2_version_byte_uniformly_rejects_baseline() {
+    let payload = fixture_payload();
+    let dak = fixture_dak();
+    let bytes = serialize_vault_for_test(&payload, &dak);
+    // Sanity: the honest frame decodes.
+    assert!(
+        decode_vault_for_test(&bytes, &dak).is_ok(),
+        "F-12: the honest V2 vault frame MUST decode (positive control)."
+    );
+    // byte[1] is the envelope format-version byte (parse_vault_frame :357).
+    // Flip it to a STALE (< V2) value and a NEWER (> V2) value; BOTH must
+    // currently reject with the SAME MalformedCbor (uniform policy).
+    for injected in [0x00u8, 0x01u8, 0x03u8, 0xFFu8] {
+        let mut tampered = bytes.clone();
+        tampered[1] = injected;
+        let outcome = decode_vault_for_test(&tampered, &dak);
+        assert!(
+            matches!(outcome, Err(VaultError::MalformedCbor)),
+            "F-12 (Row D-72): a vault whose format-version byte is 0x{injected:02x} \
+             (NOT V2) MUST currently reject UNIFORMLY with MalformedCbor — the \
+             got>V2 (\"newer, upgrade\") vs got<V2 (\"stale, reject\") \
+             differentiated policy is DEFERRED (no extant V3). If this baseline \
+             changes, update Row D-72. got {outcome:?}"
+        );
+    }
+}
+
 /// The FROZEN canonical DAG-CBOR golden hex for `fixture_payload()`
 /// (F4-038). Computed ONCE from the canonical encoder (definite-length map
 /// of 3 pairs; field order k_principal ‖ user_did_signing_key ‖
@@ -223,5 +269,173 @@ fn vault_cbor_payload_canonical_and_reserializes_byte_identical() {
         "vault payload canonical-DAG-CBOR bytes MUST match the frozen golden-hex \
          (field order k_principal ‖ user_did_signing_key ‖ user_did_creation_time; \
          big-endian creation-time per M-19); a reorder/encoding/endianness drift flips this"
+    );
+}
+
+/// F-VA-1 (e) — R11 MC-6 frame-header freeze: the vault frame persists the
+/// 16-byte Argon2id salt + `{m_cost,t_cost,p_cost}` (each u32 BE) in the header
+/// BEFORE the nonce, at the fixed offsets
+/// `magic(1) | V2(1) | codepoint(2) | salt(16) | m_cost(4) | t_cost(4) |
+///  p_cost(4) | nonce_len(1) | nonce(24) | ct`.
+///
+/// would-FAIL-if-reverted: if the frame dropped salt+params, the header bytes
+/// at offsets 4..32 would not equal the sealed salt/params and `nonce_len`
+/// would not sit at offset 32.
+#[test]
+fn vault_frame_persists_salt_and_params_in_header() {
+    let payload = fixture_payload();
+    let dak = fixture_dak();
+    let salt = fixture_salt();
+    let params = OWASP_DEFAULT;
+    let bytes = serialize_vault(&payload, &salt, params, &dak)
+        .expect("vault serialize is infallible for the fixture");
+
+    // Fixed header offsets (R11 MC-6).
+    assert_eq!(
+        &bytes[4..20],
+        &salt[..],
+        "salt persisted at header offset 4..20"
+    );
+    assert_eq!(
+        u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]),
+        params.m_cost,
+        "m_cost (u32 BE) persisted at offset 20"
+    );
+    assert_eq!(
+        u32::from_be_bytes([bytes[24], bytes[25], bytes[26], bytes[27]]),
+        params.t_cost,
+        "t_cost (u32 BE) persisted at offset 24"
+    );
+    assert_eq!(
+        u32::from_be_bytes([bytes[28], bytes[29], bytes[30], bytes[31]]),
+        params.p_cost,
+        "p_cost (u32 BE) persisted at offset 28"
+    );
+    assert_eq!(
+        bytes[32] as usize, FROZEN_XNONCE_LEN,
+        "nonce_len byte sits at offset 32 (after the 32-byte header) and == 24"
+    );
+
+    // The decode path surfaces the header salt+params.
+    let decoded = decode_vault(&bytes, &dak).expect("decode succeeds");
+    assert_eq!(decoded.salt, salt);
+    assert_eq!(decoded.params, params);
+}
+
+/// F-VA-1 (f) — R11 MC-6 self-containment: `vault.cbor` bytes + password ALONE
+/// re-derive the DAK (salt+params sourced from the frame header) and decrypt.
+/// This is the load-bearing property MC-6 restores — before it, the salt+params
+/// lived only in an un-persisted in-RAM struct.
+///
+/// would-FAIL-on-revert: without salt+params in the frame, `open_vault` could
+/// not re-derive the DAK from the bytes alone.
+#[test]
+fn vault_opens_from_bytes_and_password_alone() {
+    let payload = fixture_payload();
+    // Runtime-built inputs (CodeQL hard-coded-crypto hygiene).
+    let password: Vec<u8> = (0u8..20)
+        .map(|i| i.wrapping_mul(9).wrapping_add(2))
+        .collect();
+    let salt: [u8; 16] = core::array::from_fn(|i| (i as u8).wrapping_add(0x40));
+    let params: Argon2idParams = OWASP_DEFAULT;
+
+    let dak = derive_dak(&password, &salt, params, DAK_HKDF_INFO_TAG);
+    let bytes = serialize_vault(&payload, &salt, params, dak.expose())
+        .expect("vault serialize is infallible for the fixture");
+
+    // Open with the frame bytes + password ALONE — no external salt.
+    let decoded: DecodedVault = open_vault(&bytes, &password, DAK_HKDF_INFO_TAG)
+        .expect("vault.cbor bytes + password alone MUST decrypt (MC-6)");
+    assert_eq!(decoded.payload, payload);
+    assert_eq!(
+        decoded.salt, salt,
+        "the recovered salt matches the sealed salt"
+    );
+    assert_eq!(decoded.params, params);
+
+    // A wrong password fails closed.
+    let mut wrong = password.clone();
+    wrong[0] ^= 0xAA;
+    assert!(matches!(
+        open_vault(&bytes, &wrong, DAK_HKDF_INFO_TAG),
+        Err(VaultError::AeadFailed)
+    ));
+}
+
+/// D-79 — ABSOLUTE literal pins on the first four bytes of the frozen vault
+/// on-disk frame.
+///
+/// The frame's magic / version / codepoint are described in PROSE here (the
+/// `F-VA-1 (e)` header-layout comment) and enforced only RELATIVELY elsewhere:
+/// `f_va_12_non_v2_version_byte_uniformly_rejects_baseline` proves the decoder
+/// READS byte 1 but never pins its VALUE, and `serialize_vault` writes bytes 0-1
+/// from `envelope::ENVELOPE_MAGIC` / `ENVELOPE_FORMAT_VERSION_V2` while
+/// `parse_vault_frame` compares against those same two symbols. Every such
+/// equality has symbols on BOTH sides, so a coordinated edit — or a bilateral
+/// endianness flip on the codepoint — leaves the whole crate green.
+///
+/// This is a permanently-frozen on-disk frame. Three literal asserts are the
+/// cheapest insurance available against a silent forever-decode break.
+///
+/// THREE MUTATIONS MUST MAKE THIS FAIL, none of which any other test catches:
+///   1. Change the literal `serialize_vault` pushes for byte 0 AND the literal
+///      `parse_vault_frame` compares it against (a bilateral magic change).
+///   2. Same for byte 1 (the V2 format-version discriminator).
+///   3. Flip the codepoint to `to_le_bytes()` in `serialize_vault` AND to
+///      `u16::from_le_bytes` in `parse_vault_frame` — a bilateral endianness
+///      change against the M-19 BE freeze. Round-trip tests stay green because
+///      both ends agree; only the absolute byte pin below disagrees.
+#[test]
+fn vault_frame_first_bytes_are_absolutely_frozen() {
+    let payload = fixture_payload();
+    let dak = fixture_dak();
+    let bytes = serialize_vault_for_test(&payload, &dak);
+
+    assert!(
+        bytes.len() > 4,
+        "the vault frame MUST carry at least the 4-byte magic/version/codepoint prefix"
+    );
+
+    // Byte 0 — the Benten envelope magic. Frozen at 0xae (the Varsig-style
+    // multiformats sibling; Varsig uses 0xb5).
+    assert_eq!(
+        bytes[0], 0xae,
+        "vault frame byte 0 (magic) is FROZEN at 0xae — this is a permanent \
+         on-disk format; a change here makes every existing vault.cbor \
+         undecodable forever (D-79)"
+    );
+
+    // Byte 1 — the vault frame format-version discriminator. Frozen at 0x02
+    // (V2; the M-20 / Wave-0 single V1->V2 bump, with no surviving V1 golden).
+    assert_eq!(
+        bytes[1], 0x02,
+        "vault frame byte 1 (format-version) is FROZEN at 0x02 (V2) — a renumber \
+         breaks forever-decodability of every persisted vault (D-79)"
+    );
+
+    // Bytes 2-3 — the vault band codepoint 0x6100, BIG-ENDIAN per M-19.
+    assert_eq!(
+        &bytes[2..4],
+        &[0x61u8, 0x00u8],
+        "vault frame bytes 2-3 (codepoint) are FROZEN at 0x6100 BIG-ENDIAN per M-19 \
+         (D-79)"
+    );
+
+    // would-FAIL guard: the codepoint is NOT little-endian. A bilateral LE flip
+    // (encoder AND decoder) survives every round-trip test; it does not survive
+    // this.
+    assert_ne!(
+        &bytes[2..4],
+        &VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT.to_le_bytes(),
+        "vault frame codepoint MUST NOT be little-endian (M-19 freeze)"
+    );
+
+    // Symbolic cross-check: the literals above and the shared envelope
+    // constants must still describe the same bytes. If this arm fails while the
+    // literal arms pass, someone moved the constant without moving the frame.
+    assert_eq!(
+        u16::from_be_bytes([bytes[2], bytes[3]]),
+        VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT,
+        "the frame codepoint MUST agree with VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT"
     );
 }

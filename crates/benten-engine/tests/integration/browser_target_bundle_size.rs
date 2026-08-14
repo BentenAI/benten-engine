@@ -32,6 +32,19 @@
 /// Plan-pinned hard cap from wasm-r1-7. Tighter caps belong in
 /// `bundle-size-budget.toml` (drift-detected separately); this is the
 /// last-line defense.
+///
+/// **KNOWN RECONCILE (F-18; pre-existing, out-of-phase — NOT a v1-beta
+/// crypto-freeze concern).** This constant is `500 * 1024`, but the `wasm-r1-7`
+/// cap was bumped **500KB → 600KB** in Phase-2b (wave-8j-ci-cleanup, PR #59;
+/// see `docs/future/phase-3-backlog.md` Phase-2b-interim note + the
+/// `benten-graph` `browser_backend` 600KB anchor + `docs/ADMIN-UI.md` br-r1-3
+/// ≤600KB). The sibling napi bundle test + the ADMIN-UI budget already use
+/// 600KB; this engine-side integration pin still carries the original 500KB.
+/// The AUTHORITATIVE live plan is NOT "reconcile to 600" — it is the Phase-3
+/// `SnapshotBlobBackend`/`GraphBackend` re-tighten of `wasm-r1-7` back to
+/// ~350KB (the original spirit of the cap; `phase-3-backlog.md`). This 500-vs-
+/// 600 divergence is therefore a NAMED known reconcile that lands with that
+/// Phase-3 GraphBackend wave, not touched at the Phase-4-Meta-Core freeze.
 const BROWSER_BUNDLE_MAX_BYTES_GZIPPED: usize = 500 * 1024;
 
 /// `wasm32_unknown_unknown_bundle_size_under_threshold` — plan §3

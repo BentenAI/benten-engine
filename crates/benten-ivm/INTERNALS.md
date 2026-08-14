@@ -117,7 +117,7 @@ create→delete integration test (closed by `tests/cascade_create_delete.rs`),
 and the rebuild-equivalence event-replay path (still open — Phase 1's
 "rebuild" doesn't actually replay events, it just clears state; see §9).
 
-### `src/strategy.rs` (67 LOC)
+### `src/strategy.rs` (84 LOC)
 
 Defines the `Strategy` enum — `{ A, B, Reserved }`, closed (no
 `#[non_exhaustive]`), `#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]`.
@@ -149,7 +149,7 @@ auto-select, no runtime adaptation, no `set_strategy` companion. Future
 algorithms would land as a new enum (`StrategyV2`), not a new variant on this
 one — the closed set is part of the API contract.
 
-### `src/subgraph_spec.rs` (300 LOC) — NEW at G23-0a
+### `src/subgraph_spec.rs` (373 LOC) — NEW at G23-0a
 
 Schema-shaped view-definition input for the generalized kernel. The G15-A
 `(view_id, label_pattern, projection)` triple is now a *special case* of
@@ -193,7 +193,7 @@ at register-time BEFORE any walk — fail-fast semantics preclude partial
 materialisation or walk-time-only checks. A future richer cycle-detection
 pass lifts behind the same flag without breaking the canary contract.
 
-### `src/view.rs` (430 LOC)
+### `src/view.rs` (498 LOC)
 
 The shared `View` trait + error / state / query / result shapes + the
 content-addressed `ViewDefinition`. This is where Phase 1 nailed down the
@@ -291,7 +291,7 @@ The load-bearing internal is the private free function `apply_event`. It:
 brief asked for the longer name; the shorter one survives because the R3
 tests use it).
 
-### `src/algorithm_b.rs` (1678 LOC, largest file)
+### `src/algorithm_b.rs` (1967 LOC, largest file)
 
 The G15-A generalized kernel + G23-0a/G23-0b SubgraphSpec surface +
 `AlgorithmBView` wrapper + internal dispatch router. Five load-bearing

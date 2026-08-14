@@ -1,5 +1,9 @@
 //! TF-2 pin (a) + S3 — hybrid Ed25519⊕ML-DSA-65: BOTH must verify;
-//! concatenated / committing / strip-resistant (NF-4).
+//! strip-resistant. (The prior Benten-own NF-4 SHA3-256 commitment trailer
+//! is **dropped entirely** at `0x0001` — the byte-faithful IETF LAMPS
+//! composite wire has no slot for it. Strip-resistance now rests on the
+//! shared-`M'` / `mldsa_ctx=Label` binding + both-halves-required, NOT on
+//! a commitment combiner.)
 //!
 //! ADDL R3 (TDD RED-phase) test-writer — Phase-4-Meta-Core Wave R3-A,
 //! agent R3-A2, family TF-2 (#1300 signature-agility integration crate
@@ -25,8 +29,9 @@
 //!
 //! These pins exercise the **production** sign/verify path of the
 //! integration crate — NOT a sentinel "a type is constructible". The
-//! load-bearing safety property is **strip-resistance**: the hybrid
-//! signature is concatenated/committing so neither the Ed25519 half nor
+//! load-bearing safety property is **strip-resistance**: both halves sign
+//! the SAME LAMPS message representative `M'` (ML-DSA half bound to
+//! `mldsa_ctx = Label`) and both MUST verify, so neither the Ed25519 half nor
 //! the ML-DSA-65 half can be stripped, zeroed, truncated, or substituted
 //! without the verify failing **closed** (a typed error, never a silent
 //! single-half accept, never a silent fallback). A single-half-accepting
@@ -67,8 +72,8 @@ fn tf2_hybrid_default_round_trip_both_halves_verify() {
 
 /// Strip-resistance (1): stripping the ML-DSA-65 (PQ) half MUST fail the
 /// verify closed. would-FAIL if a single-half-accepting impl silently
-/// verifies on the classical half alone (the exact downgrade attack the
-/// committing construction exists to prevent).
+/// verifies on the classical half alone (the exact downgrade attack that
+/// both-halves-required verification exists to prevent).
 #[test]
 
 fn tf2_stripping_ml_dsa_half_fails_closed() {
@@ -78,7 +83,7 @@ fn tf2_stripping_ml_dsa_half_fails_closed() {
     let sig = suite.sign(&kp, msg);
 
     // Adversary removes the ML-DSA-65 component, presenting only the
-    // Ed25519 half. The committing/strip-resistant construction MUST
+    // Ed25519 half. The both-must-verify / strip-resistant construction MUST
     // reject — a typed error, NOT Ok, NOT a silent classical-only accept.
     let stripped = sig.without_pq_half_for_test();
     let outcome = suite.verify(kp.public(), msg, &stripped);
@@ -113,9 +118,9 @@ fn tf2_stripping_ed25519_half_fails_closed() {
 
 /// Substitution-resistance: replacing the ML-DSA-65 half with a VALID
 /// ML-DSA-65 signature over a DIFFERENT message (mix-and-match across
-/// two signing operations) MUST fail closed. The committing construction
-/// binds both halves to the SAME message — a per-half-independently-valid
-/// but cross-message signature MUST NOT verify.
+/// two signing operations) MUST fail closed. The shared-`M'` binding puts
+/// both halves over the SAME message representative — a
+/// per-half-independently-valid but cross-message signature MUST NOT verify.
 #[test]
 
 fn tf2_cross_message_half_substitution_fails_closed() {
@@ -135,8 +140,8 @@ fn tf2_cross_message_half_substitution_fails_closed() {
     let outcome = suite.verify(kp.public(), msg_a, &forged);
     assert!(
         outcome.is_err(),
-        "cross-message half substitution MUST fail closed (committing \
-         construction binds both halves to ONE message); got {outcome:?}"
+        "cross-message half substitution MUST fail closed (the shared-M' \
+         binding puts both halves over ONE message); got {outcome:?}"
     );
 }
 

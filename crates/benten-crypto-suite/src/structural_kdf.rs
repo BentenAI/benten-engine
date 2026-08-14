@@ -5,7 +5,7 @@
 //! refinement (2) + `00-implementation-plan.md` §1.A.FROZEN item 15(f))
 //!
 //! ```text
-//! K(root) = HKDF-SHA256(K_principal, info = "root" || root_cid)
+//! K(root) = HKDF-SHA256(K_principal, info = "root:codepoint:" || cipher_codepoint_be || root_cid)
 //! K(N)    = HKDF-SHA256(K(predecessor), info = "step" || edge_label || N.cid)
 //! ```
 //!
@@ -34,13 +34,26 @@
 //! Per §1.A.FROZEN item 15(f): "KDF = HKDF-SHA256 v1-beta default
 //! (textbook domain-separation slot for variable-length material; the
 //! `"step"`/`"root"` info-tags use the slot for role-separation)." The
-//! codepoint dispatch here is implicit at this wave (single arm);
-//! G-CORE-9 freezes the explicit codepoint per the additive-codepoint
-//! discipline.
+//! codepoint dispatch here is implicit (single arm) and FROZEN at
+//! G-CORE-9 (this phase-close); a second KDF arm is a NEW additive
+//! codepoint, never a renumber.
 
 use hkdf::Hkdf;
 use sha2::Sha256;
 use zeroize::Zeroize;
+
+/// The `derive_root` HKDF info-tag cross-role domain separator prefix
+/// (`"root:codepoint:" || codepoint_be || root_cid`). Enrolled in
+/// `crate::domain_registry::registered_domain_tags()` (R6-final F-06) so the
+/// prefix-free forward-fire invariant covers this secret-keying surface. Crate-
+/// visible (not part of the frozen public API).
+pub(crate) const STRUCTURAL_KDF_ROOT_LABEL: &[u8] = b"root:codepoint:";
+
+/// The `derive_step` HKDF info-tag cross-role domain separator prefix
+/// (`"step" || edge_label || node_cid`). Enrolled in
+/// `crate::domain_registry::registered_domain_tags()` (R6-final F-06). Crate-
+/// visible (not part of the frozen public API).
+pub(crate) const STRUCTURAL_KDF_STEP_LABEL: &[u8] = b"step";
 
 /// Structural-KDF key material (32-byte HKDF-SHA256 output) — the
 /// derive_step / derive_root output type. Zeroizes on drop.
@@ -118,7 +131,7 @@ impl Drop for StructuralKdfKey {
 /// Formula (R6 R2 batch-A Item 7 — Row D-13 closure;
 /// Spike-E + §1.A.FROZEN item 15(f) extended):
 /// `K(root) = HKDF-SHA256(K_principal,
-///   info = "root:codepoint:" || codepoint_le_bytes || root_cid)`
+///   info = "root:codepoint:" || codepoint_be_bytes || root_cid)`
 ///
 /// The `"root"` HKDF info-tag is the cross-role domain separator (it
 /// disambiguates the root-derivation step from step-derivation; eliding
@@ -157,8 +170,10 @@ pub fn derive_root(
     // Wave-0). The structural-KDF info-tag is an internal keying path; the
     // BE migration keeps it consistent with every other wire/AAD integer.
     let codepoint_bytes = cipher_suite_codepoint.to_be_bytes();
-    let mut info = Vec::with_capacity(15 + codepoint_bytes.len() + root_cid.len());
-    info.extend_from_slice(b"root:codepoint:");
+    let mut info = Vec::with_capacity(
+        STRUCTURAL_KDF_ROOT_LABEL.len() + codepoint_bytes.len() + root_cid.len(),
+    );
+    info.extend_from_slice(STRUCTURAL_KDF_ROOT_LABEL);
     info.extend_from_slice(&codepoint_bytes);
     info.extend_from_slice(root_cid);
     hkdf_sha256_32(&k_principal.0, &info)
@@ -172,6 +187,18 @@ pub fn derive_root(
 /// Path-tagged: same Node reached by different predecessors yields
 /// different keys (the selective-share feature; structure-independent
 /// formula DISPROVED by Spike-E).
+///
+/// **Info-concat length-injectivity seam (R9-council F-20; §3.10 / Row D-13).**
+/// The `info` here concatenates the variable-length `edge_label` and `node_cid`
+/// WITHOUT an inter-field length prefix or codepoint tag (unlike [`derive_root`],
+/// which pins a fixed-width `"root:codepoint:" || codepoint_be`). At v1-beta the
+/// callers supply a FIXED-width `node_cid` (32/36-byte CID) so the split is
+/// unambiguous in practice, but the concat is not length-injective *by
+/// construction*. Closing this with an explicit **info-tag codepoint-binding**
+/// (a fixed-width codepoint + length-delimited fields) is a wire-format-coupled
+/// change **NAMED-DEFERRED to G-COMP-1** (`docs/V1-FROZEN-INTERFACE-DEFERRED.md`
+/// Row D-13). Not a v1-beta-core exploit given the fixed-width CID inputs; noted
+/// here so the seam is not read as fully length-injective.
 #[must_use]
 pub fn derive_step(
     predecessor: &StructuralKdfKey,
@@ -179,8 +206,9 @@ pub fn derive_step(
     node_cid: &[u8],
 ) -> StructuralKdfKey {
     // info = "step" || edge_label || node_cid (the cross-role prefix).
-    let mut info = Vec::with_capacity(4 + edge_label.len() + node_cid.len());
-    info.extend_from_slice(b"step");
+    let mut info =
+        Vec::with_capacity(STRUCTURAL_KDF_STEP_LABEL.len() + edge_label.len() + node_cid.len());
+    info.extend_from_slice(STRUCTURAL_KDF_STEP_LABEL);
     info.extend_from_slice(edge_label);
     info.extend_from_slice(node_cid);
     hkdf_sha256_32(&predecessor.0, &info)
@@ -198,7 +226,12 @@ fn hkdf_sha256_32(ikm: &[u8], info: &[u8]) -> StructuralKdfKey {
     // is infallible at runtime. `.expect` documents the invariant.
     hk.expand(info, &mut okm)
         .expect("HKDF-SHA256 expand to 32 B is infallible (output << 8160 B max)");
-    StructuralKdfKey::from_bytes(okm)
+    // Move the derived key into the zeroize-on-drop newtype, then wipe the
+    // transient stack copy (`okm` is `Copy`, so `from_bytes` took a copy) —
+    // consistent with `vault.rs::derive_dak` hygiene on the frozen KDF path.
+    let key = StructuralKdfKey::from_bytes(okm);
+    okm.zeroize();
+    key
 }
 
 #[cfg(test)]

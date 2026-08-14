@@ -83,12 +83,12 @@ fn ucan_backend_chain_walk_against_durable_store() {
         now - 1,
         now + 3600,
     );
-    let cid = backend.install_proof(&ucan).expect("install_proof");
+    backend.install_proof(&ucan).expect("install_proof");
     backend
         .validate_chain(std::slice::from_ref(&ucan), now)
         .expect("validate_chain");
-    // The CID is round-trip-able + the revocation marker is absent.
-    assert!(!backend.is_revoked(&cid).unwrap());
+    // The token round-trips + the revocation marker is absent.
+    assert!(!backend.is_revoked(&ucan).unwrap());
 }
 
 #[test]
@@ -177,20 +177,19 @@ fn ucan_backend_revocation_durable_across_restart() {
     );
 
     // Phase 1: install + validate + revoke.
-    let cid;
     {
         let backend = fresh_backend_at(&path);
-        cid = backend.install_proof(&ucan).unwrap();
+        backend.install_proof(&ucan).unwrap();
         backend
             .validate_chain(std::slice::from_ref(&ucan), now)
             .unwrap();
-        backend.revoke(&cid).unwrap();
+        backend.revoke(&ucan).unwrap();
     }
 
     // Phase 2: re-open at the same path. Revocation persists.
     {
         let backend = fresh_backend_at(&path);
-        assert!(backend.is_revoked(&cid).unwrap());
+        assert!(backend.is_revoked(&ucan).unwrap());
         let err = backend.validate_chain(&[ucan], now).unwrap_err();
         assert!(
             matches!(err, CapError::Revoked),
@@ -276,19 +275,19 @@ fn ucan_backend_no_longer_returns_not_implemented() {
         now + 3600,
     );
 
-    let cid = match backend.install_proof(&ucan) {
+    match backend.install_proof(&ucan) {
         Err(CapError::NotImplemented { .. }) => {
             panic!("install_proof must NOT return NotImplemented")
         }
-        Ok(cid) => cid,
+        Ok(_cid) => {}
         Err(other) => panic!("install_proof unexpected: {other:?}"),
-    };
+    }
     if let Err(CapError::NotImplemented { .. }) =
         backend.validate_chain(std::slice::from_ref(&ucan), now)
     {
         panic!("validate_chain must NOT return NotImplemented");
     }
-    if let Err(CapError::NotImplemented { .. }) = backend.revoke(&cid) {
+    if let Err(CapError::NotImplemented { .. }) = backend.revoke(&ucan) {
         panic!("revoke must NOT return NotImplemented");
     }
 }

@@ -256,7 +256,7 @@ Re-exported via `pub mod` from `lib.rs`. Consumed by `benten-engine`'s `engine_s
 - `mst::Mst::new() / insert(entry) / len() / is_empty() / root_cid() / apply_entries(iter) / merkle_proof_for(key)`.
 - `mst::MstEntry::from_payload(key, payload) / new_with_explicit_cid_for_testing(...)`.
 - `mst::MstCid::from_bytes(bytes) / from_blake3_digest(digest) / to_hex()`.
-- `mst::MerkleProof::reconstruct_root() / with_tampered_node() / approximate_bytes()`.
+- `mst::MerkleProof::reconstruct_root() / approximate_bytes()`, plus `with_tampered_node()` which is `#[cfg(any(test, feature = "testing"))]`-gated OFF the frozen v1-beta public surface (R6 tail fold-in F09; zero production callers — the three consumers are `src/mst.rs` `mod tests`, `src/light_client.rs` `mod tests`, and the `tests/light_client.rs` integration pin).
 - `mst::MstDiff::between(a, b)` + `mst::run_mst_diff_to_convergence(a, b)` -> rounds.
 - `mst::MstError` + variants.
 

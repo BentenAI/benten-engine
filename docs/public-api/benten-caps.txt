@@ -116,12 +116,12 @@ pub struct benten_caps::backends::ucan::UCANBackend<B: benten_graph::graph_backe
 impl<B: benten_graph::graph_backend::GraphBackend> benten_caps::backends::ucan::UCANBackend<B>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::graph_backend(&self) -> &B
 pub fn benten_caps::backends::ucan::UCANBackend<B>::install_proof(&self, &benten_id::ucan::Ucan) -> core::result::Result<benten_core::Cid, benten_caps::error::CapError>
-pub fn benten_caps::backends::ucan::UCANBackend<B>::is_revoked(&self, &benten_core::Cid) -> core::result::Result<bool, benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::is_revoked(&self, &benten_id::ucan::Ucan) -> core::result::Result<bool, benten_caps::error::CapError>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::iter_installed_proofs(&self) -> core::result::Result<alloc::vec::Vec<benten_id::ucan::Ucan>, benten_caps::error::CapError>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::new(alloc::sync::Arc<B>) -> Self
 pub fn benten_caps::backends::ucan::UCANBackend<B>::rate_limit_policy(&self) -> &dyn benten_caps::rate_limit::RateLimitPolicy
 pub fn benten_caps::backends::ucan::UCANBackend<B>::record_grant(&self, &benten_id::ucan::Ucan, &benten_caps::policy::CapWriteContext) -> core::result::Result<benten_core::Cid, benten_caps::error::CapError>
-pub fn benten_caps::backends::ucan::UCANBackend<B>::revoke(&self, &benten_core::Cid) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::revoke(&self, &benten_id::ucan::Ucan) -> core::result::Result<(), benten_caps::error::CapError>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain(&self, &[benten_id::ucan::Ucan], u64) -> core::result::Result<(), benten_caps::error::CapError>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain_at(&self, &[benten_id::ucan::Ucan], u64) -> core::result::Result<(), benten_caps::error::CapError>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain_for_audience_at(&self, &[benten_id::ucan::Ucan], &benten_id::did::Did, u64) -> core::result::Result<(), benten_caps::error::CapError>
@@ -139,12 +139,12 @@ pub struct benten_caps::backends::UCANBackend<B: benten_graph::graph_backend::Gr
 impl<B: benten_graph::graph_backend::GraphBackend> benten_caps::backends::ucan::UCANBackend<B>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::graph_backend(&self) -> &B
 pub fn benten_caps::backends::ucan::UCANBackend<B>::install_proof(&self, &benten_id::ucan::Ucan) -> core::result::Result<benten_core::Cid, benten_caps::error::CapError>
-pub fn benten_caps::backends::ucan::UCANBackend<B>::is_revoked(&self, &benten_core::Cid) -> core::result::Result<bool, benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::is_revoked(&self, &benten_id::ucan::Ucan) -> core::result::Result<bool, benten_caps::error::CapError>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::iter_installed_proofs(&self) -> core::result::Result<alloc::vec::Vec<benten_id::ucan::Ucan>, benten_caps::error::CapError>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::new(alloc::sync::Arc<B>) -> Self
 pub fn benten_caps::backends::ucan::UCANBackend<B>::rate_limit_policy(&self) -> &dyn benten_caps::rate_limit::RateLimitPolicy
 pub fn benten_caps::backends::ucan::UCANBackend<B>::record_grant(&self, &benten_id::ucan::Ucan, &benten_caps::policy::CapWriteContext) -> core::result::Result<benten_core::Cid, benten_caps::error::CapError>
-pub fn benten_caps::backends::ucan::UCANBackend<B>::revoke(&self, &benten_core::Cid) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::revoke(&self, &benten_id::ucan::Ucan) -> core::result::Result<(), benten_caps::error::CapError>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain(&self, &[benten_id::ucan::Ucan], u64) -> core::result::Result<(), benten_caps::error::CapError>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain_at(&self, &[benten_id::ucan::Ucan], u64) -> core::result::Result<(), benten_caps::error::CapError>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain_for_audience_at(&self, &[benten_id::ucan::Ucan], &benten_id::did::Did, u64) -> core::result::Result<(), benten_caps::error::CapError>
@@ -1528,12 +1528,12 @@ pub struct benten_caps::UCANBackend<B: benten_graph::graph_backend::GraphBackend
 impl<B: benten_graph::graph_backend::GraphBackend> benten_caps::backends::ucan::UCANBackend<B>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::graph_backend(&self) -> &B
 pub fn benten_caps::backends::ucan::UCANBackend<B>::install_proof(&self, &benten_id::ucan::Ucan) -> core::result::Result<benten_core::Cid, benten_caps::error::CapError>
-pub fn benten_caps::backends::ucan::UCANBackend<B>::is_revoked(&self, &benten_core::Cid) -> core::result::Result<bool, benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::is_revoked(&self, &benten_id::ucan::Ucan) -> core::result::Result<bool, benten_caps::error::CapError>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::iter_installed_proofs(&self) -> core::result::Result<alloc::vec::Vec<benten_id::ucan::Ucan>, benten_caps::error::CapError>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::new(alloc::sync::Arc<B>) -> Self
 pub fn benten_caps::backends::ucan::UCANBackend<B>::rate_limit_policy(&self) -> &dyn benten_caps::rate_limit::RateLimitPolicy
 pub fn benten_caps::backends::ucan::UCANBackend<B>::record_grant(&self, &benten_id::ucan::Ucan, &benten_caps::policy::CapWriteContext) -> core::result::Result<benten_core::Cid, benten_caps::error::CapError>
-pub fn benten_caps::backends::ucan::UCANBackend<B>::revoke(&self, &benten_core::Cid) -> core::result::Result<(), benten_caps::error::CapError>
+pub fn benten_caps::backends::ucan::UCANBackend<B>::revoke(&self, &benten_id::ucan::Ucan) -> core::result::Result<(), benten_caps::error::CapError>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain(&self, &[benten_id::ucan::Ucan], u64) -> core::result::Result<(), benten_caps::error::CapError>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain_at(&self, &[benten_id::ucan::Ucan], u64) -> core::result::Result<(), benten_caps::error::CapError>
 pub fn benten_caps::backends::ucan::UCANBackend<B>::validate_chain_for_audience_at(&self, &[benten_id::ucan::Ucan], &benten_id::did::Did, u64) -> core::result::Result<(), benten_caps::error::CapError>

@@ -83,12 +83,12 @@ fn invariant_9_fires_for_typed_call_keypair_generate_in_deterministic_handler() 
     let read_node = OperationNode::new("r", PrimitiveKind::Read);
     let typed_call_node = OperationNode::new("typed_call", PrimitiveKind::Call)
         .with_property("target", Value::text("engine:typed:keypair_generate"));
-    let sg = Subgraph {
-        handler_id: "det_with_typed_keygen".into(),
-        nodes: vec![read_node, typed_call_node],
-        edges: vec![("r".into(), "typed_call".into(), "next".into())],
-        deterministic: true,
-    };
+    let sg = Subgraph::from_parts(
+        "det_with_typed_keygen",
+        vec![read_node, typed_call_node],
+        vec![("r".into(), "typed_call".into(), "next".into())],
+        true,
+    );
 
     let err = invariants::validate_subgraph(&sg, &InvariantConfig::default(), false)
         .expect_err("Inv-9 MUST reject non-deterministic typed-CALL in deterministic handler");
@@ -115,12 +115,12 @@ fn invariant_9_permits_deterministic_typed_call_op_in_deterministic_handler() {
     let read_node = OperationNode::new("r", PrimitiveKind::Read);
     let typed_call_node = OperationNode::new("typed_call", PrimitiveKind::Call)
         .with_property("target", Value::text("engine:typed:blake3_hash"));
-    let sg = Subgraph {
-        handler_id: "det_with_typed_hash".into(),
-        nodes: vec![read_node, typed_call_node],
-        edges: vec![("r".into(), "typed_call".into(), "next".into())],
-        deterministic: true,
-    };
+    let sg = Subgraph::from_parts(
+        "det_with_typed_hash",
+        vec![read_node, typed_call_node],
+        vec![("r".into(), "typed_call".into(), "next".into())],
+        true,
+    );
 
     invariants::validate_subgraph(&sg, &InvariantConfig::default(), false)
         .expect("deterministic typed-CALL op MUST pass Inv-9 in a deterministic handler");

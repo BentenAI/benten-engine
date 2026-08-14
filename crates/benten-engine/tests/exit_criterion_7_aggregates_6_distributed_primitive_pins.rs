@@ -48,10 +48,18 @@ fn workspace_root() -> PathBuf {
 }
 
 #[test]
-#[ignore = "phase-4-foundation R4-FP-3 RED-PHASE umbrella pin — \
-    G26-A wave-10 un-ignores. Pin source: r2-test-landscape.md §2.18 row 2 + \
-    r4-triage.md §5.3 R4-FP-3 charter. Aggregates 6 cross-crate per-feature \
-    12-primitive defense pins; closes cag-r1-11 + r4-arch-1."]
+#[ignore = "F-073 destination-retarget: the cited `G26-A wave-10` destination shipped at \
+    `phase-4-foundation-close` 2026-05-14. Verified at r9-base: all SIX named pin files \
+    exist, and five carry the substance marker this umbrella's own pseudo-code specifies \
+    (PrimitiveKind x4, Strategy x1). Slot 6 is MIS-SPECIFIED: \
+    `benten-renderer-tauri/tests/three_rung_baked_in_17_defense_extension_pin.rs` \
+    contains no `PrimitiveKind` — it is a wasm32 bundle-content / baked-in-#17 \
+    deployment-shape pin, not a 12-primitive pin. Authoring verbatim REDs; relaxing the \
+    marker to `Renderer` would go GREEN while asserting something this umbrella does not \
+    claim (pim-18 SHAPE-not-SUBSTANCE). Close by naming a REAL renderer-tauri \
+    12-primitive pin for slot 6, or by dropping to five slots with a written reason — \
+    NOT by loosening the marker. Destination: docs/future/phase-4-backlog.md §4.168 residual 7 \
+    (HARD RULE 12 clause-(b))."]
 fn exit_criterion_7_aggregates_6_distributed_primitive_pins() {
     // G26-A implementer wires this. Substantive shape:
     //

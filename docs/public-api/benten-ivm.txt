@@ -26,7 +26,7 @@ impl core::marker::Unpin for benten_ivm::algorithm_b::AlgorithmError
 impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::AlgorithmError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::AlgorithmError
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::AlgorithmError
-pub enum benten_ivm::algorithm_b::LabelPattern
+#[non_exhaustive] pub enum benten_ivm::algorithm_b::LabelPattern
 pub benten_ivm::algorithm_b::LabelPattern::AnchorPrefix(alloc::string::String)
 pub benten_ivm::algorithm_b::LabelPattern::Exact(alloc::string::String)
 impl benten_ivm::algorithm_b::LabelPattern
@@ -49,7 +49,7 @@ impl core::marker::Unpin for benten_ivm::algorithm_b::LabelPattern
 impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::LabelPattern
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::LabelPattern
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::LabelPattern
-pub struct benten_ivm::algorithm_b::AlgorithmBView
+#[non_exhaustive] pub struct benten_ivm::algorithm_b::AlgorithmBView
 impl benten_ivm::algorithm_b::AlgorithmBView
 pub fn benten_ivm::algorithm_b::AlgorithmBView::for_id(&str, benten_ivm::view::ViewDefinition) -> core::result::Result<Self, benten_ivm::view::ViewError>
 pub fn benten_ivm::algorithm_b::AlgorithmBView::for_id_with_budget(&str, benten_ivm::view::ViewDefinition, u64) -> core::result::Result<Self, benten_ivm::view::ViewError>
@@ -77,7 +77,7 @@ impl core::marker::Unpin for benten_ivm::algorithm_b::AlgorithmBView
 impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::AlgorithmBView
 impl !core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::AlgorithmBView
 impl !core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::AlgorithmBView
-pub struct benten_ivm::algorithm_b::CanonicalViewEntry
+#[non_exhaustive] pub struct benten_ivm::algorithm_b::CanonicalViewEntry
 impl benten_ivm::algorithm_b::CanonicalViewEntry
 pub fn benten_ivm::algorithm_b::CanonicalViewEntry::hardcoded_label(&self) -> core::option::Option<&'static str>
 pub fn benten_ivm::algorithm_b::CanonicalViewEntry::id(&self) -> &'static str
@@ -124,7 +124,7 @@ impl core::marker::Unpin for benten_ivm::algorithm_b::CanonicalViews
 impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::CanonicalViews
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::CanonicalViews
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::CanonicalViews
-pub struct benten_ivm::algorithm_b::Projection
+#[non_exhaustive] pub struct benten_ivm::algorithm_b::Projection
 impl benten_ivm::algorithm_b::Projection
 pub fn benten_ivm::algorithm_b::Projection::all_props() -> Self
 pub fn benten_ivm::algorithm_b::Projection::apply(&self, benten_core::Node) -> benten_core::Node
@@ -238,7 +238,7 @@ impl core::marker::Unpin for benten_ivm::subgraph_spec::TypedOutputProjection
 impl core::marker::UnsafeUnpin for benten_ivm::subgraph_spec::TypedOutputProjection
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subgraph_spec::TypedOutputProjection
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subgraph_spec::TypedOutputProjection
-pub struct benten_ivm::subgraph_spec::KernelInput
+#[non_exhaustive] pub struct benten_ivm::subgraph_spec::KernelInput
 pub benten_ivm::subgraph_spec::KernelInput::created_at: i64
 pub benten_ivm::subgraph_spec::KernelInput::disambiguator: u64
 pub benten_ivm::subgraph_spec::KernelInput::label: alloc::string::String
@@ -259,7 +259,7 @@ impl core::marker::Unpin for benten_ivm::subgraph_spec::KernelInput
 impl core::marker::UnsafeUnpin for benten_ivm::subgraph_spec::KernelInput
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subgraph_spec::KernelInput
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subgraph_spec::KernelInput
-pub struct benten_ivm::subgraph_spec::SubgraphSpec
+#[non_exhaustive] pub struct benten_ivm::subgraph_spec::SubgraphSpec
 pub benten_ivm::subgraph_spec::SubgraphSpec::budget: core::option::Option<u64>
 pub benten_ivm::subgraph_spec::SubgraphSpec::label_pattern: benten_ivm::algorithm_b::LabelPattern
 pub benten_ivm::subgraph_spec::SubgraphSpec::projection: benten_ivm::algorithm_b::Projection
@@ -290,7 +290,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subgraph_spec::Subg
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subgraph_spec::SubgraphSpec
 pub const benten_ivm::subgraph_spec::CANONICAL_VIEW_IDS: &[&str]
 pub mod benten_ivm::subscriber
-pub struct benten_ivm::subscriber::Subscriber
+#[non_exhaustive] pub struct benten_ivm::subscriber::Subscriber
 impl benten_ivm::subscriber::Subscriber
 pub fn benten_ivm::subscriber::Subscriber::new() -> Self
 pub fn benten_ivm::subscriber::Subscriber::read_view(&self, &str, &benten_ivm::view::ViewQuery) -> core::option::Option<core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>>
@@ -347,7 +347,7 @@ impl core::marker::Unpin for benten_ivm::view::ViewError
 impl core::marker::UnsafeUnpin for benten_ivm::view::ViewError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewError
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewError
-pub enum benten_ivm::view::ViewResult
+#[non_exhaustive] pub enum benten_ivm::view::ViewResult
 pub benten_ivm::view::ViewResult::Cids(alloc::vec::Vec<benten_core::Cid>)
 pub benten_ivm::view::ViewResult::Current(core::option::Option<benten_core::Cid>)
 pub benten_ivm::view::ViewResult::Rules(alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>)
@@ -362,7 +362,7 @@ impl core::marker::Unpin for benten_ivm::view::ViewResult
 impl core::marker::UnsafeUnpin for benten_ivm::view::ViewResult
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewResult
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewResult
-pub enum benten_ivm::view::ViewState
+#[non_exhaustive] pub enum benten_ivm::view::ViewState
 pub benten_ivm::view::ViewState::Fresh
 pub benten_ivm::view::ViewState::Stale
 impl core::clone::Clone for benten_ivm::view::ViewState
@@ -381,7 +381,7 @@ impl core::marker::Unpin for benten_ivm::view::ViewState
 impl core::marker::UnsafeUnpin for benten_ivm::view::ViewState
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewState
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewState
-pub struct benten_ivm::view::ViewBudget
+#[non_exhaustive] pub struct benten_ivm::view::ViewBudget
 pub benten_ivm::view::ViewBudget::max_work_per_update: u64
 impl benten_ivm::view::ViewBudget
 pub fn benten_ivm::view::ViewBudget::new(u64) -> core::result::Result<Self, benten_ivm::view::ViewError>
@@ -401,7 +401,7 @@ impl core::marker::Unpin for benten_ivm::view::ViewBudget
 impl core::marker::UnsafeUnpin for benten_ivm::view::ViewBudget
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewBudget
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewBudget
-pub struct benten_ivm::view::ViewDefinition
+#[non_exhaustive] pub struct benten_ivm::view::ViewDefinition
 pub benten_ivm::view::ViewDefinition::input_pattern_label: core::option::Option<alloc::string::String>
 pub benten_ivm::view::ViewDefinition::output_label: alloc::string::String
 pub benten_ivm::view::ViewDefinition::strategy: benten_ivm::strategy::Strategy
@@ -409,6 +409,7 @@ pub benten_ivm::view::ViewDefinition::view_id: alloc::string::String
 impl benten_ivm::view::ViewDefinition
 pub fn benten_ivm::view::ViewDefinition::as_node(&self) -> benten_core::Node
 pub fn benten_ivm::view::ViewDefinition::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
+pub fn benten_ivm::view::ViewDefinition::new(impl core::convert::Into<alloc::string::String>, core::option::Option<alloc::string::String>, impl core::convert::Into<alloc::string::String>, benten_ivm::strategy::Strategy) -> Self
 impl core::clone::Clone for benten_ivm::view::ViewDefinition
 pub fn benten_ivm::view::ViewDefinition::clone(&self) -> benten_ivm::view::ViewDefinition
 impl core::cmp::Eq for benten_ivm::view::ViewDefinition
@@ -424,7 +425,7 @@ impl core::marker::Unpin for benten_ivm::view::ViewDefinition
 impl core::marker::UnsafeUnpin for benten_ivm::view::ViewDefinition
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewDefinition
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewDefinition
-pub struct benten_ivm::view::ViewQuery
+#[non_exhaustive] pub struct benten_ivm::view::ViewQuery
 pub benten_ivm::view::ViewQuery::anchor_id: core::option::Option<u64>
 pub benten_ivm::view::ViewQuery::entity_cid: core::option::Option<benten_core::Cid>
 pub benten_ivm::view::ViewQuery::event_name: core::option::Option<alloc::string::String>
@@ -509,7 +510,7 @@ pub fn benten_ivm::views::version_current::VersionCurrentView::strategy(&self) -
 pub fn benten_ivm::views::version_current::VersionCurrentView::update(&mut self, &benten_graph::store::ChangeEvent) -> core::result::Result<(), benten_ivm::view::ViewError>
 pub mod benten_ivm::views
 pub mod benten_ivm::views::capability_grants
-pub struct benten_ivm::views::capability_grants::CapabilityGrantsView
+#[non_exhaustive] pub struct benten_ivm::views::capability_grants::CapabilityGrantsView
 impl benten_ivm::views::capability_grants::CapabilityGrantsView
 pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::definition() -> benten_ivm::view::ViewDefinition
 pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::new() -> Self
@@ -538,7 +539,7 @@ impl core::marker::UnsafeUnpin for benten_ivm::views::capability_grants::Capabil
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::capability_grants::CapabilityGrantsView
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::capability_grants::CapabilityGrantsView
 pub mod benten_ivm::views::content_listing
-pub struct benten_ivm::views::content_listing::ContentListingView
+#[non_exhaustive] pub struct benten_ivm::views::content_listing::ContentListingView
 impl benten_ivm::views::content_listing::ContentListingView
 pub fn benten_ivm::views::content_listing::ContentListingView::definition() -> benten_ivm::view::ViewDefinition
 pub fn benten_ivm::views::content_listing::ContentListingView::new(impl core::convert::Into<alloc::string::String>) -> Self
@@ -569,7 +570,7 @@ impl core::marker::UnsafeUnpin for benten_ivm::views::content_listing::ContentLi
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::content_listing::ContentListingView
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::content_listing::ContentListingView
 pub mod benten_ivm::views::event_handler_dispatch
-pub struct benten_ivm::views::event_handler_dispatch::EventDispatchView
+#[non_exhaustive] pub struct benten_ivm::views::event_handler_dispatch::EventDispatchView
 impl benten_ivm::views::event_handler_dispatch::EventDispatchView
 pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::definition() -> benten_ivm::view::ViewDefinition
 pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::new() -> Self
@@ -598,7 +599,7 @@ impl core::marker::UnsafeUnpin for benten_ivm::views::event_handler_dispatch::Ev
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::event_handler_dispatch::EventDispatchView
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::event_handler_dispatch::EventDispatchView
 pub mod benten_ivm::views::governance_inheritance
-pub struct benten_ivm::views::governance_inheritance::EffectiveRules
+#[non_exhaustive] pub struct benten_ivm::views::governance_inheritance::EffectiveRules
 impl benten_ivm::views::governance_inheritance::EffectiveRules
 pub fn benten_ivm::views::governance_inheritance::EffectiveRules::cycle_detected(&self) -> bool
 pub fn benten_ivm::views::governance_inheritance::EffectiveRules::depth(&self) -> usize
@@ -615,7 +616,7 @@ impl core::marker::Unpin for benten_ivm::views::governance_inheritance::Effectiv
 impl core::marker::UnsafeUnpin for benten_ivm::views::governance_inheritance::EffectiveRules
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::governance_inheritance::EffectiveRules
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::governance_inheritance::EffectiveRules
-pub struct benten_ivm::views::governance_inheritance::GovernanceInheritanceView
+#[non_exhaustive] pub struct benten_ivm::views::governance_inheritance::GovernanceInheritanceView
 impl benten_ivm::views::governance_inheritance::GovernanceInheritanceView
 pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::add_edge(&mut self, &benten_core::Cid, &benten_core::Cid)
 pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::definition() -> benten_ivm::view::ViewDefinition
@@ -647,7 +648,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::governance_i
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
 pub const benten_ivm::views::governance_inheritance::MAX_GOVERNANCE_DEPTH: usize
 pub mod benten_ivm::views::version_current
-pub struct benten_ivm::views::version_current::VersionCurrentView
+#[non_exhaustive] pub struct benten_ivm::views::version_current::VersionCurrentView
 impl benten_ivm::views::version_current::VersionCurrentView
 pub fn benten_ivm::views::version_current::VersionCurrentView::definition() -> benten_ivm::view::ViewDefinition
 pub fn benten_ivm::views::version_current::VersionCurrentView::new() -> Self
@@ -679,7 +680,7 @@ pub trait benten_ivm::views::version_current::AnchorRef
 pub fn benten_ivm::views::version_current::AnchorRef::to_anchor_id(&self) -> u64
 impl benten_ivm::views::version_current::AnchorRef for &benten_core::Cid
 pub fn &benten_core::Cid::to_anchor_id(&self) -> u64
-pub struct benten_ivm::views::CapabilityGrantsView
+#[non_exhaustive] pub struct benten_ivm::views::CapabilityGrantsView
 impl benten_ivm::views::capability_grants::CapabilityGrantsView
 pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::definition() -> benten_ivm::view::ViewDefinition
 pub fn benten_ivm::views::capability_grants::CapabilityGrantsView::new() -> Self
@@ -707,7 +708,7 @@ impl core::marker::Unpin for benten_ivm::views::capability_grants::CapabilityGra
 impl core::marker::UnsafeUnpin for benten_ivm::views::capability_grants::CapabilityGrantsView
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::capability_grants::CapabilityGrantsView
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::capability_grants::CapabilityGrantsView
-pub struct benten_ivm::views::ContentListingView
+#[non_exhaustive] pub struct benten_ivm::views::ContentListingView
 impl benten_ivm::views::content_listing::ContentListingView
 pub fn benten_ivm::views::content_listing::ContentListingView::definition() -> benten_ivm::view::ViewDefinition
 pub fn benten_ivm::views::content_listing::ContentListingView::new(impl core::convert::Into<alloc::string::String>) -> Self
@@ -737,7 +738,7 @@ impl core::marker::Unpin for benten_ivm::views::content_listing::ContentListingV
 impl core::marker::UnsafeUnpin for benten_ivm::views::content_listing::ContentListingView
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::content_listing::ContentListingView
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::content_listing::ContentListingView
-pub struct benten_ivm::views::EventDispatchView
+#[non_exhaustive] pub struct benten_ivm::views::EventDispatchView
 impl benten_ivm::views::event_handler_dispatch::EventDispatchView
 pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::definition() -> benten_ivm::view::ViewDefinition
 pub fn benten_ivm::views::event_handler_dispatch::EventDispatchView::new() -> Self
@@ -765,7 +766,7 @@ impl core::marker::Unpin for benten_ivm::views::event_handler_dispatch::EventDis
 impl core::marker::UnsafeUnpin for benten_ivm::views::event_handler_dispatch::EventDispatchView
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::event_handler_dispatch::EventDispatchView
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::event_handler_dispatch::EventDispatchView
-pub struct benten_ivm::views::GovernanceInheritanceView
+#[non_exhaustive] pub struct benten_ivm::views::GovernanceInheritanceView
 impl benten_ivm::views::governance_inheritance::GovernanceInheritanceView
 pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::add_edge(&mut self, &benten_core::Cid, &benten_core::Cid)
 pub fn benten_ivm::views::governance_inheritance::GovernanceInheritanceView::definition() -> benten_ivm::view::ViewDefinition
@@ -795,7 +796,7 @@ impl core::marker::Unpin for benten_ivm::views::governance_inheritance::Governan
 impl core::marker::UnsafeUnpin for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::views::governance_inheritance::GovernanceInheritanceView
-pub struct benten_ivm::views::VersionCurrentView
+#[non_exhaustive] pub struct benten_ivm::views::VersionCurrentView
 impl benten_ivm::views::version_current::VersionCurrentView
 pub fn benten_ivm::views::version_current::VersionCurrentView::definition() -> benten_ivm::view::ViewDefinition
 pub fn benten_ivm::views::version_current::VersionCurrentView::new() -> Self
@@ -868,7 +869,7 @@ impl core::marker::Unpin for benten_ivm::subgraph_spec::KernelOutput
 impl core::marker::UnsafeUnpin for benten_ivm::subgraph_spec::KernelOutput
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subgraph_spec::KernelOutput
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subgraph_spec::KernelOutput
-pub enum benten_ivm::LabelPattern
+#[non_exhaustive] pub enum benten_ivm::LabelPattern
 pub benten_ivm::LabelPattern::AnchorPrefix(alloc::string::String)
 pub benten_ivm::LabelPattern::Exact(alloc::string::String)
 impl benten_ivm::algorithm_b::LabelPattern
@@ -957,7 +958,7 @@ impl core::marker::Unpin for benten_ivm::view::ViewError
 impl core::marker::UnsafeUnpin for benten_ivm::view::ViewError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewError
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewError
-pub enum benten_ivm::ViewResult
+#[non_exhaustive] pub enum benten_ivm::ViewResult
 pub benten_ivm::ViewResult::Cids(alloc::vec::Vec<benten_core::Cid>)
 pub benten_ivm::ViewResult::Current(core::option::Option<benten_core::Cid>)
 pub benten_ivm::ViewResult::Rules(alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_core::value::Value>)
@@ -972,7 +973,7 @@ impl core::marker::Unpin for benten_ivm::view::ViewResult
 impl core::marker::UnsafeUnpin for benten_ivm::view::ViewResult
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewResult
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewResult
-pub enum benten_ivm::ViewState
+#[non_exhaustive] pub enum benten_ivm::ViewState
 pub benten_ivm::ViewState::Fresh
 pub benten_ivm::ViewState::Stale
 impl core::clone::Clone for benten_ivm::view::ViewState
@@ -991,7 +992,7 @@ impl core::marker::Unpin for benten_ivm::view::ViewState
 impl core::marker::UnsafeUnpin for benten_ivm::view::ViewState
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewState
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewState
-pub struct benten_ivm::AlgorithmBView
+#[non_exhaustive] pub struct benten_ivm::AlgorithmBView
 impl benten_ivm::algorithm_b::AlgorithmBView
 pub fn benten_ivm::algorithm_b::AlgorithmBView::for_id(&str, benten_ivm::view::ViewDefinition) -> core::result::Result<Self, benten_ivm::view::ViewError>
 pub fn benten_ivm::algorithm_b::AlgorithmBView::for_id_with_budget(&str, benten_ivm::view::ViewDefinition, u64) -> core::result::Result<Self, benten_ivm::view::ViewError>
@@ -1019,7 +1020,7 @@ impl core::marker::Unpin for benten_ivm::algorithm_b::AlgorithmBView
 impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::AlgorithmBView
 impl !core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::AlgorithmBView
 impl !core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::AlgorithmBView
-pub struct benten_ivm::CanonicalViewEntry
+#[non_exhaustive] pub struct benten_ivm::CanonicalViewEntry
 impl benten_ivm::algorithm_b::CanonicalViewEntry
 pub fn benten_ivm::algorithm_b::CanonicalViewEntry::hardcoded_label(&self) -> core::option::Option<&'static str>
 pub fn benten_ivm::algorithm_b::CanonicalViewEntry::id(&self) -> &'static str
@@ -1066,7 +1067,7 @@ impl core::marker::Unpin for benten_ivm::algorithm_b::CanonicalViews
 impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::CanonicalViews
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::CanonicalViews
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::CanonicalViews
-pub struct benten_ivm::KernelInput
+#[non_exhaustive] pub struct benten_ivm::KernelInput
 pub benten_ivm::KernelInput::created_at: i64
 pub benten_ivm::KernelInput::disambiguator: u64
 pub benten_ivm::KernelInput::label: alloc::string::String
@@ -1087,7 +1088,7 @@ impl core::marker::Unpin for benten_ivm::subgraph_spec::KernelInput
 impl core::marker::UnsafeUnpin for benten_ivm::subgraph_spec::KernelInput
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subgraph_spec::KernelInput
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subgraph_spec::KernelInput
-pub struct benten_ivm::Projection
+#[non_exhaustive] pub struct benten_ivm::Projection
 impl benten_ivm::algorithm_b::Projection
 pub fn benten_ivm::algorithm_b::Projection::all_props() -> Self
 pub fn benten_ivm::algorithm_b::Projection::apply(&self, benten_core::Node) -> benten_core::Node
@@ -1109,7 +1110,7 @@ impl core::marker::Unpin for benten_ivm::algorithm_b::Projection
 impl core::marker::UnsafeUnpin for benten_ivm::algorithm_b::Projection
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::algorithm_b::Projection
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::algorithm_b::Projection
-pub struct benten_ivm::SubgraphSpec
+#[non_exhaustive] pub struct benten_ivm::SubgraphSpec
 pub benten_ivm::SubgraphSpec::budget: core::option::Option<u64>
 pub benten_ivm::SubgraphSpec::label_pattern: benten_ivm::algorithm_b::LabelPattern
 pub benten_ivm::SubgraphSpec::projection: benten_ivm::algorithm_b::Projection
@@ -1138,7 +1139,7 @@ impl core::marker::Unpin for benten_ivm::subgraph_spec::SubgraphSpec
 impl core::marker::UnsafeUnpin for benten_ivm::subgraph_spec::SubgraphSpec
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subgraph_spec::SubgraphSpec
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subgraph_spec::SubgraphSpec
-pub struct benten_ivm::Subscriber
+#[non_exhaustive] pub struct benten_ivm::Subscriber
 impl benten_ivm::subscriber::Subscriber
 pub fn benten_ivm::subscriber::Subscriber::new() -> Self
 pub fn benten_ivm::subscriber::Subscriber::read_view(&self, &str, &benten_ivm::view::ViewQuery) -> core::option::Option<core::result::Result<benten_ivm::view::ViewResult, benten_ivm::view::ViewError>>
@@ -1165,7 +1166,7 @@ impl core::marker::Unpin for benten_ivm::subscriber::Subscriber
 impl core::marker::UnsafeUnpin for benten_ivm::subscriber::Subscriber
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::subscriber::Subscriber
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::subscriber::Subscriber
-pub struct benten_ivm::ViewBudget
+#[non_exhaustive] pub struct benten_ivm::ViewBudget
 pub benten_ivm::ViewBudget::max_work_per_update: u64
 impl benten_ivm::view::ViewBudget
 pub fn benten_ivm::view::ViewBudget::new(u64) -> core::result::Result<Self, benten_ivm::view::ViewError>
@@ -1185,7 +1186,7 @@ impl core::marker::Unpin for benten_ivm::view::ViewBudget
 impl core::marker::UnsafeUnpin for benten_ivm::view::ViewBudget
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewBudget
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewBudget
-pub struct benten_ivm::ViewDefinition
+#[non_exhaustive] pub struct benten_ivm::ViewDefinition
 pub benten_ivm::ViewDefinition::input_pattern_label: core::option::Option<alloc::string::String>
 pub benten_ivm::ViewDefinition::output_label: alloc::string::String
 pub benten_ivm::ViewDefinition::strategy: benten_ivm::strategy::Strategy
@@ -1193,6 +1194,7 @@ pub benten_ivm::ViewDefinition::view_id: alloc::string::String
 impl benten_ivm::view::ViewDefinition
 pub fn benten_ivm::view::ViewDefinition::as_node(&self) -> benten_core::Node
 pub fn benten_ivm::view::ViewDefinition::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
+pub fn benten_ivm::view::ViewDefinition::new(impl core::convert::Into<alloc::string::String>, core::option::Option<alloc::string::String>, impl core::convert::Into<alloc::string::String>, benten_ivm::strategy::Strategy) -> Self
 impl core::clone::Clone for benten_ivm::view::ViewDefinition
 pub fn benten_ivm::view::ViewDefinition::clone(&self) -> benten_ivm::view::ViewDefinition
 impl core::cmp::Eq for benten_ivm::view::ViewDefinition
@@ -1208,7 +1210,7 @@ impl core::marker::Unpin for benten_ivm::view::ViewDefinition
 impl core::marker::UnsafeUnpin for benten_ivm::view::ViewDefinition
 impl core::panic::unwind_safe::RefUnwindSafe for benten_ivm::view::ViewDefinition
 impl core::panic::unwind_safe::UnwindSafe for benten_ivm::view::ViewDefinition
-pub struct benten_ivm::ViewQuery
+#[non_exhaustive] pub struct benten_ivm::ViewQuery
 pub benten_ivm::ViewQuery::anchor_id: core::option::Option<u64>
 pub benten_ivm::ViewQuery::entity_cid: core::option::Option<benten_core::Cid>
 pub benten_ivm::ViewQuery::event_name: core::option::Option<alloc::string::String>

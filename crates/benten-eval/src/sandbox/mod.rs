@@ -26,8 +26,7 @@
 //! preference — line cites in `evaluator.rs` drifted from `:185-192` to
 //! `:281-290` across waves). The SANDBOX call site (G7-C engine
 //! integration) emits the [`crate::TraceStep::BudgetExhausted`] row
-//! BEFORE propagating the typed error; see
-//! [`crate::primitives::sandbox::SandboxError::to_budget_exhausted_trace`].
+//! BEFORE propagating the typed error.
 //!
 //! ## Compile-time wasm32 disable (sec-pre-r1-05)
 //!
@@ -63,7 +62,10 @@ pub use host_fns::{
     HostFnContext, HostFnReturn, HostFnSpec, RESERVED_HOST_ASYNC_CAP, default_host_fns,
     host_fn_names,
 };
-pub use instance::{module_cache_size, module_for_bytes, shared_engine};
+pub use instance::{
+    ENGINE_MAX_WASM_STACK_BYTES, engine_max_wasm_stack_bytes, module_cache_size, module_for_bytes,
+    shared_engine,
+};
 pub use manifest::{
     CapBundle, ManifestError, ManifestRef, ManifestRegistry, ManifestSignature,
     default_manifest_names, default_manifests,

@@ -15,7 +15,7 @@
 //! - [`AeadError`] — typed error envelope: `AeadAuthFailed` +
 //!   `MalformedEnvelope` + `Unsupported` (codepoint-mismatch).
 //!
-//! # Wire format (G-CORE-9 freezes; canonical at G-CORE-3a)
+//! # Wire format (FROZEN at G-CORE-9 phase-close; canonical at G-CORE-3a)
 //!
 //! ```text
 //! byte 0   : magic 0xae        (envelope identifier; Varsig sibling)
@@ -55,8 +55,12 @@ pub const IROH_BLOCK_SIZE: usize = 16 * 1024;
 /// per-chunk AEAD ≥ 64 KiB.
 pub const WHOLE_CONTENT_AEAD_THRESHOLD: usize = 64 * 1024;
 
-/// The AEAD envelope's format-version discriminator (G-CORE-9 may
-/// re-numerate at the wire-freeze pass; until then v1-beta = 0x01).
+/// The AEAD envelope's format-version discriminator. **FROZEN at 0x01**:
+/// the phase-close freeze (this tag) IS the wire-freeze, and 0x01 is
+/// byte-pinned by the drop-bundle golden vector, so it must NEVER be
+/// re-numerated — a bump would break forever-decodability of every
+/// persisted `AeadEnvelope` blob. A future format is a NEW additive
+/// version discriminator, never a renumber of 0x01.
 pub const ENVELOPE_FORMAT_VERSION_V1: u8 = 0x01;
 
 /// Magic byte identifying a Benten AEAD envelope (Varsig-style
@@ -76,7 +80,7 @@ const CHACHA20POLY1305_NONCE_LEN: usize = 12;
 /// The byte length is dispatched by `cipher_codepoint` — at G-CORE-3a's
 /// `HYBRID_X25519_MLKEM768` codepoint the wrapped key is the
 /// SHA3-256-combiner-derived 32-B ChaCha20-Poly1305 key (the X-Wing
-/// combiner output per `draft-connolly-cfrg-xwing-kem-10` §6;
+/// combiner output per `draft-connolly-cfrg-xwing-kem-10` §5.3 "Combiner";
 /// [`crate::cipher_suite::combine_x_wing`] — NOT HKDF). **NOT a hardcoded
 /// size in the CLAUDE.md #5 sense** — the codepoint surface enforces
 /// the dispatch (a future codepoint at a different AEAD would carry
@@ -428,6 +432,22 @@ pub enum AeadError {
     /// recipient doesn't have.
     #[error("recipient lacks one of the required key halves for the dispatched cipher-suite")]
     RecipientLacksKeysForSuite,
+
+    /// A serialized [`crate::cipher_suite::RecipientPublic`] byte blob was
+    /// malformed for its codepoint (wrong total length / truncated ML-KEM
+    /// encapsulation key). Fail-closed typed-reject on
+    /// `RecipientPublic::from_bytes` — never a silent default (CLAUDE.md
+    /// baked-in #5 typed-reject-on-malformed).
+    #[error("malformed serialized recipient public material: {0}")]
+    MalformedRecipientPublic(&'static str),
+
+    /// A serialized [`crate::cipher_suite::RecipientSecret`] byte blob was
+    /// malformed for its codepoint (wrong total length / truncated ML-KEM
+    /// decapsulation key). Fail-closed typed-reject on
+    /// `RecipientSecret::from_bytes` — never a silent default (CLAUDE.md
+    /// baked-in #5 typed-reject-on-malformed).
+    #[error("malformed serialized recipient secret material: {0}")]
+    MalformedRecipientSecret(&'static str),
 
     /// Codepoint dispatch surfaced typed-unsupported (NEVER silent
     /// fallback per CLAUDE.md baked-in #5).

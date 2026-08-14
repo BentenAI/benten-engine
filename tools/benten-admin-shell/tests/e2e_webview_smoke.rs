@@ -104,10 +104,20 @@ fn webdriver_supported_on_host() -> bool {
         .is_ok_and(|s| s.success())
 }
 
-/// Path to the release binary that the E2E test launches via
-/// tauri-driver's `--native-binary` argument. The CI lane invokes
+/// Path to the release binary that the E2E test launches, passed to
+/// tauri-driver through the WebDriver session capability
+/// `tauri:options.application`. The CI lane invokes
 /// `cargo build --release -p benten-admin-shell --features tauri`
 /// before running the test so this path resolves.
+///
+/// **This was `--native-binary` until 2026-08-13, and that flag never
+/// existed.** `tauri-driver` accepts `--port` / `--native-port` /
+/// `--native-host` / `--native-driver`; the binary under test is named
+/// in the session capabilities, not on the command line. The flag was
+/// rejected with `unused arguments left: ["--native-binary", …]`, the
+/// process exited, and the failure then presented as "did not bind port
+/// 4444" — which is why it was diagnosed as a startup race for two
+/// phase-close arcs. The test could never have passed as written.
 fn admin_shell_binary_path() -> std::path::PathBuf {
     let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.pop(); // tools/
@@ -155,14 +165,12 @@ async fn e2e_webview_smoke_loads_index_html_and_invokes_ipc_command() {
             let _ = self.0.wait();
         }
     }
+    // `--port` is the ONLY argument passed. The application under test is
+    // named in the WebDriver session capabilities below — see the note on
+    // `admin_shell_binary_path`.
     let _guard = DriverGuard(
         Command::new("tauri-driver")
-            .args([
-                "--port",
-                &TAURI_DRIVER_PORT.to_string(),
-                "--native-binary",
-                binary.to_str().unwrap(),
-            ])
+            .args(["--port", &TAURI_DRIVER_PORT.to_string()])
             .stdin(Stdio::null())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
@@ -206,12 +214,27 @@ async fn e2e_webview_smoke_loads_index_html_and_invokes_ipc_command() {
     // Use `rustls()` constructor (the workspace bans openssl via
     // deny.toml so the fantoccini `native-tls` default-feature is
     // disabled — see Cargo.toml).
+    // The application under test is named HERE, in the session capabilities,
+    // as `tauri:options.application` — this is tauri-driver's documented
+    // contract and the reason no `--native-binary` flag exists. fantoccini
+    // places these into the WebDriver `alwaysMatch` block.
+    let mut caps = serde_json::Map::new();
+    caps.insert(
+        "tauri:options".to_string(),
+        serde_json::json!({ "application": binary.to_str().expect("binary path must be UTF-8") }),
+    );
+
     let url = format!("http://127.0.0.1:{TAURI_DRIVER_PORT}");
     let client = ClientBuilder::rustls()
         .expect("rustls client builder")
+        .capabilities(caps)
         .connect(&url)
         .await
-        .expect("fantoccini connect to tauri-driver");
+        .expect(
+            "fantoccini connect to tauri-driver — if this fails with a session-creation \
+             error rather than a connection error, check that `tauri:options.application` \
+             names an executable tauri binary",
+        );
 
     // --- Assertion 1: webview loaded the canonical index.html. -------
     let title = client.title().await.expect("title");

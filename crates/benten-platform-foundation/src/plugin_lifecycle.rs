@@ -63,6 +63,42 @@ use benten_id::did::Did;
 use benten_id::plugin_did::PluginDidStore;
 use std::collections::{HashMap, HashSet};
 
+/// Fail-closed ceiling on the raw bytes accepted by the manifest-decode
+/// inside [`install_plugin`] (Compromise #28 / META #629 DoS-sweep).
+///
+/// `received_bytes` is an attacker-authored content-addressed shared plugin
+/// manifest — same threat class as `benten_engine::module_manifest::MAX_MODULE_MANIFEST_BYTES`
+/// (256 KiB), which the sweep capped. A manifest whose body (name + requires
+/// list + shares policy + optional renderer/composition refs) exceeds 256 KiB
+/// is adversarial; the cap bounds a hostile blob BEFORE `serde` allocates.
+pub const MAX_PLUGIN_MANIFEST_BYTES: usize = 256 * 1024;
+
+/// Fail-closed ceiling on the decoded [`PluginManifest::requires`] count
+/// (Compromise #28 / META #629). A count-prefixed array amplification guard
+/// sitting alongside the byte cap — mirrors
+/// `benten_engine::module_manifest::MAX_MODULE_MANIFEST_MODULES` (4096).
+/// A legitimate plugin declares a handful of capability requirements; 4096
+/// clears any realistic manifest while bounding an amplification vector.
+pub const MAX_PLUGIN_MANIFEST_REQUIRES: usize = 4096;
+
+/// Fail-closed ceiling on the decoded
+/// [`InstallRecord::granted_caps_bytes`](crate::plugin_manifest::InstallRecord::granted_caps_bytes)
+/// element count (Compromise #28 / META #629). `granted_caps_bytes` is an
+/// attacker-appendable `Vec<Vec<u8>>` decoded per-element in
+/// `install_record_covers_required_caps`; a hostile record can append
+/// unbounded tiny CBOR blobs to blow up `HashSet::with_capacity` + the
+/// per-element decode loop. 4096 clears any realistic consent record (one
+/// entry per granted cap) while bounding the amplification vector.
+pub const MAX_GRANTED_CAPS: usize = 4096;
+
+/// Fail-closed per-element byte ceiling on each
+/// [`InstallRecord::granted_caps_bytes`](crate::plugin_manifest::InstallRecord::granted_caps_bytes)
+/// entry (Compromise #28 / META #629). Each element is the DAG-CBOR encoding
+/// of one [`crate::plugin_manifest::CapRequirement`] (a scope string + small
+/// fields); 64 KiB is generous headroom while bounding a single hostile
+/// element before `serde` decodes it.
+pub const MAX_GRANTED_CAP_BYTES: usize = 64 * 1024;
+
 /// Result of `uninstall_plugin` — observable counters that callers can
 /// pin in tests + observability.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -410,12 +446,14 @@ impl InMemoryUninstallCascade {
     }
 
     /// Insert a subscription (test fixture surface).
+    #[cfg(any(test, feature = "testing"))]
     pub fn insert_subscription(&mut self, sub: InMemorySubscription) {
         self.subscriptions.push(sub);
     }
 
     /// Insert a private-namespace row (test fixture surface). Scope
     /// MUST start with `private:<plugin_did>:`.
+    #[cfg(any(test, feature = "testing"))]
     pub fn insert_private_row(&mut self, scope: String, body: Vec<u8>) {
         self.private_rows.insert(scope, body);
     }
@@ -432,6 +470,7 @@ impl InMemoryUninstallCascade {
 
     /// Snapshot active grants issued by `issuer` (test observable for
     /// T10-uninstall (b) baseline).
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn active_grants_with_issuer(&self, issuer: &Did) -> Vec<&InMemoryGrant> {
         self.grants
@@ -449,22 +488,13 @@ impl InMemoryUninstallCascade {
 
     /// Snapshot private-namespace rows for a plugin-DID (test
     /// observable for T7 isolation guarantee).
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn private_rows_for(&self, plugin_did: &Did) -> Vec<&String> {
         let prefix = format!("private:{}:", plugin_did.as_str());
         self.private_rows
             .keys()
             .filter(|k| k.starts_with(&prefix))
-            .collect()
-    }
-
-    /// Snapshot subscriptions for a plugin-DID (test observable for
-    /// T10-uninstall (c) defense-in-depth).
-    #[must_use]
-    pub fn active_subscriptions_for(&self, plugin_did: &Did) -> Vec<&InMemorySubscription> {
-        self.subscriptions
-            .iter()
-            .filter(|s| s.subscriber == *plugin_did)
             .collect()
     }
 }
@@ -882,7 +912,8 @@ pub struct InstallOutcome {
 ///    a manifest, `verify_upgrade_author_continuity` rejects an
 ///    upgrade whose new `peer_did` differs from the prior
 ///    (`PluginAuthorNotTrusted`). T10-(a) + T10-(b) are co-defensive
-///    per `docs/admin-ui-v0-threat-model.md` §T10; both gates fire on
+///    per `.addl/_archive/phase-4-foundation/admin-ui-v0-threat-model.md`
+///    §T10; both gates fire on
 ///    every upgrade attempt.
 /// 7b. **Fresh-consent gap at upgrade time** — if the new manifest
 ///    `requires` a capability the prior did NOT, reject with
@@ -931,6 +962,14 @@ where
     P: PrivateNamespaceProvisioner,
 {
     // 1. Decode manifest + verify content-CID.
+    //
+    //    Fail-closed byte cap (Compromise #28 / META #629 DoS-sweep):
+    //    reject an over-large attacker-authored manifest blob BEFORE
+    //    `serde` allocates. Mirrors the ModuleManifest cap
+    //    (`benten_engine::module_manifest::from_canonical_bytes`).
+    if received_bytes.len() > MAX_PLUGIN_MANIFEST_BYTES {
+        return Err(ErrorCode::PluginManifestInvalid);
+    }
     let manifest: PluginManifest = serde_ipld_dagcbor::from_slice(received_bytes)
         .map_err(|_| ErrorCode::PluginManifestInvalid)?;
     if manifest.compute_content_cid() != *expected_cid {
@@ -1234,8 +1273,21 @@ fn rollback_step9<M: CapMinter + ?Sized>(minter: &mut M, minted: &[Cid]) {
 /// malformed consent tokens MUST NOT smuggle un-consented caps).
 fn install_record_covers_required_caps(record: &InstallRecord, manifest: &PluginManifest) -> bool {
     use crate::plugin_manifest::CapRequirement;
+    // Fail-closed decode caps (Compromise #28 / META #629 DoS-sweep):
+    // `granted_caps_bytes` is an attacker-appendable `Vec<Vec<u8>>`. Reject an
+    // over-large consent record (element count) BEFORE `HashSet::with_capacity`
+    // allocates, and reject any single over-large element BEFORE `serde`
+    // decodes it. An over-cap record is treated as un-coverage (fail closed —
+    // never smuggle un-consented caps through an amplification blob).
+    if record.granted_caps_bytes.len() > MAX_GRANTED_CAPS {
+        return false;
+    }
     let mut consented: HashSet<String> = HashSet::with_capacity(record.granted_caps_bytes.len());
     for bytes in &record.granted_caps_bytes {
+        if bytes.len() > MAX_GRANTED_CAP_BYTES {
+            // Malformed / oversized consent token → un-coverage. Fail closed.
+            return false;
+        }
         match serde_ipld_dagcbor::from_slice::<CapRequirement>(bytes) {
             Ok(req) => {
                 consented.insert(req.scope);
@@ -1272,21 +1324,16 @@ impl InMemoryInstallCascade {
     }
 
     /// Snapshot all minted grants `(user_did, plugin_did, scope, grant_cid)`.
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn minted_grants(&self) -> &[(Did, Did, String, Cid)] {
         &self.minted_grants
     }
 
-    /// Whether the cascade has provisioned the private namespace for
-    /// `plugin_did`.
-    #[must_use]
-    pub fn has_provisioned(&self, plugin_did: &Did) -> bool {
-        self.provisioned_namespaces.contains(plugin_did)
-    }
-
     /// Count of plugin-DIDs whose private namespace has been provisioned.
     /// Used by no-partial-state-commit pins (e.g. cycle-rejected install)
     /// where no plugin-DID is known at assertion time.
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn provisioned_count(&self) -> usize {
         self.provisioned_namespaces.len()
@@ -1377,6 +1424,103 @@ mod tests {
             plugin_did,
             installed_at_nanos: 1,
         }
+    }
+
+    /// Build a minimal valid manifest with a given `requires` list — for the
+    /// M-1 requires-count ceiling pin.
+    fn manifest_with_requires(requires: Vec<CapRequirement>) -> PluginManifest {
+        PluginManifest {
+            plugin_name: "test".to_string(),
+            content_cid: fake_cid(1),
+            peer_did: fake_did("AuthorX"),
+            peer_signature: vec![0u8; 64],
+            requires,
+            shares: SharesPolicy {
+                default: SharesPolicyDefault::None,
+                rules: None,
+            },
+            renderer_config: None,
+            composes_plugins: None,
+            accepts_content: None,
+            requires_schema_authors: None,
+            requires_plugin_authors: None,
+        }
+    }
+
+    /// M-1: `PluginManifest::validate()` rejects a `requires` array that
+    /// exceeds the amplification ceiling. Would-FAIL-on-revert: without the
+    /// `MAX_PLUGIN_MANIFEST_REQUIRES` check, an over-cap manifest validates.
+    #[test]
+    fn m1_validate_rejects_over_cap_requires_count() {
+        // At the cap: valid.
+        let at_cap = manifest_with_requires(
+            (0..MAX_PLUGIN_MANIFEST_REQUIRES)
+                .map(|i| CapRequirement::new(format!("store:n{i}:read")))
+                .collect(),
+        );
+        assert!(
+            at_cap.validate().is_ok(),
+            "M-1: a manifest at exactly the requires cap must validate"
+        );
+        // One over the cap: rejected fail-closed.
+        let over_cap = manifest_with_requires(
+            (0..MAX_PLUGIN_MANIFEST_REQUIRES + 1)
+                .map(|i| CapRequirement::new(format!("store:n{i}:read")))
+                .collect(),
+        );
+        assert_eq!(
+            over_cap.validate().unwrap_err(),
+            ErrorCode::PluginManifestInvalid,
+            "M-1: a manifest whose requires count exceeds the cap must be rejected"
+        );
+    }
+
+    /// M-2: `install_record_covers_required_caps` fails closed (returns false)
+    /// when `granted_caps_bytes` exceeds the element-count cap. Would-FAIL-on
+    /// -revert: without the count cap the over-cap record is decoded and can
+    /// smuggle coverage through an amplification blob.
+    #[test]
+    fn m2_over_cap_granted_caps_count_fails_closed() {
+        let manifest = manifest_with_requires(vec![CapRequirement::new("store:notes:read")]);
+        let covering =
+            serde_ipld_dagcbor::to_vec(&CapRequirement::new("store:notes:read")).unwrap();
+        // Over the count cap, every element a valid covering token: still
+        // fails closed (rejected before the decode loop), so coverage is
+        // denied even though the caps would otherwise cover `requires`.
+        let record = InstallRecord {
+            manifest_cid: fake_cid(1),
+            plugin_did: fake_did("PluginA"),
+            consenting_user_did: fake_did("UserA"),
+            user_signature: vec![0u8; 64],
+            timestamp_stub_nanos: 1,
+            nonce: vec![0u8; 16],
+            granted_caps_bytes: vec![covering; MAX_GRANTED_CAPS + 1],
+        };
+        assert!(
+            !install_record_covers_required_caps(&record, &manifest),
+            "M-2: an over-cap granted_caps_bytes count must fail closed (no coverage)"
+        );
+    }
+
+    /// M-2: `install_record_covers_required_caps` fails closed when any single
+    /// `granted_caps_bytes` element exceeds the per-element byte cap.
+    #[test]
+    fn m2_over_cap_granted_cap_element_bytes_fails_closed() {
+        let manifest = manifest_with_requires(vec![CapRequirement::new("store:notes:read")]);
+        let record = InstallRecord {
+            manifest_cid: fake_cid(1),
+            plugin_did: fake_did("PluginA"),
+            consenting_user_did: fake_did("UserA"),
+            user_signature: vec![0u8; 64],
+            timestamp_stub_nanos: 1,
+            nonce: vec![0u8; 16],
+            // A single oversized element (all-zero padding well past the cap).
+            granted_caps_bytes: vec![vec![0u8; MAX_GRANTED_CAP_BYTES + 1]],
+        };
+        assert!(
+            !install_record_covers_required_caps(&record, &manifest),
+            "M-2: an oversized granted_caps_bytes element must fail closed"
+        );
     }
 
     #[test]

@@ -10,7 +10,8 @@
 //! ## What this pin asserts
 //!
 //! At Phase-4-Foundation close, the load-bearing top-of-funnel docs
-//! (PRIMER.md, VISION.md, FULL-ROADMAP.md, ARCHITECTURE.md, README.md)
+//! (PRIMER.md, ARCHITECTURE.md, README.md — see the F-073 note at the
+//! doc-list below for why VISION.md and FULL-ROADMAP.md are NOT checked)
 //! all carry the Phase-4-Foundation retense narrative — they mention
 //! the phase as SHIPPED (or in-flight per current state) and the new
 //! v1-platform surface (admin UI v0, plugin manifest, materializer,
@@ -30,28 +31,28 @@ fn workspace_root() -> PathBuf {
         .join("..")
 }
 
+/// FAILS ON THIS ONE-LINE MUTATION: delete the string `Phase 4-Foundation`
+/// from `README.md` (it appears in the status table) — `missing_phase_mention`
+/// then names README and the first assertion fires.
 #[test]
-#[ignore = "phase-4-foundation R4-FP-3 RED-PHASE — G26-A wave-10 un-ignores. \
-    Pin source: r2-test-landscape.md §2.12 row 2 + exit-criterion 10. Phase-4-Foundation \
-    retense narrative present across 5 load-bearing top-of-funnel docs."]
 fn phase_4_foundation_docs_retense_complete() {
     let root = workspace_root();
 
-    // The 5 load-bearing top-of-funnel docs. Each MUST mention
-    // Phase-4-Foundation as a labelled phase + at least one of the
-    // headline surfaces (admin UI / plugin manifest / materializer /
-    // schema rendering) so the retense is substantive not name-only.
+    // The load-bearing top-of-funnel docs that are TRACKED. Each MUST mention
+    // Phase-4-Foundation as a labelled phase + at least one of the headline
+    // surfaces (admin UI / plugin manifest / materializer / schema rendering)
+    // so the retense is substantive, not name-only.
+    //
+    // F-073: `docs/VISION.md` and `docs/FULL-ROADMAP.md` were in this list and
+    // are LOCAL-ONLY (`.gitignore` lines 78 and 90) — absent from every CI
+    // checkout. Because this test `panic!`s on a missing doc, un-ignoring it
+    // with those two present would have red-ed CI unconditionally, while
+    // asserting nothing extra: a gate can only gate what the runner can see.
+    // They are dropped rather than made optional, because "optional" would make
+    // the pin vacuous on the only machine that runs it.
     let docs: &[(&str, &[&str])] = &[
         (
             "docs/PRIMER.md",
-            &["Phase 4-Foundation", "phase-4-foundation"],
-        ),
-        (
-            "docs/VISION.md",
-            &["Phase 4-Foundation", "phase-4-foundation"],
-        ),
-        (
-            "docs/FULL-ROADMAP.md",
             &["Phase 4-Foundation", "phase-4-foundation"],
         ),
         (

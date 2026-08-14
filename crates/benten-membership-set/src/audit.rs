@@ -30,7 +30,11 @@
 // ---------------------------------------------------------------------------
 
 /// The administrative operation an audit Version Node records.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future admin-op variant lands
+/// additively, never a downstream `match` break.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AdminOp {
     /// A member was admitted to the set.
     AdmitMember,
@@ -52,6 +56,12 @@ pub enum AdminOp {
 /// the ENFORCED engine WRITE populates all three (`benten-graph/src/store.rs`
 /// `ChangeEvent` attribution fields — "an engine-API write fills the triple
 /// in").
+/// **R6-tail: gated off the frozen public surface.** Both producers
+/// ([`emit_audit_event_via_engine`] / [`emit_audit_event_via_bare_put`]) are
+/// `#[cfg(any(test, feature = "testing"))]`-gated (F11), so under default
+/// features this type has no reachable producer and no consumer; it is gated
+/// with them rather than frozen as an orphan on the v1-beta surface.
+#[cfg(any(test, feature = "testing"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AuditEmitResult {
     /// The actor that authorized the op (`None` on the bare-put path).
@@ -66,14 +76,30 @@ pub struct AuditEmitResult {
     pub chain_advanced: bool,
 }
 
-/// Emit an audit event through the `is_actor_active`-gated ENFORCED engine
-/// WRITE path. Populates the full `(actor_cid, handler_cid,
-/// capability_grant_cid)` attribution triple AND advances the audit
-/// version-chain.
+/// MODEL the `AuditEmitResult` SHAPE an audit event emitted through the
+/// `is_actor_active`-gated ENFORCED engine WRITE path would carry: the full
+/// `(actor_cid, handler_cid, capability_grant_cid)` attribution triple SET,
+/// and `chain_advanced == true`.
 ///
-/// The `handler_cid` is the canonical audit-emit handler subgraph CID — the
-/// enforced WRITE attributes the event to the handler that performed it; that
-/// is precisely the attribution a bare `put_node` cannot supply.
+/// **This function performs NO enforcement.** It constructs the result
+/// directly from its own arguments — it does not touch the engine, the
+/// `is_actor_active` gate, the capability policy, or the audit version-chain.
+/// It is the positive half of the enforced-vs-bare MODEL pair whose negative
+/// half is [`emit_audit_event_via_bare_put`]. The LIVE enforcement is
+/// engine-layer: `benten_engine::Engine::audit_sequence` over the real
+/// enforced-grant WRITE (driven by the `engine_enforced_path_*` arm of
+/// `crates/benten-engine/tests/f_audit_1_enforced_write_path_attribution_triple.rs`).
+/// See `docs/SECURITY-POSTURE.md` "Test-debt note — `f_audit_1` arm-(a)
+/// model-shape" for the tracked upgrade to a real end-to-end drive.
+///
+/// The `handler_cid` is the canonical audit-emit handler subgraph CID the
+/// enforced WRITE would attribute the event to — precisely the attribution a
+/// bare `put_node` cannot supply.
+///
+/// **R6-tail F-11: model-shape helper — gated off the frozen public surface**
+/// (zero production callers; consumed only by the `f_audit_1` pin, symmetric
+/// with its already-gated [`emit_audit_event_via_bare_put`] sibling).
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn emit_audit_event_via_engine(
     set_id: &[u8; 32],
@@ -100,6 +126,7 @@ pub fn emit_audit_event_via_engine(
 /// attribution, so it leaves ALL three triple fields `None`, and the chain does
 /// NOT advance (tamper-evidence is NOT free — it is a property of routing
 /// through the enforced WRITE).
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn emit_audit_event_via_bare_put(
     _set_id: &[u8; 32],
@@ -232,17 +259,28 @@ impl AuditChain {
         false
     }
 
-    /// Verify the full chain on read, with a mid-chain Version Node TAMPERED.
+    /// MODEL the declared-tamper RETURN SHAPE for a mid-chain Version Node.
     ///
-    /// Models the Crosby-Wallach content-hash-on-read check: tampering the
-    /// bytes of the immutable Version Node at `seq` breaks its CID linkage
-    /// (its recomputed content hash no longer matches the chained CID its
-    /// successor committed to), which is detected on read.
+    /// This returns the tamper error UNCONDITIONALLY for an in-range `seq` — it
+    /// does NOT re-hash a mutated node. It models the Crosby-Wallach
+    /// content-hash-on-read CONSEQUENCE (tampering the immutable Version Node at
+    /// `seq` would break its CID linkage, so a real content-hash-on-read check
+    /// names the exact sequence), without performing that live check here. The
+    /// LIVE tamper-detection enforcement is `Engine::audit_sequence` +
+    /// `Node::load_verified` (content-hash-on-read).
     ///
     /// # Errors
     ///
     /// Returns [`AuditChainError::TamperDetectedLinkageBroken`] naming the
-    /// exact mid-chain sequence whose linkage broke.
+    /// exact mid-chain sequence for an in-range `seq`; returns
+    /// [`AuditChainError::NonMonotonicAppend`] for `seq == 0` or `seq` beyond
+    /// the chain.
+    ///
+    /// **R6-final F-04: return-shape modelling helper — gated off the frozen
+    /// public surface** (zero production callers; the LIVE tamper enforcement is
+    /// `Engine::audit_sequence` + `Node::load_verified`; consumed only by the
+    /// `f_audit_2` pin).
+    #[cfg(any(test, feature = "testing"))]
     pub fn verify_with_tampered_node_at(&self, seq: u64) -> Result<(), AuditChainError> {
         // A `seq` of 0 is the Anchor (no Version Node to tamper). A `seq`
         // beyond the chain length cannot be tampered either. Both are
@@ -285,7 +323,11 @@ fn link_cid(
 /// The audit read-access gradation. The first two variants are LIVE at v1-beta;
 /// the latter four are RESERVED as UCAN-caveat / IVM compositions — NEVER wire
 /// codepoints, NEVER a 3rd top-level `Scope` arm.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future gradation variant lands
+/// additively, never a downstream `match` break.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AuditAccessGradation {
     /// Only Admins hold the audit read cap.
     AdminOnly,
@@ -303,7 +345,11 @@ pub enum AuditAccessGradation {
 }
 
 /// The decision an audit-read gradation reaches for a requester.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future decision variant lands
+/// additively, never a downstream `match` break.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AuditReadDecision {
     /// The read is admitted.
     Admit,
@@ -312,7 +358,11 @@ pub enum AuditReadDecision {
 }
 
 /// The role of a principal requesting an audit read.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future requester-role variant
+/// lands additively, never a downstream `match` break.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RequesterRole {
     /// An Admin of the set.
     Admin,
@@ -345,6 +395,11 @@ impl AuditAccessGradation {
             | AuditAccessGradation::Threshold
             | AuditAccessGradation::TimeLocked
             | AuditAccessGradation::Anonymized => requester == RequesterRole::Admin,
+            // NOTE: no `_` arm here. `AuditAccessGradation` is `#[non_exhaustive]`
+            // (SemVer-readiness for downstream crates), but WITHIN the defining
+            // crate this match stays exhaustive — a future variant is a
+            // HALT-AND-SURFACE compile error here, forcing an explicit
+            // fail-closed decision rather than a silent Admin-only default.
         };
         if admit {
             AuditReadDecision::Admit
@@ -382,6 +437,7 @@ impl AuditAccessGradation {
 /// Always `false`: an `audit:<set_id>:*` scope routes through the EXISTING
 /// `Scope::RestrictedSelector(RestrictedScope)` arm (m-15 GNC-1) — `Scope`
 /// stays EXACTLY 2 arms. No 3rd top-level arm is introduced.
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn parse_audit_scope_added_new_top_level_scope_arm(scope: &str) -> bool {
     // The audit scope parses into the existing RestrictedSelector arm; even a
@@ -397,6 +453,7 @@ pub fn parse_audit_scope_added_new_top_level_scope_arm(scope: &str) -> bool {
 /// The containment is decidable and SET-SCOPED: the scope for `set-X` contains
 /// any concrete request prefixed by `audit:set-X:`, and does NOT contain a
 /// request scoped to a DIFFERENT set.
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn restricted_audit_scope_contains(scope: &str, concrete_request: &str) -> bool {
     // Parse the `audit:<set_id>:*` scope into its `audit:<set_id>:` prefix.
@@ -463,10 +520,24 @@ pub fn audit_log_query_composition(set_id: &[u8; 32]) -> AuditQueryComposition {
 }
 
 /// Build the canonical `audit:<set_id_hex>:*` read-scope string for a set.
+///
+/// **4-byte-prefix scope caveat (R9-council F-22).** This uses only the FIRST
+/// 4 bytes (8 hex chars) of the 32-byte `set_id` as the `<set_id>` segment —
+/// it is a HUMAN-READABLE / DISPLAY-scope label for the `audit:<set_id>:*`
+/// scope FAMILY, NOT a collision-free set identifier. Two distinct sets sharing
+/// a 4-byte `set_id` prefix would map to the SAME scope string. This is
+/// acceptable ONLY because the scope string is a display/grouping label; the
+/// authoritative set identity is the FULL 32-byte `set_id` (and the full CID
+/// linkage in `link_cid`), never this truncated label. A caller MUST NOT use
+/// this string as a security-load-bearing set discriminator. This surface is a
+/// data-half model with zero production callers (see the crate-root
+/// register-then-enforce disclosure); if it is ever wired into a live
+/// cap-scope, the segment MUST carry the full `set_id`.
 fn audit_set_scope_string(set_id: &[u8; 32]) -> String {
     use std::fmt::Write as _;
-    // Use a short hex prefix of the set CID as the `<set_id>` segment so the
-    // scope is the read-side audit scope family `audit:<set_id>:*`.
+    // Use a short hex prefix of the set CID as the `<set_id>` DISPLAY segment
+    // (NOT a collision-free identifier — see the doc caveat above) so the scope
+    // is the read-side audit scope family `audit:<set_id>:*`.
     let mut hex = String::with_capacity(8);
     for b in set_id.iter().take(4) {
         let _ = write!(hex, "{b:02x}");

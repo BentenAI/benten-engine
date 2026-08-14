@@ -23,7 +23,11 @@
 //! [`Did::from_hybrid_public_key`] / [`Did::resolve_hybrid`]. The single-byte
 //! [`HYBRID_SIG_MULTICODEC`] / [`HYBRID_KEM_MULTICODEC`] private values
 //! (the G-CORE-9 NQ-C4 interim, reserved before registered codes existed) are
-//! retained as documented fallback-only and are #5-risky.
+//! both #5-risky single-byte squats, with DIFFERENT v1-beta statuses:
+//! [`HYBRID_SIG_MULTICODEC`] is retained as documented fallback-only, while
+//! [`HYBRID_KEM_MULTICODEC`] is RETIRED (superseded on every KEM path by the
+//! registered `0x120c`/`0xec` components that GAP-KDB Shape-B wired into the
+//! key-set `kem` multikey).
 
 use core::fmt;
 
@@ -87,17 +91,66 @@ pub const HYBRID_SIG_MULTICODEC: [u8; 2] = [0xef, 0x01];
 /// Multicodec varint prefix for the **PQ-hybrid KEM** public key
 /// (X25519⊕ML-KEM-768).
 ///
-/// **FALLBACK-ONLY interim (NQ-C4 / §5.D-9 — RESOLVED).** Same status as
-/// [`HYBRID_SIG_MULTICODEC`]: the single-byte private value (`0xf0`, varint
-/// `[0xf0, 0x01]`) was the G-CORE-9 reserved-private interim. The KEM hybrid
-/// `did:key` (when wired) uses the two-registered-component-multikey form
-/// (the registered `ml-kem-768-pub` component code + `x25519-pub`), so this
-/// const is RETAINED as documented fallback-only and is #5-RISKY (single-byte
-/// squat). See `docs/CRYPTO-CODEPOINTS.md`.
+/// **RETIRED interim (NQ-C4 / §5.D-9 — RESOLVED; GAP-KDB Shape-B).** The
+/// single-byte private value (`0xf0`, varint `[0xf0, 0x01]`) was the G-CORE-9
+/// reserved-private interim and is #5-RISKY (single-byte squat). Unlike
+/// [`HYBRID_SIG_MULTICODEC`] — which is RETAINED as documented fallback-only —
+/// this const is **RETIRED**: GAP-KDB Shape-B WIRED the
+/// two-registered-component-multikey form (the registered multiformats
+/// `mlkem-768-pub` = `0x120c` component code + `x25519-pub` = `0xec`) into the
+/// `KeySetDocument` `kem` field, so `0xf0` is the KEM encoding on NO path. The
+/// const is kept declared (not deleted) so the NQ-C4 reservation stays visible
+/// and is never re-minted for another purpose. See
+/// `docs/CRYPTO-CODEPOINTS.md` NQ-C4 + the GAP-KDB Shape-B section.
 pub const HYBRID_KEM_MULTICODEC: [u8; 2] = [0xf0, 0x01];
+
+/// Multicodec varint prefix for the **X25519** KEM public-key COMPONENT —
+/// the registered `x25519-pub = 0xec`, unsigned-varint `[0xec, 0x01]`. The
+/// FIRST component of a GAP-KDB Shape-B key-set `kem` multikey (X25519-first,
+/// design C2 — matches the already-frozen `RecipientPublic::to_bytes` order).
+/// A REGISTERED multiformats value (CLAUDE.md baked-in #5).
+pub const X25519_PUB_MULTICODEC: [u8; 2] = [0xec, 0x01];
+
+/// Multicodec varint prefix for the **ML-KEM-768** KEM public-key COMPONENT —
+/// the registered `mlkem-768-pub = 0x120c`, unsigned-varint `[0x8c, 0x24]`.
+/// The SECOND component of a GAP-KDB Shape-B key-set `kem` multikey (design
+/// C2/§5). REGISTERED multiformats value — this is what retires the
+/// #5-risky private [`HYBRID_KEM_MULTICODEC`] (`0xf0`) squat.
+pub const MLKEM768_PUB_MULTICODEC: [u8; 2] = [0x8c, 0x24];
 
 /// `did:key` URI prefix (literal string the W3C spec mandates).
 pub const DID_KEY_PREFIX: &str = "did:key:z";
+
+/// `did:benten:` method identifier (no multibase marker) — the GAP-KDB
+/// Shape-B content-addressed key-set DID method (design §1.1). A DISTINCT
+/// method makes "this DID commits my full key-set" lexically un-confusable
+/// with a signing-only `did:key`; `did:key` bytes are unchanged → zero
+/// migration for the classical/authority world.
+pub const DID_BENTEN_METHOD: &str = "did:benten:";
+
+/// `did:benten:z` method prefix incl. the `z` base58btc multibase marker
+/// (design §1.1). The method-specific-id is
+/// `signing_multikey ‖ keysetDocCID(36)` (ML-DSA-first signing multikey then
+/// the committed key-set CID, NO framing byte — design C1).
+pub const DID_BENTEN_PREFIX: &str = "did:benten:z";
+
+/// Hard upper bound on the length (bytes) of a `did:key` STRING accepted
+/// by [`Did::resolve`] / [`Did::resolve_hybrid`] before any base58btc
+/// decode runs.
+///
+/// **Pre-auth DoS defense (F2).** `bs58::decode` is O(N²) in the body
+/// length, and the live UCAN chain validators resolve the
+/// attacker-controlled `iss` DID of every chain link BEFORE verifying
+/// its signature (`crate::ucan::validate_chain_inner`). Without a cap, a
+/// multi-MB junk `iss` × up to [`crate::ucan::MAX_UCAN_PROOF_DEPTH`]
+/// links is quadratic-CPU exhaustion reachable pre-signature-check.
+///
+/// A valid PQ-hybrid `did:key` (the largest legitimate shape — the
+/// two-component ML-DSA-65 ‖ Ed25519 multikey) base58btc-encodes a
+/// ~2 KB body to ≈2.7 KB of string; 4096 gives ample headroom, so NO
+/// well-formed DID's resolution outcome changes. The cap only rejects
+/// input that is already far larger than any structurally-valid DID.
+pub const MAX_DID_KEY_STRING_LEN: usize = 4096;
 
 /// `did:agent:` — an OPTIONAL allowlist alias method (NQ-C4 + Inv-22). The
 /// principal's NATURE is DERIVED via method-parse; the `did:agent:` alias is
@@ -148,6 +201,25 @@ impl Did {
         &self.0
     }
 
+    /// Pre-decode length gate shared by [`Did::resolve`] +
+    /// [`Did::resolve_hybrid`] (F2 pre-auth DoS defense).
+    ///
+    /// Rejects an over-long DID string with a typed
+    /// [`DidError::BodyTooLong`] BEFORE the O(N²) `bs58::decode` runs, so
+    /// an attacker-controlled `iss` cannot inflict quadratic-CPU cost on
+    /// the pre-signature-check DID resolve that the UCAN chain walker
+    /// performs per link. Nothing structurally valid exceeds
+    /// [`MAX_DID_KEY_STRING_LEN`], so no valid resolution changes.
+    fn length_pre_check(&self) -> Result<(), DidError> {
+        if self.0.len() > MAX_DID_KEY_STRING_LEN {
+            return Err(DidError::BodyTooLong {
+                got: self.0.len(),
+                max: MAX_DID_KEY_STRING_LEN,
+            });
+        }
+        Ok(())
+    }
+
     /// Resolve a `did:key` string back to its underlying public key.
     ///
     /// Round-trip property (per
@@ -156,6 +228,11 @@ impl Did {
     /// exact bytes — NO bit can be silently dropped or rewritten by
     /// the encode → decode path.
     pub fn resolve(&self) -> Result<PublicKey, DidError> {
+        // F2: bound the input length BEFORE the O(N²) base58btc decode
+        // so an attacker-controlled `iss` cannot inflict quadratic CPU
+        // pre-signature-check.
+        self.length_pre_check()?;
+
         let body = self
             .0
             .strip_prefix(DID_KEY_PREFIX)
@@ -165,15 +242,33 @@ impl Did {
             .into_vec()
             .map_err(|_| DidError::Base58Decode)?;
 
-        if decoded.len() < 2 + 32 {
+        // Need at least the 2-byte multicodec to discriminate the arm.
+        if decoded.len() < 2 {
             return Err(DidError::BodyTooShort {
                 got: decoded.len(),
                 min: 2 + 32,
             });
         }
 
+        // Multicodec discrimination FIRST — so a non-Ed25519 body (e.g. a
+        // hybrid `0x1211` ML-DSA-first body) surfaces the semantic
+        // `UnknownMulticodec`, not a length error.
         if decoded[0] != ED25519_MULTICODEC[0] || decoded[1] != ED25519_MULTICODEC[1] {
             return Err(DidError::UnknownMulticodec(decoded[0], decoded[1]));
+        }
+
+        // F-04: EXACT length for the Ed25519 arm — reject trailing bytes,
+        // mirroring `resolve_signing` (which exact-consumes). A `< 2+32`
+        // gate silently ignored trailing bytes, making the codec
+        // non-injective (a `did:key:z<base58(0xed01 ‖ pk ‖ junk)>` resolved
+        // to the same key as the canonical form) and diverging from
+        // `resolve_signing`. Rejecting only already-malformed Ed25519 input
+        // changes no legitimate DID's outcome.
+        if decoded.len() != 2 + 32 {
+            return Err(DidError::BodyTooShort {
+                got: decoded.len(),
+                min: 2 + 32,
+            });
         }
 
         let mut pk_bytes = [0u8; 32];
@@ -272,6 +367,10 @@ impl Did {
     ///
     /// See the typed-reject list above.
     pub fn resolve_hybrid(&self) -> Result<benten_crypto_suite::sig::PublicKey, DidError> {
+        // F2: bound the input length BEFORE the O(N²) base58btc decode
+        // (same pre-auth DoS defense as [`Did::resolve`]).
+        self.length_pre_check()?;
+
         let body = self
             .0
             .strip_prefix(DID_KEY_PREFIX)
@@ -281,64 +380,15 @@ impl Did {
             .into_vec()
             .map_err(|_| DidError::Base58Decode)?;
 
-        let mldsa_len = mldsa65_pubkey_len();
-        let mut cursor = 0usize;
-
-        // --- Component 1: ML-DSA-65 (FIRST). ---
-        // varint prefix (2 bytes) + mldsaPK(mldsa_len).
-        let mldsa_min = MLDSA65_PUB_MULTICODEC.len() + mldsa_len;
-        if decoded.len() < cursor + mldsa_min {
-            return Err(DidError::HybridBodyTooShort {
-                component: "ML-DSA-65",
-                got: decoded.len().saturating_sub(cursor),
-                min: mldsa_min,
-            });
-        }
-        if decoded[cursor] != MLDSA65_PUB_MULTICODEC[0]
-            || decoded[cursor + 1] != MLDSA65_PUB_MULTICODEC[1]
-        {
-            return Err(DidError::UnknownMulticodec(
-                decoded[cursor],
-                decoded[cursor + 1],
-            ));
-        }
-        cursor += MLDSA65_PUB_MULTICODEC.len();
-        let mldsa_pk = &decoded[cursor..cursor + mldsa_len];
-        cursor += mldsa_len;
-
-        // --- Component 2: Ed25519 (SECOND). ---
-        let ed_min = ED25519_MULTICODEC.len() + ED25519_PUBKEY_LEN;
-        if decoded.len() < cursor + ed_min {
-            return Err(DidError::HybridBodyTooShort {
-                component: "Ed25519",
-                got: decoded.len().saturating_sub(cursor),
-                min: ed_min,
-            });
-        }
-        if decoded[cursor] != ED25519_MULTICODEC[0] || decoded[cursor + 1] != ED25519_MULTICODEC[1]
-        {
-            return Err(DidError::UnknownMulticodec(
-                decoded[cursor],
-                decoded[cursor + 1],
-            ));
-        }
-        cursor += ED25519_MULTICODEC.len();
-        let trad_pk = &decoded[cursor..cursor + ED25519_PUBKEY_LEN];
-        cursor += ED25519_PUBKEY_LEN;
-
-        // --- Reject trailing bytes (a well-formed body is EXACT). ---
-        if cursor != decoded.len() {
+        // Decode the two composite signing-key component multikeys. A
+        // well-formed hybrid `did:key` body is EXACT — no bytes may follow.
+        let (pk, consumed) = decode_composite_signing_multikey(&decoded)?;
+        if consumed != decoded.len() {
             return Err(DidError::HybridTrailingBytes {
-                extra: decoded.len() - cursor,
+                extra: decoded.len() - consumed,
             });
         }
-
-        // --- Reconstruct the composite key (mldsaPK ‖ tradPK, ML-DSA-first). ---
-        let mut composite = Vec::with_capacity(mldsa_pk.len() + trad_pk.len());
-        composite.extend_from_slice(mldsa_pk);
-        composite.extend_from_slice(trad_pk);
-        benten_crypto_suite::sig::PublicKey::from_lamps_composite_bytes(&composite)
-            .map_err(|_| DidError::InvalidHybridPublicKey("LAMPS composite half not a valid key"))
+        Ok(pk)
     }
 
     /// Construct from a pre-resolved string. Caller must have already
@@ -378,8 +428,15 @@ impl Did {
     /// previous `from_string_unchecked` blended into surrounding
     /// production code).
     ///
-    /// **NEVER call from production code.** Production callers MUST
-    /// use [`Did::parse_validated`].
+    /// **Not for production code** — enforced by naming convention +
+    /// code review, NOT by the type system: this constructor is `pub`
+    /// and physically callable, so a production-path call is a
+    /// review-flagged regression rather than a compile error. Production
+    /// callers construct DIDs through the validating constructors —
+    /// [`Did::parse_validated`] for a classical `did:key`, or
+    /// [`Did::parse_validated_hybrid`] for the PQ-hybrid `did:key` form —
+    /// so a malformed DID string surfaces a typed [`DidError`] instead of
+    /// silently constructing.
     #[must_use]
     pub fn from_string_for_test_fixture(s: String) -> Self {
         Self(s)
@@ -427,6 +484,304 @@ impl Did {
         candidate.resolve_hybrid()?;
         Ok(candidate)
     }
+
+    /// Validate-on-construct typed constructor via the **method/multicodec-
+    /// aware** [`Did::resolve_signing`] (design §2 Tier-1, C6) — the signing-
+    /// key sibling of [`Did::parse_validated_hybrid`] that ALSO accepts a
+    /// `did:benten` (composite signing multikey ‖ committed key-set CID) and a
+    /// classical `did:key` (`pq = None`), not only a hybrid `did:key`.
+    ///
+    /// The **production-safe** path for callers (e.g. `benten-drop`'s Layer-C
+    /// Sealed-Sender ORIGIN-AUTH verify — the DROP-8 sender-origin-auth
+    /// migration) that receive a `did:key` OR `did:benten` sender-DID string
+    /// from the wire and need to resolve its signing key. Distinct from
+    /// [`Did::parse_validated_hybrid`] (which would reject a `did:benten` at
+    /// its trailing committed-CID) and the test-only
+    /// [`Did::from_string_for_test_fixture`].
+    ///
+    /// # Errors
+    ///
+    /// Surfaces the [`Did::resolve_signing`] typed-reject set (wrong prefix /
+    /// base58 / unknown component multicodec / body-too-short / trailing bytes
+    /// / invalid key / over-long input) rather than swallowing bad input.
+    pub fn parse_validated_signing(s: impl Into<String>) -> Result<Self, DidError> {
+        let s = s.into();
+        let candidate = Self(s);
+        candidate.resolve_signing()?;
+        Ok(candidate)
+    }
+
+    // ── GAP-KDB Shape-B — `did:benten` content-addressed key-set DID ──────
+
+    /// Encode a `did:benten` committing `keyset_doc` (design §1.1).
+    ///
+    /// The method-specific-id is `signing_multikey(sig_pk) ‖ keyset_doc.cid()`
+    /// (36-byte CIDv1), base58btc-encoded, with **NO framing byte** between the
+    /// two (design C1 — the CIDv1 self-describing prefix `0x01,0x71,0x1e,0x20`
+    /// already disambiguates the decode). The signing multikey is
+    /// `varint(0x1211) ‖ mldsaPK(1952) ‖ varint(0xed) ‖ tradPK(32)`,
+    /// ML-DSA-first — byte-identical to the hybrid `did:key` payload
+    /// ([`Did::from_hybrid_public_key`]).
+    ///
+    /// The reverse directions are [`Did::resolve_signing`] (recover the
+    /// embedded composite signing key, zero-I/O) + [`Did::keyset_cid`]
+    /// (recover the committed key-set CID). All sizes flow from the upstream
+    /// component dimensions — never hardcoded (CLAUDE.md baked-in #5).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `sig_pk` carries no PQ half (a classical-only key handed to
+    /// the `did:benten` encoder is a caller contract violation — a `did:benten`
+    /// embeds the hybrid composite signing key; a signing-only classical
+    /// principal uses a bare `did:key` per [`Did::from_public_key`]).
+    #[must_use]
+    pub fn from_benten_keyset(
+        sig_pk: &benten_crypto_suite::sig::PublicKey,
+        keyset_doc: &crate::keyset::KeySetDocument,
+    ) -> Self {
+        // Signing multikey (ML-DSA-first) — sourced from the crypto-suite's
+        // symmetric composite serializer, identical to the hybrid did:key body.
+        let composite = sig_pk.to_lamps_composite_bytes().expect(
+            "from_benten_keyset requires a hybrid (PQ-carrying) signing key; \
+             signing-only classical principals use a bare did:key",
+        );
+        let mldsa_len = mldsa65_pubkey_len();
+        let (mldsa_pk, trad_pk) = composite.split_at(mldsa_len);
+
+        let cid = keyset_doc.cid();
+        let cid_bytes = cid.as_bytes();
+        let mut payload = Vec::with_capacity(
+            MLDSA65_PUB_MULTICODEC.len()
+                + mldsa_pk.len()
+                + ED25519_MULTICODEC.len()
+                + trad_pk.len()
+                + cid_bytes.len(),
+        );
+        payload.extend_from_slice(&MLDSA65_PUB_MULTICODEC);
+        payload.extend_from_slice(mldsa_pk);
+        payload.extend_from_slice(&ED25519_MULTICODEC);
+        payload.extend_from_slice(trad_pk);
+        // Committed key-set CID (36-byte CIDv1) — NO framing byte (C1).
+        payload.extend_from_slice(cid_bytes);
+
+        let body = bs58::encode(&payload).into_string();
+        Self(format!("{DID_BENTEN_PREFIX}{body}"))
+    }
+
+    /// Method/multicodec-aware signing-key resolve (design §2 Tier-1, C6) —
+    /// the ZERO-I/O authority-path resolver that returns a
+    /// [`benten_crypto_suite::sig::PublicKey`] for BOTH issuer shapes.
+    ///
+    /// Dispatches on the **leading multicodec** (peeked after base58btc
+    /// decode), NOT the method string alone (a hybrid `did:key` is *also*
+    /// method `did:key`, design C6):
+    ///
+    /// - `did:benten` → decode the embedded composite signing multikey, then
+    ///   **strip the trailing 36-byte committed CID** (design §2 Tier-1). NO
+    ///   key-set doc, NO I/O. Returns the `pq = Some` composite key.
+    /// - `did:key` with leading `0x1211` (ML-DSA-65) → the composite arm
+    ///   (agrees with [`Did::resolve_hybrid`]).
+    /// - `did:key` with leading `0xed01` (Ed25519) → the classical arm,
+    ///   yielding a `pq = None` handle via
+    ///   [`benten_crypto_suite::sig::PublicKey::from_classical_ed25519_bytes`]
+    ///   (so a classical issuer is never mis-typed as hybrid — no silent
+    ///   PQ-strip / PQ-upgrade).
+    ///
+    /// The F2 length pre-check gates the O(N²) `bs58::decode` for the
+    /// attacker-controlled `did:benten` `iss` too (design C7).
+    ///
+    /// # Errors
+    ///
+    /// The [`DidError`] typed-reject set (wrong prefix / base58 / unknown
+    /// component multicodec / body-too-short / trailing bytes / invalid key /
+    /// over-long input) — fail-closed, never a silent fallback.
+    pub fn resolve_signing(&self) -> Result<benten_crypto_suite::sig::PublicKey, DidError> {
+        // F2 (C7): bound the input length BEFORE the O(N²) base58btc decode —
+        // the `did:benten` `iss` is attacker-controlled per UCAN chain link.
+        self.length_pre_check()?;
+
+        // --- did:benten — composite signing multikey ‖ committed CID(36). ---
+        if let Some(body) = self.0.strip_prefix(DID_BENTEN_PREFIX) {
+            let decoded = bs58::decode(body)
+                .into_vec()
+                .map_err(|_| DidError::Base58Decode)?;
+            let (pk, consumed) = decode_composite_signing_multikey(&decoded)?;
+            // The trailing bytes after the signing multikey are EXACTLY the
+            // 36-byte committed CID — no more (payload-stuffing), no less
+            // (truncation). resolve_signing strips them zero-I/O.
+            if decoded.len() - consumed != benten_core::CID_LEN {
+                return Err(DidError::HybridTrailingBytes {
+                    extra: decoded
+                        .len()
+                        .saturating_sub(consumed + benten_core::CID_LEN),
+                });
+            }
+            return Ok(pk);
+        }
+
+        // --- did:key — peek the leading multicodec (C6), NOT the method. ---
+        let body = self
+            .0
+            .strip_prefix(DID_KEY_PREFIX)
+            .ok_or_else(|| DidError::InvalidPrefix(self.0.clone()))?;
+        let decoded = bs58::decode(body)
+            .into_vec()
+            .map_err(|_| DidError::Base58Decode)?;
+        if decoded.len() < 2 {
+            return Err(DidError::BodyTooShort {
+                got: decoded.len(),
+                min: 2,
+            });
+        }
+
+        // Composite arm — leading 0x1211 (hybrid did:key).
+        if decoded[0] == MLDSA65_PUB_MULTICODEC[0] && decoded[1] == MLDSA65_PUB_MULTICODEC[1] {
+            let (pk, consumed) = decode_composite_signing_multikey(&decoded)?;
+            if consumed != decoded.len() {
+                return Err(DidError::HybridTrailingBytes {
+                    extra: decoded.len() - consumed,
+                });
+            }
+            return Ok(pk);
+        }
+
+        // Classical arm — leading 0xed01 (Ed25519 did:key) → pq=None handle.
+        if decoded[0] == ED25519_MULTICODEC[0] && decoded[1] == ED25519_MULTICODEC[1] {
+            let min = ED25519_MULTICODEC.len() + ED25519_PUBKEY_LEN;
+            if decoded.len() != min {
+                return Err(DidError::BodyTooShort {
+                    got: decoded.len(),
+                    min,
+                });
+            }
+            let mut pk_bytes = [0u8; ED25519_PUBKEY_LEN];
+            pk_bytes.copy_from_slice(&decoded[2..2 + ED25519_PUBKEY_LEN]);
+            return benten_crypto_suite::sig::PublicKey::from_classical_ed25519_bytes(&pk_bytes)
+                .map_err(|_| DidError::InvalidPublicKey);
+        }
+
+        Err(DidError::UnknownMulticodec(decoded[0], decoded[1]))
+    }
+
+    /// The committed key-set CID carried in a `did:benten` string — the
+    /// trailing 36-byte CIDv1 after the embedded signing multikey (design
+    /// §1.1). A bare `did:key` commits NO key-set → [`DidError::NoKemCommitment`]
+    /// (design §6).
+    ///
+    /// # Errors
+    ///
+    /// - [`DidError::NoKemCommitment`] — not a `did:benten` (signing-only
+    ///   degenerate identity).
+    /// - [`DidError::HybridTrailingBytes`] / [`DidError::HybridBodyTooShort`]
+    ///   — the committed component is truncated or over-long (exact-consume).
+    /// - [`DidError::InvalidKeysetCid`] — the trailing 36 bytes are not a
+    ///   well-formed Benten CIDv1 (never treats arbitrary bytes as a CID).
+    /// - [`DidError::BodyTooLong`] / [`DidError::Base58Decode`].
+    pub fn keyset_cid(&self) -> Result<benten_core::Cid, DidError> {
+        self.length_pre_check()?;
+        let body = self
+            .0
+            .strip_prefix(DID_BENTEN_PREFIX)
+            .ok_or(DidError::NoKemCommitment)?;
+        let decoded = bs58::decode(body)
+            .into_vec()
+            .map_err(|_| DidError::Base58Decode)?;
+        let (_pk, consumed) = decode_composite_signing_multikey(&decoded)?;
+        let tail = &decoded[consumed..];
+        if tail.len() != benten_core::CID_LEN {
+            return Err(DidError::HybridTrailingBytes {
+                extra: tail.len().saturating_sub(benten_core::CID_LEN),
+            });
+        }
+        benten_core::Cid::from_bytes(tail).map_err(|_| DidError::InvalidKeysetCid)
+    }
+
+    /// Recover + VERIFY the recipient KEM key from this DID's key-set
+    /// commitment (design §2 Tier-2) — fail-closed on ANY mismatch. Only
+    /// called on the cold Layer-C seal/open path.
+    ///
+    /// Four fail-closed steps:
+    /// 1. **CID 2nd-preimage** — `cid(keyset_doc)` (over the re-canonicalized
+    ///    doc bytes, never a raw compare) MUST equal this DID's committed CID.
+    ///    This is the GAP-KDB active-substitution guard (a BLAKE3-256
+    ///    2nd-preimage).
+    /// 2. **Embedded-signing cross-check** — `keyset_doc.sig` MUST equal the
+    ///    signing multikey embedded in this `did:benten` (defeats an
+    ///    embedded-victim-sig ⊕ attacker-KEM splice).
+    /// 3. **PQ floor** — the committed `kem_cp` MUST be `0x647a`
+    ///    (`HYBRID_X25519_MLKEM768`); a below-floor / non-PQ suite (e.g. the
+    ///    classical-only `0x6400`) is HNDL-exposed and NEVER sealed to (C5).
+    /// 4. **kem multikey decode + `kem_cp` ⟺ components cross-check** — decode
+    ///    the X25519-first `kem` multikey (`0xec01‖x25519(32) ‖ 0x120c‖
+    ///    mlkem768_ek(1184)`, C2) and reconstruct the hybrid
+    ///    [`RecipientPublic`](benten_crypto_suite::cipher_suite::RecipientPublic)
+    ///    (no reorder — X25519-first matches `to_bytes`). A `kem_cp`-claims-
+    ///    hybrid ⊕ classical-only-components confusion fails here.
+    ///
+    /// # Errors
+    ///
+    /// [`DidError::NoKemCommitment`] / [`DidError::KeysetCommitmentMismatch`] /
+    /// [`DidError::KeysetEmbeddedSigningMismatch`] /
+    /// [`DidError::KeysetBelowPqFloor`] / [`DidError::MalformedKemMultikey`].
+    pub fn resolve_kem(
+        &self,
+        keyset_doc: &crate::keyset::KeySetDocument,
+    ) -> Result<benten_crypto_suite::cipher_suite::RecipientPublic, DidError> {
+        use benten_crypto_suite::CipherSuiteCodepoint;
+
+        // Step 1 — CID 2nd-preimage. `keyset_cid` also enforces "must be a
+        // did:benten" (a bare did:key → NoKemCommitment).
+        let committed = self.keyset_cid()?;
+        if keyset_doc.cid().as_bytes() != committed.as_bytes() {
+            return Err(DidError::KeysetCommitmentMismatch);
+        }
+
+        // Step 2 — doc.sig == the DID's embedded signing multikey.
+        let embedded = self.benten_embedded_signing_multikey()?;
+        if keyset_doc.sig() != embedded.as_slice() {
+            return Err(DidError::KeysetEmbeddedSigningMismatch);
+        }
+
+        // Step 3 — PQ floor (C5): only the hybrid suite may be sealed to.
+        let kem_cp = CipherSuiteCodepoint::from_raw(keyset_doc.kem_cp());
+        if kem_cp != CipherSuiteCodepoint::HYBRID_X25519_MLKEM768 {
+            return Err(DidError::KeysetBelowPqFloor {
+                kem_cp: keyset_doc.kem_cp(),
+            });
+        }
+
+        // Step 4 — decode the X25519-first kem multikey + reconstruct via the
+        // crypto-suite's SOLE kem-multikey decoder
+        // ([`benten_crypto_suite::cipher_suite::RecipientPublic::from_kem_multikey`]
+        // — the ONLY place the component codecs are cross-checked against
+        // `kem_cp`, C2). It requires BOTH registered components (0xec01 then
+        // 0x120c) at exact lengths, so a hybrid-cp ⊕ classical-only-components
+        // confusion fails closed there. `kem_cp` is HYBRID (step-3), so the
+        // hybrid arm is taken; this is byte-for-byte the prior local
+        // decode-reassemble-`from_bytes`, with no second decoder to drift.
+        benten_crypto_suite::cipher_suite::RecipientPublic::from_kem_multikey(
+            kem_cp,
+            keyset_doc.kem(),
+        )
+        .map_err(|_| DidError::MalformedKemMultikey)
+    }
+
+    /// The raw signing-multikey bytes embedded in a `did:benten` string
+    /// (`varint(0x1211) ‖ mldsaPK ‖ varint(0xed) ‖ tradPK`) — the exact bytes
+    /// a committed [`KeySetDocument`](crate::keyset::KeySetDocument)'s `sig`
+    /// field must equal (design §2 Tier-2 step 2). Internal to
+    /// [`Did::resolve_kem`].
+    fn benten_embedded_signing_multikey(&self) -> Result<Vec<u8>, DidError> {
+        let body = self
+            .0
+            .strip_prefix(DID_BENTEN_PREFIX)
+            .ok_or(DidError::NoKemCommitment)?;
+        let decoded = bs58::decode(body)
+            .into_vec()
+            .map_err(|_| DidError::Base58Decode)?;
+        let (_pk, consumed) = decode_composite_signing_multikey(&decoded)?;
+        Ok(decoded[..consumed].to_vec())
+    }
 }
 
 impl fmt::Display for Did {
@@ -439,4 +794,68 @@ impl AsRef<str> for Did {
     fn as_ref(&self) -> &str {
         &self.0
     }
+}
+
+/// Decode the two composite signing-key component multikeys
+/// (`varint(0x1211) ‖ mldsaPK(1952) ‖ varint(0xed) ‖ tradPK(32)`, ML-DSA
+/// FIRST) at the front of `decoded`, returning the reconstructed composite
+/// verifying key + the number of bytes consumed. Does NOT reject trailing
+/// bytes — the caller decides what may follow (nothing for a hybrid
+/// `did:key`; the 36-byte committed CID for a `did:benten`). Shared by
+/// [`Did::resolve_hybrid`] + the `did:benten` resolvers so the composite
+/// decode has ONE definition (no PQ-strip drift). All component lengths flow
+/// from the upstream size witnesses — never hardcoded (CLAUDE.md #5).
+fn decode_composite_signing_multikey(
+    decoded: &[u8],
+) -> Result<(benten_crypto_suite::sig::PublicKey, usize), DidError> {
+    let mldsa_len = mldsa65_pubkey_len();
+    let mut cursor = 0usize;
+
+    // --- Component 1: ML-DSA-65 (FIRST). ---
+    let mldsa_min = MLDSA65_PUB_MULTICODEC.len() + mldsa_len;
+    if decoded.len() < cursor + mldsa_min {
+        return Err(DidError::HybridBodyTooShort {
+            component: "ML-DSA-65",
+            got: decoded.len().saturating_sub(cursor),
+            min: mldsa_min,
+        });
+    }
+    if decoded[cursor] != MLDSA65_PUB_MULTICODEC[0]
+        || decoded[cursor + 1] != MLDSA65_PUB_MULTICODEC[1]
+    {
+        return Err(DidError::UnknownMulticodec(
+            decoded[cursor],
+            decoded[cursor + 1],
+        ));
+    }
+    cursor += MLDSA65_PUB_MULTICODEC.len();
+    let mldsa_pk = &decoded[cursor..cursor + mldsa_len];
+    cursor += mldsa_len;
+
+    // --- Component 2: Ed25519 (SECOND). ---
+    let ed_min = ED25519_MULTICODEC.len() + ED25519_PUBKEY_LEN;
+    if decoded.len() < cursor + ed_min {
+        return Err(DidError::HybridBodyTooShort {
+            component: "Ed25519",
+            got: decoded.len().saturating_sub(cursor),
+            min: ed_min,
+        });
+    }
+    if decoded[cursor] != ED25519_MULTICODEC[0] || decoded[cursor + 1] != ED25519_MULTICODEC[1] {
+        return Err(DidError::UnknownMulticodec(
+            decoded[cursor],
+            decoded[cursor + 1],
+        ));
+    }
+    cursor += ED25519_MULTICODEC.len();
+    let trad_pk = &decoded[cursor..cursor + ED25519_PUBKEY_LEN];
+    cursor += ED25519_PUBKEY_LEN;
+
+    // --- Reconstruct the composite key (mldsaPK ‖ tradPK, ML-DSA-first). ---
+    let mut composite = Vec::with_capacity(mldsa_pk.len() + trad_pk.len());
+    composite.extend_from_slice(mldsa_pk);
+    composite.extend_from_slice(trad_pk);
+    let pk = benten_crypto_suite::sig::PublicKey::from_lamps_composite_bytes(&composite)
+        .map_err(|_| DidError::InvalidHybridPublicKey("LAMPS composite half not a valid key"))?;
+    Ok((pk, cursor))
 }

@@ -488,6 +488,7 @@ function translateSandboxArgs(
     fuel?: number;
     wallclockMs?: number;
     outputLimitBytes?: number;
+    memoryLimitBytes?: number;
     caps?: readonly string[];
   };
   const props: Record<string, JsonValue> = {};
@@ -514,6 +515,18 @@ function translateSandboxArgs(
     // reads `op.properties.get("output_limit")`). Symmetric with
     // `wallclock_ms` not carrying `_milliseconds`.
     props.output_limit = a.outputLimitBytes;
+  }
+  if (typeof a.memoryLimitBytes === "number") {
+    // memoryLimitBytes (camelCase, DSL) → memory_limit (snake_case,
+    // eval-side — DROPS `Bytes`, symmetric with outputLimitBytes →
+    // output_limit). primitive_host.rs::execute_sandbox reads
+    // `op.properties.get("memory_limit")`.
+    //
+    // TIGHTEN-ONLY: the engine ignores a value ABOVE the 64 MiB ceiling
+    // (and logs a warning) because exhausting memory can OOM-kill the
+    // host process shared by every other handler. Lowering always
+    // applies. See docs/SANDBOX-LIMITS.md §2.
+    props.memory_limit = a.memoryLimitBytes;
   }
   if (Array.isArray(a.caps)) {
     // by-caps escape hatch — caps key is canonical eval-side.

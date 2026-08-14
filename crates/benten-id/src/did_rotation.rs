@@ -36,13 +36,12 @@
 //! Durable rehydration of this in-memory walk is named for
 //! Phase-4-Meta at `docs/future/phase-4-backlog.md §4.26`.
 
-use benten_crypto_suite::primitives::ed25519_dalek::{Signature, Signer, Verifier};
 use serde::{Deserialize, Serialize};
 
 use crate::CanonicalBytes;
 use crate::did::Did;
 use crate::errors::DidRotationError;
-use crate::keypair::{Keypair, PublicKey};
+use crate::keypair::Keypair;
 
 /// Signed attestation recording a `did:key` rotation event.
 ///
@@ -81,7 +80,21 @@ pub struct RotationAttestation {
 /// lands post-Phase-3 — the deliberate forward-stable shape is the
 /// point. Wire-format-adjacent; out of scope to mutate per the lane
 /// rule regardless.
+/// `#[non_exhaustive]` (D-96): a recovery authorizer is a NEW attestation kind,
+/// and this enum freezes into the v1-beta public API at
+/// `phase-4-meta-core-close`. Without the attribute, minting that variant
+/// post-tag is a SemVer-major break on a frozen type, which is what the
+/// identity-recovery survey's "authority-recovery is safely deferrable"
+/// conclusion silently assumed was possible. Free here: the only external use
+/// is an `assert_eq!` comparison, which `#[non_exhaustive]` still permits.
+///
+/// Deliberately NOT applied to `RotationAttestation` itself: its canonical
+/// signing bytes are a separate closed `SigInput`, so any field added later
+/// would be UNSIGNED — an unsigned field on an attestation is a security smell,
+/// and the cleaner route for recovery is a sibling `RecoveryAttestation` type
+/// with its own canonical bytes, which is additive by construction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum AttestationKind {
     /// "Old DID is superseded by new DID" — the only kind in Phase 3.
     SupersededBy,
@@ -114,21 +127,31 @@ impl RotationAttestation {
         Did::from_string_for_test_fixture(self.next_did.clone())
     }
 
-    /// Verify the attestation's signature against the supplied OLD
-    /// public key. Returns [`DidRotationError::BadSignature`] on
-    /// mismatch.
-    pub fn verify_signature_with(&self, old_pk: &PublicKey) -> Result<(), DidRotationError> {
+    /// Verify the attestation's signature against the supplied OLD signing
+    /// key. Returns [`DidRotationError::BadSignature`] on mismatch.
+    ///
+    /// **GAP-KDB Fork-A (AUTH-8):** the verify is the ONE
+    /// codepoint-dispatched hybrid verify
+    /// ([`crate::authority_verify::verify_authority_signature`]). `old_pk`
+    /// accepts BOTH a composite [`sig::PublicKey`](benten_crypto_suite::sig::PublicKey)
+    /// (a `did:benten` / hybrid `did:key` `previous_did`, resolved via
+    /// [`crate::did::Did::resolve_signing`]) AND the classical
+    /// [`crate::keypair::PublicKey`] (a `did:key` `previous_did`) via the
+    /// [`ToSigningKey`](crate::authority_verify::ToSigningKey) projection —
+    /// its SHAPE selects the arm, so a composite-committing prev whose
+    /// rotation signature carries only the Ed25519 half is a silent PQ-strip
+    /// that rejects.
+    pub fn verify_signature_with(
+        &self,
+        old_pk: &impl crate::authority_verify::ToSigningKey,
+    ) -> Result<(), DidRotationError> {
         let bytes = self.to_canonical_bytes();
-        let sig_bytes: [u8; 64] = self
-            .signature
-            .as_slice()
-            .try_into()
-            .map_err(|_| DidRotationError::BadSignature)?;
-        let sig = Signature::from_bytes(&sig_bytes);
-        old_pk
-            .as_verifying_key()
-            .verify(&bytes, &sig)
-            .map_err(|_| DidRotationError::BadSignature)
+        crate::authority_verify::verify_authority_signature(
+            &old_pk.to_signing_key(),
+            &bytes,
+            &self.signature,
+        )
+        .map_err(|_| DidRotationError::BadSignature)
     }
 }
 
@@ -272,14 +295,21 @@ impl RotationLog {
         // AUTHENTICITY GATE (Safe-1 #509 / F-FWD-2-01 #1051): verify
         // the attestation is genuinely signed by the OLD keypair
         // BEFORE any ordering check. `previous_did` is a self-resolving
-        // did:key; resolve it to the OLD public key and verify the
-        // 64-byte Ed25519 signature. Resolution failure OR signature
-        // mismatch both map to BadSignature (matches Acceptor step-4).
+        // DID; resolve its signing key and hybrid-verify the rotation
+        // signature. Resolution failure OR signature mismatch both map to
+        // BadSignature (matches Acceptor step-4).
+        //
+        // GAP-KDB Fork-A (AUTH-9): the resolve is `resolve_signing` (a
+        // `did:benten` prev yields its composite signing key), and the
+        // authenticity gate fires BEFORE the verbatim-replay / HLC-strict
+        // ordering checks below — so a PQ-stripped `did:benten` attestation
+        // is rejected fail-closed and is NEVER recorded, even when the HLC
+        // ordering would otherwise admit it.
         let prev_did = Did::from_string_for_test_fixture(attestation.previous_did.clone());
-        let old_pk = prev_did
-            .resolve()
+        let old_signing_pk = prev_did
+            .resolve_signing()
             .map_err(|_| crate::errors::DidRotationError::BadSignature)?;
-        attestation.verify_signature_with(&old_pk)?;
+        attestation.verify_signature_with(&old_signing_pk)?;
         // Verbatim replay defense — DID + signature compares routed
         // through ct_signature_eq per crypto-major-4 UNIFORMITY.
         if self.entries.iter().any(|e| {

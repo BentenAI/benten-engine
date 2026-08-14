@@ -29,21 +29,23 @@
 //! The self-contained stub-shim is DELETED. The production surface is
 //! `benten_membership_set::federation::{KSetAcquisitionPath,
 //! MEMBERSHIP_RECURSION_MAX_DEPTH, AcquisitionError, FederationError,
-//! FederationModel, admit_subset_ref_at_v1_beta, dispatch_codepoint_at_v1_beta,
+//! FederationModel, admit_subset_ref_at_v1_beta,
 //! select_model_at_v1_beta}` + the `0x6620` codepoint
 //! `benten_membership_set::codepoints::MEMBERSHIP_SET_RESERVED_0X6620`. The
 //! production `KSetAcquisitionPath` carries `Vec<u8>` ids (content-addressed
 //! bytes); the `[u8; 4]` fixtures below are lifted to `Vec<u8>` by the `mk`
-//! helper. The wire layout (V2 + big-endian) is byte-identical to the frozen
-//! golden vector (the `to_wire_v2_be` serialization is unchanged).
+//! helper. The wire layout is V2 + big-endian + LENGTH-PREFIXED (injective).
+//! **R19 (F4):** `to_wire_v2_be` gained a `u32`-BE length prefix on every
+//! variable-length field so the encoding is injective; the golden vector below
+//! is updated accordingly. This is allowed because `0x6620` is RESERVED /
+//! encode-only / zero-live-decoder at v1-beta (not a live wire format).
 
 #![allow(dead_code)]
 
 use benten_membership_set::codepoints::MEMBERSHIP_SET_RESERVED_0X6620;
 use benten_membership_set::federation::{
     AcquisitionError, FederationError, FederationModel, KSetAcquisitionPath,
-    MEMBERSHIP_RECURSION_MAX_DEPTH, admit_subset_ref_at_v1_beta, dispatch_codepoint_at_v1_beta,
-    select_model_at_v1_beta,
+    MEMBERSHIP_RECURSION_MAX_DEPTH, admit_subset_ref_at_v1_beta, select_model_at_v1_beta,
 };
 
 /// The federation codepoint (`0x6620`) — reserve-and-refused at v1-beta.
@@ -173,20 +175,48 @@ fn fed1_wire_is_v2_big_endian() {
         [0xDE, 0xAD, 0xBE, 0xEF],
     );
     let wire = path.to_wire_v2_be();
+    // R19 (F4): each VARIABLE-length field now carries a `u32`-BE length prefix
+    // so the encoding is INJECTIVE. 0x6620 is RESERVED / encode-only / zero live
+    // decoder at v1-beta, so this golden update is allowed (not a live wire
+    // change). Layout: version || hop_count || lp(target) || target ||
+    // (lp(hop) || hop)* || lp(cid) || cid.
     let expected: Vec<u8> = vec![
         0x02, // ENVELOPE_FORMAT_VERSION_V2 (M-20; NOT 0x01)
         0x02, // hop_count = 2
+        0x00, 0x00, 0x00, 0x04, // u32-BE len(target_set_id) = 4
         0xDD, 0xCC, 0xBB, 0xAA, // target_set_id (as-authored byte order)
+        0x00, 0x00, 0x00, 0x04, // u32-BE len(hop[0]) = 4
         0x11, 0x22, 0x33, 0x44, // hop[0]
+        0x00, 0x00, 0x00, 0x04, // u32-BE len(hop[1]) = 4
         0x55, 0x66, 0x77, 0x88, // hop[1]
+        0x00, 0x00, 0x00, 0x04, // u32-BE len(acquisition_proof_cid) = 4
         0xDE, 0xAD, 0xBE, 0xEF, // acquisition_proof_cid
     ];
     assert_eq!(
         wire, expected,
-        "KSetAcquisitionPath serializes V2 + big-endian from the first commit (M-20 — no LE/V1 golden vector)"
+        "KSetAcquisitionPath serializes V2 + big-endian + length-prefixed (injective) from the first commit (M-20 — no LE/V1 golden vector)"
     );
     // Explicit version-byte assertion (the M-20 freeze-gating guarantee).
     assert_eq!(wire[0], 0x02, "format_version is V2");
+    // Injectivity guard (F4): two paths whose flat byte concatenation is
+    // identical but whose field boundaries differ MUST now produce DISTINCT
+    // wire bytes (the non-injective concat could not tell them apart). Both
+    // flatten to target++hop++cid == [0xAA,0xBB,0xCC,0xDD,0xEE].
+    let a = KSetAcquisitionPath {
+        target_set_id: vec![0xAA, 0xBB],
+        hop_path: vec![vec![0xCC, 0xDD]],
+        acquisition_proof_cid: vec![0xEE],
+    };
+    let b = KSetAcquisitionPath {
+        target_set_id: vec![0xAA],
+        hop_path: vec![vec![0xBB, 0xCC]],
+        acquisition_proof_cid: vec![0xDD, 0xEE],
+    };
+    assert_ne!(
+        a.to_wire_v2_be(),
+        b.to_wire_v2_be(),
+        "length-prefixed encoding must distinguish different field partitions of the same flat bytes"
+    );
 }
 
 // ── F-FED-2 pins ──────────────────────────────────────────────────────────────
@@ -199,16 +229,13 @@ fn fed2_subset_ref_refused_at_v1_beta() {
         Err(FederationError::FederationReserved),
         "MemberRef::SubsetRef is reserved-and-REFUSED at v1-beta"
     );
-    // The 0x6620 codepoint typed-rejects at dispatch.
-    assert_eq!(
-        dispatch_codepoint_at_v1_beta(MEMBERSHIP_SET_SUBSET_REF),
-        Err(FederationError::FederationReserved),
-        "codepoint 0x6620 typed-rejects at v1-beta"
-    );
+    // The 0x6620 SubsetRef federation codepoint stays RESERVED at v1-beta; the
+    // live entry point above (admit_subset_ref_at_v1_beta) is the fail-CLOSED
+    // gate. The former dormant fail-OPEN `federation_reserve_gate_at_v1_beta`
+    // blocklist helper was DROPPED at the R20 phase-close (zero production
+    // callers; the fail-CLOSED allowlist reserve-gate is a Composing deliverable
+    // — see docs/CRYPTO-CODEPOINTS.md).
     assert_eq!(MEMBERSHIP_SET_SUBSET_REF, 0x6620);
-    // Paired positive control: a non-federation codepoint does NOT reject — so
-    // the 0x6620 rejection is targeted, not a blanket fail.
-    assert!(dispatch_codepoint_at_v1_beta(0x6600).is_ok());
 }
 
 #[test]

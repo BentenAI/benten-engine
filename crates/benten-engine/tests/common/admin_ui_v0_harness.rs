@@ -305,14 +305,14 @@ impl AdminUiV0TestHarness {
     ) -> Result<MaterializerOutput, MaterializerError> {
         let adapter = HarnessEngineAdapter::new(self.engine());
         let walk_principal = self.admin_ui_plugin_principal_cid();
-        HtmlJsonMaterializer.materialize_with_gate(MaterializerWalkInputs {
-            engine: &adapter,
+        HtmlJsonMaterializer.materialize_with_gate(MaterializerWalkInputs::new(
+            &adapter,
             spec,
             content_cid,
             walk_principal,
             cap_recheck,
             declared_requires,
-        })
+        ))
     }
 
     /// Capture per-cap-scope `cap_recheck` invocations — used by the

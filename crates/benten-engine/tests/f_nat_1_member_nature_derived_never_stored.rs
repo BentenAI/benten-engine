@@ -3,8 +3,8 @@
 //! `member_type` is DELETED. `is_ai_operated(did) = (did.method() ==
 //! "agent")` (did:agent is an optional allowlist ALIAS, not a stored
 //! discriminator); `is_plugin` / `is_autonomous_ai` are derived
-//! (Inv-14 / manifest); ownership comes from `root_issuers(agent_did)`;
-//! any CACHED nature is an IVM-materialized view — never authoritative.
+//! (Inv-14 / manifest); ownership comes from the Inv-14 attribution chain;
+//! any CACHED nature is a derived (recomputed) view — never authoritative.
 //!
 //! Pin sources (F-full R2 test-landscape §1 Group 11 row F-NAT-1; merges
 //! K4 + GNI-11/12/13):
@@ -26,17 +26,15 @@
 //! `MemberEntry` field. Crucially, the canonical 5-field shape carries ZERO
 //! nature field — so the Inv-22 struct-fence is preserved by-construction.
 //!
-//! # RED-PHASE STATUS (pim-12 §3.6e) + STUB-SHIM DISCIPLINE
+//! # STATUS — LIVE at HEAD (F-17 R12 retense; formerly RED-PHASE staged-pin)
 //!
 //! The W6 nature-derivation surface (`is_ai_operated` / `MemberEntry` /
-//! `derive_member_nature` IVM view) does not exist at this SHA.
-//! Self-contained stub-shim compiles green; nature-derivation bodies
-//! `unimplemented!()`. W6 R5 implementer:
-//!   1. DELETE `mset_w6_nature_stub`,
-//!   2. INSERT `use benten_membership_set::member::{MemberEntry, MemberRef,
-//!      RoleId, Hlc, SigPubKey, is_ai_operated, derive_member_nature};`,
-//!   3. UN-IGNORE,
-//!   4. Verify green.
+//! `derive_member_nature`) is BUILT and the arms below run against the REAL
+//! `benten_membership_set::member` API (see the `use` below) — the stub-shim
+//! was deleted and the tests un-ignored when the W6 surface landed. This
+//! header formerly described the RED-PHASE staged-pin state (stub-shim +
+//! `unimplemented!()` bodies + a pending un-ignore); that state is HISTORY —
+//! all arms are live and green at HEAD.
 //!
 //! # Production-arm shape (pim-2 sub-rule-4 + pim-18 + §3.6f-ext)
 //!

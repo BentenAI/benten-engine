@@ -424,7 +424,7 @@ Not yet live:
 
 - Marketplace / dynamic manifest registration (`register_runtime` reserved with `E_SANDBOX_MANIFEST_REGISTRATION_DEFERRED`; Phase 8)
 - Garden-controlled iroh relays (Phase 7) — until then, public iroh relays leak peer-DID + connection-metadata at the transport layer (Compromise #22)
-- Inv-4 runtime depth-threading — both arms fully active. One adversarial integration test stays `#[ignore]`'d pending a `testing_call_engine_dispatch` host-fn helper — the runtime defense is wired; only the adversarial-test driver is paper-only. See `docs/INVARIANT-COVERAGE.md` "Inv-4 + Inv-7 runtime arm status" for the wiring trace.
+- Inv-4 runtime depth-threading — both arms fully active, and the ESC-10 adversarial integration test (`sandbox_escape_attempts_denied.rs::sandbox_escape_reentrancy_via_host_fn_denied`) is LIVE (`#[test]`, un-ignored at G20-A1 wave-8a, widened at G21-T3) and drives the `testing_call_engine_dispatch` helper into the typed `EscapeAttempt` reject. What is *not* live here is a **true nested-dispatch driver**: the pin stays SIMULATION-driven, because no production host-fn re-enters `Engine::call` (D19-RESOLVED). See `docs/INVARIANT-COVERAGE.md` "Inv-4 + Inv-7 runtime arm status" for the wiring trace.
 
 If something in the "live" list doesn't behave as documented, file an issue.
 

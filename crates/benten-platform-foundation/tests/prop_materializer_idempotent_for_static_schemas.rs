@@ -78,14 +78,7 @@ proptest! {
         let alice = materializer_fixtures::actor_principal_alice_cid();
 
         let mat = HtmlJsonMaterializer;
-        let mk = || MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: cid,
-            walk_principal: alice,
-            cap_recheck: allow_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        };
+        let mk = || MaterializerWalkInputs::new(&engine, &spec, cid, alice, allow_all_cap_recheck(), Vec::new());
         let out1 = mat.materialize_with_gate(mk()).unwrap();
         let out2 = mat.materialize_with_gate(mk()).unwrap();
         prop_assert_eq!(out1.html_bytes(), out2.html_bytes());

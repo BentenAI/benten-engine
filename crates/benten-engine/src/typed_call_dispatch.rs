@@ -48,6 +48,28 @@ use benten_eval::{EvalError, TypedCallOp};
 use benten_id::keypair::{ENVELOPE_ALG, ENVELOPE_VERSION, Keypair, PublicKey, Signature};
 use zeroize::Zeroizing;
 
+// --- Fail-closed input ceilings on the typed-CALL decode ops
+// (Compromise #28 / META #629 DoS-sweep). ---
+//
+// Both consts bound attacker-supplied input a principal feeds through the
+// CALL primitive BEFORE the underlying decode allocates. They are post-auth
+// (the CALL cap-check has cleared) but still worth bounding — a cap-holding
+// but hostile handler could otherwise pin memory via an enormous decode.
+
+/// Fail-closed ceiling on the multibase-decode input string length. A
+/// CID-shaped multibase string is ~60 chars, so 8 KiB is generous headroom;
+/// beyond it the `bs58` / base32 decoders would allocate an O(N) `Vec` from
+/// attacker bytes with no upstream cap.
+const MAX_MULTIBASE_INPUT_LEN: usize = 8 * 1024;
+
+/// Fail-closed ceiling on the `VcVerify` credential CBOR blob size. A
+/// well-formed VC is a few KiB; 64 KiB clears any realistic credential while
+/// bounding a hostile blob before `serde_ipld_dagcbor::from_slice` allocates
+/// the `Credential`. (The benten-id-side `verify_bytes_in_trust_domain` cap is
+/// tighter at 16 KiB; this typed-CALL path decodes directly, so it carries its
+/// own generous ceiling.)
+const MAX_CREDENTIAL_CBOR_BYTES: usize = 64 * 1024;
+
 /// Dispatch one of the 10 typed-CALL ops to its underlying
 /// implementation.
 ///
@@ -253,6 +275,20 @@ fn multibase_decode(input: &Value) -> Result<Value, EvalError> {
         })?;
     let body: String = chars.collect();
 
+    // Fail-closed length cap (Compromise #28 / META #629): reject an
+    // over-long input BEFORE either the base32 or bs58 decoder allocates an
+    // O(N) `Vec` from attacker bytes. Applies to the post-prefix body (the
+    // bytes the decoders actually consume).
+    if body.len() > MAX_MULTIBASE_INPUT_LEN {
+        return Err(EvalError::TypedCallDispatchError {
+            op_name: TypedCallOp::MultibaseDecode.name(),
+            reason: format!(
+                "multibase input length {} exceeds cap {MAX_MULTIBASE_INPUT_LEN}",
+                body.len()
+            ),
+        });
+    }
+
     let (data, base) = match prefix {
         'b' => {
             let upper = body.to_ascii_uppercase();
@@ -362,10 +398,28 @@ fn ucan_validate_chain(input: &Value) -> Result<Value, EvalError> {
                 });
             }
         };
-        let ucan: benten_id::ucan::Ucan = serde_ipld_dagcbor::from_slice(bytes).map_err(|e| {
+        // safe-2 #549: bound the CBOR proof-chain nesting BEFORE serde's
+        // derived recursive `Ucan` deserialize runs. `prf: Vec<Ucan>` is a
+        // directly-recursive field; an adversarial token blob can nest it
+        // arbitrarily deep and stack-overflow the process. The bounded
+        // decoder pre-walks the CBOR header stream iteratively and rejects
+        // over-deep blobs, then delegates to the same
+        // `serde_ipld_dagcbor::from_slice`, so a VALID token decodes to a
+        // byte-identical `Ucan`.
+        let ucan: benten_id::ucan::Ucan = benten_id::ucan::Ucan::from_canonical_bytes_bounded(
+            bytes,
+            benten_id::ucan::MAX_UCAN_PROOF_DEPTH,
+        )
+        .map_err(|e| {
+            let reason = match e {
+                benten_id::errors::UcanError::ProofChainTooDeep { depth, max } => format!(
+                    "tokens[{i}] DAG-CBOR decode: proof chain too deep (depth={depth} exceeds max={max})"
+                ),
+                other => format!("tokens[{i}] DAG-CBOR decode: {other}"),
+            };
             EvalError::TypedCallDispatchError {
                 op_name: TypedCallOp::UcanValidateChain.name(),
-                reason: format!("tokens[{i}] DAG-CBOR decode: {e}"),
+                reason,
             }
         })?;
         chain.push(ucan);
@@ -450,6 +504,18 @@ fn vc_verify(input: &Value) -> Result<Value, EvalError> {
             });
         }
     };
+
+    // Fail-closed size cap (Compromise #28 / META #629): reject an
+    // over-large credential blob BEFORE `serde` allocates the `Credential`.
+    if credential_bytes.len() > MAX_CREDENTIAL_CBOR_BYTES {
+        return Err(EvalError::TypedCallInvalidInput {
+            op_name: TypedCallOp::VcVerify.name(),
+            reason: format!(
+                "credential CBOR {} bytes exceeds cap {MAX_CREDENTIAL_CBOR_BYTES}",
+                credential_bytes.len()
+            ),
+        });
+    }
 
     let credential: benten_id::vc::Credential = serde_ipld_dagcbor::from_slice(credential_bytes)
         .map_err(|e| EvalError::TypedCallDispatchError {

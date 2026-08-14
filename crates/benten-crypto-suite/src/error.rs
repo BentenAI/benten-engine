@@ -33,8 +33,9 @@ pub enum UnsupportedAlgorithm {
         codepoint: u64,
     },
     /// Unknown / reserved-unimplemented cipher-suite codepoint. (G-CORE-3
-    /// `#1301` lights the live impls; this wave reserves the typed-reject
-    /// surface ahead.)
+    /// `#1301` lit the live impls — `0x647a` / `0x6400` / `0x647c` resolve
+    /// at HEAD; this variant is the typed-reject surface for any codepoint
+    /// outside that set.)
     #[error("unsupported cipher-suite codepoint 0x{codepoint:04x}")]
     CipherSuite {
         /// The raw cipher-suite codepoint value the dispatch did not know.
@@ -63,9 +64,17 @@ pub enum VerifyError {
     /// truncated). Fail-closed strip-resistance pin.
     #[error("hybrid signature missing a required half: {0}")]
     HybridHalfMissing(&'static str),
-    /// The committing construction detected a substitution: each half was
-    /// individually valid but they did not jointly bind the same message
-    /// (cross-message half splice).
+    /// A substitution was detected: each half was individually valid but they
+    /// did not jointly bind the same message (cross-message half splice).
+    ///
+    /// The binding that makes this detectable is the IETF LAMPS composite's
+    /// own mechanism — both halves cover the SAME message representative `M'`,
+    /// and the ML-DSA half additionally binds the Label as its context
+    /// (`mldsa_ctx = Label`) — plus both-halves-required verification. It is
+    /// NOT a commitment combiner: the prior Benten-own NF-4 SHA3-256
+    /// commitment trailer is dropped entirely at
+    /// [`crate::codepoint::SigCodepoint::HYBRID_ED25519_MLDSA65`], because the
+    /// LAMPS composite wire has no slot for it. See [`crate::sig`].
     #[error("hybrid strip-resistance violated: {0}")]
     StripResistanceViolated(&'static str),
     /// A classical-only suite was handed a hybrid-codepoint signature; it

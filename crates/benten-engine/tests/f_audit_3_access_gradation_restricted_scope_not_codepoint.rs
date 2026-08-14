@@ -14,23 +14,23 @@
 //!     decidable-contains) + grep-defense shape from
 //!     `crates/benten-caps/tests/cap_r1_1_audience_binding_grep_defense.rs`.
 //!
-//! # RED-PHASE STATUS (pim-12 §3.6e) + STUB-SHIM DISCIPLINE
+//! # SHIPPED STATUS (R17 retense; formerly RED-PHASE pim-12 §3.6e)
 //!
 //! The W6 `AuditAccessGradation` + the `audit:<set_id>:*` RestrictedScope
-//! parse path do not exist at this SHA. Self-contained stub-shim compiles
-//! green; bodies `unimplemented!()`. W6 R5 implementer:
-//!   1. DELETE `mset_w6_audit_gradation_stub`,
-//!   2. INSERT `use benten_membership_set::audit::{AuditAccessGradation,
-//!      parse_audit_scope};` + `use benten_caps::RestrictedScope;`,
-//!   3. UN-IGNORE,
-//!   4. Verify green.
+//! parse path EXIST at HEAD. This file `use`s the REAL
+//! `benten_membership_set::audit` surface (see the `use` below); every arm
+//! is a live `#[test]` (NO `#[ignore]`). The prior RED-PHASE staging — a
+//! self-contained `mset_w6_audit_gradation_stub` shim with
+//! `unimplemented!()` bodies, un-ignored + wired to the real `use` at the W6
+//! closing wave — is fully discharged.
 //!
 //! # Production-arm shape (pim-2 sub-rule-4 + pim-18 + §3.6f-ext)
 //!
 //! Arms: (1) AdminOnly + non-Admin → denied; (2) PublicAllMembers +
 //! member → admitted; (3) `audit:<set_id>:*` parses through the EXISTING
 //! `RestrictedScope` arm WITHOUT adding a 3rd top-level `Scope` arm
-//! (struct/grep fence — `Scope` stays EXACTLY 2 arms); (4) the 4 reserved
+//! (real `benten_caps::Scope` exhaustive match — `Scope` stays EXACTLY 2 arms);
+//! (4) the 4 reserved
 //! variants resolve to UCAN-caveat/IVM compositions, NOT codepoints
 //! (no-audit-gradation-codepoint grep-defense source scan == 0).
 
@@ -47,6 +47,8 @@ use std::path::Path;
 // `benten_caps::RestrictedScope` arm (m-15 GNC-1) — `Scope` stays EXACTLY 2
 // arms (no 3rd top-level arm).
 // =====================================================================
+use benten_caps::restricted_spec::RestrictedScope;
+use benten_caps::scope::Scope;
 use benten_membership_set::audit::{
     AuditAccessGradation, AuditReadDecision, RequesterRole,
     parse_audit_scope_added_new_top_level_scope_arm, restricted_audit_scope_contains,
@@ -98,6 +100,30 @@ fn audit_scope_parses_via_existing_restricted_scope_arm_no_new_top_level_arm() {
          benten_caps::RestrictedScope arm (m-15 GNC-1) — it MUST NOT add a \
          3rd top-level `Scope` variant (Scope stays EXACTLY 2 arms)"
     );
+
+    // The routing claim above, exercised against the REAL `benten_caps` types
+    // rather than only the membership-set predicate (R6 tail fold-in): an
+    // `audit:<set_id>:*` scope is carried by the EXISTING
+    // `Scope::RestrictedSelector(RestrictedScope)` arm, and the match below is
+    // exhaustive over a NON-`#[non_exhaustive]` enum — so adding a 3rd
+    // top-level `Scope` variant compile-FAILS this pin.
+    let audit_scope: Scope = Scope::RestrictedSelector(
+        RestrictedScope::new().with_label_allowlist(vec![scope.to_string()]),
+    );
+    match audit_scope {
+        Scope::RestrictedSelector(ref spec) => {
+            assert_eq!(
+                spec.label_allowlist.as_deref(),
+                Some(&[scope.to_string()][..]),
+                "F-AUDIT-3: the audit scope MUST round-trip through the REAL \
+                 benten_caps::RestrictedSelector arm"
+            );
+        }
+        Scope::Hashes(_) => panic!(
+            "F-AUDIT-3: an `audit:<set_id>:*` scope MUST NOT route through the \
+             content-CID `Scope::Hashes` arm"
+        ),
+    }
     assert!(
         restricted_audit_scope_contains(scope, "audit:set-0x51:read:event-0xAB"),
         "F-AUDIT-3: the parsed audit RestrictedScope MUST decidably CONTAIN a \
@@ -151,10 +177,10 @@ fn no_gradation_variant_is_backed_by_a_wire_codepoint() {
 /// F-AUDIT-3 (d'): GREP-DEFENSE — the W6 membership-set source MUST NOT
 /// declare an `AUDIT_GRADATION`-named codepoint constant. Clone of the
 /// `cap_r1_1_audience_binding_grep_defense` source-scan shape. This arm is
-/// `#[test]` (green now): at baseline the membership-set crate does not yet
-/// exist so the scan trivially finds zero — it becomes load-bearing once
-/// the crate lands (it would FAIL if a future edit mints a gradation
-/// codepoint const). Kept un-ignored so the grep-defense is always live.
+/// a live `#[test]`: the membership-set crate exists at HEAD and the scan
+/// finds zero gradation codepoint constants — load-bearing, since it would
+/// FAIL if a future edit mints a gradation codepoint const. Always un-ignored
+/// so the grep-defense stays live.
 #[test]
 fn grep_defense_no_audit_gradation_codepoint_constant_in_membership_set_src() {
     let candidate_src_dir = Path::new(env!("CARGO_MANIFEST_DIR"))

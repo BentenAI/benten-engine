@@ -91,32 +91,41 @@ fn caps_write_context_is_cap_write_context_no_dual_type_collision_1156_885() {
 }
 
 /// #1143 #641 DISAGREE pin: durable revocation is monotonic. Mark a
-/// UCAN-CID revoked, then assert it stays revoked across re-probe —
-/// there is no un-revoke API. This is the property that makes the
-/// "N+1 gets without snapshot" race fail-CLOSED-only (a revoke landing
-/// between get-1 and get-N is observed by a *later* token and rejects
-/// the chain; it can never admit a chain that should be revoked).
+/// UCAN revoked (by its sig-exclusive payload CID per F-03/Inv-15),
+/// then assert it stays revoked across re-probe — there is no
+/// un-revoke API. This is the property that makes the "N+1 gets
+/// without snapshot" race fail-CLOSED-only (a revoke landing between
+/// get-1 and get-N is observed by a *later* token and rejects the
+/// chain; it can never admit a chain that should be revoked).
 #[test]
 fn durable_revocation_is_monotonic_so_n_plus_1_race_is_fail_closed_only_1143_641() {
     use benten_caps::UCANBackend;
-    use benten_core::Cid;
+    use benten_id::keypair::Keypair;
+    use benten_id::ucan::Ucan;
 
     let inner = benten_graph::RedbBackend::open_in_memory().expect("redb in-memory open");
     let ucan_backend = UCANBackend::new(Arc::new(inner));
-    let cid = Cid::from_blake3_digest([7u8; 32]);
+
+    let issuer = Keypair::generate();
+    let audience = Keypair::generate();
+    let token = Ucan::builder()
+        .issuer_did(&issuer.public_key().to_did())
+        .audience_did(&audience.public_key().to_did())
+        .capability("/zone/posts", "read")
+        .sign(&issuer);
 
     assert!(
-        !ucan_backend.is_revoked(&cid).unwrap(),
-        "unmarked CID must not be revoked"
+        !ucan_backend.is_revoked(&token).unwrap(),
+        "unmarked token must not be revoked"
     );
-    ucan_backend.revoke(&cid).unwrap();
+    ucan_backend.revoke(&token).unwrap();
     assert!(
-        ucan_backend.is_revoked(&cid).unwrap(),
+        ucan_backend.is_revoked(&token).unwrap(),
         "post-revoke probe must be revoked"
     );
     // Monotonic: re-probe still revoked; no API exists to un-revoke.
     assert!(
-        ucan_backend.is_revoked(&cid).unwrap(),
+        ucan_backend.is_revoked(&token).unwrap(),
         "revocation is append-only/monotonic — the basis for the #641 \
          fail-CLOSED-only safety argument"
     );
@@ -127,35 +136,48 @@ fn durable_revocation_is_monotonic_so_n_plus_1_race_is_fail_closed_only_1143_641
 /// length-prefix/hash, enabling a `g14b:` cross-namespace collision)
 /// was DELETED by the COLLAPSE spine (#1251 — "collapse device-
 /// revocation/recheck parallel pipes into single chain-validation
-/// seam"). Revocation now flows through the per-UCAN-CID
-/// `g14b:revoked:<ucan_cid>` marker only, where `<ucan_cid>` is a
-/// fixed-width BLAKE3 digest (not attacker-influenced DID bytes). This
-/// pin locks the resolved state: revoking by CID and probing by the
-/// SAME CID round-trips, and the key derivation is CID-shaped (no
+/// seam"). Revocation now flows through the per-token
+/// `g14b:revoked:<payload_cid>` marker only, where `<payload_cid>` is a
+/// fixed-width BLAKE3 digest over the UCAN `claims` alone (F-03/Inv-15;
+/// sig-exclusive, never attacker-influenced DID bytes). This pin locks
+/// the resolved state: revoking a token and probing the SAME token
+/// round-trips, and the key derivation is CID-shaped (no
 /// untrusted-DID-bytes prefix path remains to collide).
 #[test]
 fn revocation_keyed_by_blake3_cid_no_untrusted_did_prefix_1148_559() {
     use benten_caps::UCANBackend;
-    use benten_core::Cid;
+    use benten_id::keypair::Keypair;
+    use benten_id::ucan::Ucan;
 
     let inner = benten_graph::RedbBackend::open_in_memory().expect("redb in-memory open");
     let backend = UCANBackend::new(Arc::new(inner));
 
-    // Two distinct CIDs (the only revocation-key input post-#1251).
-    let cid_a = Cid::from_blake3_digest([0xAAu8; 32]);
-    let cid_b = Cid::from_blake3_digest([0xBBu8; 32]);
+    let issuer = Keypair::generate();
+    let audience = Keypair::generate();
+    // Two distinct tokens (distinct capabilities → distinct claims →
+    // distinct payload CIDs), the only revocation-key input post-#1251.
+    let token_a = Ucan::builder()
+        .issuer_did(&issuer.public_key().to_did())
+        .audience_did(&audience.public_key().to_did())
+        .capability("/zone/posts", "read")
+        .sign(&issuer);
+    let token_b = Ucan::builder()
+        .issuer_did(&issuer.public_key().to_did())
+        .audience_did(&audience.public_key().to_did())
+        .capability("/zone/comments", "write")
+        .sign(&issuer);
 
-    backend.revoke(&cid_a).unwrap();
+    backend.revoke(&token_a).unwrap();
     assert!(
-        backend.is_revoked(&cid_a).unwrap(),
-        "revoke(cid_a) then is_revoked(cid_a) must be true"
+        backend.is_revoked(&token_a).unwrap(),
+        "revoke(token_a) then is_revoked(token_a) must be true"
     );
-    // A different CID is NOT collaterally revoked — proves the key is
-    // a function of the (collision-resistant) CID alone, not of any
-    // attacker-influenced DID-bytes prefix.
+    // A different token is NOT collaterally revoked — proves the key is
+    // a function of the (collision-resistant) payload CID alone, not of
+    // any attacker-influenced DID-bytes prefix.
     assert!(
-        !backend.is_revoked(&cid_b).unwrap(),
-        "a distinct CID must NOT be collaterally revoked — the #559 \
+        !backend.is_revoked(&token_b).unwrap(),
+        "a distinct token must NOT be collaterally revoked — the #559 \
          cross-namespace collision surface (dev_revoke_key DID-prefix) \
          is gone post-#1251"
     );

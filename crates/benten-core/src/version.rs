@@ -52,6 +52,10 @@ use crate::Cid;
 /// chain). Two independent [`Anchor::new`] calls — even with the same `head`
 /// CID — produce **independent** chains.
 #[derive(Debug, Clone)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a
+// SemVer break. The `chain` field is already private, so cross-crate literal
+// construction was never possible; the attribute is the freeze pin.
+#[non_exhaustive]
 pub struct Anchor {
     /// The initial head the anchor was constructed against.
     pub head: Cid,
@@ -103,6 +107,9 @@ impl Anchor {
 /// against the actual current head (re-read + re-attempt) rather than
 /// receiving an opaque "append failed."
 #[derive(Debug, thiserror::Error)]
+// §11 SemVer-readiness (F-22 pre-tag): a future version-error variant lands
+// additively; cross-crate consumers add a `_` wildcard arm.
+#[non_exhaustive]
 pub enum VersionError {
     /// Two appends against the same prior head — chain forks. `seen` is the
     /// prior head the duplicate was stacked on; `attempted` is the

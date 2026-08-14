@@ -1,4 +1,31 @@
 pub mod benten_id
+pub mod benten_id::authority_verify
+pub enum benten_id::authority_verify::AuthorityVerifyError
+pub benten_id::authority_verify::AuthorityVerifyError::Malformed
+pub benten_id::authority_verify::AuthorityVerifyError::VerifyFailed
+impl core::clone::Clone for benten_id::authority_verify::AuthorityVerifyError
+pub fn benten_id::authority_verify::AuthorityVerifyError::clone(&self) -> benten_id::authority_verify::AuthorityVerifyError
+impl core::cmp::Eq for benten_id::authority_verify::AuthorityVerifyError
+impl core::cmp::PartialEq for benten_id::authority_verify::AuthorityVerifyError
+pub fn benten_id::authority_verify::AuthorityVerifyError::eq(&self, &benten_id::authority_verify::AuthorityVerifyError) -> bool
+impl core::fmt::Debug for benten_id::authority_verify::AuthorityVerifyError
+pub fn benten_id::authority_verify::AuthorityVerifyError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for benten_id::authority_verify::AuthorityVerifyError
+impl core::marker::StructuralPartialEq for benten_id::authority_verify::AuthorityVerifyError
+impl core::marker::Freeze for benten_id::authority_verify::AuthorityVerifyError
+impl core::marker::Send for benten_id::authority_verify::AuthorityVerifyError
+impl core::marker::Sync for benten_id::authority_verify::AuthorityVerifyError
+impl core::marker::Unpin for benten_id::authority_verify::AuthorityVerifyError
+impl core::marker::UnsafeUnpin for benten_id::authority_verify::AuthorityVerifyError
+impl core::panic::unwind_safe::RefUnwindSafe for benten_id::authority_verify::AuthorityVerifyError
+impl core::panic::unwind_safe::UnwindSafe for benten_id::authority_verify::AuthorityVerifyError
+pub trait benten_id::authority_verify::ToSigningKey
+pub fn benten_id::authority_verify::ToSigningKey::to_signing_key(&self) -> benten_crypto_suite::sig::PublicKey
+impl benten_id::authority_verify::ToSigningKey for benten_crypto_suite::sig::PublicKey
+pub fn benten_crypto_suite::sig::PublicKey::to_signing_key(&self) -> benten_crypto_suite::sig::PublicKey
+impl benten_id::authority_verify::ToSigningKey for benten_id::keypair::PublicKey
+pub fn benten_id::keypair::PublicKey::to_signing_key(&self) -> benten_crypto_suite::sig::PublicKey
+pub fn benten_id::authority_verify::verify_authority_signature(&benten_crypto_suite::sig::PublicKey, &[u8], &[u8]) -> core::result::Result<(), benten_id::authority_verify::AuthorityVerifyError>
 pub mod benten_id::canonical_bytes
 pub trait benten_id::canonical_bytes::CanonicalBytes
 pub fn benten_id::canonical_bytes::CanonicalBytes::to_canonical_bytes(&self) -> alloc::vec::Vec<u8>
@@ -125,7 +152,7 @@ pub fn benten_id::device_attestation::DeviceAttestation::issue_with_nonce(&bente
 pub fn benten_id::device_attestation::DeviceAttestation::issue_with_runtime_check(&benten_id::keypair::Keypair, benten_id::did::Did, benten_id::device_attestation::CapabilityEnvelope, benten_id::device_attestation::RuntimeTarget) -> core::result::Result<Self, benten_id::errors::DeviceAttestationError>
 pub fn benten_id::device_attestation::DeviceAttestation::parent_did(&self) -> benten_id::did::Did
 pub fn benten_id::device_attestation::DeviceAttestation::to_canonical_bytes(&self) -> alloc::vec::Vec<u8>
-pub fn benten_id::device_attestation::DeviceAttestation::verify_signature_with(&self, &benten_id::keypair::PublicKey) -> core::result::Result<(), benten_id::errors::DeviceAttestationError>
+pub fn benten_id::device_attestation::DeviceAttestation::verify_signature_with(&self, &impl benten_id::authority_verify::ToSigningKey) -> core::result::Result<(), benten_id::errors::DeviceAttestationError>
 impl benten_id::canonical_bytes::CanonicalBytes for benten_id::device_attestation::DeviceAttestation
 pub fn benten_id::device_attestation::DeviceAttestation::to_canonical_bytes(&self) -> alloc::vec::Vec<u8>
 impl core::clone::Clone for benten_id::device_attestation::DeviceAttestation
@@ -151,13 +178,18 @@ pub mod benten_id::did
 pub struct benten_id::did::Did(_)
 impl benten_id::did::Did
 pub fn benten_id::did::Did::as_str(&self) -> &str
+pub fn benten_id::did::Did::from_benten_keyset(&benten_crypto_suite::sig::PublicKey, &benten_id::keyset::KeySetDocument) -> Self
 pub fn benten_id::did::Did::from_hybrid_public_key(&benten_crypto_suite::sig::PublicKey) -> Self
 pub fn benten_id::did::Did::from_public_key(&benten_id::keypair::PublicKey) -> Self
 pub fn benten_id::did::Did::from_string_for_test_fixture(alloc::string::String) -> Self
+pub fn benten_id::did::Did::keyset_cid(&self) -> core::result::Result<benten_core::Cid, benten_id::errors::DidError>
 pub fn benten_id::did::Did::parse_validated(impl core::convert::Into<alloc::string::String>) -> core::result::Result<Self, benten_id::errors::DidError>
 pub fn benten_id::did::Did::parse_validated_hybrid(impl core::convert::Into<alloc::string::String>) -> core::result::Result<Self, benten_id::errors::DidError>
+pub fn benten_id::did::Did::parse_validated_signing(impl core::convert::Into<alloc::string::String>) -> core::result::Result<Self, benten_id::errors::DidError>
 pub fn benten_id::did::Did::resolve(&self) -> core::result::Result<benten_id::keypair::PublicKey, benten_id::errors::DidError>
 pub fn benten_id::did::Did::resolve_hybrid(&self) -> core::result::Result<benten_crypto_suite::sig::PublicKey, benten_id::errors::DidError>
+pub fn benten_id::did::Did::resolve_kem(&self, &benten_id::keyset::KeySetDocument) -> core::result::Result<benten_crypto_suite::cipher_suite::RecipientPublic, benten_id::errors::DidError>
+pub fn benten_id::did::Did::resolve_signing(&self) -> core::result::Result<benten_crypto_suite::sig::PublicKey, benten_id::errors::DidError>
 impl core::clone::Clone for benten_id::did::Did
 pub fn benten_id::did::Did::clone(&self) -> benten_id::did::Did
 impl core::cmp::Eq for benten_id::did::Did
@@ -184,13 +216,18 @@ impl core::marker::UnsafeUnpin for benten_id::did::Did
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::did::Did
 impl core::panic::unwind_safe::UnwindSafe for benten_id::did::Did
 pub const benten_id::did::DID_AGENT_PREFIX: &str
+pub const benten_id::did::DID_BENTEN_METHOD: &str
+pub const benten_id::did::DID_BENTEN_PREFIX: &str
 pub const benten_id::did::DID_KEY_PREFIX: &str
 pub const benten_id::did::ED25519_MULTICODEC: [u8; 2]
 pub const benten_id::did::HYBRID_KEM_MULTICODEC: [u8; 2]
 pub const benten_id::did::HYBRID_SIG_MULTICODEC: [u8; 2]
+pub const benten_id::did::MAX_DID_KEY_STRING_LEN: usize
 pub const benten_id::did::MLDSA65_PUB_MULTICODEC: [u8; 2]
+pub const benten_id::did::MLKEM768_PUB_MULTICODEC: [u8; 2]
+pub const benten_id::did::X25519_PUB_MULTICODEC: [u8; 2]
 pub mod benten_id::did_rotation
-pub enum benten_id::did_rotation::AttestationKind
+#[non_exhaustive] pub enum benten_id::did_rotation::AttestationKind
 pub benten_id::did_rotation::AttestationKind::SupersededBy
 impl core::clone::Clone for benten_id::did_rotation::AttestationKind
 pub fn benten_id::did_rotation::AttestationKind::clone(&self) -> benten_id::did_rotation::AttestationKind
@@ -221,7 +258,7 @@ impl benten_id::did_rotation::RotationAttestation
 pub fn benten_id::did_rotation::RotationAttestation::kind(&self) -> benten_id::did_rotation::AttestationKind
 pub fn benten_id::did_rotation::RotationAttestation::next_keypair_did(&self) -> benten_id::did::Did
 pub fn benten_id::did_rotation::RotationAttestation::previous_keypair_did(&self) -> benten_id::did::Did
-pub fn benten_id::did_rotation::RotationAttestation::verify_signature_with(&self, &benten_id::keypair::PublicKey) -> core::result::Result<(), benten_id::errors::DidRotationError>
+pub fn benten_id::did_rotation::RotationAttestation::verify_signature_with(&self, &impl benten_id::authority_verify::ToSigningKey) -> core::result::Result<(), benten_id::errors::DidRotationError>
 impl benten_id::canonical_bytes::CanonicalBytes for benten_id::did_rotation::RotationAttestation
 pub fn benten_id::did_rotation::RotationAttestation::to_canonical_bytes(&self) -> alloc::vec::Vec<u8>
 impl core::clone::Clone for benten_id::did_rotation::RotationAttestation
@@ -303,6 +340,9 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::DeviceAttest
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::DeviceAttestationError
 #[non_exhaustive] pub enum benten_id::errors::DidError
 pub benten_id::errors::DidError::Base58Decode
+pub benten_id::errors::DidError::BodyTooLong
+pub benten_id::errors::DidError::BodyTooLong::got: usize
+pub benten_id::errors::DidError::BodyTooLong::max: usize
 pub benten_id::errors::DidError::BodyTooShort
 pub benten_id::errors::DidError::BodyTooShort::got: usize
 pub benten_id::errors::DidError::BodyTooShort::min: usize
@@ -313,8 +353,22 @@ pub benten_id::errors::DidError::HybridBodyTooShort::min: usize
 pub benten_id::errors::DidError::HybridTrailingBytes
 pub benten_id::errors::DidError::HybridTrailingBytes::extra: usize
 pub benten_id::errors::DidError::InvalidHybridPublicKey(&'static str)
+pub benten_id::errors::DidError::InvalidKeysetCid
 pub benten_id::errors::DidError::InvalidPrefix(alloc::string::String)
 pub benten_id::errors::DidError::InvalidPublicKey
+pub benten_id::errors::DidError::KeysetBelowPqFloor
+pub benten_id::errors::DidError::KeysetBelowPqFloor::kem_cp: u16
+pub benten_id::errors::DidError::KeysetCommitmentMismatch
+pub benten_id::errors::DidError::KeysetDocMalformed
+pub benten_id::errors::DidError::KeysetDocNonCanonical
+pub benten_id::errors::DidError::KeysetDocTooLong
+pub benten_id::errors::DidError::KeysetDocTooLong::got: usize
+pub benten_id::errors::DidError::KeysetDocTooLong::max: usize
+pub benten_id::errors::DidError::KeysetDocUnsupportedVersion
+pub benten_id::errors::DidError::KeysetDocUnsupportedVersion::version: u16
+pub benten_id::errors::DidError::KeysetEmbeddedSigningMismatch
+pub benten_id::errors::DidError::MalformedKemMultikey
+pub benten_id::errors::DidError::NoKemCommitment
 pub benten_id::errors::DidError::UnknownMulticodec(u8, u8)
 impl core::cmp::Eq for benten_id::errors::DidError
 impl core::cmp::PartialEq for benten_id::errors::DidError
@@ -452,6 +506,9 @@ pub benten_id::errors::UcanError::DeviceEnvelopeViolated
 pub benten_id::errors::UcanError::DeviceEnvelopeViolated::cap: alloc::string::String
 pub benten_id::errors::UcanError::DeviceEnvelopeViolated::issuer: alloc::string::String
 pub benten_id::errors::UcanError::EmptyChain
+pub benten_id::errors::UcanError::EnvelopeTooLarge
+pub benten_id::errors::UcanError::EnvelopeTooLarge::got: usize
+pub benten_id::errors::UcanError::EnvelopeTooLarge::max: usize
 pub benten_id::errors::UcanError::Expired
 pub benten_id::errors::UcanError::Expired::exp: u64
 pub benten_id::errors::UcanError::Expired::now: u64
@@ -484,6 +541,9 @@ impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::UcanError
 #[non_exhaustive] pub enum benten_id::errors::VcError
 pub benten_id::errors::VcError::BadSignature
 pub benten_id::errors::VcError::DecodeFailed
+pub benten_id::errors::VcError::EnvelopeTooLarge
+pub benten_id::errors::VcError::EnvelopeTooLarge::got: usize
+pub benten_id::errors::VcError::EnvelopeTooLarge::max: usize
 pub benten_id::errors::VcError::Expired
 pub benten_id::errors::VcError::Expired::exp: u64
 pub benten_id::errors::VcError::Expired::now: u64
@@ -564,6 +624,8 @@ pub fn benten_id::keypair::PublicKey::from_bytes(&[u8; 32]) -> core::option::Opt
 pub fn benten_id::keypair::PublicKey::to_bytes(&self) -> [u8; 32]
 pub fn benten_id::keypair::PublicKey::to_did(&self) -> benten_id::did::Did
 pub fn benten_id::keypair::PublicKey::verify(&self, &[u8], &ed25519::Signature) -> core::result::Result<(), ed25519_dalek::errors::SignatureError>
+impl benten_id::authority_verify::ToSigningKey for benten_id::keypair::PublicKey
+pub fn benten_id::keypair::PublicKey::to_signing_key(&self) -> benten_crypto_suite::sig::PublicKey
 impl core::clone::Clone for benten_id::keypair::PublicKey
 pub fn benten_id::keypair::PublicKey::clone(&self) -> benten_id::keypair::PublicKey
 impl core::cmp::Eq for benten_id::keypair::PublicKey
@@ -595,6 +657,38 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_id::keypair::SecretKey
 impl core::panic::unwind_safe::UnwindSafe for benten_id::keypair::SecretKey
 pub const benten_id::keypair::ENVELOPE_ALG: &str
 pub const benten_id::keypair::ENVELOPE_VERSION: u8
+pub mod benten_id::keyset
+pub struct benten_id::keyset::KeySetDocument
+impl benten_id::keyset::KeySetDocument
+pub fn benten_id::keyset::KeySetDocument::cid(&self) -> benten_core::Cid
+pub fn benten_id::keyset::KeySetDocument::from_canonical_bytes(&[u8]) -> core::result::Result<Self, benten_id::errors::DidError>
+pub fn benten_id::keyset::KeySetDocument::kem(&self) -> &[u8]
+pub fn benten_id::keyset::KeySetDocument::kem_cp(&self) -> u16
+pub fn benten_id::keyset::KeySetDocument::sig(&self) -> &[u8]
+pub fn benten_id::keyset::KeySetDocument::sig_cp(&self) -> u16
+pub fn benten_id::keyset::KeySetDocument::to_canonical_bytes(&self) -> alloc::vec::Vec<u8>
+pub fn benten_id::keyset::KeySetDocument::v1_hybrid(alloc::vec::Vec<u8>, alloc::vec::Vec<u8>) -> Self
+pub fn benten_id::keyset::KeySetDocument::v1_with(u16, alloc::vec::Vec<u8>, alloc::vec::Vec<u8>, u16, u16) -> Self
+pub fn benten_id::keyset::KeySetDocument::version(&self) -> u16
+impl core::clone::Clone for benten_id::keyset::KeySetDocument
+pub fn benten_id::keyset::KeySetDocument::clone(&self) -> benten_id::keyset::KeySetDocument
+impl core::cmp::Eq for benten_id::keyset::KeySetDocument
+impl core::cmp::PartialEq for benten_id::keyset::KeySetDocument
+pub fn benten_id::keyset::KeySetDocument::eq(&self, &benten_id::keyset::KeySetDocument) -> bool
+impl core::fmt::Debug for benten_id::keyset::KeySetDocument
+pub fn benten_id::keyset::KeySetDocument::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for benten_id::keyset::KeySetDocument
+impl core::marker::Freeze for benten_id::keyset::KeySetDocument
+impl core::marker::Send for benten_id::keyset::KeySetDocument
+impl core::marker::Sync for benten_id::keyset::KeySetDocument
+impl core::marker::Unpin for benten_id::keyset::KeySetDocument
+impl core::marker::UnsafeUnpin for benten_id::keyset::KeySetDocument
+impl core::panic::unwind_safe::RefUnwindSafe for benten_id::keyset::KeySetDocument
+impl core::panic::unwind_safe::UnwindSafe for benten_id::keyset::KeySetDocument
+pub const benten_id::keyset::KEM_CP_HYBRID_X25519_MLKEM768: u16
+pub const benten_id::keyset::KEYSET_DOC_VERSION: u16
+pub const benten_id::keyset::MAX_KEYSET_DOC_BYTES: usize
+pub const benten_id::keyset::SIG_CP_LAMPS_MLDSA65_ED25519: u16
 pub mod benten_id::multi_sig
 pub struct benten_id::multi_sig::Ed25519SingleKey
 impl benten_id::multi_sig::Ed25519SingleKey
@@ -782,6 +876,8 @@ impl core::marker::Unpin for benten_id::ucan::UcanClaims
 impl core::marker::UnsafeUnpin for benten_id::ucan::UcanClaims
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::ucan::UcanClaims
 impl core::panic::unwind_safe::UnwindSafe for benten_id::ucan::UcanClaims
+pub const benten_id::ucan::MAX_UCAN_ENVELOPE_BYTES: usize
+pub const benten_id::ucan::MAX_UCAN_PER_LINK_BYTES: usize
 pub const benten_id::ucan::MAX_UCAN_PROOF_DEPTH: usize
 pub fn benten_id::ucan::validate_chain_at(&[benten_id::ucan::Ucan], u64) -> core::result::Result<(), benten_id::errors::UcanError>
 pub fn benten_id::ucan::validate_chain_for_audience(&[benten_id::ucan::Ucan], &benten_id::did::Did) -> core::result::Result<(), benten_id::errors::UcanError>
@@ -941,13 +1037,14 @@ impl core::marker::Unpin for benten_id::vc::TrustDomain
 impl core::marker::UnsafeUnpin for benten_id::vc::TrustDomain
 impl core::panic::unwind_safe::RefUnwindSafe for benten_id::vc::TrustDomain
 impl core::panic::unwind_safe::UnwindSafe for benten_id::vc::TrustDomain
+pub const benten_id::vc::MAX_VC_ENVELOPE_BYTES: usize
 pub const benten_id::vc::VC_CONTEXT_V1: &str
 pub const benten_id::vc::VC_TYPE_BASE: &str
 pub fn benten_id::vc::verify(&benten_id::vc::Credential, &benten_id::did::Did) -> core::result::Result<(), benten_id::errors::VcError>
 pub fn benten_id::vc::verify_at(&benten_id::vc::Credential, &benten_id::did::Did, u64) -> core::result::Result<(), benten_id::errors::VcError>
-pub fn benten_id::vc::verify_bytes_in_trust_domain(&[u8], &benten_id::vc::TrustDomain) -> core::result::Result<(), benten_id::errors::VcError>
-pub fn benten_id::vc::verify_in_trust_domain(&benten_id::vc::Credential, &benten_id::vc::TrustDomain) -> core::result::Result<(), benten_id::errors::VcError>
-pub fn benten_id::vc::verify_with_registry(&benten_id::vc::Credential, &benten_id::did::Did, &benten_id::vc::RevocationRegistry) -> core::result::Result<(), benten_id::errors::VcError>
+pub fn benten_id::vc::verify_bytes_in_trust_domain(&[u8], &benten_id::vc::TrustDomain, u64) -> core::result::Result<(), benten_id::errors::VcError>
+pub fn benten_id::vc::verify_in_trust_domain(&benten_id::vc::Credential, &benten_id::vc::TrustDomain, u64) -> core::result::Result<(), benten_id::errors::VcError>
+pub fn benten_id::vc::verify_with_registry(&benten_id::vc::Credential, &benten_id::did::Did, &benten_id::vc::RevocationRegistry, u64) -> core::result::Result<(), benten_id::errors::VcError>
 #[non_exhaustive] pub enum benten_id::DeviceAttestationError
 pub benten_id::DeviceAttestationError::BadSignature
 pub benten_id::DeviceAttestationError::DecodeFailed
@@ -985,6 +1082,9 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_id::errors::DeviceAttest
 impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::DeviceAttestationError
 #[non_exhaustive] pub enum benten_id::DidError
 pub benten_id::DidError::Base58Decode
+pub benten_id::DidError::BodyTooLong
+pub benten_id::DidError::BodyTooLong::got: usize
+pub benten_id::DidError::BodyTooLong::max: usize
 pub benten_id::DidError::BodyTooShort
 pub benten_id::DidError::BodyTooShort::got: usize
 pub benten_id::DidError::BodyTooShort::min: usize
@@ -995,8 +1095,22 @@ pub benten_id::DidError::HybridBodyTooShort::min: usize
 pub benten_id::DidError::HybridTrailingBytes
 pub benten_id::DidError::HybridTrailingBytes::extra: usize
 pub benten_id::DidError::InvalidHybridPublicKey(&'static str)
+pub benten_id::DidError::InvalidKeysetCid
 pub benten_id::DidError::InvalidPrefix(alloc::string::String)
 pub benten_id::DidError::InvalidPublicKey
+pub benten_id::DidError::KeysetBelowPqFloor
+pub benten_id::DidError::KeysetBelowPqFloor::kem_cp: u16
+pub benten_id::DidError::KeysetCommitmentMismatch
+pub benten_id::DidError::KeysetDocMalformed
+pub benten_id::DidError::KeysetDocNonCanonical
+pub benten_id::DidError::KeysetDocTooLong
+pub benten_id::DidError::KeysetDocTooLong::got: usize
+pub benten_id::DidError::KeysetDocTooLong::max: usize
+pub benten_id::DidError::KeysetDocUnsupportedVersion
+pub benten_id::DidError::KeysetDocUnsupportedVersion::version: u16
+pub benten_id::DidError::KeysetEmbeddedSigningMismatch
+pub benten_id::DidError::MalformedKemMultikey
+pub benten_id::DidError::NoKemCommitment
 pub benten_id::DidError::UnknownMulticodec(u8, u8)
 impl core::cmp::Eq for benten_id::errors::DidError
 impl core::cmp::PartialEq for benten_id::errors::DidError
@@ -1155,6 +1269,9 @@ pub benten_id::UcanError::DeviceEnvelopeViolated
 pub benten_id::UcanError::DeviceEnvelopeViolated::cap: alloc::string::String
 pub benten_id::UcanError::DeviceEnvelopeViolated::issuer: alloc::string::String
 pub benten_id::UcanError::EmptyChain
+pub benten_id::UcanError::EnvelopeTooLarge
+pub benten_id::UcanError::EnvelopeTooLarge::got: usize
+pub benten_id::UcanError::EnvelopeTooLarge::max: usize
 pub benten_id::UcanError::Expired
 pub benten_id::UcanError::Expired::exp: u64
 pub benten_id::UcanError::Expired::now: u64
@@ -1187,6 +1304,9 @@ impl core::panic::unwind_safe::UnwindSafe for benten_id::errors::UcanError
 #[non_exhaustive] pub enum benten_id::VcError
 pub benten_id::VcError::BadSignature
 pub benten_id::VcError::DecodeFailed
+pub benten_id::VcError::EnvelopeTooLarge
+pub benten_id::VcError::EnvelopeTooLarge::got: usize
+pub benten_id::VcError::EnvelopeTooLarge::max: usize
 pub benten_id::VcError::Expired
 pub benten_id::VcError::Expired::exp: u64
 pub benten_id::VcError::Expired::now: u64

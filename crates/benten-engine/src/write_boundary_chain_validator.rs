@@ -39,21 +39,24 @@
 //!   so platform-foundation can swap in the substantive validator at
 //!   engine construction time.
 //!
-//! G-CORE-8.2 follow-up (HARD-RULE-12 BELONGS-NAMED-NOW disposition;
-//! named destination: this module's `Engine::commit`-path wire-up):
-//! the actual call into the WRITE admission path inside
-//! `Engine::commit` / `Engine::put_node_with_context` — pulled to a
-//! follow-up wave because (a) it requires audit of every WRITE call
-//! site to ensure no admission path is missed (Phase-3 G16-B-F
-//! precedent), (b) integration-tests + sync interaction need a full
-//! validator wired (Atrium merge → Engine::apply_atrium_merge already
-//! has its own seam at `manifest_envelope_recheck`), and (c) the
-//! engine-installed-default behavior choice (admit vs reject when no
-//! validator is installed) is a Ben-decision deferral per §8-E
-//! sealed-discipline (the §8-E ratification covers `CapabilityPolicy`
-//! sealing; the parallel question for `WriteBoundaryChainValidator`'s
-//! default-builder posture follows the same SEALED-discipline
-//! framework and waits for the corresponding ratification).
+//! G-CORE-8.2 consumption — **LANDED (Row D-1 CLOSED at R6 R1 FP-F4 §S1,
+//! 2026-05-24; sharpened at R6 R2 FP-B, 2026-05-25).** The actual call into
+//! the WRITE admission path is now wired at every WRITE call site: the
+//! `Engine::commit` / `Engine::put_node_with_context` cluster consults the
+//! configured validator via
+//! `write_boundary_chain_validator::WriteAdmissionFrame::engine_internal()` /
+//! `::with_chain(...)` (see `engine_crud.rs`, `engine_caps.rs`,
+//! `engine_wait.rs`, `handler_versions.rs`, `engine_views.rs`; the Atrium
+//! merge path consults its own `manifest_envelope_recheck` seam in
+//! `Engine::apply_atrium_merge`). The full WRITE-call-site audit (Phase-3
+//! G16-B-F precedent) + integration-tests are complete. The one residual
+//! Ben-decision — the engine-installed-DEFAULT posture (admit vs reject when
+//! no validator is installed) — follows the §8-E SEALED-discipline framework
+//! (which ratified `CapabilityPolicy` sealing; the parallel
+//! `WriteBoundaryChainValidator` default-builder posture rides the same
+//! framework); the shipped default here is [`NoopWriteBoundaryChainValidator`]
+//! (returns `NotApplicable` → admit) until platform-foundation swaps in the
+//! substantive validator via [`crate::Engine::set_write_boundary_chain_validator`].
 
 use benten_errors::ErrorCode;
 

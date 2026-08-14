@@ -38,9 +38,14 @@ fn workspace_root() -> PathBuf {
 }
 
 #[test]
-#[ignore = "phase-4-foundation R4-FP-3 RED-PHASE — G26-B wave-10 un-ignores. \
-    Pin source: r2-test-landscape.md §2.13 row 5 + meth-r1-9. branch-protection.yml aggregate \
-    over 3 new Phase-4-Foundation required-status contexts."]
+#[ignore = "F-073 destination-retarget: umbrella over the admin-ui-v0-build + \
+    plugin-manifest-validation + materializer-determinism contexts. Verified FALSE at \
+    r9-base — none of the three markers appears in branch-protection.yml. The \
+    materializer-determinism leg is CLOSED differently (registered on the required \
+    frozen-bytes corpus, not as its own workflow context — see \
+    materializer_determinism_canonical_bytes_stable_across_runs.rs), so this aggregate \
+    needs re-scoping to the two remaining workflow legs, not just un-ignoring. \
+    Destination: docs/future/phase-4-backlog.md §4.168 residual 3 (HARD RULE 12 clause-(b))."]
 fn branch_protection_spec_lists_new_phase_4_foundation_required_contexts() {
     let root = workspace_root();
     let spec_path = root.join(".github/branch-protection.yml");

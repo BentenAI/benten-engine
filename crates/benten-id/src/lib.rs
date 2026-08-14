@@ -75,13 +75,25 @@
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
 
+pub mod authority_verify;
 pub mod canonical_bytes;
 pub mod device_attestation;
 pub mod did;
 pub mod did_rotation;
 pub mod errors;
 pub mod grant_reader;
+// GAP-KDB Shape-B (W0 canary) — shared RED-PHASE test fixtures for the
+// did:benten identity model. `testing`-gated + a LIBRARY module (not
+// `tests/`) so benten-drop + benten-engine red-phase tests can import the
+// frozen surface cross-crate. R5 swaps the stubs for the minted real API.
+#[cfg(any(test, feature = "testing"))]
+pub mod kdb_testing;
 pub mod keypair;
+// GAP-KDB Shape-B (W0 canary → R5) — the real content-addressed
+// `KeySetDocument` a `did:benten` commits by CID. Production module (the real
+// KeySetDocument CID uses BLAKE3 in production); `did::Did::resolve_kem`
+// consumes it.
+pub mod keyset;
 pub mod multi_sig;
 pub mod plugin_did;
 pub mod ucan;

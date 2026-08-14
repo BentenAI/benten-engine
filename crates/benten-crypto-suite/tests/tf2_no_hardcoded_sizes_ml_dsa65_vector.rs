@@ -20,11 +20,13 @@
 //! (the JS analog widening); CLAUDE.md #5 ("Never hardcode key/sig/
 //! ciphertext sizes").
 //!
-//! # RED-PHASE STATUS (pim-12 §3.6e)
+//! # LANDED (RED-PHASE discharged at G-CORE-2; F-17 header retense)
 //!
-//! `benten-crypto-suite` is a STUB at R3-A; the intended G-CORE-2 surface
-//! does not exist, so these compile-but-fail at the `use` line. All
-//! `#[ignore]`-staged `LANDED at G-CORE-2 (pim-12 / §3.6e closure)`.
+//! The intended G-CORE-2 size-agility surface (`benten_crypto_suite::sizes`
+//! `SizeTouchingSurfaces` / `SyntheticVector` + `sig::{HybridSignature,
+//! SignatureSuite}`) EXISTS at HEAD — these tests wire the real API (see the
+//! `use` below) and run GREEN (no `#[ignore]`). The prior RED-PHASE stub-shim
+//! + un-ignore staging is fully discharged.
 //!
 //! # §3.5g cross-language rule-mirror note (carried into the G-CORE-2 brief)
 //!
@@ -44,7 +46,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 
-// RED-PHASE failure point: intended G-CORE-2 size-agility surface.
+// LANDED (G-CORE-2): the size-agility surface is live.
 use benten_crypto_suite::sig::{HybridSignature, SignatureSuite};
 use benten_crypto_suite::sizes::{SizeTouchingSurfaces, SyntheticVector};
 

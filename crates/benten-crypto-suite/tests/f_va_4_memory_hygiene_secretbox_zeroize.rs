@@ -140,21 +140,30 @@ fn secret_wrapper_debug_does_not_leak_key() {
     let secret = StubSecretKey::new(key_bytes);
     let rendered = format!("{secret:?}");
 
-    // The `{:?}` array form renders bytes as DECIMAL: 0xDE=222, 0xAD=173,
-    // 0xBE=190, 0xEF=239, 0xCA=202, 0xFE=254. A leaking Debug contains these
-    // distinct multi-digit values; a redacted `SecretBox<…>` render does not.
-    let leaked = rendered.contains("222")
-        || rendered.contains("173")
-        || rendered.contains("190")
-        || rendered.contains("239")
-        || rendered.contains("202")
-        || rendered.contains("254");
+    // R6-tail F-41 sweep: assert the CONTIGUOUS decimal SEQUENCE a leaking
+    // (derived) Debug would emit for the distinctive prefix — NOT the
+    // individual decimals. A bare `222` / `173` could false-positively collide
+    // with an unrelated integer field's rendering, making the old scan both
+    // fragile and imprecise. This matches the `LEAK_DECIMAL` convention in
+    // `crates/benten-engine/tests/f_secret_hygiene_roster.rs`. The fixture's
+    // leading bytes are 0xDE,0xAD,0xBE,0xEF,0xCA,0xFE,0xBA,0xD0, so a derived
+    // `[u8; 32]` Debug renders `[222, 173, 190, 239, 202, 254, 186, 208, ...]`.
+    const LEAK_DECIMAL: &str = "222, 173, 190, 239, 202, 254, 186, 208";
     assert!(
-        !leaked,
+        !rendered.contains(LEAK_DECIMAL),
         "the unlocked-K_principal wrapper MUST redact its Debug (secrecy::\
          SecretBox renders `SecretBox<…>`, never the bytes) — a coredump or a \
-         log line MUST NOT contain the key (Compromise #36). would-FAIL while \
-         the stub Debug leaks the raw [u8;32]; rendered=`{rendered}`"
+         log line MUST NOT contain the key (Compromise #36). A derived Debug \
+         leaks it as `{LEAK_DECIMAL}`; rendered=`{rendered}`"
+    );
+    // Positive guard: the k_principal FIELD must be replaced wholesale by the
+    // SecretBox placeholder, not merely have a marker somewhere in the render.
+    // (On this type `<redacted>` belongs to `user_did_signing_key`, a DIFFERENT
+    // field — so a generic `<redacted>` scan would not prove k_principal safe.)
+    assert!(
+        rendered.contains("k_principal: \"SecretBox<[u8; 32]>\""),
+        "the unlocked-K_principal wrapper MUST replace the k_principal field \
+         wholesale with the SecretBox placeholder; rendered=`{rendered}`"
     );
 }
 

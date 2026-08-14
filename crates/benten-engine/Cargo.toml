@@ -311,6 +311,16 @@ blake3 = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 benten-membership-set = { path = "../benten-membership-set", features = ["testing"] }
 
+# GAP-KDB Shape-B (W3 Fork-A authority-migration): the engine-seam RED-PHASE
+# pins (`kdb_eng_device_envelope_hybrid`, `kdb_eng_ucan_envelope_parity`)
+# import the `benten_id::kdb_testing` fixtures, which live behind benten-id's
+# `testing` feature. benten-id is already a native-only PRODUCTION dep above
+# (no `testing`); this dev-dep unions the `testing` feature into the ENGINE
+# TEST build ONLY (cargo feature unification is per-target — the production
+# lib build's dep-set + v1-frozen-interface surface are unchanged). Native-
+# only for the same reason benten-id itself is (CLAUDE.md baked-in #17).
+benten-id = { path = "../benten-id", features = ["testing"] }
+
 # Phase-3 G19-C2 wave-7 (§7.1) — SANDBOX execution-metrics propagation
 # tests. The `describe_sandbox_node_for_handler` accessor lives behind
 # `cfg(any(test, feature = "test-helpers"))` per Phase-2a sec-r6r2-02
@@ -372,6 +382,26 @@ required-features = ["test-helpers"]
 # `test-helpers`.
 [[test]]
 name = "r6_r2_batch_a_path_g_capability_grant_cid_substantive_at_apply_atrium_merge"
+required-features = ["test-helpers"]
+
+# D-74/75/76 secret-hygiene: `expose_unlocked_key` (raw-`K_principal`
+# `[u8; 32]` accessor) moved behind `#[cfg(any(test, feature =
+# "test-helpers"))]` (a raw-secret accessor must not sit on the frozen
+# `benten-engine` public-api surface). This F-LD-1 round-trip pin imports
+# `expose_unlocked_key`, so it now `required-features` `test-helpers` —
+# `cargo test --workspace` silently skips it (rather than failing the
+# import) when the feature isn't enabled.
+[[test]]
+name = "f_ld_1_device_auth_backend_sealed_headless"
+required-features = ["test-helpers"]
+
+# D-74/75/76 ENFORCING roster meta-test: constructs the publicly-buildable
+# secret types (VaultPayload / PermissionRequest / ProvisioningInnerPayload)
+# for the Debug-does-not-leak half + source-anchors the full zeroize/redact
+# roster. Reaches `benten-crypto-suite/testing` (PureKemDec cfg-gate anchor)
+# via `test-helpers`, so it `required-features` `test-helpers`.
+[[test]]
+name = "f_secret_hygiene_roster"
 required-features = ["test-helpers"]
 
 [[bench]]

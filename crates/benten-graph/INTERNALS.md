@@ -83,7 +83,7 @@ crate ships from the workspace yet.
 
 ## 3. Files inventory in `src/`
 
-### `lib.rs` (986 LOC)
+### `lib.rs` (1222 LOC)
 Crate root + module list + crate-level re-exports.
 Owns the `GraphError` enum (the canonical storage-layer error type with seven
 variants and a `code()` mapping to the stable error catalog), the
@@ -111,7 +111,7 @@ Phase 2+ can swap the storage for a boxed iterator without semver break.
 Compromise #12 at the engine-level posture even though the redb v4 mapping still
 collapses Group → Immediate.
 
-### `store.rs` (442 LOC)
+### `store.rs` (602 LOC)
 The mid-level node/edge traits and the change-event schema. Owns the key-schema
 helpers (`node_key`, `edge_key`, `subgraph_key`, `edge_src_index_key`,
 `edge_tgt_index_key`, plus their prefix variants), `NodeStore` and `EdgeStore`
@@ -125,7 +125,7 @@ footgun fix). Key schema is `n:CID`, `e:CID`, `s:CID`, `es:SRC|EDGE`,
 `et:TGT|EDGE` — five prefixes, no escape characters needed because CID byte
 length is fixed.
 
-### `redb_backend.rs` (1848 LOC)
+### `redb_backend.rs` (3160 LOC)
 The production backend. Single concrete struct (`RedbBackend`) wrapping a
 `redb::Database`, the configured durability, a shared `CidExistenceCache` for
 the Inv-13 fast path, a transaction-flag Mutex (nested-txn detection), an atomic
@@ -143,7 +143,7 @@ inherent `put_node` / `put_edge` always run the system-zone guard before any
 redb call (the chaos-engineer g3-ce-1 / g3-ce-2 fix that closed the
 binding-caller bypass).
 
-### `transaction.rs` (760 LOC)
+### `transaction.rs` (820 LOC)
 The closure-based `Transaction` primitive. Owns `PendingOp` (the four-variant
 pending-ops enum: PutNode / PutEdge / DeleteNode / DeleteEdge — each carrying
 enough state to construct the post-commit ChangeEvent without re-reading the
@@ -160,7 +160,7 @@ referencing Edge inside the same redb txn (r6b-ivm-1 — the prior version left
 dangling edges); `PendingOp::PutEdge` always emits `ChangeKind::EdgeCreated`,
 never `Created`, so edge-driven IVM views see the right event shape.
 
-### `indexes.rs` (90 LOC)
+### `indexes.rs` (128 LOC)
 Label and property-value index plumbing. Two `MultimapTableDefinition`s
 (`LABEL_INDEX_TABLE`, `PROP_INDEX_TABLE`) plus three crate-private helpers:
 `value_index_bytes` (DAG-CBOR-encode a `Value` for use as an index key
@@ -209,7 +209,7 @@ byte prefix (returns `None` for all-`0xff` so callers do an unbounded `prefix..`
 scan instead). Promoted out of `redb_backend.rs` so `InMemoryBackend` and
 `BrowserBackend` could share it without dragging redb into the wasm32 build.
 
-### `graph_backend.rs` (394 LOC)
+### `graph_backend.rs` (472 LOC)
 The umbrella `GraphBackend` trait, introduced at G13-A as the canary for the
 generic-cascade direction. Composes `KVBackend + NodeStore + EdgeStore` plus
 four new associated items: `type Snapshot` (constrained to `Send + Sync +
@@ -223,7 +223,7 @@ Engine consumes it through the generic-cascade direction
 (`Engine<B: GraphBackend>`); the test
 `engine_does_not_reference_dyn_graph_backend_at_engine_boundary` pins that.
 
-### `browser_backend.rs` (667 LOC)
+### `browser_backend.rs` (759 LOC)
 The wasm32-unknown-unknown thin-client cache. In-RAM `Mutex<BTreeMap>` keyed
 under the same `n:CID` / `e:CID` / `es:` / `et:` schema as `RedbBackend`. Owns
 `BrowserBackend`, `BrowserSnapshot` (an owned `BTreeMap` clone — independent of
@@ -238,17 +238,17 @@ the system-zone label gate is preserved as a defense-in-depth check against a
 buggy subscription.
 
 ### `backends/mod.rs` + four submodules
-- `backends/blob_backend_trait.rs` (119 LOC) — the `BlobBackend` trait scaffold.
+- `backends/blob_backend_trait.rs` (179 LOC) — the `BlobBackend` trait scaffold.
   Three methods (`get`, `put`, `is_persistent`) returning `impl Future + Send`
   per D-PHASE-3-7 (browser-target async compatibility). Associated `type Error`.
   Not object-safe (RPITIT + assoc type). Generic-cascade direction.
-- `backends/blob_backend.rs` (344 LOC, native-only) — `RedbBlobBackend`, the
+- `backends/blob_backend.rs` (538 LOC, native-only) — `RedbBlobBackend`, the
   concrete redb-native impl. Stores blobs as `system:ModuleBytes` Nodes (label +
   `blob_cid: Text` + `blob_bytes: Bytes` properties) through
   `put_node_with_context(privileged_for_engine_api())`. Defense-in-depth
   recomputes `BLAKE3(bytes)` and rejects `CidMismatch` at the put boundary.
   Closes Compromise #17 (in-memory module-bytes registry).
-- `backends/snapshot_blob.rs` (~615 LOC post-G-CORE-6b) — `SnapshotBlobBackend`, a read-only
+- `backends/snapshot_blob.rs` (~714 LOC post-G-CORE-6b) — `SnapshotBlobBackend`, a read-only
   `KVBackend` over a canonical DAG-CBOR `SnapshotBlob` payload
   (schema_version=**2** post-G-CORE-6b, anchor_cid, nodes:BTreeMap<Cid,Vec<u8>>,
   system_zone_index, **merkle_root: Option<Cid>** [v2: §8-B mode-(b)

@@ -595,7 +595,9 @@ info-tag + D-8 F3 CAS).
   derived `K(root) = HKDF-SHA256(K_principal, info="root" || root_cid)`.
   Post-Item-7 the function takes a third `cipher_suite_codepoint:
   u16` parameter and derives `K(root) = HKDF-SHA256(K_principal,
-  info = "root:codepoint:" || codepoint_le_bytes || root_cid)`. The
+  info = "root:codepoint:" || codepoint_be_bytes || root_cid)` — the
+  codepoint is 2 bytes **BIG-endian** per M-19 (the F-full Wave-0 BE
+  migration; `structural_kdf.rs::derive_root` calls `to_be_bytes()`). The
   info-tag binding closes the attacker-controlled envelope codepoint
   → key newtype attack class (Row D-13). All callers updated. K_root
   keys derived under different codepoints now observably differ →
@@ -773,3 +775,141 @@ fn is_substantive(&self) -> bool { true }
 **Regression-guard:** `crates/benten-engine/tests/r6_r2_fp_item_9_d18_substantive_rechecker_detection_couple.rs` — 5 test arms covering default `is_substantive()`, Noop override, faulty-admit-all rechecker rejection, resolvable-DID pass-through, and Noop-+-synthesized non-fire.
 
 **Coupling.** Per Row D-18, full closure couples to Row D-4 (the substantive `ProductionManifestEnvelopeRechecker` impl at G-COMP-1); Item 9's structural pin is the engine-substrate defense-in-depth that holds regardless of which rechecker is mounted.
+
+---
+
+# Cohort 9 — F-full R5 → pre-tag landings (post-2026-05-25, through `phase-4-meta-core-close`)
+
+> **Why this cohort exists.** Cohorts 1-8 stop at the R6-R2 WIRE-NOW batch
+> (2026-05-25). The F-full R5 substrate, the Layer-C / Layer-D / MembershipSet
+> wire bands, the GAP-KDB Shape-B identity closure and the F-22 pre-tag
+> `#[non_exhaustive]` sweep all landed AFTER that batch and were never
+> enumerated here, leaving the ledger short of its own stated update
+> discipline. This cohort is the INDEX of those landings; the normative
+> per-surface detail lives in the tracked docs cited on each row
+> ([`V1-FROZEN-INTERFACE.md`](V1-FROZEN-INTERFACE.md),
+> [`V1-WIRE-FORMAT-INVENTORY.md`](V1-WIRE-FORMAT-INVENTORY.md),
+> [`CRYPTO-CODEPOINTS.md`](CRYPTO-CODEPOINTS.md),
+> [`ERROR-CATALOG.md`](ERROR-CATALOG.md),
+> [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md)) and in the committed
+> `docs/public-api/*.txt` baselines. Rows here name surfaces + destinations
+> only — they deliberately assert no PR numbers.
+
+### New workspace crate — `benten-membership-set` (15th)
+
+**What changed.** A new public crate ships the MembershipSet keying primitive:
+the EXACTLY-3 `MembershipSetKind` (`Atrium = 0` / `DeviceMesh = 1` /
+`SingleDevice = 2`; a 4th arm is a compile-time HALT, deliberately NOT a
+`#[non_exhaustive]` wildcard), the 5-value `RoleId` RBAC axis (`Invitee = 0` /
+`Viewer = 1` / `Member = 2` / `Moderator = 3` / `Admin = 4`), the `members_table`
+canonical-CBOR snapshot and the `0x6600` / `0x6610` / `0x6620` codepoint band.
+Owns Inv-19..Inv-22.
+
+**Why it's breaking (additive-only).** Net-new public surface; no existing item
+changed shape. The `cargo-public-api` crate list grows 14 → 15
+(`.github/workflows/cargo-public-api.yml`) with a new committed baseline at
+`docs/public-api/benten-membership-set.txt`.
+
+**Frozen surface:** [`V1-FROZEN-INTERFACE.md`](V1-FROZEN-INTERFACE.md) §16.
+
+### New public module — `benten_engine::layer_d` (device provisioning + remote permission)
+
+**What changed.** `pub mod layer_d` exposes `device_auth`, `device_link`,
+`drop_timestamp`, `grant_acceptance`, `remote_permission` and `secret_store`,
+including the `#[non_exhaustive]` enums `DeviceAuthError`, `DeviceLinkError`,
+`SecretStoreError` and `PermissionOperation`.
+
+**Why it's breaking (additive-only).** Net-new public surface on
+`benten-engine`; `docs/public-api/benten-engine.txt` grows accordingly.
+
+**Wire rows:** [`V1-WIRE-FORMAT-INVENTORY.md`](V1-WIRE-FORMAT-INVENTORY.md)
+items 27-29 (DeviceLink `0x6310..0x631F`, RemotePermission `0x6320..0x632F`,
+Layer-D drop timestamp-EXCLUSION).
+
+### New DID method — `did:benten` (GAP-KDB Shape-B content-addressed key-set)
+
+**What changed.** `benten-id` gains `DID_BENTEN_METHOD` / `DID_BENTEN_PREFIX`,
+`Did::resolve_kem`, and `pub mod keyset` with `KeySetDocument`. A `did:benten`
+commits its key-set document by CID, so a recipient's KEM key is
+recovered-and-VERIFIED from the DID rather than trusted from an address book.
+
+**Migration:** **none for `did:key`** — `did:key` byte layouts are unchanged
+(the zero-migration property is pinned by `DID-5` in
+`crates/benten-id/tests/kdb_did_benten_codec.rs`). Callers that accept a
+sender-DID string must accept BOTH methods.
+
+**Wire rows:** [`V1-WIRE-FORMAT-INVENTORY.md`](V1-WIRE-FORMAT-INVENTORY.md)
+items 31 (method-specific-id byte layout) + 32 (KeySetDocument v1 schema).
+**Invariant:** Inv-23. **Residual:** Compromise #67 (first-contact / TOFU).
+
+### REMOVAL — the substitutable two-parameter Layer-C seal API is DELETED
+
+**What changed.** `benten_drop::layer_c` gains the `RecipientBinding`
+sole-constructor typestate (private fields; `RecipientBinding::resolve` is the
+ONLY constructor; no `(kem_pub, audience_did)` fallback door) plus
+`RecipientBindingError`. The seal surfaces now take a binding rather than a
+loose key/DID pair — `seal_sealed_sender(recipient: &RecipientBinding, …)` and
+`seal_group_multi(recipients: &[RecipientBinding], …)`.
+
+**Why it's breaking (removal).** This is a genuine deletion, not a rename: no
+code path can seal to an un-committed `(KEM key, audience DID)` pair any more.
+Downstream callers must route through `RecipientBinding::resolve` and handle
+its fail-closed `RecipientBindingError`.
+
+### Envelope-codepoint mints not recorded in Cohorts 1-8
+
+Cohort 1 records only the `0x647c` cipher-suite mint. The registry at freeze
+(`crates/benten-crypto-suite/src/registry.rs::registered_envelope_codepoints`)
+carries **20** envelope codepoints; the following are present at HEAD and were
+never enumerated in this ledger:
+
+| Codepoint(s) | Surface |
+|---|---|
+| `0x6100` / `0x6101` | Layer-A vault envelope (`SymmetricAeadXNonce`) + its 12-byte `SymmetricAead` sibling |
+| `0x6310` / `0x6320` | Layer-D DeviceLink band base / RemotePermission band base |
+| `0x6380` / `0x6390` / `0x63A0` / `0x63B0` / `0x63C0` | Reserved forward-secrecy brackets (MLS-Application, MLS-Welcome, CGKA-Commit, Bird-of-Prey, draft-prabel) |
+| `0x6400` / `0x647a` / `0x647b` | Cipher classical-only downgrade / the hybrid X25519⊕ML-KEM-768 DEFAULT / the reserved NF-1 PQ⊕PQ arm |
+| `0x6500` / `0x6510` / `0x6520` | Layer-C drop band — plaintext-sender sibling / **Sealed-Sender DEFAULT** / group multi-recipient |
+| `0x6600` / `0x6610` / `0x6620` | MembershipSet band — set-keying / group multi-stanza / federation subset-ref |
+| `0x6700` | Lifecycle / revocation band base |
+
+Full table + the IANA-disjointness rationale:
+[`CRYPTO-CODEPOINTS.md`](CRYPTO-CODEPOINTS.md). Codepoint-registry discipline is
+Inv-18.
+
+### New `ErrorCode` mints — `CATALOG_VARIANT_COUNT` 197 → 201
+
+`E_ROLE_STALE_AT_VERIFY` (198), `E_KV_TARGET_NOT_IMMUTABLE` (199),
+`E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH` (200),
+`E_RECIPIENT_KEM_NOT_COMMITTED` (201). The TS mirror
+`packages/engine/src/errors.generated.ts` `CATALOG_CODES` correspondingly
+carries 203 classes (201 throwable + the retained `E_INV_ITERATE_NEST_DEPTH`
+envelope + the `E_UNKNOWN` fallback). Per-code detail:
+[`ERROR-CATALOG.md`](ERROR-CATALOG.md).
+
+### F-22 pre-tag `#[non_exhaustive]` EXTENSION sweep — SUPERSEDES the Cohort 8 Group B "REMAINING" note
+
+**What changed.** The Row D-17 R2 EXTENSION set (~55 pub types across
+`benten-core`, `benten-ivm`, `benten-platform-foundation` and `benten-engine`)
+took `#[non_exhaustive]` at the pre-tag sweep — the Cohort 8 (Group B) line
+"REMAINING (NOT in this PR; G-COMP-1 destination)" is **superseded**, and the
+per-class "no `#[non_exhaustive]` cascade at v1-beta to preserve
+cargo-public-api baseline shape" carve-out no longer holds.
+
+**Migration for downstream consumers.** Cross-crate `match` arms on the
+affected enums need a `_` wildcard; cross-crate struct-literal / FRU sites move
+to the minted constructors `benten_core::Subgraph::from_parts`,
+`benten_core::NodeHandle::new`, `benten_ivm::ViewDefinition::new` and
+`benten_platform_foundation::materializer::MaterializerWalkInputs::new` (or to
+`default()` + field mutation). In-crate exhaustive matches are unaffected.
+
+**Baselines:** `docs/public-api/{benten-core,benten-ivm,benten-platform-foundation,benten-engine}.txt`
+regenerated. **Record:** [`V1-FROZEN-INTERFACE-DEFERRED.md`](V1-FROZEN-INTERFACE-DEFERRED.md) Row D-17.
+
+### Disclosure + invariant mints (no public-API shape change)
+
+Compromises #65 / #66 / #67 and Invariants Inv-19..Inv-23 were minted in this
+window. They carry no API break and are listed here only so the v1-beta
+release-notes draft is complete; the normative records are
+[`SECURITY-POSTURE.md`](SECURITY-POSTURE.md) and
+[`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md).

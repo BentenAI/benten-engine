@@ -1,5 +1,76 @@
 # v1 Frozen Interface Contract — Phase-4-Meta-Core deliverable (TRIAGE SYNTHESIS)
 
+> **⚑ F-19 (R12) PRE-TAG-SWEEP NOTE (Ben-gated):** this status banner is
+> stale relative to the Phase-4-Meta-Core phase-close state — it reads
+> "POST-BUILD-OUT-WAVE" dated 2026-05-23, predating the R6–R12 phase-close
+> council rounds. At the (Ben-gated) pre-tag sweep, retense this banner to
+> the phase-close/freeze-ready state (dropping the "TRIAGE SYNTHESIS" +
+> build-out-wave framing; the doc is now the AS-BUILT freeze contract that
+> the phase-close council has iterated to convergence). Registered here so
+> the pre-tag sweep picks it up; NOT retensed now (banner-retense couples to
+> the SHA + date the tag lands, a pre-tag-sweep concern).
+> >
+> > **⚑ R13 F-16 pre-tag-sweep line — §11 `#[non_exhaustive]` tally
+> > REFRESHED at F-22 (2026-07-03).** §11 (~L1055) now states the
+> > HEAD-verified count "**196 total `pub enum` (135 non_exhaustive) + 448
+> > total `pub struct` (53 non_exhaustive) = 188 of 644 pub types carry the
+> > attribute**" (R6-R1c re-count at HEAD `b86dec03` per F-03 — the F-22
+> > `194 / 130 / 444 / 53 / 183 / 638` snapshot drifted +2 `pub enum` /
+> > +5 ne-enum / +4 `pub struct` post-F-22; struct-ne holds at 53), itself
+> > replacing the older stale `158 / 148` snapshot. The refresh
+> > landed alongside the F-22 Row D-17 EXTENSION `#[non_exhaustive]`
+> > application (the same sweep that added ~55 attributes + regenerated the
+> > cargo-public-api baselines). Should further phase-close rounds mutate the
+> > enum/struct set before the tag lands, re-run the count once more at the
+> > final pre-tag pass.
+> >
+> > **⚑ TRIGGER FIRED — the re-run above is now MANDATORY, not conditional
+> > (recorded at the R6-tail close-out pass, base `53e27088`).** The
+> > `196 / 135 / 448 / 53 / 188 / 644` tally is pinned to HEAD `b86dec03`,
+> > which is 4 commits behind `53e27088`, and commit `024fd4b0`
+> > ("… F-03/F-04 gate non-exempt test-symbols") cfg-gated public items —
+> > shrinking the pub surface and invalidating the denominators. Treat the
+> > §11 figures as KNOWN-STALE-at-`b86dec03` until the pre-tag re-run. The
+> > count was deliberately NOT refreshed in this pass: §11's generating
+> > methodology is not recorded in the doc, and a re-derivation by a
+> > different method would replace a known-stale number with a
+> > confidently-wrong one. Re-run with the SAME method that produced the
+> > `b86dec03` figures. NOT a convergence blocker — the machine-enforced
+> > `cargo-public-api` baselines are regenerated and green; only this prose
+> > narrative drifts.
+> >
+> > **⚑ R14 F-04 pre-tag-sweep line — banner/description retense (couples to
+> > F-19 above; Ben-gated).** The R6–R14 phase-close council has CONVERGED
+> > (0 BLOCKER/MAJOR at R14; MINOR/OBS residual closed at the R14 pre-tag doc
+> > sweep 2026-07-03). At the (Ben-gated) pre-tag sweep, retense BOTH (a) the
+> > "POST-BUILD-OUT-WAVE" status banner below and (b) the `# … (TRIAGE
+> > SYNTHESIS)` H1 title/description to the AS-BUILT freeze-ready state — the
+> > same retense F-19 names, now extended to reflect the full R6–R14
+> > convergence, not just R6–R12. Registered here (with F-19) so the single
+> > pre-tag-sweep pass discharges both; NOT retensed now because the retense
+> > couples to the SHA + date the tag lands.
+> >
+> > **⚑ R14 §16 pre-tag-sweep line — §1.A.FROZEN inclusion sign-off (Ben-gated).**
+> > The §16 MembershipSet frozen-surface table's HEAD re-pin was DISCHARGED at
+> > the R14 pre-tag sweep (2026-07-03) — the table matches HEAD's `lib.rs`
+> > pub-use set + the cargo-public-api baseline, verified. The ONE residual is
+> > the freeze-lens + Ben §1.A.FROZEN-inclusion sign-off on the 15th crate's
+> > surface, a tag-gate decision that legitimately waits for the tag SHA.
+> > Registered here so the pre-tag-sweep pass surfaces it to Ben.
+> > **⚑ FZ-MS16-SCOPE (R18; count corrected R21 F-06).** The Ben
+> > §1.A.FROZEN-inclusion sign-off above MUST cover the **full 16-`pub mod` set**
+> > of `benten-membership-set` (the complete `lib.rs` public module surface —
+> > `aad` / `audit` / `codepoints` / `error` / `federation` / `governance` /
+> > `keying` / `keying_kv` / `kind` / `member` / `privacy` / `role` / `scaffold` /
+> > `set` / `ucan` / `verify` — every `pub mod` + re-export the cargo-public-api
+> > baseline pins; the baseline additionally enumerates the nested `set::crdt`
+> > submodule + the crate root), NOT only the abstract
+> > "MembershipSet surface." Fold the enumerated 16-pub-mod set into the Ben
+> > sign-off checklist so the freeze decision is against the concrete module
+> > roster the baseline (`docs/public-api/benten-membership-set.txt`) freezes —
+> > preventing an accidental scope gap between "the surface" and the actual
+> > pub-module set at the tag.
+>
 > **Status: POST-BUILD-OUT-WAVE.** Round 0.5 triage-synthesis refreshed
 > at the V1-FROZEN-INTERFACE build-out wave (2026-05-23). The 8 cross-
 > confirmed FIX-NOW pre-freeze build-out items from the companion
@@ -17,7 +88,7 @@
 > - `7af94d06` row 4 (Engine::walk_share_scope mint + SubgraphSpecWalkFailed ErrorCode)
 > - `d2616800` row 5 (MerkleRangeProofBackend → DEFERRED to G-COMP-1 per Option A)
 > - `75a1d33a` row 8 bundle (non_exhaustive sweep + wire-format inventory + Compromise #31 [revocation-reach; re-pointed to #62 at F-full per BR-2 — #31 now denotes LAMPS Composite ML-DSA])
-> - `fb7c212d` row 1 (cargo-public-api baselines regenerated — 14 of 14 real)
+> - `fb7c212d` row 1 (cargo-public-api baselines regenerated — 15 of 15 real, one per workspace crate incl. `benten-membership-set`)
 > - `13322df4` row 2 (TS-public-api parity gate workflow + baseline)
 >
 > **Council-readiness statement:** the doc + as-built surface are ready
@@ -56,12 +127,68 @@ merge). The release cadence beyond is `phase-4-meta-close` → `v1-beta` →
 
 ## Verification mechanism (workspace-wide)
 
+> ### ⛔ STANDING PROHIBITION — never regenerate a frozen baseline to clear a red
+>
+> **Ratified 2026-07-26 (D-97), before the `phase-4-meta-core-close` tag.**
+>
+> Every baseline named in this section is generated by a toolchain this repo does
+> **not** pin: `cargo-public-api.yml` runs a floating `toolchain: nightly` with an
+> unversioned `cargo-public-api` (acknowledged in-file, R9-council F-24), and
+> `ts-public-api.yml` runs `pnpm install --no-frozen-lockfile` against a
+> `typescript: ^5.6.0` caret range with **no committed workspace lockfile** — the
+> two tracked per-package `pnpm-lock.yaml` files are shadowed by
+> `pnpm-workspace.yaml`, so the graph *looks* pinned and is not.
+>
+> A toolchain bump can therefore turn a baseline red without any source change.
+> The tempting response — regenerate the baseline and commit it — would **silently
+> rewrite the permanent freeze record while appearing to fix CI.** That is the
+> single highest-consequence mistake available against this document.
+>
+> **THE RULE. A red baseline gate is a question, never a chore.**
+>
+> 1. **Establish WHY it moved before touching the baseline.** Compare the
+>    toolchain version to the one that produced the committed file. A drift with
+>    no corresponding source change is a TOOLCHAIN event, not an API event.
+> 2. **If the source did not change, DO NOT regenerate.** Pin or roll back the
+>    toolchain instead, and record the version that reproduces the committed
+>    baseline. Regenerating here destroys evidence of what was actually frozen.
+> 3. **If the source DID change, the regeneration is legitimate** — but the diff
+>    must be reviewed line by line and every line attributed to an intended
+>    change. An unattributed line is a finding, not noise.
+> 4. **Never regenerate to make a merge proceed.** There is no deadline that
+>    justifies an unexplained mutation of the frozen record; the tag is permanent
+>    and a delayed merge is not.
+>
+> *Empirical status at tag time:* not currently biting — TypeScript 5.6.3 and
+> 5.9.3 were verified to emit byte-identical declarations for this codebase, and
+> the committed TS baseline reproduces under both. The exposure is future drift,
+> which is why this is a standing rule rather than an incident report.
+>
+> *Owed follow-up (Composing, one coherent change — deliberately NOT done
+> mid-freeze, because a half-measure here yields the appearance of pinning
+> without the substance):* commit the workspace-root `pnpm-lock.yaml`, pin
+> `typescript` to an exact version, flip CI to `--frozen-lockfile`, and pin the
+> Rust side to a dated nightly plus a versioned `cargo-public-api`.
+
 The freeze is enforceable, not merely declarative. Five structural backstops
 fail CI on a frozen-surface mutation:
 
-1. **`cargo-public-api` baseline regeneration + drift test** at
-   `crates/benten-engine/tests/cargo_public_api_drift.rs` against
-   `docs/public-api/benten-*.{txt,json}`.
+1. **`cargo-public-api` baseline regeneration + drift gate.** The
+   **authoritative diff gate is the CI workflow**
+   `.github/workflows/cargo-public-api.yml`, which regenerates the public
+   surface at PR-time and diffs it against the committed baselines at
+   `docs/public-api/benten-*.txt` (a diff fails CI). The one non-`.txt`
+   baseline, `docs/public-api/benten-renderer-tauri.json`, is NOT part of
+   that workflow diff loop — it is the Tauri IPC method-name allowlist
+   baseline, enforced instead by the Rust drift-detector
+   `crates/benten-renderer-tauri/tests/ipc_method_name_stability_drift_detector.rs`
+   (it pins `_ipc_method_name_allowlist_baseline._anticipated_method_set`
+   byte-for-byte against `TauriRenderer::ipc_method_allowlist()`; silent
+   IPC-surface expansion is a manifest-bypass risk). Both baselines are
+   frozen; the enforcement mechanism differs. The Rust-side
+   test `crates/benten-engine/tests/cargo_public_api_drift.rs` is the
+   **presence-pin** — it asserts the workflow file exists and references the
+   `cargo-public-api` extension (non-vacuity), NOT the drift diff itself.
    **LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 1 (commit `fb7c212d`);
    extended to the 15th crate `benten-membership-set` at F-full R5
    (2026-06-05).** All 15 lib crate baselines regenerated with
@@ -76,10 +203,13 @@ fail CI on a frozen-surface mutation:
 2. **TS-side public-API parity gate (#1204)** for `@benten/engine`.
    **LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 2 (commit `13322df4`).**
    Workflow at `.github/workflows/ts-public-api.yml`; baseline at
-   `packages/engine/etc/public-api.txt` (415 LOC; extract-from-.d.ts
-   structural diff covering all 15 `dist/**/*.d.ts` files — the recursive
-   glob includes the publicly-exported `dist/internal/trace.d.ts` subpath,
-   psf-2 R6-round-7). Migration to
+   `packages/engine/etc/public-api.txt` (1927 LOC; whole-.d.ts-text
+   structural diff, comments stripped by the compiler, covering all 15
+   `dist/**/*.d.ts` files — the recursive glob includes the
+   publicly-exported `dist/internal/trace.d.ts` subpath, psf-2
+   R6-round-7; widened from opening-lines-only at the CI-integrity pass
+   S-2 close, which had left class methods + interface members
+   unrecorded). Migration to
    `@microsoft/api-extractor` is named for v1-Composing (the workflow
    + baseline-file location ARE the migration seam — swap-in is
    contained).
@@ -94,16 +224,28 @@ fail CI on a frozen-surface mutation:
    `feedback_workspace_missing_docs_test_invocation`). Mandatory
    pre-push + CI lane. Every `pub` item carries `///` docs at freeze;
    post-freeze additions inherit the gate.
-5. **CATALOG_VARIANT_COUNT exhaustive-match dual-tripwire** at
-   `crates/benten-errors/tests/stable_shape.rs::catalog_variant_count_matches_enum`.
-   **CATALOG_VARIANT_COUNT = 199 at HEAD `b93b2efc`** (192 at the
+5. **CATALOG_VARIANT_COUNT roster pin** at
+   `crates/benten-errors/src/lib.rs::catalog_roster_pin` (the compiler half)
+   + `crates/benten-errors/tests/stable_shape.rs::variant_count_is_pinned`
+   (the round-trip + length half). Both expand from the single
+   `crates/benten-errors/catalog_roster.rs.in`.
+   **CATALOG_VARIANT_COUNT = 201 at HEAD `b86dec03`** (192 at the
    G-CORE-9 build-out FREEZE milestone → 197 R6-R2-FP G-COMP-1 cohort 8
    → 198 `E_ROLE_STALE_AT_VERIFY` (F-full w-ms-canary) → 199
-   `E_KV_TARGET_NOT_IMMUTABLE` (F-full w-gov-audit; Inv-19)). Adding
-   or removing an `ErrorCode` variant without updating the list fails to
-   compile or fails the runtime length assertion. ⚠️ A parallel F-full
-   CODE wave may mint one more (F-01) → **200**; the strategy-C
-   integrator reconciles at integrate-time.
+   `E_KV_TARGET_NOT_IMMUTABLE` (F-full w-gov-audit; Inv-19) → 200
+   `E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH` → 201
+   `E_RECIPIENT_KEM_NOT_COMMITTED` (GAP-KDB Shape-B recipient-binding;
+   Inv-23)). Adding an `ErrorCode` variant without adding it to
+   `catalog_roster.rs.in` is `error[E0004]: non-exhaustive patterns` in the
+   `benten-errors` lib-test build; adding it to the roster without moving the
+   two length pins fails both of them at 202 != 201.
+   **Corrected 2026-07-27 (F-014).** The prior wording described the
+   `stable_shape.rs::catalog_variant_count_matches_enum` "dual tripwire" as
+   compiler-enforced. It was not: `ErrorCode` is `#[non_exhaustive]` and that
+   test is a downstream crate, so its match carried a mandatory `_ => false`
+   and its "independent count" filtered the list it was counting. A mutation
+   adding a fully-wired throwable variant left 9/9 PASS. The compiler half now
+   lives in the defining crate, where exhaustiveness is real.
 
 > **NEW pim-N candidate REJECTED at triage** (Planner-A's
 > per-`pub`-declaration `// FROZEN: re-open requires Ben sign-off`
@@ -187,6 +329,13 @@ RATIFIED-prework-forks-2026-05-18.md §8-A option (a)):**
   closure means the v1-beta cargo-public-api baselines no longer carry
   the bulk of the `_for_test*` surfaces; renaming the 14 exempts is a
   v1-GM-target cleanup tracked separately.
+  **Scanner-completeness follow-up (R16 F-12):** the `is_for_test_pattern`
+  matcher in the same test file catches the `_for_test*` / `test_` / `_test_`
+  / `mock_` / `inject_` name families but NOT the `from_raw*` / `_unchecked`
+  degenerate-constructor family; widening it to also catch those (with
+  allowlist entries for any legitimately-public raw/unchecked constructors)
+  is NAMED for v1-GM backstop-completeness at `docs/future/phase-3-backlog.md`
+  §15.6 (with the bare-`for_test` widening Row D-74).
 - `crates/benten-engine/src/engine.rs::Engine::caps` (`fn caps(&self) ->
   &EngineCapsHandle`) stays `pub`; this is the canonical cap-mutation
   surface per the §4.69-ALREADY-SHIPPED ground-truth. No `Engine`-direct
@@ -246,6 +395,19 @@ Bundle F2):**
   `crates/benten-engine/tests/g_core_9_engine_no_direct_cap_mutation.rs`
   will use `cargo-public-api` output to assert ZERO cap-mutation
   methods on `Engine` (other than `caps()`).
+- **`backend.get_edge` — frozen `pub` + ungated read surface (R17 F-12).**
+  `GraphBackend::get_edge` (`crates/benten-graph/src/store.rs:408` trait +
+  `redb_backend.rs:1231`/`:2909` `pub fn`) is an un-attributed backend read
+  path with NO principal/cap gating, symmetric to the un-attributed node-read
+  path. At v1-beta this is a frozen backend-internal read (the engine's
+  attributed read boundary is `read_node_as`; edges are read via the same
+  internal pathway node-content is). The **META #593 read-path attribution
+  scan-set** — the audit that verifies every non-internal read routes through
+  `read_node_as` — MUST include `backend.get_edge(` alongside the node-read
+  call sites, so a future edge-read at a non-internal principal boundary is
+  caught. Named for the #593 read-path scan extension (V1-FROZEN §1 + the #593
+  tracking scan-set); no visibility change at v1-beta (edges are content-half,
+  read via the internal pathway, not a public attributed surface).
 
 **Composing-phase escape valve:**
 A Composing-time discovery that genuinely needs un-attributed
@@ -319,7 +481,7 @@ re-open).
 | §4.62 | `crates/benten-graph/src/backends/blob_backend_trait.rs:120` `BlobBackend` | **DECIDED additive-default** (NOT a split). The trait carries `put_blob`/`get_blob`/`has_blob` with `Send + Sync + 'static`; future additive methods land as defaulted methods. |
 | §4.63 | `crates/benten-graph/src/backend.rs:306` `KVBackend: Send + Sync` | **DECIDED sync** (NOT RPITIT). RPITIT adds 2024-edition feature-gate complexity v1-beta cannot absorb; future-Composing-async migration is an additive `AsyncKVBackend` trait. |
 | §4.64 | `crates/benten-sync/src/transport_trait.rs:85` `Transport` + `TransportEndpoint` + `TransportConnection` family | `Transport` family stays in `benten-sync` per §8-B (b). The trait surface is `pub` + `Send + Sync + 'static`. **`MerkleRangeProofBackend` trait DEFERRED to G-COMP-1 per V1-FROZEN-INTERFACE row 5 outcome (commit `d2616800`)** — Option A per Planner-B; verified not-built at HEAD; freezing a phantom shape is overcommit. Tracked at `docs/future/phase-4-backlog.md §4.64` (the named-NOW destination per HARD RULE 12 clause-(b)). The §4.64 row received an explicit verify-or-defer outcome paragraph at the G-CORE-9 row 5 commit. |
-| §4.43 | `WriteContext` / `ChangeEvent` / `GraphError::TxAborted` `#[non_exhaustive]` | **APPLY `#[non_exhaustive]` to all three.** `benten_graph::WriteContext` (in `crates/benten-graph/src/lib.rs`) is currently MISSING the attribute (verified HEAD). `benten_core::change_stream::ChangeEvent` ALREADY has it — KEEP. `benten_graph::GraphError::TxAborted` per-variant `#[non_exhaustive]` — APPLY defensively. The freeze MUST not ship without these. Couples to item 5 + item 11; closes atomically in the G-CORE-9 wave. |
+| §4.43 | `WriteContext` / `ChangeEvent` / `GraphError::TxAborted` `#[non_exhaustive]` | `benten_graph::WriteContext` (in `crates/benten-graph/src/lib.rs`) **HAS `#[non_exhaustive]` at HEAD** (applied; verified `pub struct WriteContext` carries the attribute). `benten_core::change_stream::ChangeEvent` ALREADY has it — KEEP. `benten_graph::GraphError::TxAborted` per-variant `#[non_exhaustive]` is **deliberately NOT applied** (Fwd-2 #997 / umbrella #1207 explicit no-apply — `TxAborted { reason }` is constructed in cross-crate production code at `crates/benten-engine/src/engine_diagnostics.rs`, so a bare per-variant `#[non_exhaustive]` breaks the workspace build; `GraphError` is ALREADY `#[non_exhaustive]` at the enum level, so only adding a NEW field to `TxAborted` — not a new variant — is a SemVer break). Applying the per-variant attribute (with a `GraphError::tx_aborted(reason)` constructor + production-site migration) OR accepting the field-level lock with a written rationale is a **ratified HARD-RULE clause-(b) NAMED-DEFERRAL to `docs/future/phase-4-backlog.md §4.43`** (the v1-API-stabilization wave; see that row's `#[non_exhaustive]` residual note). The §11 sweep (this doc) preserves the explicit no-apply reason at the cite. Couples to item 5 + item 11. |
 
 **What "frozen" means here:**
 - Trait method signatures + `Send + Sync + 'static` bounds + the
@@ -379,7 +541,8 @@ freeze wave SURFACES the decision; Ben makes it.
   (item 15(g)) — locked at `crates/benten-crypto-suite/src/aead.rs:52`.
   AAD layout binds `(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32)`
   per `crates/benten-crypto-suite/src/aead.rs::aad_per_chunk` (4-segment
-  layout: domain-tag || plaintext_cid || chunk_index LE || total_chunks LE).
+  layout: domain-tag || plaintext_cid || chunk_index BE || total_chunks BE —
+  big-endian per M-19; the earlier LE encoding was migrated at F-full Wave-0).
   The `total_chunks` segment closes the cross-chunk-truncation attack
   (an attacker who truncates a 10-chunk ciphertext to 5 chunks cannot
   fabricate per-chunk AAD-matching tags because the seal-time AAD
@@ -404,7 +567,7 @@ freeze wave SURFACES the decision; Ben makes it.
    envelope; SnapshotBlob; TwoCidStore mapping format).
 2. The current **explicit format-version discriminator** for each (e.g.
    `SNAPSHOT_BLOB_SCHEMA_VERSION: u32 = 2`; `DropBundleVersion` enum at
-   `crates/benten-drop/src/lib.rs`).
+   `crates/benten-drop/src/bundle.rs`).
 3. The list of surfaces that **DO NOT YET HAVE** a byte-pin test in CI
    (the wire-format pre-flight gap to close — added before tag).
 4. **The Ben sign-off path** — `docs/V1-WIRE-FORMAT-INVENTORY.md` IS the
@@ -585,9 +748,29 @@ each codepoint = SWAPPABLE within the framing):**
    | Sig | `SigCodepoint::HYBRID_MLDSA65_SLHDSA` | `0x0003` | reserved swap-matrix arm (NF-1 end-state; **typed-rejected by default** at `SigCodepoint::resolve` + `SignatureSuite::resolve_codepoint` + `varsig.rs::decode_payload`; reachable only via `SwapMatrix::try_pure_pq_sole_trust_path()` audit-gated constructor per C11b safety gate; mirrors 0x647c framing) |
    | Cipher | `CipherSuiteCodepoint::HYBRID_X25519_MLKEM768` | `0x647a` | LIVE, **default (X-Wing-style combiner vendored ~30 LOC; ChaCha20-Poly1305 bulk)** |
    | Cipher | `CipherSuiteCodepoint::CLASSICAL_X25519` | `0x6400` | LIVE, non-default classical-only downgrade |
-   | Cipher | `CipherSuiteCodepoint::NONE_PLAINTEXT` | `0x0000` | LIVE, non-default plaintext-partition downgrade |
+   | Cipher | `CipherSuiteCodepoint::NONE_PLAINTEXT` | `0x0000` | non-default plaintext-partition (public-class) arm — **typed-REJECTED at `CipherSuiteCodepoint::resolve` by design** (not a resolvable default, never a silent fallback); reachable ONLY via the explicit `SwapMatrix::no_encryption_public_class()` / `sign_only` path |
    | Cipher | `CipherSuiteCodepoint::HYBRID_MLKEM768_HQC` | `0x647b` | reserved-unimplemented (NF-1 KEM end-state; FIPS 207-final build-gated) |
    | Cipher | `CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY` | `0x647c` | reserved swap-matrix arm (NOT default; pre-FREEZE bundle #1342 mint per Ben morning queue item 1; **typed-rejected by default — gated by `AUDIT_LANDED_PURE_PQ_FLAG` per the C11b safety gate**) |
+
+   **Envelope-band codepoints cross-ref (F-15).** The table above is the
+   Hash/Sig/Cipher-SUITE codepoints. The distinct **envelope-band** codepoints
+   (which layer/envelope a wire blob is) live in their own producing-crate
+   registries, mirrored to `benten_crypto_suite::registry` and enumerated in
+   `docs/CRYPTO-CODEPOINTS.md`:
+   - **Layer-C drop band `0x65xx`** — `LAYER_C_DROP == 0x6500` /
+     `DROP_TO_RECIPIENT_SEALED_SENDER == 0x6510` /
+     `LAYER_C_DROP_MULTI_RECIPIENT == 0x6520`
+     (`crates/benten-drop/src/layer_c.rs`).
+   - **MembershipSet band `0x66xx`** — `MEMBERSHIP_SET_ENCRYPTION == 0x6600` /
+     `MEMBERSHIP_SET_GROUP_MULTI_STANZA == 0x6610` /
+     `MEMBERSHIP_SET_RESERVED_0X6620 == 0x6620`
+     (`crates/benten-membership-set/src/codepoints.rs`).
+
+   These `0x65xx`/`0x66xx` values are FROZEN-band-owned (Inv-18 / NQ-W2) and
+   const-equality-pinned cross-crate against the registry by
+   `crates/benten-drop/tests/f_disc_1_compromise_disclosure_coherence_catch_net.rs`'s
+   sibling SSOT arm (`f_disc_2_codepoint_ssot_cross_crate_const_equality`). A
+   one-sided edit to any producer const fails the build.
 
 3. **Swap-matrix constructors** at
    `crates/benten-crypto-suite/src/swap_matrix.rs::SwapMatrix`:
@@ -608,11 +791,67 @@ each codepoint = SWAPPABLE within the framing):**
    structural/size + roundtrip + constant-position + format-version pins,
    not a deterministic hex byte-golden.
 
+   - **F-07 (R12) — Inv-16 seam registration at `CipherSuite::wrap_key_material`.**
+     The `WrappedKey` wire form is produced by
+     `benten_crypto_suite::cipher_suite::CipherSuite::wrap_key_material(&RecipientPublic, k_root)`
+     (`crates/benten-crypto-suite/src/cipher_suite.rs`) and consumed by the
+     mirror `unwrap_key_material`. This is the frozen Inv-16 (one-HPKE-primitive
+     KEM-DEM) key-wrap seam. **AS-BUILT note:** Layer-C
+     (`benten_drop::layer_c`) assembles its per-stanza `EncryptedEnvelope`
+     bytes **directly** (its own AAD assembly + the crypto-suite `aead::wrap`
+     bulk primitive) and does **NOT** route through the `benten_crypto_suite::hpke`
+     facade — the Inv-16 unification is at the ENVELOPE / AAD-binding layer +
+     the shared `wrap_key_material`/`aead` primitives, not a single call-through
+     facade. So the frozen seam is the `wrap_key_material` + `aead::wrap`
+     primitive pair, with Layer-C as a direct-assembly consumer (this is
+     intentional — keeps Layer-C's production tree sync-free; the byte-equality
+     mirror pins guard against drift). The `hpke` module is the facade for the
+     Layer-D wrap path.
+
 5. **Multi-device key-wrap/recovery envelope SHAPE** — frozen as part of
    #1301 per item 6. Recovery PROTOCOL choice (Shamir / social / hardware
    / MLS-style) stays G-COMP-3 v1-assessment-window; the ENVELOPE SHAPE
    around the wrap is frozen here so a recovery-protocol choice doesn't
    require re-opening the freeze.
+
+5a. **Layer-C encrypt-to-recipient seal/open signatures — REAL hybrid
+   recipient key types (R9 GAP-1 closure).** The 8 `benten-drop` Layer-C
+   seal/open functions are frozen keying off the REAL hybrid recipient key
+   types (NOT a `[u8; 32]` placeholder fingerprint). `benten-drop`
+   **re-exports** `RecipientPublic` / `RecipientSecret` from
+   `benten_crypto_suite::cipher_suite` (`benten_drop::layer_c::{RecipientPublic,
+   RecipientSecret}` + the `group_posture` mirror). **The seal side keys off
+   `RecipientBinding`, NOT a bare `(&RecipientPublic, &AudienceDid)` pair
+   (GAP-KDB Shape-B / Inv-23).** `RecipientBinding` is a sole-constructor
+   typestate (`benten_drop::layer_c::RecipientBinding`; private fields,
+   `RecipientBinding::resolve` the ONLY constructor) that commits the
+   recipient's KEM key TO its audience `did:benten` by CID — the deleted
+   two-param `(kem_pub, audience_did)` seal door's absence is load-bearing
+   (the anti-downgrade property: no code path can seal to an un-committed
+   `(KEM, DID)` pair, and a `did:benten` recipient cannot be downgraded to
+   the un-cross-checked path). The open side takes `&RecipientSecret` +
+   `&AudienceDid` unchanged. The frozen signatures
+   (machine-locked by the `docs/public-api/benten-drop.txt` `cargo-public-api`
+   baseline):
+
+   - `seal_sealed_sender(&RecipientBinding, &SenderDid, &sig::Keypair, &BodyCidDigest, u32, &[u8]) -> EncryptedEnvelope`
+   - `seal_plaintext_sender(&RecipientBinding, &SenderDid, &sig::Keypair, &BodyCidDigest, u32, &[u8]) -> EncryptedEnvelope`
+   - `seal_group_multi(&[RecipientBinding], &SenderDid, &sig::Keypair, &BodyCidDigest, u32, &[u8]) -> Result<EncryptedEnvelope, LayerCError>`
+   - `seal_group_multi_plaintext_sender(&[RecipientBinding], &SenderDid, &sig::Keypair, &BodyCidDigest, u32, &[u8]) -> Result<EncryptedEnvelope, LayerCError>`
+   - `open_single(&RecipientSecret, &AudienceDid, u32, &EncryptedEnvelope) -> Result<(Vec<u8>, SenderDid), LayerCError>`
+   - `open_group_stanza(&RecipientSecret, usize, &[RecipientDid], u32, &EncryptedEnvelope) -> Result<(Vec<u8>, SenderDid), LayerCError>`
+   - `group_posture::seal_membership_set_group(&[RecipientBinding], &SenderDid, &sig::Keypair, &[u8; 32], &GroupSealParams, &[u8]) -> Result<GroupSealedEnvelope, LayerCError>`
+   - `group_posture::open_membership_set_group(&RecipientSecret, usize, &GroupVerifyContext, &GroupSealedEnvelope) -> Result<(Vec<u8>, SenderDid), GroupError>`
+
+   The recipient secret carries genuine OS-RNG entropy (ML-KEM-768
+   decapsulation key ‖ X25519 static secret; unrecoverable from the public
+   key) — the seal side wraps the CEK to `&RecipientPublic` and the open side
+   unwraps with `&RecipientSecret`, **fail-closed** on any non-matching
+   secret. The deleted placeholder derived `sk = pk + 0x80` (zero secret
+   entropy). Cross-refs `docs/SECURITY-PROOFS.md` §4.1/§4.2 + `docs/THREAT-MODEL.md`
+   §2 rung 4. Engine-level USE of this surface is `NAMED-DEFERRED` to
+   Phase-4-Meta-Composing (`docs/V1-FROZEN-INTERFACE-DEFERRED.md`) — the
+   PRIMITIVE is frozen + safe + exercisable; no engine flow calls it yet.
 
 6. **Typed-reject discipline** — `UnsupportedAlgorithm::{Signature,
    CipherSuite, Hash}` error variant on every codepoint dispatcher;
@@ -627,11 +866,17 @@ each codepoint = SWAPPABLE within the framing):**
    discipline.
 
 8. **Codepoint-typed constructors** — `SigCodepoint` / `CipherSuiteCodepoint`
-   / `HashCodepoint` are wrapper structs around `u16` (`pub struct
-   SigCodepoint(pub(crate) u16)`). The `from_raw(raw: u16) -> Self`
-   constructor at `codepoint.rs::from_raw` (line 82) is `pub` for deserializer use, paired
-   with `resolve()` → `Result<(), UnsupportedAlgorithm>` at every
-   dispatch site — i.e. you can construct any codepoint but you can't
+   are wrapper structs around `u16` (`pub struct SigCodepoint(pub(crate) u16)`;
+   `pub struct CipherSuiteCodepoint(pub(crate) u16)`). **F-13 (R12) AS-BUILT
+   note: `HashCodepoint` wraps a `u64`, NOT a `u16`** (`pub struct
+   HashCodepoint(pub(crate) u64)` at `crates/benten-crypto-suite/src/codepoint.rs`)
+   — the multihash/multicodec code space is a `u64` varint space (a hash code
+   can exceed `u16`), so `HashCodepoint`'s underlying integer width is `u64`
+   while the two crypto-suite selectors that live in the Benten-owned `u16`
+   codepoint table are `u16`. The `from_raw(raw) -> Self` constructor is `pub`
+   for deserializer use (its `raw` param type matches the wrapped width per
+   selector), paired with `resolve()` → `Result<(), UnsupportedAlgorithm>` at
+   every dispatch site — i.e. you can construct any codepoint but you can't
    USE one that doesn't typed-resolve. This is the C11b safety property
    and MUST be enforced end-to-end at every dispatch site (auditable
    workspace-wide).
@@ -677,6 +922,19 @@ each codepoint = SWAPPABLE within the framing):**
   are frozen.
 - The independent audit DELIVERY date — that's a v1-GM gate
   (C-GM-AUDIT), not a v1-beta freeze item.
+
+**C-GM-AUDIT scope (F-12 — what the independent third-party audit covers,
+so the test-header deferrals back-reference a real destination, HARD-RULE
+clause-b bidirectionality):** (i) the pinned crypto-primitive versions on
+the hybrid trust path — `ml-dsa` (ML-DSA-65) + `libcrux-ml-kem` (ML-KEM-768,
+the pinned production impl) + the classical `ed25519-dalek` / `x25519-dalek`
+halves; (ii) the NIST FIPS-203/204 `.rsp` KAT conformance corpus (beyond the
+current libcrux↔RustCrypto mutual-agreement pin `f_kat_1` + the IETF LAMPS WG
+spec-KAT `f_kat_4`); (iii) live-binary cross-ecosystem LAMPS Composite interop
+{BouncyCastle / OpenSSL-3.5 / OpenPGP-PQC} (the `f_kat_4` INBOUND-live
+deferral); (iv) the 13 accepted-unaudited Cryspen/libcrux exemptions recorded
+in `supply-chain/exemptions.toml` (interim until certified). Cross-ref:
+`docs/SECURITY-POSTURE.md` #30 + the `f_kat_1` / `f_kat_4` test headers.
 
 **Verification mechanism:**
 - `cargo-public-api` baselines for `benten-crypto-suite` + `benten-caps`
@@ -865,13 +1123,15 @@ total):**
   structural backstop).
 
 **CLOSED post G-CORE-9 build-out (commit `8cc4eddd`):** all 14 baselines-
-at-that-time regenerated as real `cargo public-api -p <crate> --simplified
---omit blanket-impls` output and committed as the canonical v1 baseline
+at-that-time regenerated as real `cargo +nightly public-api --simplified
+-p <crate>` output (the exact CI invocation in
+`.github/workflows/cargo-public-api.yml` — treat the baselines as
+tool-generated, never hand-authored) and committed as the canonical v1 baseline
 (the 15th crate `benten-membership-set` baseline was added at F-full R5,
 2026-06-05); the prior G20-A3 11-LOC placeholder stubs are gone. Per
 L12-R3-MIN-1 closure the gate is now structurally REAL (cf. item 1 "drift
 gate is now REAL,
-not a placebo"). Baseline LOC range at HEAD: 110-3509 across the 14
+not a placebo"). Baseline LOC range at HEAD: 110-3992 across the 15
 crates. See build-backlog row 1 for the regeneration procedure.
 
 **What's NOT frozen:**
@@ -882,10 +1142,36 @@ crates. See build-backlog row 1 for the regeneration procedure.
   the baseline.
 
 **Verification mechanism:**
-- `crates/benten-engine/tests/cargo_public_api_drift.rs` runs the drift
-  detection on every CI lane.
+- The CI workflow `.github/workflows/cargo-public-api.yml` is the
+  authoritative diff gate (regenerate-and-diff against the committed
+  baselines at PR-time). `crates/benten-engine/tests/cargo_public_api_drift.rs`
+  is the presence-pin that asserts the workflow is wired + non-vacuous, not
+  the drift diff itself.
 - `cargo +stable clippy --workspace --all-targets -- -D warnings`
   orthogonal catch on missing-docs / unused-pub.
+
+**Baseline-update log (Rust surface).**
+
+- **2026-08-11, R6 fix-wave — `docs/public-api/benten-engine.txt`, ADDITIVE, exactly 4
+  added lines** (the `EngineBuilder` block appears twice in `--simplified` output, so the
+  two new methods show as 2 lines each): `EngineBuilder::invariant_config(self,
+  benten_eval::InvariantConfig) -> Self` and `EngineBuilder::iteration_budget(self, u64)
+  -> Self`. **Zero removals, zero renames, zero signature changes.** Regenerated with CI's
+  exact pipeline (`cargo +nightly public-api --simplified -p benten-engine`, stderr
+  dropped); never hand-edited.
+  **Why:** `benten_eval::InvariantConfig` was documented as "configurable invariant
+  thresholds" while all three engine registration paths hardcoded
+  `InvariantConfig::default()` inline, and the engine's only iteration-budget writer was
+  the cfg-gated `Engine::testing_set_iteration_budget` — i.e. two FALSE RECORDS of the
+  rule-14 shape, which a freeze makes permanent. Per rule 15 the fix is the CODE. The
+  runtime frame cap (`Evaluator::max_stack_depth`) is deliberately **derived** from
+  `InvariantConfig::max_depth` rather than exposed as a third knob, because the two bound
+  the same quantity and previously agreed only by both being the literal `64`.
+  **Freeze-pin check:** both new signatures are grep-clean of `tauri::Runtime` /
+  `tokio::runtime::Handle` / `with_runtime`, so the §"Runtime-handle-leak structural pin
+  via cargo-public-api baseline" defense on this exact `EngineBuilder` block is unaffected.
+  Default-configuration behaviour is byte-identical to the pre-change engine. Full record +
+  verdict table + falsification mutations: `docs/future/engine-fit-and-gaps.md` §3.7.
 
 **Composing-phase escape valve:**
 A new pub item = baseline-update PR; reviewed against the freeze
@@ -902,7 +1188,7 @@ SURFACE.
 |---|---|---|
 | `packages/engine/src/index.ts` exports | All `export` statements at HEAD | LOCKED as-shipped at the freeze wave; commit the post-freeze `index.d.ts` |
 | `packages/engine/src/engine.ts` `Engine` + `PolicyKind` | As-shipped | LOCKED |
-| `packages/engine/src/errors.generated.ts` `CATALOG_CODES` | The 201-TS-class catalog at HEAD `b93b2efc` (199 Rust ErrorCode throwable variants + `E_INV_ITERATE_NEST_DEPTH` Phase-2a-retired retained envelope + `E_UNKNOWN` forward-compat sentinel = 201; documented in ERROR-CATALOG.md "Catalog count narrative" table) | LOCKED — mirror item 8's `ErrorCode` mirror discipline; auto-generation contract frozen (regen MUST produce byte-identical file given same input) |
+| `packages/engine/src/errors.generated.ts` `CATALOG_CODES` | The 203-TS-class catalog (201 Rust ErrorCode throwable variants + `E_INV_ITERATE_NEST_DEPTH` Phase-2a-retired retained envelope + `E_UNKNOWN` forward-compat sentinel = 203; documented in ERROR-CATALOG.md "Catalog count narrative" table; pinned by `crates/benten-errors/tests/stable_shape.rs` `CATALOG_VARIANT_COUNT == 201`) | LOCKED — mirror item 8's `ErrorCode` mirror discipline; auto-generation contract frozen (regen MUST produce byte-identical file given same input) |
 | `packages/engine/src/types.ts` typed-call shapes | `TypedCallInputShapes`, `TypedCallOutputShapes`, `ManifestSignature`, the `ed25519_*` / `keypair_*` / `did_resolve` arms | LOCKED — **PQ-hybrid-capable** sizes (NO hardcoded Ed25519 32B-key / 64B-sig assumption; per item 10 PQ-hybrid JS-shape widening + napi-r1-1 atomic mirror) |
 | `packages/engine/src/types.ts` other interface exports | `Subgraph`, `RegisteredHandler`, `AttributionFrame`, `Trace*`, `CapabilityClaim`, `DeviceAttestation`, `CapabilityGrant`, `Edge`, `TypedCallOp`, etc. | LOCKED as-shipped |
 | `packages/engine/src/index.d.ts` | The TS module declaration file; generated from napi-rs via the build pipeline | LOCKED post-regen at the freeze wave |
@@ -912,27 +1198,31 @@ SURFACE.
 | `packages/engine/src/identity.ts` `Keypair` / `VerifiableCredential` / `DeviceAttestation` JS-side wrappers | As-shipped (PQ-hybrid sized) | LOCKED |
 | `packages/engine/src/manifest.ts` `ManifestSignature` + plugin-manifest JS shapes | As-shipped (PQ-hybrid sized) | LOCKED |
 | `packages/engine/src/sandbox.ts` SANDBOX JS API | As-shipped | LOCKED |
-| `packages/engine/src/wait.ts` WAIT JS API | As-shipped | LOCKED |
+| `packages/engine/src/dsl.ts` `wait(...)` WAIT JS API | As-shipped | LOCKED |
 
 **#1204 JS-side public-API parity gate LANDED at G-CORE-9
 V1-FROZEN-INTERFACE row 2 (commit `13322df4`).** Workflow at
 `.github/workflows/ts-public-api.yml`; baseline at
-`packages/engine/etc/public-api.txt` (415 LOC; extract-from-.d.ts
-structural diff covering all 15 `dist/**/*.d.ts` files — the recursive
-glob includes the publicly-exported `dist/internal/trace.d.ts` subpath,
-psf-2 R6-round-7). Migration to
+`packages/engine/etc/public-api.txt` (1927 LOC; whole-.d.ts-text
+structural diff, comments stripped by the compiler, covering all 15
+`dist/**/*.d.ts` files — the recursive glob includes the
+publicly-exported `dist/internal/trace.d.ts` subpath, psf-2
+R6-round-7; widened from opening-lines-only at the CI-integrity pass
+S-2 close, which had left class methods + interface members
+unrecorded). Migration to
 `@microsoft/api-extractor` is named for v1-Composing (the workflow
 + baseline-file location ARE the migration seam; swap-in is
 contained).
 
 **errors.generated.ts ↔ catalog ↔ Rust `ErrorCode` parity audit
 RESOLVED at G-CORE-9 V1-FROZEN-INTERFACE row 8a (investigation outcome
-in commit `75a1d33a` body).** Counts at HEAD `b93b2efc`: 199 Rust
+in commit `75a1d33a` body).** Counts at HEAD: 201 Rust
 ErrorCode throwable variants + 1 `E_INV_ITERATE_NEST_DEPTH`
 Phase-2a-retired retained envelope (catalog ID retained for
 backward-compat string round-trip; Rust enum has no variant) + 1
 `E_UNKNOWN` forward-compat sentinel (mirrors Rust `Unknown(String)`
-fallback) = 201 catalog/TS entries.
+fallback) = 203 catalog/TS entries. Machine-pinned by
+`crates/benten-errors/tests/stable_shape.rs` (`CATALOG_VARIANT_COUNT == 201`).
 **Delta is the legitimate retained-envelope set, NOT drift**; the
 drift-detect script (`npm run drift:errors`) validates this exact
 pattern. Documented in ERROR-CATALOG.md's "Catalog count narrative"
@@ -943,9 +1233,9 @@ agree" at every CI run.
 - The exported TS class/type/function names are locked.
 - The PQ-hybrid sizing (no Ed25519-shaped assumption) is locked at the
   type level — e.g. `keypair_publicKey: Uint8Array` with no length pin
-  in the type, and runtime length-check tests at
-  `packages/engine/src/manifest.test.ts` exercise the hybrid-sized
-  inputs.
+  in the type, and the `signature?: ManifestSignature` parity test at
+  `packages/engine/test/manifest_schema_parity.test.ts` exercises the
+  hybrid-sized manifest-signature shape.
 - The `errors.generated.ts` regen-determinism is part of the contract (a
   re-codegen produces zero diff).
 
@@ -969,10 +1259,31 @@ agree" at every CI run.
   literals on crypto-touching types (PQ-hybrid JS-shape widening
   invariant).
 
+**Baseline-update log (item-10 manifest-review record).**
+
+- **2026-08-11, R6 fix-wave.** `packages/engine/etc/public-api.txt` updated —
+  **exactly two changed lines**, both the `EInputLimit.fixHint` string value.
+  **No structural drift:** the 203-class `CATALOG_CODES` set, every `code`
+  literal, and every signature are byte-identical, so the LOCKED contract in the
+  table above (catalog membership + regen determinism) is untouched. The prose
+  changed because the prior value was a **false record** — it advertised
+  "Limits are configurable via the engine builder" (no builder method, no config
+  struct exists) and "nesting depth 128" (the canonical decoder stops at 64, and
+  the napi cap is now derived from it). Per rule 15, a frozen baseline is not a
+  reason to preserve a false statement in an artifact that ships to consumers;
+  the honest value is the one that goes in. Regenerated with CI's exact pipeline
+  (`tsc 5.9.3 --emitDeclarationOnly --removeComments`, `LC_ALL=C` file sort),
+  never hand-edited. Provenance now lives in the `ERROR-CATALOG.md` blockquote,
+  which is doc-only and does not reach the published package.
+
 **Composing-phase escape valve:**
 - New TS export = ADDITIVE; baseline-update PR; reviewed against the
   freeze.
 - Removing/renaming = HALT-AND-SURFACE.
+- **A `fixHint` / doc-prose value change is NOT a structural change** — it is a
+  baseline-update with the diff shown in the log above. It still requires the
+  regenerated baseline in the same commit, because the detector diffs the whole
+  declaration text.
 - Backward-compatible additions (new optional fields on existing
   interfaces with `#[non_exhaustive]`-equivalent TS shape) can land with
   explicit regenerate + R6 review.
@@ -988,10 +1299,20 @@ coherent freeze-wave over the FULL enumerated workspace surface."
 **Frozen scope:**
 
 The G-CORE-9 wave enumerates EVERY public enum + struct workspace-wide
-and makes a per-item apply-or-D8-carve-out decision. Verified at HEAD:
-**158 total `pub enum` across `crates/`; 148 of those carry
-`#[non_exhaustive]` already (counting all types, not just enums)**. The
-freeze MUST close the remaining gap.
+and makes a per-item apply-or-D8-carve-out decision. **HEAD-verified count
+refreshed at R6-R1c re-count (HEAD `b86dec03`, per F-03; supersedes the
+F-22 2026-07-03 `194 / 130 / 444 / 53 / 183 / 638` snapshot):** **196 total
+`pub enum` across `crates/`, 135 of which carry `#[non_exhaustive]`; 448
+total `pub struct`, 53 of which carry `#[non_exhaustive]` — 188 of the 644
+total pub enum+struct types carry the attribute at HEAD** (the un-attributed
+remainder is overwhelmingly the documented carve-out set — frozen-cardinality
+wire-keying enums, all-private-field internal structs where the attribute is a
+no-op for external construction, and the `#[cfg]`-gated / builder-pattern
+surfaces — plus the small honestly-deferred set below). The F-22 sweep closed
+the Row D-17 EXTENSION set (~55 types across benten-core / benten-ivm /
+benten-platform-foundation / benten-engine); the remaining honestly-deferred
+gaps are the §4.43-tracked `GraphError::TxAborted` per-variant + `store::ChangeEvent`
+(cross-crate literal-construction cascade, v1-API-stabilization wave).
 
 **Architectural position: APPLY `#[non_exhaustive]` UNIVERSALLY** unless
 a D8-carve-out has a documented structural reason. The cost of NOT
@@ -1024,6 +1345,16 @@ WRONG):
   EXACTLY-6-arms-by-the-type-system property IS the structural pin. **CARVE-OUT
   (documented; per the doc-block at `grant_acceptance.rs` + the
   `GrantRejection::ALL` / `roster_index` const-assert pin). R6-R3 ratification.**
+- **`benten-drop::layer_c::BindingContext`** (`crates/benten-drop/src/layer_c.rs`)
+  — the CLOSED two-variant single-recipient drop set (`DropPlaintextSender` =
+  `0x6500` / `DropSealedSender` = `0x6510`). Each variant is WIRE-KEYING (one
+  codepoint per variant), so the set is a closed, frozen wire contract —
+  structurally identical to `MembershipSetKind` / `RoleId`. `#[non_exhaustive]`
+  would defeat the exhaustive-match wire-decision guard; new drop shapes are added
+  on the sibling `#[non_exhaustive]` `EncryptedEnvelope` + the codepoint registry,
+  NOT by growing this enum. **CARVE-OUT (documented; per the §11 doc-block at
+  `layer_c.rs::BindingContext` + the `binding_context_audit_exhaustive_by_design_no_catch_all`
+  pin). R10-council F-02/F-11 ratification.**
 
 **The enumerated must-apply set** (from §1.A.FROZEN item 11 + workspace
 verification at HEAD):
@@ -1035,7 +1366,8 @@ verification at HEAD):
 | `benten-engine` (layer_d) | `device_auth::DeviceAuthError` / `device_link::DeviceLinkError` / `secret_store::SecretStoreError` / `remote_permission::PermissionOperation` | NO at HEAD (new frozen-v1 layer_d enums) | **APPLY** (R6-R3 fix-b comprehensive sweep). `PermissionOperation`'s same-crate `to_wire_be` match stays exhaustive (forces a wire-tag for any new variant); cross-crate consumers get additive forward-compat. |
 | `benten-engine` (layer_d) | **`grant_acceptance::GrantRejection`** | NO (deliberate) | **DO NOT APPLY** — explicit carve-out (R6-R3): the frozen M-12 six-pass-class roster; the non-wildcard `roster_index` match IS the structural roster-drift guard (a 7th class HALT-AND-SURFACEs at every consumer). Mirrors `Strategy` / `MembershipSetKind`. |
 | `benten-core` | `WriteAuthority`, `ChangeEvent`, `ChangeKind`, `subgraph_spec::Spec`+`SpecError`, `version_dag::*`, `Subgraph::PrimitiveKind` | YES (except `Spec` which uses private-fields-plus-builder pattern for equivalent SemVer-safety per L17-r2-1) | KEEP |
-| `benten-core` | new `RestrictedSpec` enum variants (`subgraph_spec/spec.rs:126`) | TBD | APPLY |
+| `benten-core` | new `SubgraphSpecRestriction` enum variants (`subgraph_spec/spec.rs:115`) | TBD | APPLY |
+| **F-22 Row D-17 EXTENSION set** (pre-tag) | `benten-core`: `Mode` / `VersionError` / `VersionDagError` / `Anchor` / `VersionDag` / `DagVersionChain` / `Subgraph` / `SubgraphBuilder` / `NodeHandle`. `benten-ivm`: `SubgraphSpec` / `KernelInput` / `ViewState` / `ViewBudget` / `ViewQuery` / `ViewResult` / `ViewDefinition` / `LabelPattern` / `Subscriber` / `CanonicalViewEntry` / `AlgorithmBView` / `Projection` / `EffectiveRules` + the 5 view-instance structs. `benten-platform-foundation`: `VocabLabel` / `VocabEdge` / `Scalar` / `RenderError` / `MaterializerError` / `MaterializerDenialFrame` / `MaterializerWalkInputs` / `MaterializerOutput` / `SubscribeAttachToken`. `benten-engine`: `UserViewSpec` / `UserViewSpecBuilder` / `ReadViewOptions` / `Outcome` / `Trace` / `TerminalError` / `BudgetExhaustedView` / `AnchorHandle` / `RegisterReplaceOutcome` / `HandlerPredecessors` / `DiagnosticInfo` / `NestedTx` / `EngineViewsHandle` / `AtriumConfig` / `SyncStatus` | **YES — `#[non_exhaustive]` APPLIED at HEAD (F-22 pre-tag sweep)** (each carries a `// §11 SemVer-readiness (F-22 pre-tag)` doc-block) | **APPLIED (KEEP)** — closes `V1-FROZEN-INTERFACE-DEFERRED.md` Row D-17 EXTENSION set. Cross-crate cascade closed via minted constructors (`Subgraph::from_parts` / `NodeHandle::new` / `ViewDefinition::new` / `MaterializerWalkInputs::new`) + `default()`+field-mutation for FRU structs + `_` wildcard match arms (in-crate exhaustive matches unaffected). NO carve-outs in this set. Audit pins: 12 `f22_*` tests in `crates/benten-engine/tests/g_core_9_non_exhaustive_audit.rs`. |
 | `benten-ivm` | `AlgorithmError` | per spec item 11 | AUDIT + APPLY |
 | `benten-sync` | §4.71 5-enum cluster | per spec item 11 | AUDIT + APPLY |
 | `benten-caps` | `CapError`, `RestrictedSpec`, `PendingOp` | YES | KEEP |
@@ -1044,14 +1376,17 @@ verification at HEAD):
 | `benten-caps` | **`Scope`** | NO (deliberate) | **DO NOT APPLY** — explicit carve-out per item 15(c); the EXACTLY-two-arms-by-the-type-system property IS the structural pin |
 | `benten-ivm` | **`Strategy`** | NO (deliberate) | **DO NOT APPLY** — explicit carve-out per G-CORE-9 R1 L8-MAJOR-3 ratification; the 3-arm `{A, B, Reserved}` set IS load-bearing per the spec's audit-pin (item 11 documented carve-out); adding a 4th strategy is a Composing-time architectural decision, NOT a SemVer non-breaking field addition |
 | `benten-graph` | `WriteContext` (struct) | NO at HEAD | **APPLY** (item 5 coupling) |
-| `benten-graph` | `ChangeEvent` (re-export) | YES | KEEP |
+| `benten-graph` | `ChangeEvent` (`benten_core::change_stream::ChangeEvent` re-export) | YES | KEEP |
+| `benten-graph` | `store::ChangeEvent` (**benten-graph's OWN struct** at `crates/benten-graph/src/store.rs`, re-exported at `lib.rs::pub use store::{ChangeEvent, ..}` — DISTINCT from the `benten_core` re-export above) | **NO at HEAD** (`pub struct ChangeEvent` with `pub` fields, no `#[non_exhaustive]`) | **F-05 (R12) freeze-accounting: NAMED-DEFERRAL** — same class as `WriteContext` §4.43: `store::ChangeEvent` is struct-literal-constructed in cross-crate test code (`crates/benten-ivm/tests/*`), so a bare struct-level `#[non_exhaustive]` breaks the workspace test build. Applying it (+ migrating the test literals to the `ChangeEvent::new_*` constructors) OR accepting the field-level SemVer-lock with a written rationale is deferred to the v1-API-stabilization wave, tracked at `docs/future/phase-4-backlog.md §4.43` (the `#[non_exhaustive]` residual row already names `ChangeEvent` alongside `WriteContext`). |
 | `benten-graph` | `GraphError` | YES | KEEP |
 | `benten-graph` | `GraphError::TxAborted` (per-variant) | Unclear at HEAD | **APPLY** defensively |
 | `benten-graph` | `WriteAuthority` (re-export from core) | YES | KEEP |
 | `benten-graph` | per `benten_graph::GraphError::TxAborted` Fwd-2 #997/#1207 explicit no-apply | NO (explicit reason) | DO NOT APPLY |
 | `benten-crypto-suite` | `UnsupportedAlgorithm` | TBD | APPLY |
-| `benten-crypto-suite` | `SwapMatrixError` | TBD | APPLY |
-| `benten-drop` | `DropBundleVersion`, `DropContentMode`, `DropBundleError`, `EnvelopeSigError` (+ the Layer-C `LayerCError` / `AdmitError` / `GroupError` consumer enums) | YES — `#[non_exhaustive]` applied to `DropBundleVersion`, `DropBundleError`, `EnvelopeSigError`, `LayerCError`, `AdmitError`, `GroupError`; `DropContentMode` is the intentional exhaustive-by-design carve-out (item 15(c) + `tf3f_drop_content_mode_no_inline_tiny_arm`). Audit arm-coverage at `crates/benten-drop/tests/g_core_9_non_exhaustive_audit_drop.rs` (6/6 covered enums PASS) | APPLY each (KEEP) |
+| `benten-crypto-suite` | `SwapMatrixError` | YES | KEEP |
+| `benten-crypto-suite` | `swap_matrix::{SwapKeypair, SwapPublicKey, SwapRecipientKeypair, SwapRecipientPublic, SwapRecipientSecret}` + `discharge::DischargeDisposition` | **YES — `#[non_exhaustive]` APPLIED at R10-council F-02/F-11** (each carries a `// §11 SemVer-readiness` doc-block; the 5 `Swap*` matrix enums grow additively with each new sig/enc arm, and `DischargeDisposition` grows if a future discharge shape lands). Audit arm-coverage at `crates/benten-crypto-suite/tests/g_core_9_non_exhaustive_audit_crypto_suite.rs` (6/6 PASS). No external match sites needed `_` arms (the `Swap*` enums are matched only inside `swap_matrix.rs`). | APPLY each (KEEP) |
+| `benten-drop` | `DropBundleVersion`, `DropContentMode`, `DropBundleError`, `EnvelopeSigError` (+ the Layer-C `LayerCError` / `AdmitError` / `GroupError` consumer enums) + `layer_c::EncryptedEnvelope` (R10 F-02/F-11) | YES — `#[non_exhaustive]` applied to `DropBundleVersion`, `DropBundleError`, `EnvelopeSigError`, `LayerCError`, `AdmitError`, `GroupError`, and (R10-council F-02/F-11) `layer_c::EncryptedEnvelope` (the Inv-16 codepoint-dispatched envelope — additive-shape-ready; integration-test consumers gained fail-closed `_` arms). `DropContentMode` is the intentional exhaustive-by-design carve-out (item 15(c) + `tf3f_drop_content_mode_no_inline_tiny_arm`); **`layer_c::BindingContext` is the R10 exhaustive-by-design carve-out** (wire-keying — one codepoint per variant `0x6500`/`0x6510`; mirrors `MembershipSetKind`/`RoleId`; NO `#[non_exhaustive]`, NO `_` arm — the exhaustive 2-arm match HALT-AND-SURFACEs a wire decision; registered in the carve-out registry below). Audit arm-coverage at `crates/benten-drop/tests/g_core_9_non_exhaustive_audit_drop.rs` (`EncryptedEnvelope` PASS + `BindingContext` exhaustive-by-design pin) | APPLY each (KEEP) |
+| `benten-membership-set` | `audit::AdminOp`, `audit::AuditAccessGradation`, `audit::AuditReadDecision`, `audit::RequesterRole`, `federation::FederationModel`, `governance::GovernanceTier` | **YES — `#[non_exhaustive]` APPLIED at HEAD** (verified `crates/benten-membership-set/src/{audit,federation,governance}.rs`; each carries a `// §11 SemVer-readiness` doc-block above the attribute so a future variant lands additively) | **APPLIED (KEEP)** — the additive-variant surfaces (governance tiers, federation models, audit-op / access-gradation / read-decision / requester-role) all grow post-v1; `#[non_exhaustive]` on each is the SemVer-readiness pin. **Carve-out registry** (deliberately exhaustive-by-design, NO `#[non_exhaustive]` — the EXACTLY-N-arms-by-the-type-system property IS the structural pin, mirrors `Strategy` / `benten-caps::Scope`): `kind::MembershipSetKind` (EXACTLY-3 `{Atrium, DeviceMesh, SingleDevice}` per item 15(c); a 4th Kind HALT-AND-SURFACEs — Garden/Grove are GOVERNANCE tiers on the orthogonal `GovernanceConfig` axis, NOT Kinds), `kind::RequestedReserveKind` (the typed-reject reserve *selector*, keeps `MembershipSetKind` EXACTLY-3), `role::RoleId` (`#[repr(u8)]` AAD-keying-bound wire ordinal; a new role changes the keying wire), `member::MemberRef` (`#[repr(u8)]` AAD-keying-bound int-discriminant; tag 3 reserved for a future `SubsetRef`), `keying_kv::CidTarget` (the `derive_kv` KDF-input target set — exhaustive by keying construction). |
 | `benten-renderer-tauri` | `IpcMethod` (per-method allowlist) | TBD | APPLY |
 | `benten-dsl-compiler` | `CompileError`, `CompiledSubgraph`, `CompiledPrimitive`, `Diagnostic`, `Span` | YES (5/5 applied per L9-DSL-MAJOR-2 closure at G-CORE-9 R2; audit test at `crates/benten-dsl-compiler/tests/g_core_9_non_exhaustive_audit_dsl.rs` 2/2 PASS) | KEEP |
 | `benten-errors` | `ErrorCode` | YES (per Phase-4-Foundation freeze) | KEEP |
@@ -1068,7 +1403,24 @@ verification at HEAD):
 **What's NOT frozen:**
 - The variant SET inside the enum (the whole point of `#[non_exhaustive]`
   is permitting additive future variants).
-- The struct FIELD SET (same — additive future fields).
+- The struct FIELD SET **for the non-wire structs** (same — additive future
+  fields land at the `#[non_exhaustive]` tail).
+
+  **Exception — the serde-canonical-bytes wire structs.** For the category of
+  types whose FIELD LAYOUT *is* the frozen wire contract — the
+  serde/DAG-CBOR-canonical-bytes structs whose declared field order + set is
+  what a signature signs / what round-trips on disk / on the wire (e.g.
+  `VaultPayload`, the Layer-C/Layer-D on-wire payloads, `UcanClaims`
+  canonical-bytes) — the field set is EXHAUSTIVE-BY-WIRE-DESIGN and thus
+  frozen: adding a field is a wire-format break, not a non-breaking additive
+  change. `#[non_exhaustive]` is the WRONG tool for these — it advertises
+  additive-field-readiness that the wire contract forbids, and it does not
+  even prevent the break (a new serialized field changes the canonical bytes
+  regardless of the attribute). These structs are deliberately NOT
+  `#[non_exhaustive]`; their freeze mechanism is the golden-hex / canonical-CBOR
+  KAT pins (e.g. `f_va_1::VAULT_PAYLOAD_GOLDEN_HEX`), not the attribute. This
+  is a distinct carve-out class from the exhaustive-cardinality wire-KEYING
+  enums (`MembershipSetKind` / `RoleId` / `BindingContext`).
 
 **Verification mechanism:**
 - An enumerated-per-type audit test pin
@@ -1093,10 +1445,24 @@ verification at HEAD):
 - New `pub enum` / `pub struct` in Composing MUST default to
   `#[non_exhaustive]` per the freeze policy; carve-out requires explicit
   registry entry + Ben sign-off.
-- ADDING `#[non_exhaustive]` to a type that doesn't have it = additive +
-  permitted in Composing (caveat: technically SemVer-breaking for
-  external direct-struct-literal construction, so the migration path
-  must be tested).
+- ADDING `#[non_exhaustive]` to a type that doesn't have it is
+  **SemVer-BREAKING for external consumers, not additive.** It breaks
+  downstream struct-literal construction AND downstream exhaustive
+  `match`. **Corrected 2026-08-13** — this clause previously read
+  "additive + permitted in Composing (caveat: technically
+  SemVer-breaking …)", which asserts both halves of a contradiction and
+  invites a reader to quote the convenient one. Someone did: the
+  adopter-ledger row dismissing an external request to add the attribute
+  to four types pre-tag cited only the un-caveated half.
+  **The caveat was the true half.** Note the asymmetry with the
+  neighbouring rules: this is the one direction the escape valve does
+  NOT cover, because "permitted in Composing" is only meaningful for
+  changes that do not break the consumers the freeze protects.
+  Consequence: **adding it after the tag costs a major bump**, so any
+  type that may ever gain a variant or field wants the attribute
+  BEFORE the freeze. The defining crate is unaffected either way —
+  `#[non_exhaustive]` constrains downstream crates only, so
+  intra-workspace exhaustive matching keeps compiling.
 - REMOVING `#[non_exhaustive]` from a frozen item = HALT-AND-SURFACE.
 
 ---
@@ -1122,7 +1488,7 @@ SHIPPED per #1338 G-CORE-8 fix-pass + the wave-2 batch #1340):**
 - `pub trait ManifestEnvelopeRechecker` (`crates/benten-engine/src/manifest_envelope_recheck.rs::ManifestEnvelopeRechecker`) — the port interface; method
   signatures frozen.
 - `NoopManifestEnvelopeRechecker` is the v1-beta **shipped default**
-  (`crates/benten-engine/src/engine.rs::Engine::new_with_engine_caps_handle` always installs
+  (`crates/benten-engine/src/engine.rs::Engine::from_parts_with_clocks` always installs
   `Some(Arc::new(NoopManifestEnvelopeRechecker))` per the
   `manifest_envelope_rechecker: Some(Arc::new(...NoopManifestEnvelopeRechecker))` initializer). At HEAD its
   `recheck_row` impl returns `NotApplicable` for every input
@@ -1217,7 +1583,7 @@ planners agreed; locked as-shipped.**
   in the const-allowlist. **Registration affordance REJECTED** per
   CLAUDE.md #19 engine-extensions-are-compile-time-linked discipline; a
   runtime-registerable IPC method bypasses the compile-time review gate.
-- `crates/benten-platform-foundation/src/materializer.rs:552` `pub trait
+- `crates/benten-platform-foundation/src/materializer.rs:587` `pub trait
   Renderer: Send + Sync` with `render(&MaterializerOutput) -> Result<(),
   RenderError>` + `backend_name() -> &'static str`. **Trait surface
   carries NO transport-specific methods** (compile-test pin asserts a
@@ -1399,10 +1765,10 @@ CLAUDE.md baked-in #18 (Principal primitive + plugin trust model).
 ### 15.a — SubgraphSpec primitive
 
 **Frozen surfaces:**
-- `crates/benten-core/src/subgraph_spec/spec.rs:190` `pub struct Spec` —
+- `crates/benten-core/src/subgraph_spec/spec.rs::Spec` `pub struct Spec` —
   the 4-thing thin core (Roots / Expansion / Inclusion / Termination).
   **Equivalent SemVer-safety via private fields + builder pattern**
-  (`pub fn builder() -> SpecBuilder` at `spec.rs:216`; all four fields are
+  (`pub fn builder() -> SpecBuilder` at `spec.rs:205`; all four fields are
   private). External direct-struct-literal construction is already blocked
   by field visibility — `#[non_exhaustive]` is NOT required for the
   SemVer-additive-field-extension property `Spec` needs. Per G-CORE-9 R2
@@ -1425,7 +1791,7 @@ CLAUDE.md baked-in #18 (Principal primitive + plugin trust model).
 **ARCHITECTURAL CONCERN — type-name collision (orchestrator-decided per
 distinctive-angle).** Two `RestrictedSpec` types existed at HEAD: (i)
 `crates/benten-caps/src/restricted_spec.rs:103` (the 6-dimension product
-per (b)); (ii) `crates/benten-core/src/subgraph_spec/spec.rs:126` (a
+per (b)); (ii) `crates/benten-core/src/subgraph_spec/spec.rs::SubgraphSpecRestriction` (a
 different enum). **Renames LANDED at G-CORE-9 V1-FROZEN-INTERFACE row 7
 (commit `dd12f394`):** `subgraph_spec::RestrictedSpec` →
 `SubgraphSpecRestriction`; `caps::RestrictedSpec` → `RestrictedScope`.
@@ -1643,8 +2009,11 @@ collapses the encryption-class taxonomy (RATIFIED-S&C §R6 + spec item
 **Frozen surfaces:**
 - The HKDF-SHA256 `derive_step` API in
   `crates/benten-crypto-suite/src/structural_kdf.rs`:
-  - `K(root) = HKDF-SHA256(K_principal, info = "root" || root_cid)`
-    (line 150 `derive_root`).
+  - `K(root) = HKDF-SHA256(K_principal, info = "root:codepoint:" ||
+    cipher_codepoint_be(2) || root_cid)` (the as-built 3-arg
+    `derive_root` — the Item-7 cross-codepoint-replay binding folds the
+    2-byte big-endian cipher-suite codepoint into the info-tag, so a
+    different suite = a different K(root)).
   - `K(N) = HKDF-SHA256(K(predecessor), info = "step" || edge_label ||
     N.cid)` (line 176 `derive_step`).
 - `StructuralKdfKey` zeroize-on-drop output type.
@@ -1664,9 +2033,11 @@ collapses the encryption-class taxonomy (RATIFIED-S&C §R6 + spec item
   additions land additively per item 14).
 
 **What "frozen" means here:**
-- The HKDF info-tag convention (`"step"` for step-derivation, `"root"`
-  for root) is wire-permanent (a different tag = different key =
-  decryption failure).
+- The HKDF info-tag convention is wire-permanent (a different tag =
+  different key = decryption failure): `"step"` (variable-length,
+  `edge_label || N.cid`) for step-derivation, and the fixed-width
+  `"root:codepoint:" || cipher_codepoint_be(2)` prefix for
+  root-derivation (the codepoint-bound info-tag).
 - The corrected (per Spike E) derivation formula with the explicit
   info-tags is locked; not the literal-DESIGN-doc formula (which Spike E
   proved doesn't converge).
@@ -1692,6 +2063,19 @@ different strings) = HALT (cryptographic; breaks downstream derivation).
 - `crates/benten-sync/src/two_cid_store.rs::TwoCidStore` — the wave-3e
   adapter wrapping a ciphertext-bytes backing store + the two-CID
   mapping (plaintext_cid → ciphertext_cid).
+- **NOT frozen (DROPPED R9 F-07):** the F-full DUAL-CID *extension* that
+  once sat alongside `TwoCidStore` in the same module (`DualCidStore` /
+  `plaintext_cid` / `reseal` / `blind_set_cid` / `verify_stanza_generation` /
+  `GenError` / `k_principal_generation`) was DELETED as superseded — its
+  stable-identity, generation-staleness, and blinded-set-CID concepts all
+  ship live in `layer_c` (the `body_cid` recompute-on-open + AAD-bound
+  key-epoch generations + B2 `M_auth`) and `membership-set`
+  (`membership_set_id_commitment`), equal-or-stronger; the dropped surface
+  had no seal-side producer and a single test as its only consumer (see
+  SECURITY-POSTURE.md, "Generation-staleness defense of record"). Only the
+  wave-3e `TwoCidStore` above is frozen — a future reader must NOT re-mint
+  the dropped extension (a genuinely-needed shape re-adds additively against
+  the real types under crypto-agility, not from the wrong-width stand-in).
 - redb-backed `plaintext_cid → ciphertext_cid` mapping table at G-CORE-3d
   (#1323) — durable.
 - UCAN scopes against plaintext_cid; iroh-blobs serves ciphertext blob by
@@ -1844,13 +2228,20 @@ semantics in Composing = HALT.
 
 ## 16. MembershipSet keying primitive public surface frozen (the 15th crate `benten-membership-set`)
 
-> **⚠️ FLAG-FOR-BEN / FLAG-FOR-ORCHESTRATOR-REVIEW.** This section
-> documents the AS-BUILT shipped MembershipSet surface (F-full TIER-1/2,
-> HEAD `b93b2efc`). It is added by the R6 R1 doc-reconciler to make the
-> 15th crate's frozen surface referenceable; the freeze-lens + Ben sign
-> off the §1.A.FROZEN inclusion at the freeze gate. Read against
-> `crates/benten-membership-set/src/lib.rs` pub-use set +
-> `docs/public-api/benten-membership-set.txt` baseline.
+> **✅ HEAD RE-PIN DISCHARGED at R14 pre-tag sweep (2026-07-03); §1.A.FROZEN
+> inclusion sign-off remains Ben-gated at the tag.** This section documents the
+> AS-BUILT shipped MembershipSet surface. At the R14 pre-tag sweep the frozen
+> surface table below was re-verified against HEAD's
+> `crates/benten-membership-set/src/lib.rs` pub-use set (`error::{…}` +
+> `kind::{KindDispatchError, MembershipSetKind, RequestedReserveKind,
+> dispatch_reserve}` + `member::{Did, Hlc, MemberEntry, MemberNature, MemberRef,
+> MembersTable, RoleId, SigPubKey, derive_member_nature, is_ai_operated}` +
+> `set::{MembershipSet, wire_cost_ceiling}` + the `aad::*` assembler surface) +
+> the `docs/public-api/benten-membership-set.txt` cargo-public-api baseline —
+> the table matches HEAD (no drift). The ONE residual that genuinely couples to
+> the tag is the freeze-lens + Ben §1.A.FROZEN-inclusion sign-off, which is a
+> tag-gate decision (registered on the pre-tag-sweep checklist at the top of
+> this doc alongside F-19 / F-04), NOT force-discharged here.
 
 **The 15th workspace crate** is `benten-membership-set` — a thin
 keying-glue Rust engine plugin (mechanism-half per GN-2 / R0 §6.1). Its
@@ -1902,12 +2293,60 @@ assigned at v1-beta:
    `f_ms_2_constructor_cardinality_memberref.rs`).
 5. **`0x6610` group AAD = BLINDED 11-field set** (pinned by
    `f_aad_1_members_table_canonical_cbor_length_injective.rs` +
-   `f_aad_2_nine_tuple_injectivity_opaque_boundary.rs`).
+   `f_aad_2_nine_tuple_injectivity_opaque_boundary.rs` — the `nine_tuple`
+   FILENAME is stale; the file pins the 11-field set, rename tracked at
+   `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-32).
 
 **Escape valve:** any Composing-time change to the EXACTLY-3 Kind
 cardinality, the 5-value RoleId ordinal, the one-DID-one-record fusion,
 the `0x6610` 11-field AAD layout, or the `0x6600`/`0x6610`/`0x6620`
 codepoint band = a §1.A.FROZEN mutation → HALT-AND-SURFACE-TO-BEN.
+
+---
+
+## 17. Reserved-seam / stand-in roll-up (F-15) + UCAN-authority key-type scoping (F-22)
+
+**F-15 — reserved-seam / stand-in consolidated pointer.** Several v1-beta
+surfaces are frozen as SEAMS or STAND-INS — the wire-shape / trait-signature /
+codepoint is locked now, but the substantive production behind it is a named
+Phase-4-Meta-Composing / G-COMP-1 / v1-GM deferral. They are individually
+documented; this is the ONE consolidated pointer so a reader can find the whole
+reserved-seam set from a single place:
+
+- **Row D-30** (`docs/V1-FROZEN-INTERFACE-DEFERRED.md`) —
+  `DeviceLinkError::SessionIdReplayed` production replay-store wire-in (the
+  session-id replay-detection seam is present + typed; the durable replay-store
+  is deferred).
+- **Row D-64** (`docs/V1-FROZEN-INTERFACE-DEFERRED.md`) — Engine
+  encrypt-to-recipient wiring → Phase-4-Meta-Composing; includes the
+  `benten_engine::layer_d::secret_store::SecretStore` `keyring-core` seam
+  (`crates/benten-engine/src/layer_d/secret_store.rs`; the frozen `SecretStore`
+  surface with the production keyring backend deferred) and the `derive_kv`
+  keying-glue with zero production callers at HEAD.
+- **Row D-66** (`docs/V1-FROZEN-INTERFACE-DEFERRED.md`) — the associated
+  Composing-side wiring row (reserved-seam sibling of D-64).
+- **Compromise #65** (`docs/SECURITY-POSTURE.md`) — the wave-3e per-Node AEAD
+  publicly-derivable-`K_principal` **STAND-IN** (keeps the substrate shape
+  stable for the production `K_principal`-store swap-in; NOT real untrusted-host
+  confidentiality at v1-beta; closes at the #1301 / D-64 backend).
+
+Freeze discipline: each of these seams is wire/trait/codepoint-LOCKED at
+G-CORE-9, so the deferred production behind it lands ADDITIVELY (no wire break,
+per CLAUDE.md baked-in #5). Any Composing-time discovery requiring a shape change
+to one of these seams is a §1.A.FROZEN mutation → HALT-AND-SURFACE-TO-BEN.
+
+**F-22 — UCAN-authority key-type scoping.** At v1-beta a **hybrid**
+(Ed25519⊕ML-DSA-65 two-component-multikey) `did:key` is NOT UCAN-audience-eligible:
+the UCAN audience/authority path resolves through the Ed25519-only `did:key`
+form (`benten_id::did::Did::resolve`; plugin-DID + user-DID are fresh Ed25519
+`did:key` shapes per §18 / `docs/PLUGIN-MANIFEST.md §3`). The hybrid `did:key`
+form + its `Did::resolve_hybrid` path exist for the signing/verifying-key
+resolution used by the Layer-C sender-origin-auth (per-message LAMPS-hybrid
+signature) — a DISTINCT axis from UCAN delegation authority. A UCAN whose
+audience is a hybrid `did:key` therefore does not resolve to an
+Ed25519-audience match and **fails closed** (no silent admission). This scoping
+is v1-beta-frozen; UCAN-audience eligibility for hybrid `did:key` (if ever
+wanted) is a post-v1-beta additive extension, not a v1-beta behavior.
 
 ---
 

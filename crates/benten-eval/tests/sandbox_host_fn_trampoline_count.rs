@@ -67,11 +67,9 @@ fn sandbox_host_fn_output_bytes_counted_at_trampoline_not_body() {
     )
     .unwrap();
     let registry = ManifestRegistry::new();
-    let cfg = SandboxConfig {
-        output_bytes: 1024 * 1024,
-        fuel: 100_000_000,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.output_bytes = 1024 * 1024;
+    cfg.fuel = 100_000_000;
     let attribution = dummy_attribution();
     let res = execute(
         &bytes,

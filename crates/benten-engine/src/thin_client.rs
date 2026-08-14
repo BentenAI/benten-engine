@@ -3,7 +3,8 @@
 //!
 //! Implements the **DID-keyed handshake** + **session token** contract
 //! that defends admin UI v0 (and any future thin-client surface) per
-//! `docs/admin-ui-v0-threat-model.md` §T2 defenses 1-3, br-r1-1, and
+//! `.addl/_archive/phase-4-foundation/admin-ui-v0-threat-model.md`
+//! §T2 defenses 1-3, br-r1-1, and
 //! sec-4f-r1-5.
 //!
 //! ## Three deployment shapes use ONE protocol

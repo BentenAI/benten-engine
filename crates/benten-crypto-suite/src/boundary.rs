@@ -283,7 +283,7 @@ name = "foo"
 
 [dependencies]
 ed25519-dalek = "2"
-libcrux-ml-kem = { version = "=0.0.9" }
+libcrux-ml-kem = { version = "=0.0.10" }
 sha2 = "0.10"
 sha3 = "0.10"
 secrecy = "0.10"

@@ -364,6 +364,18 @@ fn f_ld_2_full_struct_signing_bytes_golden_pin() {
 /// NEVER silent acceptance (CLAUDE.md #5).
 #[test]
 fn f_ld_2_out_of_band_codepoint_typed_rejects() {
+    // Band base literal wire-lock. `dispatch_remote_permission_codepoint` derives
+    // its range FROM this const, so the dispatch arms below are self-satisfying
+    // for the base value itself — assert the integer directly (mirrors
+    // `f_ld_4_device_link_band_base_pinned`). Paired with the registry-side
+    // literal lock in
+    // `crates/benten-crypto-suite/tests/f_cp_codepoint_registry_dispatch.rs`
+    // (`new_codepoint_integers_wire_locked`), a one-sided edit to EITHER of the
+    // two independent homes of 0x6320 now fails the build.
+    assert_eq!(
+        REMOTE_PERMISSION_BAND_BASE, 0x6320,
+        "RemotePermission band base is wire-locked at 0x6320 (R0.7 §4.1 FREEZE)"
+    );
     // In-band base accepts.
     dispatch_remote_permission_codepoint(REMOTE_PERMISSION_BAND_BASE)
         .expect("in-band remote-permission codepoint MUST dispatch");
@@ -373,4 +385,189 @@ fn f_ld_2_out_of_band_codepoint_typed_rejects() {
     assert_eq!(err.0, 0x6310);
     // A wholly-unknown codepoint also rejects.
     assert!(dispatch_remote_permission_codepoint(0x0001).is_err());
+}
+
+// ---------------------------------------------------------------------------
+// E-05 / E-06 — EXHAUSTIVE per-arm `to_wire_be()` ABSOLUTE goldens.
+//
+// The R6 falsification sweep flipped `RemoteUnlock` 0x02 -> 0x00 (collides with
+// `Decrypt`) and `ExecuteWorkflow` 0x03 -> 0x02 (collides with `RemoteUnlock`) and all
+// 61 targets stayed GREEN. Only `SignUcanDelegation` had a `to_wire_be` golden
+// (`OP_SIGN_UCAN_WIRE_HEX` above); `Decrypt` was covered only transitively through
+// `REQUEST_SIGNING_BYTES_HEX`; `RemoteUnlock` and `ExecuteWorkflow` had NO byte pin at
+// all. `f_ld_2_permission_request_signature_round_trips_over_canonical_be_bytes`
+// *uses* `RemoteUnlock` as a signature-tamper value — but that arm only needs the
+// bytes to CHANGE, which a tag flip preserves, so it is exactly the kind of
+// round-trip/injectivity assertion a byte-order or tag mutation passes unharmed.
+//
+// `to_wire_be` is a ONE-WAY encoder: there is no `from_wire_be`, so signer and
+// verifier agree bilaterally on any tag assignment. An ABSOLUTE golden is the only
+// construction that can catch this. The compile-time exhaustiveness gate cannot live
+// here — `PermissionOperation` is `#[non_exhaustive]`, so a match in this (foreign)
+// crate is forced to carry a `_` arm; it lives in the `operation_wire_tag_freeze`
+// module inside `src/layer_d/remote_permission.rs`.
+// ---------------------------------------------------------------------------
+
+/// ONE 32-byte payload shared by the `Decrypt` and `ExecuteWorkflow` golden fixtures,
+/// so those two rows differ ONLY in their discriminant tag byte — the exact shape a tag
+/// collision erases (E-06).
+const OP_SHARED_CID: [u8; 32] = [0x5Au8; 32];
+
+/// The frozen `PermissionOperation` arm count. Used as the array length of BOTH
+/// `operation_roster()` and `OPERATION_WIRE_GOLDEN_HEX`, so a fifth fixture cannot be
+/// added without also adding a golden row (the two arrays would stop type-checking).
+/// The COMPILE-TIME gate that forces a fifth variant to be noticed at all lives in
+/// `operation_wire_tag_freeze::roster_index` inside
+/// `src/layer_d/remote_permission.rs` — `#[non_exhaustive]` makes a wildcard-free
+/// match impossible from this (foreign) crate.
+const OPERATION_ARM_COUNT: usize = 4;
+
+/// ABSOLUTE `to_wire_be()` goldens, one row per `PermissionOperation` arm, in frozen
+/// wire-tag order: `Decrypt`=0x00, `SignUcanDelegation`=0x01, `RemoteUnlock`=0x02,
+/// `ExecuteWorkflow`=0x03.
+///
+/// PROVENANCE: all four rows were CAPTURED FROM THE REAL ENCODER at R6 round #1
+/// (M-20 — goldens are never hand-authored) by running:
+///
+///   CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=line-tables-only CARGO_BUILD_JOBS=6 \
+///     cargo nextest run -p benten-engine --features benten-engine/test-helpers \
+///     --test f_ld_2_remote_permission_wire_freeze \
+///     e_05_e_06_operation_wire_tags_frozen_absolute_goldens --no-capture
+///
+/// Format is lowercase hex, no `0x`, no separators — the same `to_hex` this file
+/// already uses for `OP_SIGN_UCAN_WIRE_HEX`. On failure the test still emits the
+/// whole four-row block in one run, so a DELIBERATE, ratified wire change can be
+/// re-derived in a single pass. **A failure you did not intend means a tag or a
+/// field encoding regressed — fix `to_wire_be`, not this table.**
+///
+/// Row [1] is byte-identical to `OP_SIGN_UCAN_WIRE_HEX` (same fixture values) and
+/// the test asserts that, so the two homes cannot drift apart.
+/// Rows [0] and [3] deliberately share one 32-byte payload so the dangerous
+/// `ExecuteWorkflow 0x03 -> 0x00` collision (which would make the two wires
+/// byte-identical) is what fails.
+const OPERATION_WIRE_GOLDEN_HEX: [&str; OPERATION_ARM_COUNT] = [
+    /* [0] Decrypt             */
+    "005a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+    /* [1] SignUcanDelegation  */
+    "010000000b61747269756d3a7265616400000002aabb0102030405060708",
+    /* [2] RemoteUnlock        */ "02",
+    /* [3] ExecuteWorkflow     */
+    "035a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+];
+
+/// One deterministic fixture per `PermissionOperation` arm, in frozen wire-tag order.
+/// Field values mirror the `operation_wire_tag_freeze` roster in
+/// `src/layer_d/remote_permission.rs` so both homes freeze the same bytes.
+fn operation_roster() -> [(&'static str, PermissionOperation); OPERATION_ARM_COUNT] {
+    [
+        (
+            "Decrypt",
+            PermissionOperation::Decrypt {
+                node_cid: OP_SHARED_CID,
+            },
+        ),
+        (
+            "SignUcanDelegation",
+            PermissionOperation::SignUcanDelegation {
+                scope: b"atrium:read".to_vec(),
+                audience: vec![0xAA, 0xBB],
+                expires_at: 0x0102_0304_0506_0708,
+            },
+        ),
+        ("RemoteUnlock", PermissionOperation::RemoteUnlock),
+        (
+            "ExecuteWorkflow",
+            PermissionOperation::ExecuteWorkflow {
+                workflow_cid: OP_SHARED_CID,
+            },
+        ),
+    ]
+}
+
+/// E-05/E-06 — EVERY `PermissionOperation` arm's `to_wire_be()` matches its ABSOLUTE
+/// frozen golden.
+///
+/// would-FAIL-on-mutation (each is one line in `to_wire_be`):
+///   - `Self::RemoteUnlock => out.push(0x02),` -> `out.push(0x00),` (row [2] flips)
+///   - `Self::ExecuteWorkflow { .. } => { out.push(0x03);` -> `out.push(0x02);`
+///     (row [3] flips)
+///   - `Self::Decrypt { .. } => { out.push(0x00);` -> `out.push(0x03);` (row [0] flips)
+/// Both sweep mutations were survived by the pre-existing corpus; each flips a row
+/// here.
+#[test]
+fn e_05_e_06_operation_wire_tags_frozen_absolute_goldens() {
+    let roster = operation_roster();
+    let actual: Vec<String> = roster
+        .iter()
+        .map(|(_, op)| to_hex(&op.to_wire_be()))
+        .collect();
+
+    // Re-derivation aid: build the ENTIRE table up front so ONE failing run yields
+    // all four rows (an `assert_eq!` per row would stop at the first). Used only when
+    // a wire change is deliberate and ratified — never to clear an unexpected red.
+    let mut block =
+        String::from("const OPERATION_WIRE_GOLDEN_HEX: [&str; OPERATION_ARM_COUNT] = [\n");
+    for ((name, _), hex) in roster.iter().zip(actual.iter()) {
+        use core::fmt::Write as _;
+        let _ = writeln!(block, "    /* {name} */ \"{hex}\",");
+    }
+    block.push_str("];");
+
+    let mut drifted: Vec<&'static str> = Vec::new();
+    for (i, (name, _)) in roster.iter().enumerate() {
+        if actual[i] != OPERATION_WIRE_GOLDEN_HEX[i] {
+            drifted.push(*name);
+        }
+    }
+    assert!(
+        drifted.is_empty(),
+        "E-05/E-06: PermissionOperation wire encodings drifted from their FROZEN \
+         per-arm goldens ({drifted:?}). `to_wire_be` is a ONE-WAY encoder with no \
+         `from_wire_be` decoder, so signer and verifier agree bilaterally on ANY tag \
+         assignment — this absolute golden is the only thing that can catch a tag \
+         flip (the R6 falsification sweep flipped RemoteUnlock 0x02->0x00 and \
+         ExecuteWorkflow 0x03->0x02 with all 61 targets green). Fix `to_wire_be`; \
+         adopt the table below ONLY if this wire change is deliberate and \
+         ratified.\nactual>\n{block}"
+    );
+
+    // Cross-home consistency: row [1] uses the SAME fixture as the pre-existing
+    // `OP_SIGN_UCAN_WIRE_HEX`, so the two literals MUST agree. Catches a mis-paste
+    // during capture and keeps the older golden coupled to the new table.
+    assert_eq!(
+        OPERATION_WIRE_GOLDEN_HEX[1], OP_SIGN_UCAN_WIRE_HEX,
+        "E-05: the SignUcanDelegation row of the per-arm table MUST equal the \
+         pre-existing OP_SIGN_UCAN_WIRE_HEX golden (identical fixture values)"
+    );
+
+    // Tag bytes are frozen DENSE from 0x00 in roster order. Independent of the hex.
+    for (i, (name, op)) in roster.iter().enumerate() {
+        let wire = op.to_wire_be();
+        assert_eq!(
+            usize::from(wire[0]),
+            i,
+            "E-05: `{name}` MUST carry the frozen discriminant tag 0x{i:02x}"
+        );
+    }
+
+    // E-06 privilege-confusion guard: `Decrypt` and `ExecuteWorkflow` share
+    // OP_SHARED_CID, so an equal encoding means the tag byte collided and a
+    // "decrypt one Node" grant is byte-identical to an "execute a workflow" grant.
+    // `RemoteUnlock` is full permanent K_principal authority per the module doc
+    // (src/layer_d/remote_permission.rs), which is what makes this a privilege
+    // confusion rather than a cosmetic wire break.
+    for (i, (name_i, op_i)) in roster.iter().enumerate() {
+        let wire_i = op_i.to_wire_be();
+        for (name_j, op_j) in roster.iter().skip(i + 1) {
+            let wire_j = op_j.to_wire_be();
+            assert_ne!(
+                wire_i[0], wire_j[0],
+                "E-06: `{name_i}` and `{name_j}` MUST NOT share a discriminant tag"
+            );
+            assert_ne!(
+                wire_i, wire_j,
+                "E-06: `{name_i}` and `{name_j}` MUST NOT encode to identical bytes"
+            );
+        }
+    }
 }

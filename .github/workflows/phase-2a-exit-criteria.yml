@@ -264,6 +264,22 @@ jobs:
     name: Phase 2a exit-gate aggregate
     runs-on: ubuntu-24.04
     needs: [wait-resume-determinism, invariants-firing, option-c-flanking, perf-gates]
+    # S-4 (CI-integrity audit 2026-07-26). This job's body is an
+    # unconditional `echo`, so before this change it had exactly two states:
+    # it ran and printed PASS, or an upstream gate died and it was SKIPPED —
+    # which GitHub reports to branch protection as SUCCESS. In other words
+    # the REQUIRED "Phase 2a exit-gate aggregate" context could not fail.
+    # `if: always()` + the assertion below give it a third, real state.
+    if: always()
     steps:
+      # Required only so the local composite action below can be resolved
+      # from the working tree; this job otherwise needs no source.
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Assert every upstream job succeeded
+        uses: ./.github/actions/assert-needs-succeeded
+        with:
+          needs-json: ${{ toJSON(needs) }}
+
       - name: All Phase-2a gates green
         run: 'echo "Phase 2a exit criteria: PASS"'

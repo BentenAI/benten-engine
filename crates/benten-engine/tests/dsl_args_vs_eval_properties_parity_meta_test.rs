@@ -179,6 +179,12 @@ fn canonical_eval_keyspace(primitive: &str) -> BTreeSet<&'static str> {
             "fuel",
             "wallclock_ms",
             "output_limit",
+            // R6 phase-close: memory was the only one of the four
+            // SANDBOX enforcement axes with no production writer, while
+            // docs/SANDBOX-LIMITS.md advertised the override. The DSL
+            // surface `memoryLimitBytes` translates to `memory_limit`
+            // (drops `Bytes`, symmetric with outputLimitBytes).
+            "memory_limit",
             "input",
         ],
         // WRITE: spreads verbatim, eval-side reads `label` + `properties` +

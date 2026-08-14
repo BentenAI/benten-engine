@@ -74,6 +74,19 @@ use crate::peer_id::PeerId;
 /// entry; a fresh handshake is permitted.
 pub const DEFAULT_REPLAY_WINDOW_MS: u64 = 5_000;
 
+/// Fail-closed ceiling on an inbound `protocol_payload` before it is decoded
+/// (Compromise #28 / META #629 DoS-sweep).
+///
+/// `respond_with_window` / `finalise` / `initiate_nonce` decode the
+/// attacker-supplied `HandshakeFrame::protocol_payload` from an UNAUTHENTICATED
+/// remote peer BEFORE the initiate/respond signature is verified. The payload's
+/// `Vec<RevocationEntry>` + grant fields allocate O(N) from attacker bytes; the
+/// only pre-existing bound is the 4-MiB transport `RECV_CAP` at the frame-recv
+/// boundary, which the decode functions themselves do not inherit. A well-formed
+/// handshake payload is a few KiB, so 256 KiB is generous headroom while bounding
+/// a hostile pre-auth payload to a fixed allocation.
+pub const MAX_HANDSHAKE_PAYLOAD_BYTES: usize = 256 * 1024;
+
 /// The Layer-D nonce-cache retention bucket in seconds (1 hour).
 ///
 /// The `jti`-keyed nonce-cache (NQ-T4 / Compromise #25 durable-CAS-marker
@@ -614,6 +627,10 @@ impl Handshake {
         local_revocation_set: Vec<RevocationEntry>,
         replay_window_ms: u64,
     ) -> HandshakeResult<(HandshakeFrame, Session)> {
+        // Fail-closed size cap (Compromise #28 / META #629): reject an
+        // over-large pre-auth payload BEFORE `serde` allocates the decoded
+        // HandshakePayload (grant + revocation-set vectors).
+        check_handshake_payload_bounds(&initiate_frame.protocol_payload, "initiate")?;
         let payload: HandshakePayload =
             serde_ipld_dagcbor::from_slice(&initiate_frame.protocol_payload).map_err(|e| {
                 HandshakeError::PayloadMalformed {
@@ -785,6 +802,9 @@ impl Handshake {
         local_revocation_set: Vec<RevocationEntry>,
         response_frame: &HandshakeFrame,
     ) -> HandshakeResult<Session> {
+        // Fail-closed size cap (Compromise #28 / META #629): reject an
+        // over-large pre-auth payload BEFORE `serde` allocates the decode.
+        check_handshake_payload_bounds(&response_frame.protocol_payload, "respond")?;
         let payload: HandshakePayload =
             serde_ipld_dagcbor::from_slice(&response_frame.protocol_payload).map_err(|e| {
                 HandshakeError::PayloadMalformed {
@@ -910,6 +930,23 @@ pub fn sync_hydrate_consume_recheck_outcome(
     }
 }
 
+/// Fail-closed size cap on an inbound `protocol_payload` BEFORE it is decoded
+/// (Compromise #28 / META #629 DoS-sweep). Shared by every handshake decode
+/// site (`respond_with_window` / `finalise` / `initiate_nonce`) so the
+/// pre-auth allocation bound is enforced identically at each. `label` names
+/// the payload half for the operator-facing reject reason.
+fn check_handshake_payload_bounds(payload: &[u8], label: &str) -> HandshakeResult<()> {
+    if payload.len() > MAX_HANDSHAKE_PAYLOAD_BYTES {
+        return Err(HandshakeError::PayloadMalformed {
+            reason: format!(
+                "{label} payload {} bytes exceeds cap {MAX_HANDSHAKE_PAYLOAD_BYTES}",
+                payload.len()
+            ),
+        });
+    }
+    Ok(())
+}
+
 /// Convenience: extract the [`HandshakePayload::Initiate`] nonce from
 /// an outbound initiate frame so the initiator can pass it to
 /// [`Handshake::finalise`] without re-decoding the frame.
@@ -919,6 +956,9 @@ pub fn sync_hydrate_consume_recheck_outcome(
 /// Returns [`HandshakeError::PayloadMalformed`] if the frame's payload
 /// is not a valid Initiate.
 pub fn initiate_nonce(frame: &HandshakeFrame) -> HandshakeResult<[u8; 32]> {
+    // Fail-closed size cap (Compromise #28 / META #629): reject an over-large
+    // pre-auth payload BEFORE `serde` allocates the decode.
+    check_handshake_payload_bounds(&frame.protocol_payload, "initiate")?;
     let payload: HandshakePayload = serde_ipld_dagcbor::from_slice(&frame.protocol_payload)
         .map_err(|e| HandshakeError::PayloadMalformed {
             reason: format!("initiate payload decode: {e}"),

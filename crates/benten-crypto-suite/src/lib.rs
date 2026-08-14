@@ -83,7 +83,8 @@
 //! a real typed surface ([`cipher_suite::CipherSuiteCodepoint`]) without
 //! adding a new workspace dep. **G-CORE-3a CANARY shipped `0x647a`
 //! X25519⊕ML-KEM-768 hybrid KEM LIVE** (the vendored ~30-LOC X-Wing-style
-//! combiner over `ml-kem` + `x25519-dalek` + `sha3` — stable-but-non-WG
+//! combiner over `libcrux-ml-kem` (via `crate::mlkem`; RustCrypto `ml-kem` is
+//! the dev-only KAT witness) + `x25519-dalek` + `sha3` — stable-but-non-WG
 //! IETF Independent Submission draft, Benten-owned) + **`0x6400`
 //! classical-only X25519 downgrade arm LIVE.** **G-CORE-3c TERMINAL shipped
 //! the full swap matrix** retaining `0x647c` (pure-PQ ML-KEM-768-only swap-matrix
@@ -154,7 +155,8 @@ pub mod vault;
 // Convenience re-exports of the most-used typed surface.
 pub use crate::aead::{AeadEnvelope, AeadError, AeadKeyMaterial};
 pub use crate::cipher_suite::{
-    X_WING_LABEL, classical_combine, combine_x_wing, x_wing_combiner_preimage,
+    X_WING_LABEL, X25519_PUBLIC_LEN, X25519_SECRET_LEN, classical_combine, combine_x_wing,
+    x_wing_combiner_preimage,
 };
 pub use crate::codepoint::{CipherSuiteCodepoint, CodepointLifecycle, HashCodepoint, SigCodepoint};
 pub use crate::envelope::{
@@ -167,13 +169,25 @@ pub use crate::hash::HashSeam;
 pub use crate::sig::{HybridSignature, SignatureSuite, SuiteConfig};
 pub use crate::structural_kdf::{StructuralKdfKey, derive_root, derive_step};
 pub use crate::swap_matrix::{
-    AUDIT_LANDED_PURE_PQ_FLAG, KemKatVector, PureKemDec, PureKemEnc, PureKemKeypair,
-    PurePqNf1SignatureArm, PureSigPubkey, PureSigVec, SignatureKatVector, SwapDecrypted,
-    SwapEnvelope, SwapKeypair, SwapMatrix, SwapMatrixError, SwapPublicKey, SwapRecipientKeypair,
-    SwapRecipientPublic, SwapRecipientSecret, audit_landed_pure_pq_flag,
+    AUDIT_LANDED_PURE_PQ_FLAG, PureKemEnc, PureKemKeypair, PurePqNf1SignatureArm, PureSigPubkey,
+    PureSigVec, SwapDecrypted, SwapEnvelope, SwapKeypair, SwapMatrix, SwapMatrixError,
+    SwapPublicKey, SwapRecipientKeypair, SwapRecipientPublic, SwapRecipientSecret,
+    audit_landed_pure_pq_flag,
 };
+// R18 C4 + D-74/75/76: the KAT-fixture structs + the `PureKemDec` recovered-
+// shared-secret handle are TEST-ONLY conformance surfaces — gated off the
+// frozen default-feature public-api surface (their loaders /
+// `ml_kem_768_decapsulate_for_test` are already
+// `#[cfg(any(test, feature = "testing"))]`).
+#[cfg(any(test, feature = "testing"))]
+pub use crate::swap_matrix::{KemKatVector, PureKemDec, SignatureKatVector};
 pub use crate::varsig::{UcanVarsigV1Header, VarsigError};
 pub use crate::vault::{
-    Argon2idParams, DAK_HKDF_INFO_TAG, OWASP_DEFAULT, UnlockedKeyMaterial, VaultEngine, VaultError,
+    Argon2idParams, DAK_HKDF_INFO_TAG, OWASP_DEFAULT, UnlockedKeyMaterial, VaultError,
     VaultPayload, derive_dak,
 };
+// R6-final F-02: `VaultEngine` is a test/lock-state harness (its `encrypt_node`
+// is a repeating-key XOR stand-in, not a real seal; zero production callers) —
+// gated off the frozen public surface, consumed only by the `f_va_5` pin.
+#[cfg(any(test, feature = "testing"))]
+pub use crate::vault::VaultEngine;

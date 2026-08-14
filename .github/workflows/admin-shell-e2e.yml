@@ -98,12 +98,29 @@ jobs:
     name: build-smoke / macos-14
     runs-on: macos-14
     timeout-minutes: 30
+    env:
+      # F-060. `toolchain: 1.95` on the dtolnay step below only sets the rustup
+      # default, which the repo-root rust-toolchain.toml (`channel = "stable"`)
+      # overrides. This line is what actually pins the build.
+      RUSTUP_TOOLCHAIN: "1.95"
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           toolchain: 1.95
+      - name: Assert the MSRV toolchain is actually in effect
+        # F-060 falsification arm. Without this, deleting the RUSTUP_TOOLCHAIN
+        # env above silently reverts this job to floating stable and NOTHING
+        # reports it — a pin with no way to fail. Mirrors msrv.yml.
+        run: |
+          set -euo pipefail
+          actual="$(cargo --version)"
+          echo "$actual"
+          case "$actual" in
+            *" 1.95."*) echo "OK: MSRV 1.95 toolchain is in effect." ;;
+            *) echo "::error::admin-shell-e2e is not building at MSRV — expected cargo 1.95.x, got: $actual"; exit 1 ;;
+          esac
       - name: Cache cargo
         uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
         with:
@@ -121,6 +138,9 @@ jobs:
     name: webview-e2e / ubuntu-24.04
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      # F-060 — see the note on `build-only-macos` above. Same shadow, same fix.
+      RUSTUP_TOOLCHAIN: "1.95"
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
@@ -143,6 +163,17 @@ jobs:
         with:
           toolchain: 1.95
 
+      - name: Assert the MSRV toolchain is actually in effect
+        # F-060 falsification arm — see the note on `build-only-macos` above.
+        run: |
+          set -euo pipefail
+          actual="$(cargo --version)"
+          echo "$actual"
+          case "$actual" in
+            *" 1.95."*) echo "OK: MSRV 1.95 toolchain is in effect." ;;
+            *) echo "::error::webview-e2e is not building at MSRV — expected cargo 1.95.x, got: $actual"; exit 1 ;;
+          esac
+
       - name: Cache cargo
         uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
         with:
@@ -153,7 +184,21 @@ jobs:
           key: ${{ runner.os }}-cargo-admin-shell-e2e-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install tauri-driver
-        run: cargo install tauri-driver --locked
+        # PINNED (2026-08-13). Previously unpinned, so every run silently
+        # re-targeted whatever version had most recently published — which is
+        # the class of drift that lets a CLI contract change arrive as a
+        # mystery red rather than a deliberate bump. Pin to the 2.x line that
+        # matches the Tauri 2.x runtime this shell builds against; bumping is
+        # then an explicit, reviewable edit.
+        run: cargo install tauri-driver --locked --version '^2'
+
+      - name: Record the tauri-driver CLI contract
+        # The harness passes ONLY --port, and names the application under test
+        # via the `tauri:options.application` session capability. Printing
+        # --help makes the accepted flag set visible in the log, so if a future
+        # version changes the contract the evidence is in the same run that
+        # fails rather than requiring a re-run with logging added.
+        run: tauri-driver --help || true
 
       - name: Build benten-admin-shell with tauri feature
         run: cargo build --release -p benten-admin-shell --features tauri --bin benten-admin-shell

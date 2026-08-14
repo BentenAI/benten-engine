@@ -33,6 +33,7 @@
 #![allow(clippy::doc_markdown)]
 
 use benten_id::keypair::{PublicKey, Signature};
+use zeroize::Zeroize as _;
 
 /// AAD-prefix / cross-version-replay-defense version byte (R0.7 §4.1:
 /// `aad_version: u8` prefix — DISTINCT from the wire/format version). Mirrors
@@ -156,7 +157,14 @@ impl PermissionOperation {
 /// e2r §6.4 — `PermissionRequest`, signed by requesting device B. FULL field
 /// set (F4-015: `requesting_device_did`, `reason`, `ephemeral_signing_key`
 /// RESTORED).
-#[derive(Clone, Debug)]
+///
+/// Secret-hygiene (D-74/75/76): `ephemeral_signing_key` is a per-request
+/// PRIVATE signing key. `Debug` is a MANUAL impl that renders it as
+/// `<redacted>` (the `#[derive(Debug)]` was replaced — it dumped the raw
+/// key bytes via `{:?}`), and the key is zeroized on drop. Field types are
+/// unchanged, so there is NO wire / serialization / public-API-shape change —
+/// redacted-Debug + zeroize are non-wire additions only.
+#[derive(Clone)]
 pub struct PermissionRequest {
     /// AAD-prefix version (F4-004/005-LD2). MUST equal [`AAD_VERSION`].
     pub aad_version: u8,
@@ -207,6 +215,37 @@ impl PermissionRequest {
         b.extend_from_slice(&self.ephemeral_signing_key);
         b.extend_from_slice(&self.nonce);
         b
+    }
+}
+
+/// Debug-redacting: the per-request PRIVATE `ephemeral_signing_key` MUST NOT
+/// leak into logs / panics / tracing. All other (non-secret) fields render
+/// normally; only the ephemeral signing key is a `<redacted>` marker. Replaces
+/// the former `#[derive(Debug)]`, which dumped the raw key bytes.
+impl core::fmt::Debug for PermissionRequest {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("PermissionRequest")
+            .field("aad_version", &self.aad_version)
+            .field("version", &self.version)
+            .field("request_id", &self.request_id)
+            .field("requesting_device_did", &self.requesting_device_did)
+            .field("requesting_device_pubkey", &self.requesting_device_pubkey)
+            .field("operation", &self.operation)
+            .field("reason", &self.reason)
+            .field("timestamp_bucket", &self.timestamp_bucket)
+            .field("ephemeral_signing_key", &"<redacted>")
+            .field("nonce", &self.nonce)
+            .field("signature", &self.signature)
+            .finish()
+    }
+}
+
+/// Zeroize-on-drop: wipe the per-request PRIVATE ephemeral signing key so it
+/// does not linger in freed heap / coredump. Non-secret fields are left to
+/// their normal drop. Field types are unchanged (no wire impact).
+impl Drop for PermissionRequest {
+    fn drop(&mut self) {
+        self.ephemeral_signing_key.zeroize();
     }
 }
 
@@ -402,5 +441,166 @@ mod domain_registry_mirror {
             reg::EXEC_WORKFLOW_AAD_DOMAIN,
             "EXEC_WORKFLOW_AAD_DOMAIN drifted from the central domain_registry mirror"
         );
+    }
+}
+
+/// E-05/E-06 — the `PermissionOperation` wire-tag freeze (the compile-gate half).
+///
+/// The R6 falsification sweep mutated `RemoteUnlock` `0x02 -> 0x00` (colliding with
+/// `Decrypt`) and `ExecuteWorkflow` `0x03 -> 0x02` (colliding with `RemoteUnlock`) and
+/// ALL 61 targets stayed GREEN. Three things conspired: the only `to_wire_be` golden
+/// covered `SignUcanDelegation`; `Decrypt` was pinned only transitively through
+/// `PermissionRequest::signing_bytes`; and there is no `from_wire_be` decoder to
+/// disagree with the encoder. `to_wire_be` is ONE-WAY — signer and verifier both call
+/// it, so they agree bilaterally on ANY tag assignment. That is the same shape as the
+/// plugin install-record preimage: only an ABSOLUTE per-arm golden, or a structural
+/// cross-arm relation, can catch it.
+///
+/// This module carries the two checks that need NO golden (so they are live from the
+/// first run, before capture): the tag-equals-roster-index pin and the pairwise
+/// privilege-confusion pin. The ABSOLUTE per-arm hex goldens live in
+/// `tests/f_ld_2_remote_permission_wire_freeze.rs`, which is already listed in
+/// `.github/frozen-bytes-corpus.txt` and therefore runs on the REQUIRED
+/// `frozen-bytes` lane; this `--lib` module runs on that lane too since the R6
+/// round-#1 widening of `frozen-bytes.yml` step 5 to the full corpus package set.
+///
+/// The match in `roster_index` is deliberately wildcard-free. `PermissionOperation` is
+/// `#[non_exhaustive]`, which suppresses exhaustiveness checking only ACROSS crates —
+/// inside the defining crate a fifth variant FAILS TO COMPILE here, forcing its author
+/// to declare a wire tag, a fixture, and (via `EXPECTED_VARIANT_COUNT`) a golden row.
+#[cfg(test)]
+mod operation_wire_tag_freeze {
+    use super::PermissionOperation;
+
+    /// The frozen variant cardinality. This is the ARRAY LENGTH of [`roster`], so it
+    /// is the gate, not a runtime assert: a fifth variant fails to compile in
+    /// [`roster_index`] first, and adding its fixture then fails to compile here
+    /// until this const is bumped.
+    const EXPECTED_VARIANT_COUNT: usize = 4;
+
+    /// ONE 32-byte payload shared by the `Decrypt` and `ExecuteWorkflow` fixtures, so
+    /// those two wires differ ONLY in their discriminant tag — the exact shape a tag
+    /// collision erases (E-06).
+    const SHARED_CID: [u8; 32] = [0x5A; 32];
+
+    /// EXHAUSTIVE, wildcard-free — this match IS the compile-time roster gate.
+    fn roster_index(op: &PermissionOperation) -> usize {
+        match op {
+            PermissionOperation::Decrypt { .. } => 0,
+            PermissionOperation::SignUcanDelegation { .. } => 1,
+            PermissionOperation::RemoteUnlock => 2,
+            PermissionOperation::ExecuteWorkflow { .. } => 3,
+        }
+    }
+
+    /// One deterministic fixture per variant, in frozen wire-tag order. Field values
+    /// are IDENTICAL to the `f_ld_2` integration fixtures so the two homes freeze the
+    /// same bytes.
+    fn roster() -> [(&'static str, PermissionOperation); EXPECTED_VARIANT_COUNT] {
+        [
+            (
+                "Decrypt",
+                PermissionOperation::Decrypt {
+                    node_cid: SHARED_CID,
+                },
+            ),
+            (
+                "SignUcanDelegation",
+                PermissionOperation::SignUcanDelegation {
+                    scope: b"atrium:read".to_vec(),
+                    audience: vec![0xAA, 0xBB],
+                    expires_at: 0x0102_0304_0506_0708,
+                },
+            ),
+            ("RemoteUnlock", PermissionOperation::RemoteUnlock),
+            (
+                "ExecuteWorkflow",
+                PermissionOperation::ExecuteWorkflow {
+                    workflow_cid: SHARED_CID,
+                },
+            ),
+        ]
+    }
+
+    /// E-05 — the leading discriminant byte of every arm equals its frozen roster
+    /// index. `roster_index` is a SECOND, independent home for the tag ordering, so
+    /// this catches a tag edit without needing any captured hex.
+    ///
+    /// would-FAIL-on-mutation (the exact line the sweep flipped, in `to_wire_be`):
+    ///   `Self::RemoteUnlock => out.push(0x02),`  ->  `Self::RemoteUnlock => out.push(0x00),`
+    /// (`to_wire_be()[0]` becomes 0 while `roster_index` still says 2).
+    ///
+    /// The tags are frozen DENSE from 0x00 in roster order. A future variant that
+    /// wants a non-dense tag must change this pin deliberately — that is the point:
+    /// the wire-tag space is frozen at v1-beta, so a sparse assignment is a decision,
+    /// not a drive-by.
+    #[test]
+    fn e_05_operation_wire_tag_equals_frozen_roster_index() {
+        // No `roster.len() == EXPECTED_VARIANT_COUNT` assert here on purpose: the
+        // array TYPE already carries that, so the assert would be a tautology (and
+        // this partition's whole point is that tautological pins are worthless).
+        let roster = roster();
+        for (i, (name, op)) in roster.iter().enumerate() {
+            assert_eq!(
+                roster_index(op),
+                i,
+                "E-05: fixture `{name}` is out of frozen wire-tag order (roster slot {i})"
+            );
+            let wire = op.to_wire_be();
+            assert!(
+                !wire.is_empty(),
+                "E-05: `{name}` MUST emit at least its discriminant tag byte"
+            );
+            assert_eq!(
+                usize::from(wire[0]),
+                i,
+                "E-05: `{name}` MUST carry the FROZEN discriminant tag 0x{i:02x}. The \
+                 wire tags are frozen dense from 0x00 in roster order (Decrypt=0x00, \
+                 SignUcanDelegation=0x01, RemoteUnlock=0x02, ExecuteWorkflow=0x03) and \
+                 `to_wire_be` has NO decoder to disagree with it."
+            );
+        }
+    }
+
+    /// E-06 — no two operations encode to the same wire bytes, and no two share a
+    /// discriminant tag.
+    ///
+    /// `Decrypt` and `ExecuteWorkflow` deliberately carry the SAME 32-byte payload
+    /// ([`SHARED_CID`]), so their wires are distinguishable ONLY by the tag byte.
+    ///
+    /// would-FAIL-on-mutation (one line, in `to_wire_be`):
+    ///   `Self::ExecuteWorkflow { workflow_cid } => { out.push(0x03);`
+    ///     ->  `... => { out.push(0x00);`
+    /// The two wires then become BYTE-IDENTICAL — a signed grant reading
+    /// "execute this workflow on rented compute" and one reading "decrypt this one
+    /// Node" are the same bytes. The module doc puts `RemoteUnlock` at the
+    /// TOP of the blast-radius ladder (full permanent `K_principal` authority), which
+    /// is what makes a tag collision a privilege confusion rather than a cosmetic
+    /// wire break.
+    ///
+    /// Needs no golden, so it is enforcing from the first run.
+    #[test]
+    fn e_06_operation_wires_pairwise_distinct_privilege_confusion_guard() {
+        let roster = roster();
+        for (i, (name_i, op_i)) in roster.iter().enumerate() {
+            let wire_i = op_i.to_wire_be();
+            for (name_j, op_j) in roster.iter().skip(i + 1) {
+                let wire_j = op_j.to_wire_be();
+                assert_ne!(
+                    wire_i[0], wire_j[0],
+                    "E-06: `{name_i}` and `{name_j}` MUST NOT share a discriminant tag \
+                     — a colliding tag is a privilege confusion across the O-6 \
+                     blast-radius ladder (Decrypt = 1 Node; RemoteUnlock = full \
+                     permanent K_principal)"
+                );
+                assert_ne!(
+                    wire_i, wire_j,
+                    "E-06: `{name_i}` and `{name_j}` MUST NOT encode to IDENTICAL wire \
+                     bytes. These fixtures share a payload on purpose, so an equal \
+                     encoding means the tag byte collided and the two authorities are \
+                     indistinguishable in the signed bytes."
+                );
+            }
+        }
     }
 }

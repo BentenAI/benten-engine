@@ -106,6 +106,12 @@ pub fn testing_subscribe_register_as(
 ///
 /// # Errors
 /// See [`SubscribeError`].
+// R10-council F-03: this whole module (`benten_eval::testing`) is already gated
+// `#[cfg(any(test, feature = "testing"))]` at its `pub mod testing;` declaration
+// (`lib.rs`). The redundant per-fn gate here (identical cfg — never narrows)
+// makes the widened `_test_`/`inject_` no-regression guard recognize the gate
+// directly (the guard inspects the 5 preceding lines, not the module decl).
+#[cfg(any(test, feature = "testing"))]
 pub fn testing_subscribe_inject_event(
     sub: &ActiveSubscription,
     event: ChangeEvent,

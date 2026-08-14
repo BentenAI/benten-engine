@@ -159,10 +159,10 @@ pub fn build_subgraph_reading_literal_system_cid_for_test(label: &str) -> Subgra
     props.insert("label".to_string(), Value::text(label.to_string()));
     let mut read_node = OperationNode::new(format!("read_{label}"), PrimitiveKind::Read);
     read_node.properties = props;
-    Subgraph {
-        nodes: vec![read_node],
-        edges: Vec::new(),
-        handler_id: "inv11_literal_read_fixture".to_string(),
-        deterministic: false,
-    }
+    Subgraph::from_parts(
+        "inv11_literal_read_fixture".to_string(),
+        vec![read_node],
+        Vec::new(),
+        false,
+    )
 }

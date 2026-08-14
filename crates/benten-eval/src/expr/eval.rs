@@ -512,6 +512,13 @@ fn truthy(v: &Value) -> bool {
         Value::Bytes(b) => !b.is_empty(),
         Value::List(l) => !l.is_empty(),
         Value::Map(m) => !m.is_empty(),
+        // `Value` is `#[non_exhaustive]`; a variant added in a later release
+        // lands here. FALSE is the fail-closed answer: this feeds BRANCH
+        // conditions, so an unknown value must not be able to open a guarded
+        // path. It is also consistent with every arm above — each variant's
+        // empty form is falsy, and "a kind this build does not understand"
+        // carries no more truth than an empty one.
+        _ => false,
     }
 }
 

@@ -62,11 +62,9 @@ fn sandbox_memory_limit_kills_routes_e_sandbox_memory_exhausted() {
     )
     .unwrap();
     let registry = ManifestRegistry::new();
-    let cfg = SandboxConfig {
-        // Cap at 1 page (64 KiB); module declares 200 pages minimum.
-        memory_bytes: 64 * 1024,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    // Cap at 1 page (64 KiB); module declares 200 pages minimum.
+    cfg.memory_bytes = 64 * 1024;
     let attribution = dummy_attribution();
     let err = execute(
         &bytes,

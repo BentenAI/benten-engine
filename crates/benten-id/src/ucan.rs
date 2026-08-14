@@ -54,14 +54,13 @@
 //! `docs/future/phase-4-backlog.md §4.26`. See
 //! `crates/benten-id/tests/ucan.rs` for the full pin catalogue.
 
-use benten_crypto_suite::primitives::ed25519_dalek::{Signature, Signer, Verifier};
 use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
 
 use crate::CanonicalBytes;
 use crate::did::Did;
 use crate::errors::UcanError;
-use crate::keypair::{Keypair, PublicKey};
+use crate::keypair::Keypair;
 
 /// Maximum CBOR container-nesting depth accepted for an untrusted
 /// `Ucan` byte blob (safe-2 #549).
@@ -80,9 +79,44 @@ use crate::keypair::{Keypair, PublicKey};
 /// worst-case serde recursion bounded well under the 8 MB default
 /// thread stack. Enforced at the byte boundary by
 /// [`Ucan::from_canonical_bytes_bounded`] BEFORE serde runs, so the
-/// recursive deserialize routine is never reached for an
-/// over-deep blob.
+/// recursive deserialize routine is never reached for an over-deep
+/// blob. Both live untrusted-input decode sites route through that
+/// bounded entry point: the typed-CALL `ucan_validate_chain` op
+/// (`benten_engine::typed_call_dispatch`) and the durable UCAN
+/// backend read path (`benten_caps::backends::ucan`).
 pub const MAX_UCAN_PROOF_DEPTH: usize = 32;
+
+/// Fail-closed total-byte ceiling on an untrusted-input `Ucan` envelope
+/// (Compromise #28 / META #629 DoS-sweep; the safe-2 #549 sibling to the
+/// nesting-depth bound).
+///
+/// [`Ucan::from_canonical_bytes_bounded`] bounds proof-chain NESTING depth
+/// but applies no cap on the TOTAL blob size before `serde` allocates the
+/// decoded `Ucan` (the `iss`/`aud` `String`s + `Vec<Capability>` att +
+/// `Vec<Ucan>` prf). Both live untrusted-input decode sites — the typed-CALL
+/// `ucan_validate_chain` op and the durable UCAN backend read path — feed the
+/// token bytes VERBATIM with no upstream byte cap, so a within-depth but
+/// enormous blob is an O(N) allocation DoS. Mirrors the
+/// `keypair.rs::SEED_ENVELOPE_MAX_BYTES` fail-closed pattern.
+///
+/// **GAP-KDB Fork-A re-size (AUTH-11 / FS-1 — a FROZEN v1-beta wire budget).**
+/// The Ed25519-era `64 * 1024` (32 × ~2 KiB per token) was sized for
+/// 64-byte signatures + `did:key` identity strings. A `did:benten` issuer
+/// embeds a LAMPS composite signing key + a ~3373-byte composite signature,
+/// and carries a ~2762-char `did:benten` `iss`/`aud` — a full-depth
+/// ([`MAX_UCAN_PROOF_DEPTH`]-link) composite chain dwarfs 64 KiB (the
+/// composite signature bytes ALONE are `32 × 3373 ≈ 105 KiB`). The cap is
+/// re-derived as `MAX_UCAN_PROOF_DEPTH × MAX_UCAN_PER_LINK_BYTES` so a
+/// legitimate composite chain is admitted while an over-cap blob still
+/// rejects at the byte boundary BEFORE serde materializes it (the F2 / META
+/// #629 DoS ceiling survives the re-size). The per-link budget is a generous
+/// 16 KiB — comfortably above one composite link (~3373 B signature + two
+/// ~2762 B `did:benten` strings + attenuation caps + DAG-CBOR framing ≈ 9 KiB).
+pub const MAX_UCAN_PER_LINK_BYTES: usize = 16 * 1024;
+
+/// See [`MAX_UCAN_PER_LINK_BYTES`] for the Fork-A re-size rationale. `512
+/// KiB` (`32 × 16 KiB`) — the frozen v1-beta envelope budget.
+pub const MAX_UCAN_ENVELOPE_BYTES: usize = MAX_UCAN_PROOF_DEPTH * MAX_UCAN_PER_LINK_BYTES;
 
 /// Capability grant pair: `(resource, ability)`.
 ///
@@ -184,6 +218,16 @@ impl Ucan {
     /// [`UcanError::DecodeFailed`], matching the existing decode
     /// failure contract.
     pub fn from_canonical_bytes_bounded(bytes: &[u8], max_depth: usize) -> Result<Self, UcanError> {
+        // Fail-closed total-byte cap (Compromise #28 / META #629): reject an
+        // over-large blob BEFORE the depth pre-walk / serde allocation so a
+        // within-depth but enormous envelope cannot drive an O(N) allocation
+        // DoS. Complements the nesting-depth bound below.
+        if bytes.len() > MAX_UCAN_ENVELOPE_BYTES {
+            return Err(UcanError::EnvelopeTooLarge {
+                got: bytes.len(),
+                max: MAX_UCAN_ENVELOPE_BYTES,
+            });
+        }
         // Iterative pre-walk: reject over-deep nesting at the byte
         // boundary so serde's recursive deserialize never runs on a
         // pathological blob.
@@ -501,6 +545,23 @@ pub(crate) fn ct_signature_eq(a: &[u8], b: &[u8]) -> bool {
 /// older parents. Equivalent to [`validate_chain_at`] with `now =
 /// u64::MAX` (which never trips `exp`). Use the timed variant for
 /// production paths.
+///
+/// **Caveat (O-23, corrected):** this `_no_time_check` entry point DOES have
+/// production callers — five at HEAD, none `cfg(test)`-gated:
+/// `benten-sync/src/handshake.rs:728` (`Handshake::respond`) +
+/// `:856` (`Handshake::finalise`) validate the remote-issued grant at
+/// handshake time, and `benten-caps/src/chain_authority.rs:94` / `:164` /
+/// `:267` (`validate_chain_with_rotation_log` /
+/// `validate_chain_with_envelope_ceiling` / `validate_chain_with_manifest_ceiling`)
+/// use it as the structural+crypto primitive under a local authority
+/// consultation. **Where the nbf/exp half lives for each:** the two handshake
+/// sites bound wallclock skew with the frame-level replay-window check and
+/// defer nbf/exp to the G14-D delivery-time `validate_chain_at(now)` recheck
+/// (see the rationale comment at `handshake.rs:716-726`); the three
+/// `chain_authority` sites are ceiling-AND predicates whose callers own the
+/// time gate. Do NOT gate this fn behind `cfg(test)` — that would break all
+/// five. The CRUD/write path continues to use the timed
+/// [`validate_chain_at`] / [`validate_chain_for_capability`].
 pub fn validate_chain_no_time_check(chain: &[Ucan]) -> Result<(), UcanError> {
     // For "no time check", we still want `nbf` / `exp` consistency
     // checks to be skipped — pass `now = 0` to skip nbf only if all
@@ -653,28 +714,23 @@ fn validate_chain_inner(
             check_time_window(&token.claims, now)?;
         }
 
-        // 2. Signature check at every link (crypto-major-4: comparison
-        // is constant-time via subtle).
-        let sig_bytes: [u8; 64] = token
-            .signature
-            .as_slice()
-            .try_into()
-            .map_err(|_| UcanError::BadSignature { link_index: idx })?;
-        let sig = Signature::from_bytes(&sig_bytes);
-
-        // Resolve issuer DID to its public key.
+        // 2. Signature check at every link — GAP-KDB Fork-A: ONE
+        // codepoint-dispatched hybrid verify (design §6 / Worry-#1). The
+        // issuer key is resolved zero-I/O via `resolve_signing` (a
+        // `did:key` yields the classical `pq = None` handle; a
+        // `did:benten` / hybrid `did:key` yields the composite), and its
+        // SHAPE selects the verify arm — a composite-committing
+        // `did:benten` issuer whose token carries only the Ed25519 half is
+        // a silent PQ-strip that MUST reject (FLAGSHIP-2). There is no
+        // inline Ed25519-only `[u8; 64]` extraction here anymore — it lives
+        // in the single `authority_verify` helper (AUTH-7 completeness net).
         let iss_did = Did::from_string_for_test_fixture(token.claims.iss.clone());
-        let pk: PublicKey = iss_did
-            .resolve()
+        let signing_pk = iss_did
+            .resolve_signing()
             .map_err(|_| UcanError::BadSignature { link_index: idx })?;
         let bytes = token.claims.to_canonical_bytes();
-        // ed25519-dalek's verify is itself constant-time on the
-        // signature bytes (ed25519 verification has no early-exit on
-        // signature mismatch); we still flow the result through a
-        // typed error for the chain-walk audit trail.
-        if pk.as_verifying_key().verify(&bytes, &sig).is_err() {
-            return Err(UcanError::BadSignature { link_index: idx });
-        }
+        crate::authority_verify::verify_authority_signature(&signing_pk, &bytes, &token.signature)
+            .map_err(|_| UcanError::BadSignature { link_index: idx })?;
 
         // 3. Chain-link integrity: token's `aud` must equal next
         // token's `iss` (audience-binding within the chain).
@@ -791,23 +847,40 @@ fn validate_chain_inner(
 /// Subsume rule: parent grants child's capability iff:
 /// - exact match (resource AND ability equal), OR
 /// - parent's `ability` is `*` and resource matches, OR
-/// - parent's `resource` is a prefix of child's resource (path
-///   semantics; `/zone/posts` covers `/zone/posts/foo`) AND ability
-///   matches per the wildcard rule above.
+/// - parent's `resource` is a strict *segment-bounded* prefix of child's
+///   resource (path semantics; `/zone/posts` covers `/zone/posts/foo`)
+///   AND ability matches per the wildcard rule above.
+///
+/// **Segment-boundary guard (F-01 authority-widening defense).** The
+/// prefix rule covers ONLY true sub-paths: parent's `resource` must be
+/// non-empty, child's `resource` must be strictly longer, and the byte
+/// immediately after the matched prefix in the child must be a segment
+/// boundary — `/` (path separator) or `:` (scope separator). A bare
+/// `starts_with` would widen authority across a segment boundary: a grant
+/// for `/zone/posts` would wrongly subsume the SIBLING resource
+/// `/zone/posts-secret` (or `/zone/postsX`), because those literally
+/// start with `/zone/posts`. With the guard, only `/zone/posts/foo`
+/// (boundary `/`) and `/zone/posts:read` (boundary `:`) subsume — never
+/// `/zone/posts-secret`. An empty parent `resource` never subsumes via
+/// this branch (an empty prefix matches everything).
 ///
 /// The basic-attenuation pin
 /// (`crates/benten-id/tests/ucan.rs::ucan_chain_attenuation_rejects_overgrant`)
-/// uses only the exact-match path; the prefix + wildcard widening of the
-/// match relation is a defensive default that does NOT widen child
-/// authority beyond parent's literal grants.
+/// uses only the exact-match path; the sibling-rejection pins
+/// (`caps_match_or_subsume_rejects_sibling_prefix_confusion` +
+/// `validate_chain_rejects_sibling_resource_prefix_confusion`) pin the
+/// segment-boundary guard against regression.
 ///
 /// **Constant-time discipline:** capability `resource` / `ability` strings
-/// are not secret per se (they are the cap-system's public schema), but
-/// the rule-7 brief commits to ct-eq UNIFORMITY at security-decision sites.
-/// All `==` comparisons here go through `ct_signature_eq` so the
-/// `ucan_chain_walk_constant_time_comparison_audit` grep test pins this
-/// surface (resource / ability are the most-likely-future-drift sites for
-/// a contributor who adds a new authority comparison).
+/// are not secret (they are the cap-system's *public* schema), but the
+/// rule-7 brief commits to ct-eq UNIFORMITY at security-decision sites, so
+/// the exact/wildcard `==` comparisons here go through `ct_signature_eq`
+/// and the `ucan_chain_walk_constant_time_comparison_audit` grep test pins
+/// that surface. The prefix branch's `starts_with` / length / boundary-byte
+/// checks are variable-time; this is acceptable precisely because
+/// `resource` / `ability` are non-secret public schema, so no secret is
+/// leaked by an early exit (the constant-time claim is scoped to the
+/// exact/wildcard equality compares, not to the prefix-shape test).
 fn caps_match_or_subsume(parent: &Capability, child: &Capability) -> bool {
     let parent_res = parent.resource.as_bytes();
     let child_res = child.resource.as_bytes();
@@ -823,8 +896,28 @@ fn caps_match_or_subsume(parent: &Capability, child: &Capability) -> bool {
         return true;
     }
     // Path-prefix resource + matching/wildcard ability.
-    if child.resource.starts_with(&parent.resource)
-        && (ct_signature_eq(parent_ab, child_ab) || ct_signature_eq(parent_ab, star))
+    //
+    // SEGMENT-BOUNDARY GUARD (F-01 authority-widening / F-02 empty-parent):
+    // a bare `starts_with` widens authority across a segment boundary — a
+    // grant for `/zone/posts` would otherwise subsume the SIBLING resource
+    // `/zone/posts-secret` because `"/zone/posts-secret".starts_with("/zone/posts")`
+    // is true. The prefix rule MUST only cover TRUE sub-paths, so it
+    // requires all of:
+    //   1. parent.resource NON-EMPTY (F-02: an empty prefix matches every
+    //      resource and would grant blanket authority via this branch).
+    //   2. child.resource is a STRICT extension of parent.resource
+    //      (child longer than parent AND `starts_with` holds).
+    //   3. the byte in child.resource at index parent.resource.len() is a
+    //      SEGMENT BOUNDARY — `/` (path separator) or `:` (scope separator).
+    // So `/zone/posts` subsumes `/zone/posts/foo` (boundary `/`) — and
+    // `/zone/posts` (exact) via the exact-match branch above — but NOT
+    // `/zone/posts-secret` (byte `-`) nor `/zone/postsX` (byte `X`).
+    let ability_ok = ct_signature_eq(parent_ab, child_ab) || ct_signature_eq(parent_ab, star);
+    if !parent_res.is_empty()
+        && child_res.len() > parent_res.len()
+        && child_res.starts_with(parent_res)
+        && matches!(child_res[parent_res.len()], b'/' | b':')
+        && ability_ok
     {
         return true;
     }
@@ -866,5 +959,49 @@ mod tests {
     fn ct_eq_zero_length() {
         // const-time-eq smoke
         assert!(ct_signature_eq(b"", b""));
+    }
+
+    // F-01 / F-02 (authority-widening prefix-confusion) helper-level pin.
+    //
+    // WOULD-FAIL-ON-REVERT: prior to the segment-boundary guard, the prefix
+    // branch was a bare `child.resource.starts_with(&parent.resource)`, so a
+    // grant for `/zone/posts` SUBSUMED the sibling `/zone/posts-secret`
+    // (`"/zone/posts-secret".starts_with("/zone/posts")` is true) — an
+    // authority-widening bug. Reverting the guard flips the `-secret` /
+    // `postsX` / empty-parent asserts below from reject → accept.
+    #[test]
+    fn caps_match_or_subsume_rejects_sibling_prefix_confusion() {
+        let read = |r: &str| Capability::new(r, "read");
+
+        // Legitimate subsumption still holds.
+        assert!(
+            caps_match_or_subsume(&read("/zone/posts"), &read("/zone/posts/foo")),
+            "true sub-path (`/` boundary) must subsume"
+        );
+        assert!(
+            caps_match_or_subsume(&read("/zone/posts"), &read("/zone/posts:read")),
+            "true sub-scope (`:` boundary) must subsume"
+        );
+        assert!(
+            caps_match_or_subsume(&read("/zone/posts"), &read("/zone/posts")),
+            "exact match must subsume (via the exact-match branch)"
+        );
+
+        // Sibling resources sharing a textual prefix must NOT subsume.
+        assert!(
+            !caps_match_or_subsume(&read("/zone/posts"), &read("/zone/posts-secret")),
+            "F-01: sibling `/zone/posts-secret` must NOT be subsumed by `/zone/posts`"
+        );
+        assert!(
+            !caps_match_or_subsume(&read("/zone/posts"), &read("/zone/postsX")),
+            "F-01: sibling `/zone/postsX` must NOT be subsumed by `/zone/posts`"
+        );
+
+        // F-02: an empty parent resource must NOT subsume via the prefix
+        // branch (an empty prefix matches everything).
+        assert!(
+            !caps_match_or_subsume(&read(""), &read("/zone/posts")),
+            "F-02: empty parent resource must NOT subsume via prefix"
+        );
     }
 }

@@ -166,10 +166,9 @@ fn algorithm_b_correctness_against_capability_grants_view() {
         // Project the actor's actual grant set from each view (CapabilityGrants
         // keys on `entity_cid`; both views must report the same Cids slice for
         // the actor or Algorithm B has diverged).
-        let q = ViewQuery {
-            entity_cid: Some(actor),
-            ..ViewQuery::default()
-        };
+        // `#[non_exhaustive]` (F-22): default + field mutation.
+        let mut q = ViewQuery::default();
+        q.entity_cid = Some(actor);
         project_view_content(v, &q)
     });
 }
@@ -214,10 +213,9 @@ fn algorithm_b_correctness_against_event_handler_dispatch_view() {
         // Project the handler set for the `post.created` event name (the
         // EventDispatch view keys on `event_name`; both views must report the
         // same handler-CID set or Algorithm B has diverged).
-        let q = ViewQuery {
-            event_name: Some("post.created".into()),
-            ..ViewQuery::default()
-        };
+        // `#[non_exhaustive]` (F-22): default + field mutation.
+        let mut q = ViewQuery::default();
+        q.event_name = Some("post.created".into());
         project_view_content(v, &q)
     });
 }
@@ -272,12 +270,11 @@ fn algorithm_b_correctness_against_content_listing_view() {
         // ContentListing view keys on `label`; both views must report the
         // same paginated CID set or Algorithm B has diverged on the
         // cancellation path).
-        let q = ViewQuery {
-            label: Some("post".into()),
-            limit: Some(100),
-            offset: Some(0),
-            ..ViewQuery::default()
-        };
+        // `#[non_exhaustive]` (F-22): default + field mutation.
+        let mut q = ViewQuery::default();
+        q.label = Some("post".into());
+        q.limit = Some(100);
+        q.offset = Some(0);
         project_view_content(v, &q)
     });
 }
@@ -327,10 +324,9 @@ fn algorithm_b_correctness_against_governance_inheritance_view() {
         // GovernanceInheritance view keys on `entity_cid`; both views must
         // report the same effective-rules map or Algorithm B has diverged on
         // the transitive-closure path).
-        let q = ViewQuery {
-            entity_cid: Some(root),
-            ..ViewQuery::default()
-        };
+        // `#[non_exhaustive]` (F-22): default + field mutation.
+        let mut q = ViewQuery::default();
+        q.entity_cid = Some(root);
         project_view_content(v, &q)
     });
 }
@@ -379,10 +375,9 @@ fn algorithm_b_correctness_against_version_current_view() {
         // last-revision-wins path). Note: `anchor_id: u64` per ViewQuery
         // shape; the 0 sentinel is fine for this fixture because the test
         // uses a single anchor.
-        let q = ViewQuery {
-            anchor_id: Some(0),
-            ..ViewQuery::default()
-        };
+        // `#[non_exhaustive]` (F-22): default + field mutation.
+        let mut q = ViewQuery::default();
+        q.anchor_id = Some(0);
         project_view_content(v, &q)
     });
 }

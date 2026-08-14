@@ -1,4 +1,4 @@
-# Security Posture — Benten Engine (Phase 4-Foundation close)
+# Security Posture — Benten Engine (Phase-4-Meta-Core close)
 
 ## Compromise disposition-class index (canonical first-occurrence registry)
 
@@ -7,7 +7,10 @@
 > classes: **`ATO`** = Accepted-Trade-Off · **`SGD`** = Substrate-Guarantee-Disclosure · **`CHD`** =
 > Composition-Hazard-Honest-Disclosure · **`OOS`** = Out-Of-Scope · **`MIT`** = Mitigated-Open. The full narrative
 > for each lives in its `### Compromise #N` detail section below (the summary tables + cross-references that follow
-> ride this index). #30–#64 dispositions are R0.7 §5.2; #1–#29 reflect the Phase-1→4-Foundation closure state.
+> ride this index). #30–#66 dispositions are R0.7 §5.2 (#65/#66 are the R13/R14 mints); #1–#29 reflect the
+> Phase-1→4-Foundation closure state; **#67** is the Phase-4-Meta-Core GAP-KDB Shape-B mint (`SGD`;
+> first-contact / TOFU DID-authenticity residual) whose canonical registration is its detail section at the
+> foot of this document.
 
 | Compromise # | class | Compromise # | class | Compromise # | class |
 |---|---|---|---|---|---|
@@ -32,7 +35,7 @@
 | Compromise #55 | `SGD` | Compromise #56 | `SGD` | Compromise #57 | `SGD` |
 | Compromise #58 | `CHD` | Compromise #59 | `SGD` | Compromise #60 | `SGD` |
 | Compromise #61 | `CHD` | Compromise #62 | `SGD` (revocation-reach; Drops forever-valid) | Compromise #63 | `ATO` |
-| Compromise #64 | `SGD` (cross-device best-effort nonce / jti replay window) | | | | |
+| Compromise #64 | `SGD` (cross-device best-effort nonce / jti replay window) | Compromise #65 | `SGD` (wave-3e per-Node AEAD publicly-derivable-`K_principal` confidentiality limit at v1-beta) | Compromise #66 | `SGD` (recovered-secret `Debug`/heap hygiene; CLOSED at v1-beta — redact+zeroize on all secret types, enforced by `f_secret_hygiene_roster`) |
 
 This document records the security claims Benten makes through Phase
 4-Foundation close and the known compromises those claims rest on. This
@@ -57,26 +60,60 @@ table narrative.
 > wire-format-locked at G-CORE-9 freeze. **Consumer wire-in is sequenced**
 > across these named-deferred destinations:
 >
-> - **Compromise #26** — `ProductionManifestEnvelopeRechecker` substantive
->   per-DID recheck (deferred to G-COMP-1 per Row D-4); v1-beta ships
->   `NoopManifestEnvelopeRechecker` returning `NotApplicable` for
->   resolvable peer-DIDs (Layer-A empty-DID short-circuit IS live).
+> - **Compromise #26** — the `ProductionManifestEnvelopeRechecker` adapter
+>   TYPE + its `ProductionEngineBuilder` wiring LANDED at Core (Row D-4
+>   CLOSED at R6 R1 FP-F4 §S4); what is still deferred to G-COMP-1 is its
+>   substantive per-DID `PluginLibrary` + `UserDidRegistry` chain walk.
+>   The DEFAULT engine still mounts `NoopManifestEnvelopeRechecker`
+>   returning `NotApplicable` for resolvable peer-DIDs; the mounted
+>   production adapter returns `UnresolvedDeny` for synthesized
+>   `node-id:N` DIDs, and the Layer-A empty-DID short-circuit IS live.
 > - **Compromise #62** — Drop bundle revocation reach (forever-valid
 >   once distributed; OPEN ARCHITECTURAL TRADE-OFF mitigated by tight
 >   `nbf`/`exp` + key rotation per RATIFIED-S&C §R6).
-> - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-1** — `WriteBoundaryChainValidator`
->   runtime consumption at the WRITE admission boundary (Layer-1
->   user-as-root NOT live at WRITE admission at v1-beta).
-> - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-3** — the 3 §8-E
->   CapabilityPolicy hooks have zero production call sites at v1-beta;
->   custom impls of any hook are silently ignored (trait signatures +
->   sealed-discipline locked, so future wire-up is non-breaking).
+> - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-1 — CLOSED** (R6 R1 FP-F4 §S1;
+>   SHARPENED at R6 R2 FP-B). `WriteBoundaryChainValidator` consumption is
+>   structurally-always-on at 14 WRITE entry points via the
+>   `Engine::admit_write_chain` helper + the sealed `WriteAdmissionFrame`
+>   (2 of the 14 are chain-bearing: `delegate_capability` + the
+>   `apply_atrium_merge` per-row loop). Residual: the always-mounted
+>   `NoopWriteBoundaryChainValidator` default admits every chain, so
+>   Layer-1 user-as-root fires only where a deployment installs a
+>   substantive validator; that validator's `UserDidRegistry`-backed
+>   chain walk is the G-COMP-1 deliverable.
+> - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-3** — all three §8-E
+>   CapabilityPolicy hooks are WIRED at v1-beta (per the Compromise #26
+>   R6 R1 FP-F4 retense below): `check_install_consent` at
+>   `plugin_lifecycle::install_plugin` step 3c (typed
+>   `PluginInstallConsentDenied` reject), `check_per_delegation` at
+>   `EngineCapsHandle::delegate_capability` (typed
+>   `PluginPerDelegationDenied` reject), and `check_write_with_audience`
+>   routed at all four production write sites. D-3-c is PARTIAL: the
+>   `audience_did` stays `None` at the sweep write sites (per Δv3-2) and
+>   is populated at `delegate_capability` only as the G-COMP-1
+>   deliverable, so audience-aware `check_write` is not yet exercised
+>   with a concrete audience end-to-end. (Trait signatures +
+>   sealed-discipline are locked, so the remaining wire-up is
+>   non-breaking.)
 > - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-5** — `accept_atrium_share`
 >   cross-peer install seam not live; plugins consume through user-DID-
 >   signed install records ONLY at v1-beta.
-> - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-6** — §4.25 sync-hydrate
->   consumption of `UnresolvedDeny` at handshake.rs not live (§4.36
->   merge half structurally enforced; §4.25 sync-hydrate half not).
+> - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-6 — CLOSED** (R6 R1 FP-F4 §S4;
+>   WIRED at R6 R2 FP-B). `benten_sync::handshake::sync_hydrate_consume_recheck_outcome`
+>   is the §4.25 surface and is consumed from production `benten-engine`
+>   merge code; the §4.36 merge half and the §4.25 sync-hydrate half now
+>   both route through the shared `ManifestEnvelopeRecheckUnresolvedDeny`
+>   ErrorCode + typed reject.
+> - **V1-FROZEN-INTERFACE-DEFERRED.md Row D-88** — module-manifest
+>   signatures are structurally **did:key-only 64-byte Ed25519 by format**
+>   at v1-beta (the `ManifestSignature { ed25519 }` field + the exact-64-byte
+>   decode in `manifest_signing.rs` + the classical `Did::resolve` issuer
+>   path). A hybrid `did:benten` author CANNOT sign a verifiable manifest,
+>   so — unlike the Fork-A authority path (UCAN chain-walk / rotation /
+>   device-attestation / VC) — there is NO composite wire to silent-PQ-strip;
+>   the manifest verify correctly stays classical `PublicKey::verify` and
+>   does NOT route through `benten_id::authority_verify`. Hybrid-manifest-
+>   author support is name-carried to Phase-4-Meta-Composing.
 >
 > The honest disclosure shape: **Layer-1/2/3 is structurally encoded at
 > v1-beta as a frozen substrate; the substantive runtime enforcement
@@ -117,24 +154,24 @@ table narrative.
 | 23 | Wire device-attestation envelope cryptographic closure | 3 | **SUPERSEDED-BY-COLLAPSE** (refinement-audit-2026-05 S3; device-trust pipe deleted, provenance + ceiling retained on unified spine) |
 | 24 | Wallclock fail-closed posture (no default-clock-zero expiration bypass) | 3 | **CLOSED** at Phase-3 G16-B-B-rest (PR #158); engine refuses to initialize UCAN backend without explicit clock injection — surfaces `E_UCAN_CLOCK_NOT_INJECTED` |
 | 25 | HLC-monotonic enforcement at sync layer (adversarial-peer wallclock-injection defense) | 3 | **CLOSED** at Phase-3 sync-attack test family (HLC monotonicity + nonce-cache for replay defense + HLC bound inside signed envelope) |
-| 26 | Manifest-envelope recheck at sync merge boundary (Phase-4-Foundation plugin-DID principal extension) | 4-Foundation | **PARTIALLY CLOSED** at Phase-4-Foundation R4b-FP-1 Seam 3 (post-Q4 ratification 2026-05-13). The `ManifestEnvelopeRechecker` port + always-firing default-flip ship; the production-default `NoopManifestEnvelopeRechecker` returns `Outcome::NotApplicable` for every row at HEAD, so the substantive Layer-2 defense is NOT live in shipped binaries — only the per-row `CapabilityPolicy::pre_write` check from Compromise #2 sync-replica sub-narrative is. The substantive `ProductionManifestEnvelopeRechecker` adapter (consuming `PluginLibrary` + `UserDidRegistry` + invoking `manifest_envelope_chain_validation::validate_chain_with_manifest_envelope`) is deferred to Phase-4-Meta per `docs/future/phase-4-backlog.md §4.36`. See body for the full seam-vs-adapter shape. |
+| 26 | Manifest-envelope recheck at sync merge boundary (Phase-4-Foundation plugin-DID principal extension) | 4-Foundation | **PARTIALLY CLOSED** at Phase-4-Foundation R4b-FP-1 Seam 3 (post-Q4 ratification 2026-05-13). The `ManifestEnvelopeRechecker` port + always-firing default-flip ship; the production-default `NoopManifestEnvelopeRechecker` returns `Outcome::NotApplicable` for every row at HEAD, so the substantive Layer-2 defense is NOT live in shipped binaries — only the per-row `CapabilityPolicy::pre_write` check from Compromise #2 sync-replica sub-narrative is. **RETENSED at R6 R1 FP-F4 §S4 (Row D-4 CLOSED):** the `ProductionManifestEnvelopeRechecker` adapter TYPE + its `ProductionEngineBuilder` wiring LANDED at Phase-4-Meta-Core (`crates/benten-engine/src/production_manifest_envelope_rechecker.rs`), returning `UnresolvedDeny` for synthesized `node-id:N` peer-DIDs and `NotApplicable` for resolvable peers. What remains G-COMP-1-deferred per `docs/future/phase-4-backlog.md §4.36` is that adapter's substantive per-DID chain walk (consuming `PluginLibrary` + `UserDidRegistry` + invoking `manifest_envelope_chain_validation::validate_chain_with_manifest_envelope`) — and the DEFAULT engine still mounts the Noop, so Layer-2 is opt-in at v1-beta. See body for the full seam-vs-adapter shape. |
 | 27 | (RESERVED for META #669 closure — Plugin trust model Layers 2+3 + T10-upgrade paper-only at HEAD) | 4-Foundation | **OPEN; tracking via [META #669](https://github.com/BentenAI/benten-engine/issues/669) + [#1118](https://github.com/BentenAI/benten-engine/issues/1118) Compromise #27 mint task.** Reserved row; row body lands when META #669 closure or honest-disclosure mint lands. |
 | 28 | (RESERVED for META #629 closure — DoS-via-unbounded-decode workspace pattern; 26 instances / 9 crates) | 4-Foundation | **OPEN; tracking via [META #629](https://github.com/BentenAI/benten-engine/issues/629) + [#1126](https://github.com/BentenAI/benten-engine/issues/1126) Compromise #28 mint task.** Reserved row; row body lands when META #629 closure or honest-disclosure mint lands. |
 | 29 | Engine-level extensions — compile-time trust posture (CLAUDE.md baked-in #19) | 4-Foundation | **OPEN ARCHITECTURAL COMMITMENT; registry-tracked for cross-reference completeness.** Engine extensions are Rust crates compile-time linked into the engine binary; trust is `cargo` + code review, not the type system. Future post-Ed25519 / post-iroh / post-redb / post-wasmtime engine-extension migrations land under this Compromise's namespace per Phase-9+ scope. The trust model is comprehensively narrated below at §"Engine-level extensions — compile-time trust"; this row makes the claim registry-discoverable for the §3.12 R7-equivalent audit walk. Tracking via [#1131](https://github.com/BentenAI/benten-engine/issues/1131). |
-| 30 | Unaudited PQ primitives in the v1-beta hybrid default (`ml-dsa` signature half / `libcrux-ml-kem` KEM half have no independent third-party audit yet) | 4-Meta-Core | **OPEN; MITIGATED by hybrid construction.** v1-beta ships PQ-hybrid by default (sig Ed25519⊕ML-DSA-65 byte-faithful IETF LAMPS composite `id-MLDSA65-Ed25519-SHA512`, both-must-verify, NO commitment trailer; enc X25519⊕ML-KEM-768 at codepoint `0x647a` + ChaCha20-Poly1305) where the PQ halves are not yet independently audited. Mitigation: the **classical half is the audited security floor** (Ed25519 / X25519 + the NCC-audited ChaCha20-Poly1305 AEAD); the **signature** hybrid is strip-resistant via the shared-`M'`/ctx=Label binding + both-halves-required, and the **encryption** combiner is committing / strip-resistant — both fail closed (the typed-unsupported-arm-never-silent-fallback contract enforces it) so **unaudited PQC is never the SOLE trust path**. The KEM half is now `libcrux-ml-kem` (the 13 net-new transitive crates — 10 Cryspen/libcrux/hax + 3 general proc-macro support — join the C-GM-AUDIT scope as honest cargo-vet exemptions, budget cap 5→18). **CLOSES at v1-GM** when the independent `ml-dsa`/`ml-kem`(`libcrux-ml-kem`) audit lands (NF-2 / C-GM-AUDIT exit criterion). Per the 2026-05-19 PQ-default reframe (`.addl/pq-research/RATIFIED-pq-default-reframe-2026-05-19.md`; CLAUDE.md baked-in #5 / #15). Tracking via the v1-beta PQ-audit issue [#1302](https://github.com/BentenAI/benten-engine/issues/1302) + [#1300](https://github.com/BentenAI/benten-engine/issues/1300) / [#1301](https://github.com/BentenAI/benten-engine/issues/1301). |
+| 30 | Unaudited PQ primitives in the v1-beta hybrid default (`ml-dsa` signature half / `libcrux-ml-kem` KEM half have no independent third-party audit yet) | 4-Meta-Core | **OPEN; MITIGATED by hybrid construction.** v1-beta ships PQ-hybrid by default (sig Ed25519⊕ML-DSA-65 byte-faithful IETF LAMPS composite `id-MLDSA65-Ed25519-SHA512`, both-must-verify, NO commitment trailer; enc X25519⊕ML-KEM-768 at codepoint `0x647a` + ChaCha20-Poly1305) where the PQ halves are not yet independently audited. Mitigation: the **classical half is the audited security floor** (Ed25519 / X25519 + the NCC-audited ChaCha20-Poly1305 AEAD); the **signature** hybrid is strip-resistant via the shared-`M'`/ctx=Label binding + both-halves-required, and the **encryption** combiner is **strip-resistant** (both shared secrets — `ss_M` ‖ `ss_X` — are mixed into the KEK, so neither KEM half can be stripped without changing the derived key; full AEAD key-commitment in the robustness sense is OUT OF SCOPE at v1-beta) — both fail closed (the typed-unsupported-arm-never-silent-fallback contract enforces it) so **unaudited PQC is never the SOLE trust path**. The KEM half is now `libcrux-ml-kem` (the 13 net-new transitive crates — 10 Cryspen/libcrux/hax + 3 general proc-macro support — join the C-GM-AUDIT scope as honest cargo-vet exemptions, budget cap 5→18). **CLOSES at v1-GM** when the independent `ml-dsa`/`ml-kem`(`libcrux-ml-kem`) audit lands (NF-2 / C-GM-AUDIT exit criterion). Per the 2026-05-19 PQ-default reframe (`.addl/pq-research/RATIFIED-pq-default-reframe-2026-05-19.md`; CLAUDE.md baked-in #5 / #15). Tracking via the v1-beta PQ-audit issue [#1302](https://github.com/BentenAI/benten-engine/issues/1302) + [#1300](https://github.com/BentenAI/benten-engine/issues/1300) / [#1301](https://github.com/BentenAI/benten-engine/issues/1301). |
 | 31 | LAMPS Composite ML-DSA combiner is EUF-CMA-only NOT SUF-CMA (CLOSED-equivalent via Inv-15 application-layer 3-layer decomposition) | 4-Meta-Core | **OPEN at construction layer; CLOSED-EQUIVALENT at application layer via Inv-15.** The v1-beta default signature combiner (LAMPS Composite ML-DSA `id-MLDSA65-Ed25519-SHA512` at `SigCodepoint::HYBRID_ED25519_MLDSA65 = 0x0001`) is EUF-CMA-secure but NOT SUF-CMA-preserving (Weakly-Non-Separable per `draft-ietf-lamps-pq-composite-sigs-19` §10). The SUF-CMA gap is closed at the application layer via **Inv-15** (sig-bundle CIDs are never load-bearing identifiers; identity = canonical-payload-CID, authentication = codepoint-dispatched signature, revocation = semantic tuple). SUF-CMA-preserving combiners (Bird-of-Prey) are reserved as future-additive codepoints. See the body section "Compromise #31 — LAMPS Composite ML-DSA combiner …" + [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md) Inv-15. |
-| 32 | ML-KEM-768 Decap chosen-ciphertext side-channel (libcrux CT-mitigation) — a Decap-axis refinement of #30 | 4-Meta-Core | **OPEN; MITIGATED-LIVE.** Decap-axis refinement of the unaudited-PQ window (#30); explicitly cross-linked #30↔#32↔C-GM-AUDIT (M-5). `libcrux-ml-kem` is now the LANDED production ML-KEM-768 impl (hax/F*-verified, constant-time portable backend selected on wasm + non-SIMD) — moving #32 from deferred → mitigated-live. **#32-residual:** the runnable `check-secret-independence` CI gate is NOT wireable at `libcrux-ml-kem 0.0.9` (upstream E0053 macro defect); the verified portable backend is the live mitigation, and the runnable gate (`mlkem-ct-check` feature seam) carries to the libcrux version that fixes the macro (f_kat_2 FLAG-FOR-BEN). Closes with the #30 v1-GM audit. Encryption arc (9-eyes panel). See body section. |
+| 32 | ML-KEM-768 Decap chosen-ciphertext side-channel (libcrux CT-mitigation) — a Decap-axis refinement of #30 | 4-Meta-Core | **OPEN; MITIGATED-LIVE.** Decap-axis refinement of the unaudited-PQ window (#30); explicitly cross-linked #30↔#32↔C-GM-AUDIT (M-5). `libcrux-ml-kem` is now the LANDED production ML-KEM-768 impl (hax/F*-verified, constant-time portable backend selected on wasm + non-SIMD) — moving #32 from deferred → mitigated-live. **#32-residual:** the runnable `check-secret-independence` CI gate is NOT wireable at `libcrux-ml-kem 0.0.10` (upstream E0053 macro defect — first reproduced at 0.0.9, PERSISTS at 0.0.10, re-verified 2026-07-20); the verified portable backend is the live mitigation, and the runnable gate (`mlkem-ct-check` feature seam) carries to the libcrux version that fixes the macro (f_kat_2 FLAG-FOR-BEN). Closes with the #30 v1-GM audit. Encryption arc (9-eyes panel). See body section. |
 | 33 | Coercion / wrench attack OUT-OF-SCOPE — incl. Layer-D approval-coercion (coerced-approving-device `RemoteUnlock`/`SignUcanDelegation`) | 4-Meta-Core | **OUT-OF-SCOPE (disclosed).** Password/physical coercion is outside the cryptographic threat model. m-5 extension: a coerced approving-device makes a coerced grant look legitimate forever via the audit-Node (distinct from #34 password-coercion). 9-eyes. |
 | 34 | Password-knowledge implies full access (Argon2id defense-in-depth) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** Whoever knows the principal password derives the DAK; Argon2id raises the offline-guess cost but does not change the knowledge-implies-access property. 9-eyes. |
 | 35 | Compromised-device retroactive decryption (no past-content forward-secrecy at v1-beta; CGKA deferred) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** A device whose long-term key is compromised can retro-decrypt content it held; full PCS/CGKA is deferred post-v1-beta. 9-eyes. |
 | 36 | RAM-residency / coredump / swap forensic-extraction OUT-OF-SCOPE (`zeroize`+`secrecy` best-effort) | 4-Meta-Core | **OUT-OF-SCOPE (disclosed).** Plaintext-in-RAM extraction via coredump/swap is outside scope; `zeroize` + `secrecy` are best-effort hardening, not a guarantee. 9-eyes. |
 | 37 | No TEE / sealed-enclave attestation at v1-beta + v1-GM | 4-Meta-Core | **SUBSTRATE-GUARANTEE DISCLOSURE.** Benten makes no TEE/enclave attestation claim; key material rests in process memory protected only by OS boundaries. 9-eyes. |
 | 38 | Physical-presence side-channels OUT-OF-SCOPE | 4-Meta-Core | **OUT-OF-SCOPE (disclosed).** EM/power/acoustic/timing physical side-channels are outside the threat model. 9-eyes. |
-| 39 | Supply-chain dependency-pinning posture (PARTIAL; `cargo deny` + RustSec + McMillion-not-Cryspen `hpke`; new `secrecy` Layer-A dep) | 4-Meta-Core | **SUBSTRATE-GUARANTEE DISCLOSURE.** Dependency pinning is PARTIAL: `cargo deny` + RustSec advisory gate + the McMillion `hpke` crate (NOT Cryspen `hpke-rs` w/ 13 CVEs). O-1: `secrecy` is a new Layer-A dependency disclosed here. 9-eyes; O-1. |
+| 39 | Supply-chain dependency-pinning posture (PARTIAL; `cargo deny` + RustSec; new `secrecy` Layer-A dep) | 4-Meta-Core | **SUBSTRATE-GUARANTEE DISCLOSURE.** Dependency pinning is PARTIAL: `cargo deny` + RustSec advisory gate. **The live path uses NO `hpke` crate** (R10-council GAP-A correction) — the Benten-supplied X-Wing KEM-DEM is the wire (NQ-C1); the McMillion `hpke` (NOT Cryspen `hpke-rs` w/ 13 CVEs) pin is RESERVED for the additive RFC-9180-faithful key-schedule branch ONLY, if/when NQ-C1 ratifies it. O-1: `secrecy` is a new Layer-A dependency disclosed here. 9-eyes; O-1. |
 | 40 | Build-time / reproducible-builds + SLSA-3+ posture (post-v1-GM) | 4-Meta-Core | **SUBSTRATE-GUARANTEE DISCLOSURE.** Reproducible-builds + SLSA-3+ provenance are post-v1-GM commitments, not v1-beta guarantees. 9-eyes. |
 | 41 | Cross-device-sync UX-vs-cryptographic boundary — incl. revocation-propagation-lag (O-4) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** The cross-device sync UX surface and the cryptographic boundary differ; O-4 sub-clause: a revoked device can exercise a stale grant during a partition (bounded by tight `exp`). 9-eyes; O-4. |
 | 42 | Layer-C forward-secrecy gap (HPKE-mode-base recipient long-term sk decrypts forever) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** HPKE-mode-base is structurally non-FS at the long-term-sk axis: a 2030 sk-compromise recovers 2026 envelopes. Partial FS via app-layer key rotation; full per-message FS is the SEPARATE #56 journalist class. 9-eyes (U13). |
-| 43 | Envelope metadata leakage to untrusted relays — IMPROVED by Sealed-Sender DEFAULT (BR-1) | 4-Meta-Core | **ACCEPTED TRADE-OFF; IMPROVED.** Sealed-Sender DEFAULT (`0x6510`) removes plaintext sender-DID on the default path; NO coarse-epoch on the Drop wire (1-hr bucket is Layer-D-only — RULING-1 / M-14); group-AAD set-identifying material is BLINDED (audience_set_commitment + membership_set_id_commitment per #61). Residual on the default Drop wire = recipient DID + linkable-but-blinded group tags (roadmap U22–U28; full per-send unlinkability = U25 v1-GM-reserve). 9-eyes (L6); BR-1; #61. |
+| 43 | Envelope metadata leakage to untrusted relays — IMPROVED by Sealed-Sender DEFAULT (BR-1) | 4-Meta-Core | **ACCEPTED TRADE-OFF; IMPROVED.** Sealed-Sender DEFAULT (`0x6510`) removes plaintext sender-DID on the default path; NO coarse-epoch on the Drop wire (1-hr bucket is Layer-D-only — RULING-1 / M-14); group-AAD set-identifying material is BLINDED (audience_set_commitment + membership_set_id_commitment per #61). Residual on the default Drop wire = recipient DID + linkable-but-blinded group tags + the plaintext **`body_cid`** (unsalted `BLAKE3(body)` — a confirmation-oracle + equality-linker for LOW-ENTROPY bodies; app-layer padding / additive per-send salt mitigate) (roadmap U22–U28; full per-send unlinkability = U25 v1-GM-reserve). 9-eyes (L6); BR-1; #61. |
 | 44 | Long-term-confidentiality posture (BSI TR-02102-1; X-Wing/MLKEM768-X25519 acceptable-migration-window) | 4-Meta-Core | **OUT-OF-SCOPE (disclosed).** The very-long-term (decades) confidentiality horizon is outside the v1-beta posture; the hybrid KEM acceptable-migration-window is disclosed per BSI TR-02102-1. 9-eyes. |
 | 45 | ML-KEM-768 MAL-BIND-K-CT / K-PK binding-properties (connects to IND-CCA2-adversarial-recipient-seed) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** ML-KEM-768 binding properties (MAL-BIND-K-CT / K-PK) connect to the M-6 IND-CCA2-adversarial-recipient-seed audit line; this is an external-cryptographer-audit disclosure surface (NOT a unit-test "proof"). MembershipSet panel; M-6. |
 | 46 | `HpkeMultiBase` O(N) wire-cost above 32 recipients (Atrium 32 / DeviceMesh 5 / SingleDevice 1) | 4-Meta-Core | **ACCEPTED TRADE-OFF.** Multi-stanza HPKE wire-cost grows linearly with recipient count; per-Kind cardinality caps bound it (Atrium 32 / DeviceMesh 5 / SingleDevice 1). MembershipSet panel. |
@@ -155,9 +192,12 @@ table narrative.
 | 61 | MembershipSet-fingerprint-leak via iroh-gossip topic (CLOSED by HMAC-blinded topic) | 4-Meta-Core | **COMPOSITION-HAZARD HONEST DISCLOSURE; CLOSED.** The iroh-gossip topic would have leaked a membership-set fingerprint; CLOSED by P2 D6 HMAC-blinded (`blake3::keyed_hash`) gossip topic — set-identifying material is never published in the clear. MembershipSet panel (M-C3). |
 | 62 | Revocation reach in encryption-at-rest (already-derived keys remain decryptable; Drop bundles forever-valid once distributed) | 4-Meta-Core | **RE-POINTED from the in-tree #31 occupant (BR-2). OPEN ARCHITECTURAL TRADE-OFF; MITIGATED by tight UCAN `nbf`/`exp` + key rotation.** Per RATIFIED-S&C §R6 + V1-FROZEN-INTERFACE.md item 15(i): UCAN revocation cuts FUTURE serves (the per-request `CapabilityPolicy::check_read` consultation fails for subsequent requests against the granted CID), but already-derived keys remain decryptable forever. Once Bob has derived `K(N)` for some Node, Bob can decrypt any ciphertext he obtains for that Node, regardless of subsequent UCAN revocation. Re-keying the Node requires Alice to re-encrypt + re-issue (a heavy operation; per-Node + per-recipient cost scales). Drop bundles are forever-valid once distributed — the producer has no callback to revoke an already-distributed Drop. **Mitigation:** tight UCAN `nbf`/`exp` windows + key rotation discipline + the typed `E_UCAN_BLOBS_REQUEST_REJECTED` server-side gate. **Stays OPEN at v1-beta + v1-GM** — this is an inherent property of encryption-at-rest where the reader holds plaintext key material; closing it would require structural changes (e.g. forward-secret re-keying on every revocation; MLS-style per-message keys) that are out of scope for v1. Authored at G-CORE-9 V1-FROZEN-INTERFACE row 8e per Ben morning queue item; tracking via the V1-FROZEN-INTERFACE.md item 15(i) FREEZE-WAVE FIX-NOW. Cross-linked #57. |
 | 63 | Sealed-Sender abuse-control trade-off (no plaintext sender ⇒ abuse-control rides recipient-issued delivery tokens) | 4-Meta-Core | **NEW (BR-1; §3.11).** The DEFAULT Sealed-Sender path (`0x6510`) carries no plaintext sender identity, so abuse/spam control cannot use per-sender filtering; it rides recipient-issued short-lived rate-limited UCAN-backed delivery tokens (refused at the receive boundary BEFORE decrypt). Residual: a recipient who over-issues tokens re-admits spam (mitigated by default-conservative token rate-limits + per-token `nbf`/`exp` + revocation). See body section. |
-| 64 | Cross-device best-effort-eventual nonce-rejection window (NQ-T4) | 4-Meta-Core | **NEW (NQ-T4; Ben-ratified 2026-06-02; minted this cascade). `SGD` substrate-guarantee disclosure.** The `jti`-keyed nonce-cache is per-device-durable-GUARANTEED but user-global only best-effort-eventual-via-sync (NOT synchronous): a nonce consumed on device B is rejected on device C only after the cache entry propagates via sync. The pre-sync cross-device window admits a one-time replay of a remote-permission / DeviceLink token across the user's own devices. Mitigated by: durable per-device rejection (no same-device replay), tight `valid_until` (full-second granularity, strict, no skew window — NQ-T2), and short delivery-token `exp`. **Stays OPEN at v1-beta + v1-GM** — synchronous user-global rejection would require a consensus/online-coordinator the P2P model deliberately avoids. See body section. |
+| 64 | Cross-device best-effort-eventual nonce-rejection window (NQ-T4) | 4-Meta-Core | **NEW (NQ-T4; Ben-ratified 2026-06-02; minted this cascade). `SGD` substrate-guarantee disclosure.** The `jti`-keyed nonce-cache is per-device-durable-GUARANTEED **via the durable-CAS-marker + `from_durable` hydration seam** (`JtiNonceCache`; the engine honors a caller-contract to persist `durable_snapshot()` + re-hydrate on restart — the full disk-persistence wiring is deferred with the remote-permission wiring, Row D-64-adjacent) but user-global only best-effort-eventual-via-sync (NOT synchronous): a nonce consumed on device B is rejected on device C only after the consumed-`jti` set propagates via sync. The pre-sync cross-device window admits a one-time replay of a remote-permission / DeviceLink token across the user's own devices. Mitigated by: durable per-device rejection via the seam (no same-device replay once persisted+hydrated), tight `valid_until` (full-second granularity, strict, no skew window — NQ-T2), and short delivery-token `exp`. **Stays OPEN at v1-beta + v1-GM** — synchronous user-global rejection would require a consensus/online-coordinator the P2P model deliberately avoids. See body section. |
+| 65 | Wave-3e per-Node AEAD publicly-derivable-`K_principal` confidentiality limit at v1-beta (untrusted host CAN read partition plaintext) | 4-Meta-Core | **NEW (R13 F-07; `SGD` substrate-guarantee disclosure; minted to match the THREAT-MODEL untrusted-host honesty retense, R13 F-06).** At v1-beta the per-Node AEAD wrap does NOT provide confidentiality against a malicious *storage host*: the wave-3e `K_principal = blake3::keyed_hash(K_PRINCIPAL_DOMAIN_KEY, namespace_did)` is derived from a **publicly-known** 32-byte domain-tag constant (`K_PRINCIPAL_DOMAIN_KEY`, `crates/benten-graph/src/redb_backend.rs:181`) + the **publicly-known** `namespace_did`, so `K_principal` — and thus `K(N)` + the per-Node AEAD key — is **publicly derivable**: any party holding `(namespace_did, ciphertext_blob)` can derive the key and decrypt. Per CLAUDE.md baked-in #18 the **confidentiality half** of the Principal primitive (per-principal encryption of the storage partition; the #1301 / D-64 substrate) is **DEFERRED — NOT built at v1-beta**; the LIVE protection is the **AUTHORITY half** (capability / namespace isolation) which binds only a **cooperating** engine. So per-Node AEAD is a publicly-derivable-`K_principal` **STAND-IN** keeping the substrate shape stable for the production `K_principal`-store swap-in, NOT real untrusted-host confidentiality. Mitigated in the interim by namespace-isolation at the storage backend (the AUTHORITY half) + the local device's Layer-A vault (Argon2id-DAK-sealed, protecting the *local* vault at rest). **Stays OPEN at v1-beta; CLOSES when the #1301 / D-64 per-DID secret-material `K_principal` backend lands** (the swap-in replaces only the `K_principal` synthesis step — the function signature + AEAD-wrap layer + per-chunk size are all stable). Full narration: the "⚠️ Confidentiality limit at this wave" disclosure in the **Per-Node AEAD wrap layer** section below (`derive_test_seam_key_from_cid_with_namespace`). Cross-linked from `docs/THREAT-MODEL.md` §1 (the untrusted-host row + honesty note). Named carry: `docs/future/phase-4-backlog.md §3.10`. |
+| 66 | Recovered-secret `Debug`-render + freed-heap hygiene across the crypto-suite secret roster | 4-Meta-Core | **MINTED R14 GAP-1; CLOSED-at-v1-beta (hardened in the R19/#3 secret-hygiene sweep; `SGD` substrate-guarantee disclosure — now a positive guarantee, not an open gap).** History: R14 disclosed that `UnwrappedKey` (`crates/benten-crypto-suite/src/cipher_suite.rs`; the recovered `k_root` from `unwrap_key_material`) then carried `#[derive(Debug)]` (a `{:?}` render would print recovered KEY BYTES) with no zeroize-on-drop. The R19/#3 sweep HARDENED the whole recovered-secret roster: `UnwrappedKey` (redacting `impl Debug` → `<redacted>` + zeroizing `impl Drop`, `cipher_suite.rs`), `DecryptedPlaintext` (`cipher_suite.rs`), `VaultPayload` (`k_principal` + `user_did_signing_key` redacted + zeroized, `vault.rs`), `ProvisioningInnerPayload` (`device_link.rs:120-149`), and `PurePqMlKemKeypair` (zeroize-on-drop landed R18 C3). Enforced by the LIVE meta-test `crates/benten-engine/tests/f_secret_hygiene_roster.rs` (470 LOC, zero `#[ignore]`) — a runtime Debug-does-not-leak assertion over the full roster + a source-anchored zeroize-coverage grep-defense — plus an in-crate `<redacted>`-render assertion at `cipher_suite.rs`. So the recovered-secret `Debug`/heap hygiene is a positive v1-beta guarantee; a revert (e.g. re-deriving `Debug`) re-fires the meta-test. The residual v1-GM nicety is narrower: R6-reround `Zeroizing`-wrapped the vault seal/open transient plaintext buffers (`serialize_vault` + `decode_vault`/`open_vault` `pt`, each holding the full `k_principal` + `user_did_signing_key`, `vault.rs`) and the `benten-drop` Layer-C seal-side CEKs (`layer_c.rs`), so no transient full-secret plaintext or seal-side CEK is left un-wiped; what remains Row-D-75-deferred is the freeze-coupled still-bare-`Vec<u8>` copy sites (`unwrap_key_from_recipient` return, the `device_link.rs` `recovered` binding, `swap_matrix.rs:563`) — tracked at `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-75. The separate `derive_member_key` raw-`Vec<u8>` hardening rides Row D-76. See body section. |
+| 67 | First-contact / TOFU DID-authenticity bootstrap (GAP-KDB Shape-B residual) | 4-Meta-Core | **MINTED at the Phase-4-Meta-Core GAP-KDB Shape-B identity-model closure; `SGD` substrate-guarantee disclosure; OPEN residual — REDUCED, not eliminated.** Shape-B (the content-addressed `did:benten` key-set + `Did::resolve_kem` + the `RecipientBinding` sole-constructor typestate + Inv-23) closes *post*-first-contact key substitution: swapping the recipient KEM key under a `did:benten` a sender already holds requires a BLAKE3-256 2nd-preimage over the canonical DAG-CBOR key-set. It does **NOT** close *first-contact* DID-authenticity — whoever controls the channel where a sender FIRST learns "Alice ↔ `did:benten:…`" can hand them their own self-consistent DID, which then resolves and verifies cleanly. The confidentiality trust window narrows from continuous to **bind-once**, the identical residual carried by Signal safety numbers, MLS and PGP fingerprints; authenticating the initial DID↔principal binding is **out-of-band and the user's responsibility** (Benten ships no PKI / CA and cannot authenticate the first contact). The bare-`did:key` / Shape-A fallback has the SAME residual. **Stays OPEN at v1-beta + v1-GM.** Cross-ref: Inv-23 in [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md); [`SECURITY-PROOFS.md`](SECURITY-PROOFS.md) §4.1; [`THREAT-MODEL.md`](THREAT-MODEL.md) (the DISTINCT seal-path revocation-reach residual is #62, NOT this one). Full narrative in the body section at the foot of this document. |
 
-**Refinement-audit-2026-05 delta:** Compromise #29 (engine-extension trust model, narrative-only at HEAD; now registry-tracked) + reserved rows #27 / #28 added post-tag to anchor META #669 + META #629 closure mints. The v1-platform-shippable BLOCKER cluster framing lives in the local-only campaign-summary `refinement-audit-2026-05.md §15` (gitignored under `docs/future/*` — internal methodology artifact, not publicly shipped; see `docs/future/phase-4-backlog.md §15.5`).
+**Refinement-audit-2026-05 delta:** Compromise #29 (engine-extension trust model, narrative-only at HEAD; now registry-tracked) + reserved rows #27 / #28 added post-tag to anchor META #669 + META #629 closure mints. The v1-platform-shippable BLOCKER cluster framing lives in the local-only campaign-summary `refinement-audit-2026-05.md §15` (gitignored under `docs/future/*` — internal methodology artifact, not publicly shipped; see `docs/future/phase-4-backlog.md §4.86`, the tracked-repo destination that owns the §15.5 pim-N catalog tracking).
 
 **PQ-default-reframe-2026-05-19 delta:** Compromise #30 (unaudited PQ primitives in the v1-beta hybrid default) is the sole net-new addition from the 2026-05-19 PQ-default reframe — it names the pre-audit window as a tracked, registry-discoverable compromise that is MITIGATED by the classical-floor hybrid construction and CLOSES at the v1-GM independent audit (NF-2 / C-GM-AUDIT). The hash posture (Compromise #6) is **UNAFFECTED** by the reframe (the reframe is signature + encryption only). See `.addl/pq-research/RATIFIED-pq-default-reframe-2026-05-19.md`.
 
@@ -210,6 +250,7 @@ Benten uses **BLAKE3-256** with a 32-byte digest embedded in every CIDv1. The ac
 - **Content-addressed Nodes (`Cid`).** A collision would allow a malicious writer to forge a Node that hashes to the same CID as a legitimate Node — a "masquerade" attack. 128-bit resistance requires ~`2^128` hashes to find a collision; infeasible under any classical threat model.
 - **Version-chain `prior_head` threading** (`benten_core::version::append_version`). The API uses CIDs to name the head each writer observed. A collision on a CID used as `prior_head` could, in principle, let an attacker smuggle an alternative chain past the fork-detection check. The same 128-bit bound applies.
 - **Phase 3 UCAN-by-CID.** Phase 3 references capability grants by CID (landed at G14-B wave-5a durable UCAN backend). Revoke-by-CID paths assume the CID of a grant is unique; again, 128-bit collision resistance is the assumption.
+- **Inv-21 fork-tie-break antisymmetry (R15 F-24 cross-ref).** The MembershipSet fork-tie-break comparator (`docs/INVARIANT-COVERAGE.md` Inv-21) requires distinct-fork-event ⇒ distinct-CID for its totality/antisymmetry (the CID final tie-break byte); a collision between two genuinely-distinct forks would defeat the agreed-winner property. This 128-bit collision-resistance bound is exactly that assumption for the fork-tie-break axis.
 
 **What this posture does NOT claim:**
 
@@ -427,15 +468,15 @@ round-trips the catalog-code strings through `as_str` / `from_str`.
   | ESC-7 | Fuel-refill via host-fn re-entry | **Phase-3 wave-5c: Fully wired end-to-end.** Per-call `Store` lifecycle (D3-RESOLVED no-pool) + `SandboxStoreData.esc_defense_state: EscDefenseState` carries `re_entry_count` + `guest_active` flag (set by `enter_guest`/`exit_guest` immediately around `func.call` in `crates/benten-eval/src/primitives/sandbox.rs::execute_with_live_cap_check`). The host-fn boundary `run_all_checks` invocation surfaces `EscapeAttemptMarker` which `map_call_error` unwraps to `SandboxError::EscapeAttempt(Esc7FuelRefillViaReEntry)`. Routes through dedicated `E_SANDBOX_ESCAPE_ATTEMPT` catalog code per phase-3-backlog §6.1 + §6.1-followup task #3 + r1-wsa-1 BLOCKER closure + D-E (R1-revision triage). | Fully wired (end-to-end pin against `Sandbox::execute` driven through `wasmtime::Module` + `Instance::call`) | `sandbox_esc_runtime_arms_e2e.rs::esc_7_runtime_arm_fires_via_time_host_fn_re_entry_injection` (end-to-end) + `sandbox_esc_7.rs::esc_7_fuel_refill_via_host_fn_re_entry_blocked` + `..._traps_typed_error` (SHAPE pins; superseded by the e2e pin) — green at wave-5c |
   | ESC-8 | Call host-fn not in manifest | `Linker::func_wrap` only registers manifest-allowlisted host-fns; missing import → wasmtime "unknown import" → `SandboxHostFnNotFound` | Fully wired | `sandbox_escape_attempts_denied.rs:247` (`sandbox_escape_host_fn_not_on_manifest`) |
   | ESC-9 | Cap-revoke mid-call (TOCTOU between cap-grant and cap-use) | **Phase-3 wave-5c: Fully wired end-to-end.** D18 `PerCall` live-recheck via `LiveCapCheck` callback (`Arc<dyn Fn(&str) -> bool + Send + Sync>`) consulted from the trampoline `cap_check` helper BEFORE EVERY host-fn invocation per r1-wsa-3 MAJOR (no caching window). The engine override at `crates/benten-engine/src/primitive_host.rs::execute_sandbox` constructs the callable as a closure capturing `Arc<Mutex<HashSet<Cid>>>` cloned from the engine's revoked-actors set + the dispatching actor CID; mid-call revocation flips the actor's revoke bit and the next host-fn invocation surfaces `SandboxError::HostFnDenied`. Cadence is once-per-host-fn-entry (cadence (a) per r1-wsa-3 disposition + r4-r1-wsa-4 — within a single host-fn call, the recheck does NOT re-fire per loop iteration). Closes phase-3-backlog §6.3 + §6.1-followup task #5. | Fully wired (end-to-end pin against `Sandbox::execute` driving `kv_read` twice with mid-call revoke) | `sandbox_esc_runtime_arms_e2e.rs::esc_9_runtime_arm_fires_via_live_cap_check_revoke_mid_call` (end-to-end) + `sandbox_capability_check_per_call_after_revoke.rs::sandbox_host_fn_capability_revoked_mid_execution_denies_subsequent` + `sandbox_esc_9.rs::esc_9_live_cap_check_fires_at_every_host_fn_boundary_no_caching_window` + `..._within_kv_read_loop_consults_once_per_call_not_per_iteration` — green at wave-5c |
-  | ESC-10 | Re-entrancy via host-fn (cap-context confusion via SANDBOX → CALL → SANDBOX) | `AttributionFrame.sandbox_depth` runtime threading bumps depth at SANDBOX entry (see `crates/benten-engine/src/primitive_host.rs::execute_sandbox` saturating-bump on the parent `ActiveCall`); `SandboxError::NestedDispatchDepthExceeded` fires above ceiling at `crates/benten-eval/src/primitives/sandbox.rs::execute` → `E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED`. Wired via R6FP-G1 (PR #62) 3-lens convergent fix | Wired-defense / test-paper-only — defense fires; integration test `#[ignore]`'d pending `testing_call_engine_dispatch` helper (see [`docs/future/phase-3-backlog.md` §7.3.A.7](future/phase-3-backlog.md)) | `sandbox_escape_attempts_denied.rs:291` (`sandbox_escape_reentrancy_via_host_fn_denied`) — `#[ignore]` |
-  | ESC-11 | Component-Model type mismatch | wasmtime component-model linker type-check → `SandboxModuleInvalid`. wasmtime workspace dep at `Cargo.toml:299` ships `["runtime", "cranelift", "std", "async"]` — explicitly NO `component-model` feature; defense IS the cut | Component-model gated (`#[cfg(feature = "component-model")]` + `#[ignore]`) | `sandbox_escape_attempts_denied.rs:313` (`sandbox_escape_component_type_mismatch_rejected`) — feature-gated |
+  | ESC-10 | Re-entrancy via host-fn (cap-context confusion via SANDBOX → CALL → SANDBOX) | `AttributionFrame.sandbox_depth` runtime threading bumps depth at SANDBOX entry (see `crates/benten-engine/src/primitive_host.rs::execute_sandbox` saturating-bump on the parent `ActiveCall`); `SandboxError::NestedDispatchDepthExceeded` fires above ceiling at `crates/benten-eval/src/primitives/sandbox.rs::execute` → `E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED`. Wired via R6FP-G1 (PR #62) 3-lens convergent fix | Wired-defense / simulation-driven pin — defense fires; the adversarial pin is LIVE (un-ignored at G20-A1 wave-8a, widened at G21-T3) but SIMULATION-driven: it drives the `testing_call_engine_dispatch` helper's `EscDefenseState` transition rather than a real host-fn re-entry, because no production host-fn re-enters `Engine::call` (D19-RESOLVED) | `sandbox_escape_attempts_denied.rs::sandbox_escape_reentrancy_via_host_fn_denied` — LIVE `#[test]`, asserts `EscapeAttempt(Esc7FuelRefillViaReEntry)` |
+  | ESC-11 | Component-Model type mismatch | wasmtime component-model linker type-check → `SandboxModuleInvalid`. wasmtime workspace dep at `Cargo.toml:321` ships `["runtime", "cranelift", "std", "async"]` — explicitly NO `component-model` feature; defense IS the cut | Component-model gated (`#[cfg(feature = "component-model")]` + `#[ignore]`) | `sandbox_escape_attempts_denied.rs:313` (`sandbox_escape_component_type_mismatch_rejected`) — feature-gated |
   | ESC-12 | Resource handle forgery | wasmtime component-model resource-handle table validates handles → `SandboxModuleInvalid` or `SandboxHostFnDenied` | Component-model gated (same cut as ESC-11) | `sandbox_escape_attempts_denied.rs:330` (`sandbox_escape_resource_handle_forgery_rejected`) — feature-gated |
   | ESC-13 | Trap during fuel-meter callback / Store-state corruption | **Phase-3 wave-5c: Fully wired end-to-end.** A `std::panic::catch_unwind` wrapper around `func.call` in `crates/benten-eval/src/primitives/sandbox.rs::execute_with_live_cap_check` catches host-side panics (fuel-meter callback OR any panicking host-fn closure); the wrapper sets `esc_defense_state.fuel_meter_callback_trapped = true` + surfaces `SandboxError::EscapeAttempt(Esc13StorePoison)` directly (no wasmtime trap unwinds through host frames). Pairs with D3-RESOLVED per-call `Store` lifecycle: the (potentially-poisoned) `Store` is dropped on return; the next SANDBOX call gets a fresh `Store` (poison-recovery pin: `esc_13_recovery_path_next_call_fresh_store_no_poison_leak`). Closes r1-wsa-1 BLOCKER half-b + §6.1-followup task #4 + D-E. | Fully wired (end-to-end pin against `Sandbox::execute` + recovery-path pin proving the next call is uncontaminated) | `sandbox_esc_runtime_arms_e2e.rs::esc_13_runtime_arm_fires_via_panic_in_host_fn_callback` (end-to-end) + `..._recovery_path_next_call_fresh_store_no_poison_leak` (recovery) + `sandbox_esc_13.rs::esc_13_trap_during_fuel_meter_callback_store_poison_observable` (SHAPE pin) — green at wave-5c |
   | ESC-14 | Cap-claim forge in module bytes | Engine ignores embedded WASM custom sections for cap purposes; cap derivation is exclusively from the manifest passed at call time. `forged_cap_claim_section.wat` (committed) verifies that a forged section is silently ignored AND that subsequent `kv:read` calls fire `SandboxHostFnDenied` if the manifest didn't include them. D26 `.wasm`-bytes shipping for the escape corpus is a wave-8 noted gap (r6-wsa-5) | Partial / eval-side smoke (forged-section helper carry-forward; manifest-authoritative defense IS structurally correct in production code) | `sandbox_escape_attempts_denied.rs:378` (`sandbox_escape_forged_cap_claim_section_ignored`) |
   | ESC-15 | Named-manifest spoofing (typo / non-existent name) | `manifest_ref.resolve(&registry)` returns `Unknown`; no permissive fallback → `SandboxManifestUnknown` | Fully wired | `sandbox_escape_attempts_denied.rs:403` (`sandbox_escape_named_manifest_spoofing_rejected`) |
   | ESC-16 | Wall-clock leak via `time` host-fn fingerprinting | **Phase-3 wave-5c: Fully wired end-to-end.** `time` host-fn returns monotonic-coarsened values (100 ms granularity) AND the trampoline calls `crates/benten-eval/src/sandbox/fingerprint.rs::record_wallclock_write` on each invocation (populating the per-call `SandboxStoreData.tainted_addresses` side-table) + `read_collapse_state` (incrementing `esc_defense_state.fingerprint_correlated_reads` for tainted-cell hits). At the host-fn boundary `run_all_checks` fires `SandboxError::EscapeAttempt(Esc16FingerprintCollapse)` once the read counter reaches `FINGERPRINT_COLLAPSE_THRESHOLD` (3 reads-within-one-call) BEFORE the side-channel becomes guest-observable. Closes r1-wsa-4 + phase-3-backlog §6.1 + §6.1-followup task #2. | Fully wired (end-to-end pin: 3-call WAT fixture trips the threshold; below-threshold pin proves the defense is silent on legitimate use) | `sandbox_esc_runtime_arms_e2e.rs::esc_16_runtime_arm_fires_after_threshold_time_host_fn_calls` (end-to-end) + `esc_16_silent_below_threshold_two_time_calls_pass` (below-threshold) + `sandbox_escape_attempts_denied.rs::sandbox_escape_wallclock_fingerprint_via_time_coarsened` (1000-call loop) + `sandbox_host_fn_time.rs::sandbox_host_fn_time_returns_monotonic_coarsened_100ms` (host-fn-level coarsening) — green at wave-5c |
 
-  **Bucket totals (16 vectors, each in exactly one bucket; updated at Phase-3 wave-5c close):** **Fully wired (12):** ESC-1, -2, -3, -4, -5, -6, -7, -8, -9, -13, -15, -16 — production runtime defense + end-to-end integration test passing. *(Note: ESC-5 routes through the dedicated `SandboxStackOverflow` typed variant + `E_SANDBOX_STACK_OVERFLOW` catalog code per phase-3-backlog §6.4 + r1-wsa-7. ESC-7 / ESC-9 / ESC-13 / ESC-16 promoted from "Wired-defense + simulation pin green (helper SURFACE)" at Phase-3 G17-A1 wave-5b → **Fully wired** at wave-5c via the production runtime arms wired in `crates/benten-eval/src/primitives/sandbox.rs::execute_with_live_cap_check` + the engine override in `crates/benten-engine/src/primitive_host.rs::execute_sandbox`; end-to-end pins drive `Sandbox::execute` and assert observable typed-error firing per pim-2 §3.6b in `tests/sandbox_esc_runtime_arms_e2e.rs`.)* **Partial (1):** ESC-14 (production manifest-authoritative defense structurally correct — embedded WASM custom sections silently ignored for cap purposes; integration test `#[ignore]`'d pending `testing_inject_forged_cap_claim_section` helper full body — G17-A1 ships the helper SURFACE; G20-A1 fills the body). **Wired-defense / test-paper-only (1):** ESC-10 — `AttributionFrame.sandbox_depth` runtime threading wired in `crates/benten-engine/src/primitive_host.rs::execute_sandbox` (R6FP-G1 / PR #62); the eval-side runtime arm in `crates/benten-eval/src/primitives/sandbox.rs::execute` fires `SandboxError::NestedDispatchDepthExceeded` once `attribution.sandbox_depth > config.max_nest_depth`; the adversarial integration test stays `#[ignore]`'d pending the `testing_call_engine_dispatch` helper SURFACE — G17-A1 ships the helper SURFACE; G20-A1 fills the body. **Component-model gated (2):** ESC-11, -12 — `#[cfg(feature = "component-model")]` + `#[ignore]`; the wasmtime workspace dep at `Cargo.toml:299` explicitly omits the feature. **Total:** 12 + 1 + 1 + 2 = 16 (no double-counting). The honest headline: **13 of 16 vectors fire typed-error defense end-to-end against the production executor at Phase-3 wave-5c close** (12 with full integration tests + ESC-10 with runtime defense but `#[ignore]`'d adversarial test pending helper-body fill at G20-A1; ESC-14 partially covered). The remaining 2 (ESC-11, -12) are component-model feature-cut. Wave-5c closes r1-wsa-1 BLOCKER (ESC-7 + ESC-13 end-to-end) + r1-wsa-3 MAJOR (ESC-9 cap-revoke mid-call cadence + production override) + r1-wsa-4 MAJOR (ESC-16 fingerprint-collapse). Wave-5b's r1-wsa-7 BLOCKER (ESC-5 stack-overflow catalog) remains closed.
+  **Bucket totals (16 vectors, each in exactly one bucket; updated at Phase-3 wave-5c close):** **Fully wired (12):** ESC-1, -2, -3, -4, -5, -6, -7, -8, -9, -13, -15, -16 — production runtime defense + end-to-end integration test passing. *(Note: ESC-5 routes through the dedicated `SandboxStackOverflow` typed variant + `E_SANDBOX_STACK_OVERFLOW` catalog code per phase-3-backlog §6.4 + r1-wsa-7. ESC-7 / ESC-9 / ESC-13 / ESC-16 promoted from "Wired-defense + simulation pin green (helper SURFACE)" at Phase-3 G17-A1 wave-5b → **Fully wired** at wave-5c via the production runtime arms wired in `crates/benten-eval/src/primitives/sandbox.rs::execute_with_live_cap_check` + the engine override in `crates/benten-engine/src/primitive_host.rs::execute_sandbox`; end-to-end pins drive `Sandbox::execute` and assert observable typed-error firing per pim-2 §3.6b in `tests/sandbox_esc_runtime_arms_e2e.rs`.)* **Partial (1):** ESC-14 (production manifest-authoritative defense structurally correct — embedded WASM custom sections silently ignored for cap purposes; the integration pins are LIVE — `sandbox_escape_forged_cap_claim_section_ignored` plus the G21-T3 helper-driven `sandbox_escape_forged_cap_claim_section_helper_driven`, after G17-A1 shipped the `testing_inject_forged_cap_claim_section` SURFACE and G20-A1 filled the body — but the coverage stays STRUCTURAL, an absence-of-custom-section-parsing assertion, not a forged-section end-to-end execution, so the bucket stays Partial). **Wired-defense / live-but-simulation-driven adversarial pin (1):** ESC-10 — `AttributionFrame.sandbox_depth` runtime threading wired in `crates/benten-engine/src/primitive_host.rs::execute_sandbox` (R6FP-G1 / PR #62); the eval-side runtime arm in `crates/benten-eval/src/primitives/sandbox.rs::execute` fires `SandboxError::NestedDispatchDepthExceeded` once `attribution.sandbox_depth > config.max_nest_depth`; the adversarial integration test is LIVE (`#[test]`, un-ignored at G20-A1 wave-8a after G17-A1 shipped the `testing_call_engine_dispatch` SURFACE, widened at G21-T3) but remains SIMULATION-driven — it drives the helper's `EscDefenseState` transition and asserts the typed `EscapeAttempt(Esc7FuelRefillViaReEntry)` reject, rather than a real host-fn re-entry (no production host-fn re-enters `Engine::call`, D19-RESOLVED), which is why the bucket stays distinct from "Fully wired". **Component-model gated (2):** ESC-11, -12 — `#[cfg(feature = "component-model")]` + `#[ignore]`; the wasmtime workspace dep at `Cargo.toml:321` explicitly omits the feature. **Total:** 12 + 1 + 1 + 2 = 16 (no double-counting). The honest headline: **13 of 16 vectors fire typed-error defense end-to-end against the production executor at Phase-3 wave-5c close** (12 with full integration tests + ESC-10 with runtime defense and a LIVE but simulation-driven adversarial pin; ESC-14 covered structurally by live pins). The remaining 2 (ESC-11, -12) are component-model feature-cut. Wave-5c closes r1-wsa-1 BLOCKER (ESC-7 + ESC-13 end-to-end) + r1-wsa-3 MAJOR (ESC-9 cap-revoke mid-call cadence + production override) + r1-wsa-4 MAJOR (ESC-16 fingerprint-collapse). Wave-5b's r1-wsa-7 BLOCKER (ESC-5 stack-overflow catalog) remains closed.
 - Cross-platform behaviour:
   - **Native targets (Linux x86_64, macOS arm64, Windows x86_64):** SANDBOX executes guest modules. Per-call cold-start budget gated by `bench_thresholds.toml` per the D22 RESOLVED tiered numerics (see `docs/SANDBOX-LIMITS.md` §6).
   - **wasm32-unknown-unknown / wasm32-wasip1:** the SANDBOX executor is compile-time absent (`#[cfg(not(target_arch = "wasm32"))]`). The DSL surface (`subgraph(...).sandbox(...)`) stays present so authoring works in browsers; invocation surfaces the typed error `E_SANDBOX_UNAVAILABLE_ON_WASM` at execution time, with the wsa-14 actionable text directing operators to either Phase-3 P2P sync against a Node-resident peer or local-development via @benten/engine in a Node.js process.
@@ -449,7 +490,7 @@ round-trips the catalog-code strings through `as_str` / `from_str`.
 
 **Posture claim now in force:** the SANDBOX runtime is a load-bearing primitive. It is expected to run in Phase 2b deployments. The four enforcement axes and the capability-derived host-fn manifest constitute the supply-chain and runtime-isolation perimeter for untrusted-code execution; operators who require additional defence-in-depth (process-level isolation, separate `wasmtime::Engine` per tenant) layer those on top of — not in place of — the in-engine bounds.
 
-**Inv-4 runtime threading — fully wired at R6FP-G1 (PR #62).** Both Inv-4 enforcement arms are now active at Phase 2b close. (1) **Registration arm:** `invariants::sandbox_depth::validate_registration` at `structural.rs:215, 387` walks the static-graph at registration time (was already wired pre-wave-8). (2) **Runtime arm:** `crates/benten-engine/src/primitive_host.rs::execute_sandbox` mutates the parent `ActiveCall.sandbox_depth` via `frame.sandbox_depth = frame.sandbox_depth.saturating_add(1)` on every production SANDBOX entry; the dispatching `AttributionFrame` is constructed with `sandbox_depth: nested_depth` in both match arms of the same function. Subsequent CALL pushes inherit the bumped depth via the dispatcher-inheritance read in `crates/benten-engine/src/engine.rs::dispatch_call_with_mode_and_trace` (`let parent_sandbox_depth = guard.last().map_or(0, |f| f.sandbox_depth)` immediately before the new `ActiveCall` push). The eval-side runtime arm in `crates/benten-eval/src/primitives/sandbox.rs::execute` fires `SandboxError::NestedDispatchDepthExceeded` when `attribution.sandbox_depth > config.max_nest_depth` (default `max_nest_depth = 4` admits depths 1..=4, depth 5 fires) — surfaces as `E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED` through `trap_to_typed`. Carry-forward residual: the ESC-10 adversarial integration test `sandbox_escape_attempts_denied.rs::sandbox_escape_reentrancy_via_host_fn_denied` stays `#[ignore]`'d pending the `testing_call_engine_dispatch` host-fn helper per [`docs/future/phase-3-backlog.md` §7.3.A.7](future/phase-3-backlog.md). The runtime arm is wired; the adversarial-test driver is paper-only.
+**Inv-4 runtime threading — fully wired at R6FP-G1 (PR #62).** Both Inv-4 enforcement arms are now active at Phase 2b close. (1) **Registration arm:** `invariants::sandbox_depth::validate_registration` at `structural.rs:215, 387` walks the static-graph at registration time (was already wired pre-wave-8). (2) **Runtime arm:** `crates/benten-engine/src/primitive_host.rs::execute_sandbox` mutates the parent `ActiveCall.sandbox_depth` via `frame.sandbox_depth = frame.sandbox_depth.saturating_add(1)` on every production SANDBOX entry; the dispatching `AttributionFrame` is constructed with `sandbox_depth: nested_depth` in both match arms of the same function. Subsequent CALL pushes inherit the bumped depth via the dispatcher-inheritance read in `crates/benten-engine/src/engine.rs::dispatch_call_with_mode_and_trace` (`let parent_sandbox_depth = guard.last().map_or(0, |f| f.sandbox_depth)` immediately before the new `ActiveCall` push). The eval-side runtime arm in `crates/benten-eval/src/primitives/sandbox.rs::execute` fires `SandboxError::NestedDispatchDepthExceeded` when `attribution.sandbox_depth > config.max_nest_depth` (default `max_nest_depth = 4` admits depths 1..=4, depth 5 fires) — surfaces as `E_SANDBOX_NESTED_DISPATCH_DEPTH_EXCEEDED` through `trap_to_typed`. Residual (retensed): the ESC-10 adversarial integration test `sandbox_escape_attempts_denied.rs::sandbox_escape_reentrancy_via_host_fn_denied` is LIVE (`#[test]`, un-ignored at G20-A1 wave-8a — the §7.3.A.7 destination in [`docs/future/phase-3-backlog.md`](future/phase-3-backlog.md) is CLOSED) and drives the `testing_call_engine_dispatch` helper end-to-end into the typed `EscapeAttempt` reject. It stays SIMULATION-driven rather than a true nested-dispatch driver, because no production host-fn re-enters `Engine::call` (D19-RESOLVED).
 
 **Posture claim — per-call-only instance lifecycle is a security win by construction (D3-RESOLVED, sec-pre-r1-12).** Phase 2b ships the SANDBOX executor with a per-call `wasmtime::Instance` lifecycle (D17-RESOLVED) and explicitly NO opt-in instance pool (D3-RESOLVED). This is not solely a DX or perf decision — it is a security posture claim. With per-call instantiation:
 
@@ -676,14 +717,49 @@ attack are live in Phase 1:
    `E_INPUT_LIMIT` — the check runs during tree-walk so deeply-nested
    payloads cannot evade the cap by fragmenting across many small values.
 
-**Phase-2 completeness.** The canonical on-wire decoder
-(`testing::deserialize_value_from_js_like`) is still a shim pending a
-`CoreError::InputLimit` variant in `benten-core`; the B8 input-validation
-test suite is gated behind `--features in-process-test` and stays red
-until the decoder un-stub lands (coordination is deferred to the error-
-ergonomics work track). The boundary-side caps in this section are the
-Phase-1 defensive line against the allocation vector; the B8 suite will
-add CBOR-level depth / bomb coverage on top.
+**CLOSED 2026-07-29 (R6 round #1, B8).** The DAG-CBOR side of this
+boundary is real. `bindings/napi/src/input_limits.rs` runs a bounded
+pre-scan over the raw wire bytes — map keys, list items, byte-string
+length, text length, nesting depth, declared-length amplification, and an
+aggregate item cap — and only then hands the payload to the canonical
+decoder. `testing::deserialize_value_from_js_like` is a thin delegation to
+it, so the harness exercises the real checker rather than a parallel copy;
+the 5 R3 contract tests went 0-pass/5-fail → pass, and 12 boundary pins
+were added alongside them (17 total, on the required
+`napi in-process pins (rlib mode)` lane).
+
+Two things this closure does NOT claim, stated so the record does not
+overstate the binary:
+
+- **The prescribed remedy is not what landed.** The `CoreError::InputLimit`
+  variant named above was never added — `benten-core` is frozen. The code
+  lives in the non-frozen napi crate behind a napi-local error carrier
+  (`NapiInputError`), which discriminates a limit rejection
+  (`E_INPUT_LIMIT`) from malformed framing (`E_SERIALIZE`). No frozen
+  crate's public API was touched.
+- **The DAG-CBOR checker does not fire in the shipped cdylib.** It compiles
+  under `napi-export`, but its only callers are `testing::deserialize_*`
+  (`lib.rs`) inside `#[cfg(any(test, feature =
+  "in-process-test"))] mod testing`, and `default = ["napi-export"]` does
+  not enable that feature. **Compiling is not firing.** B8 closed the
+  Phase-1 R3 contract exactly as that contract was written — against
+  `benten_napi::testing::*` — which is a genuine closure of a genuine gap,
+  and is a different claim from production coverage. Wiring a production
+  entry point for the DAG-CBOR path is a named residual. What DOES fire in
+  production today is the JSON path below.
+
+- **The enforced depth is 64 everywhere, and now cannot drift.**
+  `NAPI_MAX_DEPTH` is DERIVED from `benten_core::MAX_VALUE_DECODE_DEPTH`
+  (byte-pinned at 64), because a napi-side cap of 128 could never fire on
+  the CBOR path — the canonical decoder refuses first — i.e. it would have
+  been a defense that looks present and is not.
+  **`JSON_MAX_DEPTH` in `bindings/napi/src/node.rs` was `128` and is now
+  derived from the same constant.** That mismatch was not cosmetic: the
+  JSON path is the LIVE production write path, so a property bag nested
+  65..=128 deep was accepted, hashed and persisted — and then could not be
+  decoded on read. Silent write-side data loss, on a shipped surface,
+  because the boundary admitted a value it could never hand back. Both caps
+  now derive from the decoder's own bound, so they cannot diverge again.
 
 ---
 
@@ -1817,15 +1893,15 @@ End-to-end *content* confidentiality is preserved (iroh's QUIC payload is encryp
 2. **The capability-envelope ceiling (D-PHASE-3-25 / CLAUDE.md #17).** The `runs_sandbox=false` / `holds_zones=CacheOnly` thin-shape ceiling is **retained as one signed envelope-ceiling attenuation** AND-ed into the inbound writer's effective capabilities at the single chain-validation seam — structurally unified with the plugin-manifest envelope (#669) as ONE ceiling-check. A `runs_sandbox=false` device still cannot exercise `host:sandbox:*` even with an otherwise-valid chain.
 3. **Anti-replay.** The freshness-window + nonce-replay defenses are re-homed into the unified chain-validation seam's existing time-window + durable-revocation-marker machinery — not dropped. (At HEAD the time-window/freshness half is live in P3; the durable replay-marker re-home is tracked as the P2/P5 unified-ceiling deliverable — see DECISION-RECORD §4b F3.)
 
-**F3 anti-replay durable replay-marker — in-window TOCTOU race at v1-beta (NOT live; deferred to G-COMP-1 per DEFERRED.md Row D-8).** The F3 marker's atomicity property is **partial** at v1-beta. The implementation at `crates/benten-caps/src/chain_authority.rs:404-421` (`FrameReplayMarker::mark_and_check_frame`) performs a `get` followed by a `put` across **two separate KVBackend transactions**; the engine caller at `crates/benten-engine/src/engine.rs::apply_atrium_merge` invokes it without a per-engine serializing lock. Under concurrent inbound `apply_atrium_merge` presentations of the *same* `session_nonce`, both calls can observe absent-marker in the `get` step and both proceed to admission before either `put` completes — the durable replay-marker exists as a state primitive but does not enforce atomic compare-and-swap.
+**F3 anti-replay durable replay-marker — atomic compare-and-swap LANDED at R6 R2 batch-A Item 8 (DEFERRED.md Row D-8 CLOSED).** The F3 marker's atomicity property is **whole** at v1-beta. `FrameReplayMarker::mark_and_check_frame` (`crates/benten-caps/src/chain_authority.rs`; symbol-form per §3.5b HARDENED point 3) routes through `benten_graph::KVBackend::compare_and_insert` (trait method in `crates/benten-graph/src/backend.rs`, redb implementation in `crates/benten-graph/src/redb_backend.rs`), which is txn-atomic on the redb-backed backend — the get + insert + commit run inside ONE redb write transaction. The prior shape (a `get` followed by a `put` across **two separate KVBackend transactions**, with the `crates/benten-engine/src/engine.rs::apply_atrium_merge` caller holding no per-engine serializing lock) admitted an in-window race where two concurrent presentations of the *same* `session_nonce` both observed absent-marker and both proceeded to admission. That race is CLOSED: the second concurrent presentation now observes `Ok(true)` (REPLAY) from the single-transaction compare-and-insert and the caller rejects the frame.
 
-**Attack class.** Two concurrent peer-presented frames carrying the same nonce arrive at the receiver within the get→put window; both pass the staleness check; both reach the per-row cap-recheck stage. Defense-in-depth (HLC-monotonic + nonce-cache + per-row cap-recheck per Compromise #25) catches secondary cases but the F3 layer is *itself* racy at v1-beta.
+**Attack class (CLOSED).** Two concurrent peer-presented frames carrying the same nonce arriving at the receiver used to both clear the get→put window, both pass the staleness check, and both reach the per-row cap-recheck stage. Post-Item-8 the single-transaction compare-and-insert serializes them: exactly one observes first-insertion, the other is reported as a replay and rejected. Defense-in-depth (HLC-monotonic + nonce-cache + per-row cap-recheck per Compromise #25) remains as the composed backstop; the F3 layer is no longer *itself* racy.
 
-**Mitigation at v1-beta** (until Row D-8 closes): the composed defenses still hold — tight `nbf`/`exp` UCAN windows + HLC-monotonic enforcement + nonce-cache + per-row cap-recheck (Compromise #25 lines 1732-1737). The F3 layer's narrow window is in-process between two `apply_atrium_merge` callers; the engine is single-process at v1-beta, so the race is workload-shape dependent on parallel `apply_atrium_merge` invocations on the same engine instance.
+**Composed defenses (unchanged; now defense-in-depth rather than the sole mitigation):** tight `nbf`/`exp` UCAN windows + HLC-monotonic enforcement + nonce-cache + per-row cap-recheck (Compromise #25). These held the line while the F3 get→put window was open and continue to hold behind the now-atomic marker.
 
-**G-COMP-1 closure path (per Row D-8).** Three implementation paths: (a) extend KVBackend trait with a typed `compare_and_insert(key, value) -> Result<bool, _>` method and route `mark_and_check_frame` through it; (b) wrap both get + put inside one `GraphBackend::transaction(|tx| ...)` invocation (~10 LOC change; lowest-cost option); (c) document a serializing per-engine lock around `apply_atrium_merge`'s marker call.
+**Closure path taken (Row D-8).** Of the three candidate paths — (a) extend the KVBackend trait with a typed `compare_and_insert(key, value) -> Result<bool, _>` and route `mark_and_check_frame` through it; (b) wrap both get + put inside one `GraphBackend::transaction(|tx| ...)` invocation; (c) document a serializing per-engine lock around `apply_atrium_merge`'s marker call — **path (a) LANDED** at R6 R2 batch-A Item 8. `KVBackend::compare_and_insert` is on the trait with a redb txn-atomic implementation, and `mark_and_check_frame` is its only production consumer.
 
-**Labels.** **NOT live at v1-beta** (the in-window race exists); honest disclosure for operator-visibility.
+**Labels.** **LIVE at v1-beta** (atomic compare-and-swap; the in-window race is closed). Retained for operator-visibility of the closure.
 
 **Net threat-model statement (honest):** *Pre-COLLAPSE:* device-trust was enforced correctly but through a second, separately-reasoned pipe, whose revocation half was un-anchored (the #1230 perpetual-DoS). *Post-COLLAPSE:* there is exactly one authority seam (user-root UCAN chain + the unified envelope-ceiling); the device-revocation DoS is dissolved (no separate pipe to forge a revocation into); the thin-shape ceiling and device provenance are preserved. The security posture is **strengthened by collapse**, not traded away: fewer parallel pipes = fewer asymmetric-enforcement gaps (#707), and the un-anchored revocation pipe that was the live BLOCKER no longer exists.
 
@@ -1852,7 +1928,7 @@ End-to-end *content* confidentiality is preserved (iroh's QUIC payload is encryp
 **Threat model closed.**
 
 - *Pre-closure:* a developer wires `UcanGroundedPolicy` into an engine without injecting a wallclock; engine silently uses clock=0; ALL UCAN proofs with positive expiration timestamps pass as "not yet expired" regardless of when they were minted. Effective bypass of the entire UCAN expiration model. Failure mode is INVISIBLE in normal tests — every expired proof admits without warning.
-- *Post-closure:* the same misconfiguration surfaces typed `E_UCAN_CLOCK_NOT_INJECTED` at the first chain evaluation. Developer cannot ship a UCAN-using engine without confronting clock injection. Production code MUST inject a real wallclock; test code injects via `with_now_for_test`.
+- *Post-closure:* the same misconfiguration surfaces typed `E_UCAN_CLOCK_NOT_INJECTED` at the first chain evaluation. Developer cannot ship a UCAN-using engine without confronting clock injection. Production and test code both inject a real wallclock via `with_now_secs`.
 
 **Test pin.** `crates/benten-caps/src/ucan_grounded.rs::default_now_secs_zero_fails_closed_when_chain_has_time_bounds` (inline test asserts the fail-closed branch fires when `DEFAULT_NOW_SECS=0` AND the chain has time bounds) + companion `default_now_secs_zero_walks_chain_when_no_time_bounds` (asserts the unbounded-chain branch remains permissive so the sentinel doesn't false-positive on time-unbounded grants).
 
@@ -2477,10 +2553,14 @@ pulls in **13 net-new transitive crates** — of which **10 are Cryspen/libcrux/
 `libcrux-intrinsics` / `libcrux-platform` / `core-models` / `hax-lib` /
 `hax-lib-macros` / `hax-lib-macros-types`) and **3 are general proc-macro support
 crates** (`pastey` / `proc-macro-error2` / `proc-macro-error-attr2`, pulled by the
-hax proc-macro layer; NOT Cryspen-authored). These are added to the v1-GM
+hax proc-macro layer; NOT Cryspen-authored). (The 0.0.10 bump additionally
+pulls `crabgrind 0.2.6` → bindgen/clang-sys as HOST build-tooling via
+libcrux-secrets, but that chain is `cfg(valgrind_ct_test)`-gated and NOT
+compiled in Benten's build — see Compromise #39 for the full accounting.)
+These are added to the v1-GM
 C-GM-AUDIT scope as honest `cargo-vet` exemptions (the exemption-budget
-*cap* was raised **5 → 18** on 2026-06-05 to cover them — a **FLAG-FOR-BEN
-policy decision, pending ratification** (see the consolidated flag at
+*cap* was raised **5 → 18** on 2026-06-05 to cover them — a policy decision
+**Ben-RATIFIED** (see the consolidated flag at
 Compromise #39); pinned by `supply-chain/exemptions.toml` +
 `crates/benten-engine/tests/cargo_vet_policy_self_test.rs`). The `5 → 18`
 is a *cap* raise, not an entry count: the file holds **13** exemption
@@ -2488,6 +2568,31 @@ entries (13-of-18 cap used; the prior cap was 5, with zero
 exemption entries carried over). They are
 under the same audit-gated window: the v1-GM independent audit must cover
 the `libcrux-ml-kem` trust path alongside `ml-dsa`/`ml-kem`.
+
+**C-GM-AUDIT conformance-corpus addition (R16 F-17).** The v1-GM ML-KEM /
+ML-DSA conformance scope must add the official **NIST `.rsp` KAT response-file
+corpus** (the FIPS-203 / FIPS-204 known-answer-test response files) to the
+conformance test set. At v1-beta the cross-impl KAT (`f_kat_1` — libcrux ↔
+RustCrypto FIPS-203 deterministic-constructor byte-equality) proves the two
+production impls agree, but it does NOT check either impl against the
+authoritative NIST-published `.rsp` vectors. Adding the official `.rsp` corpus
+(vs the current cross-impl-agreement witness) is a v1-GM conformance-scope
+deliverable, co-scheduled with the independent PQ audit (NF-2 / C-GM-AUDIT).
+
+**XW-NO-EXTERNAL-KAT conformance-corpus addition (R18; extends the R16 F-17 item).**
+The `0x647a` **X-Wing combiner** (`SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel)`,
+`crates/benten-crypto-suite/src/cipher_suite.rs`) has **no external KAT witness**
+at v1-beta: it is exercised only by internal round-trip + strip-resistance +
+construction-order pins (`tf2_*` / the `x_wing_combiner_preimage` witness), NOT
+against an authoritative `draft-connolly-cfrg-xwing-kem-10` published test
+vector. The combiner is the vendored ~30-LOC hybrid glue whose byte-exactness
+against the IETF construction is load-bearing (a divergence at the reserved
+codepoint is a silent interop break). Add an **X-Wing external-KAT witness**
+(the draft-connolly published combiner test vectors — SharedSecret KAT over the
+draft's fixed `(ss_M, ss_X, ct_X, pk_X)` inputs) to the `f_kat_*` conformance
+family, co-scheduled with the independent PQ audit (NF-2 / C-GM-AUDIT).
+**Cross-ref:** Compromise #30 (unaudited PQ window; the audit-gated close) +
+Compromise #32 (ML-KEM Decap CT); the `f_kat_1`/`f_kat_2` conformance family.
 
 **Rejected alternative (named, per the reframe).** "PQ-TLS as a
 quantum-resistant transport envelope buys time" (Matrix's public
@@ -2571,10 +2676,11 @@ hax + F*, and on the targets where CT matters most (wasm + non-SIMD) the verifie
 backend** is the one selected. This is what moves #32 from deferred → **mitigated-LIVE**.
 
 **#32-residual (the runnable CI gate; f_kat_2 FLAG-FOR-BEN).** The runnable `check-secret-independence`
-CI build-gate is NOT honestly wireable at the pinned `libcrux-ml-kem =0.0.9`: building it with the
+CI build-gate is NOT honestly wireable at the pinned `libcrux-ml-kem =0.0.10`: building it with the
 `check-secret-independence` feature on FAILS TO COMPILE (E0053 — its `impl_kem_trait!` macro does not
-propagate the secret-typed `keygen`/`encaps`/`decaps` signatures; reproduced 2026-06-05; an upstream 0.0.9
-defect, NOT Benten's usage). The **verified portable backend is the live mitigation** at v1-beta; the runnable
+propagate the secret-typed `keygen`/`encaps`/`decaps` signatures; first reproduced 2026-06-05 at 0.0.9,
+**E0053 PERSISTS at 0.0.10, re-verified 2026-07-20**; an upstream defect, NOT Benten's usage). The
+**verified portable backend is the live mitigation** at v1-beta; the runnable
 gate (the one-flag-away `mlkem-ct-check` feature seam on `benten-crypto-suite`) **carries to the libcrux
 version that fixes the upstream macro** — kept `#[ignore]`'d per the no-fake-green rule rather than reported
 as fake-green. Witness:
@@ -2626,9 +2732,18 @@ best-effort-eventual-via-sync, not synchronous; R0.7 §5.2 dispositions #64 as `
 The `jti`-keyed nonce-cache (the replay-defense substrate that re-uses the Compromise #25 durable-CAS-marker
 pattern) has two consistency tiers:
 
-- **Per-device-durable — GUARANTEED.** The cache is `jti`-keyed, durable (survives engine restart — persisted,
-  not RAM-only), and retained for ≥ the full 1-hour bucket window. A nonce consumed on a device cannot be
-  replayed against that same device.
+- **Per-device-durable — GUARANTEED via the durable-CAS-marker SEAM.** The cache is `jti`-keyed and retained
+  for ≥ the full 1-hour bucket window. Durability is delivered through a **seam**, not intrinsic disk
+  persistence at v1-beta-core: the `JtiNonceCache` (`crates/benten-sync/src/handshake.rs`) holds a
+  `durable_store` consumed-`jti` set + exposes `durable_snapshot()` / `from_durable(...)` (the hydration seam a
+  restart OR a cross-device sync feeds). Per-device durability is GUARANTEED **once the engine honors the caller
+  contract** — persist `durable_snapshot()` to disk and re-hydrate via `from_durable` on restart — after which a
+  nonce consumed on a device cannot be replayed against that same device. The FULL disk-persistence wiring (and
+  the `accept_grant` `nonce_cache` backing, currently a caller-supplied in-RAM `HashSet` on the
+  zero-production-caller path) is **deferred with the remote-permission / engine-encrypt-to-recipient wiring**
+  (`docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-64-adjacent). (The genuinely graph-backed-durable
+  `benten_caps::FrameReplayMarker<B: GraphBackend>` is a DISTINCT mechanism — it defends inbound sync FRAMES,
+  not the Layer-D `jti` grant nonce.)
 - **User-global — best-effort-eventual-via-sync (NOT synchronous).** A nonce consumed on device B is rejected on
   device C **only after** the cache entry propagates to C via sync. Between consumption-on-B and
   propagation-to-C there is a window in which the same remote-permission / DeviceLink token can be replayed once
@@ -2651,6 +2766,91 @@ replay-defense, disclosed honestly rather than papered over.
 model; the bounded window is the accepted residual. **Cross-ref:** Compromise #25 (shipped nonce-cache
 substrate it re-uses); NQ-T2 (`valid_until` strict-enforcement); Compromise #60 (tight-`exp`); R0.7 §10.5
 (NQ-T4 ratification) + §3.10 (nonce-cache spec).
+
+### Compromise #65 — Wave-3e per-Node AEAD publicly-derivable-`K_principal` confidentiality limit at v1-beta
+
+**Status.** OPEN; SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** NEW — minted at R13 (F-07), coupled to the
+THREAT-MODEL untrusted-host honesty retense (R13 F-06). **Class.** `SGD` — the substrate GUARANTEES the AUTHORITY
+half (capability / namespace isolation) and DISCLOSES that the CONFIDENTIALITY half is deferred, so per-Node AEAD
+is a publicly-derivable-`K_principal` stand-in at v1-beta (same honest-disclosure class as #62 revocation-reach +
+#64 nonce-window).
+
+At v1-beta the per-Node AEAD wrap does **NOT** provide confidentiality against a malicious **storage host**. The
+wave-3e `K_principal = blake3::keyed_hash(K_PRINCIPAL_DOMAIN_KEY, namespace_did)` is derived from a
+**publicly-known** 32-byte domain-tag constant (`K_PRINCIPAL_DOMAIN_KEY`, `crates/benten-graph/src/redb_backend.rs:181`) + the **publicly-known** `namespace_did`, so
+`K_principal` — and thus `K(N)` + the per-Node AEAD key — is **publicly derivable**: any party holding
+`(namespace_did, ciphertext_blob)` can derive the key and decrypt (see the "⚠️ Confidentiality limit at this wave"
+disclosure in the **Per-Node AEAD wrap layer** section of this document — `derive_test_seam_key_from_cid_with_namespace`).
+
+Per CLAUDE.md baked-in #18 the Principal primitive has two isolation halves, and only ONE is live at v1-beta: the
+**AUTHORITY half** (capability / namespace isolation, cooperating-engine-only) is the live protection; the
+**CONFIDENTIALITY half** (per-principal encryption of the storage partition — the #1301 / D-64 substrate) is
+**DEFERRED, NOT built at v1-beta**. So per-Node AEAD is a publicly-derivable-`K_principal` **STAND-IN** keeping the
+substrate shape stable for the production `K_principal`-store swap-in, NOT real untrusted-host confidentiality.
+
+**Why this is accepted at v1-beta.** The wave-3e use-case is holding the substrate shape stable for the production
+`K_principal`-store swap-in (the swap-in replaces only the `K_principal` synthesis step; the function signature +
+AEAD-wrap layer + per-chunk size are all stable). In the interim: the AUTHORITY half (namespace isolation at the
+storage backend) is the live protection on a cooperating engine, and the local device's **Layer-A vault**
+(Argon2id-DAK-sealed) protects the *local* vault at rest.
+
+**Stays OPEN at v1-beta; CLOSES** when the #1301 / D-64 per-DID secret-material `K_principal` backend lands.
+**Cross-ref:** `docs/THREAT-MODEL.md` §1 (untrusted-host tier row + honesty note); CLAUDE.md baked-in #18; the
+per-Node AEAD "⚠️ Confidentiality limit at this wave" section (this document); Row D-64 / #1301 (the deferred
+confidentiality substrate); `docs/future/phase-4-backlog.md §3.10` (K_principal-per-DID secret-material backend).
+Contrast the Tier-1 network-observer "sees plaintext = NO" (Layer-C encrypt-to-recipient — a DIFFERENT, live
+mechanism, NOT this stand-in).
+
+### Compromise #66 — Recovered-secret `Debug`-render + freed-heap hygiene across the crypto-suite secret roster (CLOSED-at-v1-beta)
+
+**Status.** CLOSED at v1-beta (hardened in the R19/#3 secret-hygiene sweep); SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`)
+— now a POSITIVE guarantee (redact-on-`Debug` + zeroize-on-drop for the recovered-secret roster), no longer an open
+footgun. **Source.** MINTED at R14 (GAP-1); CLOSED at R19/#3.
+
+**History (R14 mint).** R14 disclosed that `UnwrappedKey` (`crates/benten-crypto-suite/src/cipher_suite.rs`) — the
+recovered `k_root` returned by `unwrap_key_material` — then carried `#[derive(Debug)]`, so a `{:?}` render would
+have printed the recovered KEY BYTES in the clear, and had **NO** zeroize-on-drop, so its bytes lingered on the
+freed heap. At mint-time it was the asymmetric outlier vs its sibling `RecipientSecret` (which already did both).
+That gap is now CLOSED.
+
+**What landed (R19/#3 secret-hygiene sweep).** The whole recovered-secret roster now has a redacting hand-written
+`impl Debug` (rendering `<redacted>` / `[REDACTED]`, never the raw bytes) + an explicit zeroizing `impl Drop`:
+
+- **`UnwrappedKey`** — redacting `impl Debug` (`cipher_suite.rs`) + zeroizing `impl Drop`
+  (`cipher_suite.rs`). `UnwrappedKey` now MATCHES `RecipientSecret` — no longer an outlier.
+- **`DecryptedPlaintext`** (recovered Node plaintext) — redacting `impl Debug` (`cipher_suite.rs`) +
+  zeroizing `impl Drop` (`cipher_suite.rs`).
+- **`VaultPayload`** — redacting `impl Debug` (`k_principal` + `user_did_signing_key` → `<redacted>`,
+  `vault.rs`) + zeroizing `impl Drop` (`vault.rs`); also protects the derived-`Debug` cascade
+  through `DecodedVault`.
+- **`ProvisioningInnerPayload`** (Layer-D device-link recovered payload) — redacting `impl Debug`
+  (`device_link.rs:120-134`) + zeroizing `impl Drop` (`device_link.rs:143-149`).
+- **`PurePqMlKemKeypair`** — zeroize-on-drop landed earlier at R18 C3.
+
+**Enforcement.** `crates/benten-crypto-suite`'s hygiene is held by the LIVE meta-test
+`crates/benten-engine/tests/f_secret_hygiene_roster.rs` (470 LOC, ZERO `#[ignore]`): a runtime
+Debug-does-not-leak assertion (constructs each secret type with a distinctive `0xDEADBEEF` marker, `format!`s it,
+asserts the decimal-array rendering a leaking derived `Debug` would emit is ABSENT) + a source-anchored
+zeroize-coverage grep-defense (asserts a `Drop`/`zeroize()`/`ZeroizeOnDrop`/`zeroize`-feature wiring is present in
+source for every roster type). An in-crate assertion at `cipher_suite.rs` additionally asserts the `Debug`
+render contains `<redacted>`. A revert (e.g. re-deriving `Debug` on any roster type) re-fires the meta-test.
+
+**Residual (v1-GM nicety, narrower).** The `Debug`-render + freed-heap hygiene is CLOSED. R6-reround additionally
+wrapped the transient PLAINTEXT buffers that briefly hold the full serialized/decoded secret bytes around the
+redacting/zeroizing `VaultPayload`: `serialize_vault`'s pre-seal `pt` and `decode_vault`/`open_vault`'s
+decrypted-plaintext `pt` (each holds the whole `k_principal` + `user_did_signing_key` payload before/after the
+struct parse) are now `Zeroizing`-wrapped (`crates/benten-crypto-suite/src/vault.rs`), and the `benten-drop`
+Layer-C seal-side CEKs — the single-recipient BLAKE3-derived CEK and the fresh-random `0x6520` group CEK — are
+`Zeroizing`-wrapped (`crates/benten-drop/src/layer_c.rs`). So NO transient full-secret plaintext buffer in the
+vault seal/open path nor a seal-side Layer-C CEK is left un-wiped. What remains Row-D-75-deferred is the narrower
+tidy for the still-bare-`Vec<u8>` copy sites whose zeroizing return is freeze-coupled (frozen trait/return-type
+signatures): `unwrap_key_from_recipient`'s return (`crates/benten-crypto-suite/src/hpke.rs`), the `recovered`
+binding in `crates/benten-engine/src/layer_d/device_link.rs`, and the `k_root` copy in
+`crates/benten-crypto-suite/src/swap_matrix.rs`. Tracked at `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-75. The
+separate `derive_member_key` raw-`Vec<u8>` hardening rides Row D-76.
+**Cross-ref:** `crates/benten-crypto-suite/src/cipher_suite.rs` (the redact+zeroize roster);
+`crates/benten-engine/tests/f_secret_hygiene_roster.rs` (enforcing meta-test);
+`docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-75 + Row D-76 (remaining bare-`Vec<u8>` tidy).
 
 > **Compromise #62 detail (revocation reach)** lives at the renumbered in-tree section
 > "Revocation reach (§R6) — Compromise #62 detail (RE-POINTED from in-tree #31 per BR-2)" below +
@@ -2731,31 +2931,43 @@ a physically-present attacker with measurement apparatus. Disclosed, not closed.
 
 **Status.** SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** 9-eyes; O-1 (R0.7 §5.2).
 
-Dependency pinning is **PARTIAL** at v1-beta: `cargo deny` + the RustSec advisory gate run in CI, and the HPKE /
-KEM crate choices are conservative — **Brendan McMillion `hpke`** (NOT Cryspen `hpke-rs`, which carried 13 CVEs
-Feb 2026) and **libcrux-ml-kem** (verified secret-independence). **O-1 disclosure:** `secrecy` is a NEW Layer-A
+Dependency pinning is **PARTIAL** at v1-beta: `cargo deny` + the RustSec advisory gate run in CI. **The live path
+uses NO `hpke` crate** (R10-council GAP-A correction): there is no `hpke` crate dependency in any `Cargo.toml` and
+no HPKE key-schedule on the live path — Layer-C is the Benten-supplied X-Wing **KEM-DEM** (NQ-C1). The **McMillion
+`hpke`** (NOT Cryspen `hpke-rs`, which carried 13 CVEs Feb 2026) is a **RESERVED** pin for the additive
+RFC-9180-faithful key-schedule branch ONLY — the standing posture recorded so the choice does not drift IF/WHEN
+NQ-C1 ratifies that branch, not a currently-linked dependency. The KEM half is **libcrux-ml-kem** (verified
+secret-independence; the production impl). **O-1 disclosure:** `secrecy` is a NEW Layer-A
 dependency introduced this arc (wrapping secret bytes), disclosed here as a supply-chain surface. **F-full
 disclosure (2026-06-05):** the production ML-KEM-768 swap to **libcrux-ml-kem** (Compromise #32 mitigation) pulls
 13 net-new transitive crates (the `libcrux-*` / `hax-lib*` / `pastey` / `proc-macro-error2*` / `core-models`
-family — all Cryspen / well-known, all Apache-2.0 / MIT-OR-Apache-2.0). These are **unaudited-by-Benten** and
+family — all Cryspen / well-known, all Apache-2.0 / MIT-OR-Apache-2.0). Separately, the 0.0.9→0.0.10 bump
+(2026-07-18) pulls **`crabgrind 0.2.6`** (a Valgrind constant-time-test C-FFI binding — the least-well-known crate
+in the tree) via **libcrux-secrets 0.0.6**, and crabgrind build-depends on **bindgen + clang-sys** (+ cc /
+pkg-config / …). This entire `crabgrind → bindgen/clang-sys` chain is **`cfg(valgrind_ct_test)`-gated** — a cfg
+Benten NEVER sets — so it is present in `Cargo.lock` but is **NOT compiled** in Benten's build (host build-tooling,
+feature-gated-OFF, non-crypto-trust-path; `cargo tree -i bindgen` on the default target prints nothing). It carries
+no `cargo-vet` exemption entry (nothing compiles it); it is enumerated in the `supply-chain/exemptions.toml` header
+for accounting completeness. The 13 runtime crates are **unaudited-by-Benten** and
 recorded HONESTLY as accepted-unaudited `cargo-vet` exemptions in `supply-chain/exemptions.toml` (the
-exemption-budget raised 5 → 18 on 2026-06-05 — a FLAG-FOR-BEN policy decision, **pending Ben ratification**;
+exemption-budget raised 5 → 18 on 2026-06-05 — a policy decision now **Ben-RATIFIED**;
 pinned by
 `crates/benten-engine/tests/cargo_vet_policy_self_test.rs::cargo_vet_exemption_budget_within_ratified_cap`).
-**⚠️ FLAG-FOR-BEN (authoritative flag site):** the 5 → 18 exemption-budget raise is the one supply-chain
-policy decision awaiting Ben's ratification; until ratified it remains a pending/unresolved status, and every
-other site referencing the budget bump defers to this flag. They are interim until the independent
+**✅ RATIFIED (authoritative site):** the 5 → 18 exemption-budget cap raise is Ben-RATIFIED; the ratified cap is
+**18**, and every other site referencing the budget bump defers to this ratified value. The exemptions are
+interim until the independent
 ML-DSA/ML-KEM audit (NF-2 / C-GM-AUDIT) that GATES v1-GM covers the pinned ML-KEM impl. Full reproducible-builds + SLSA-3+ provenance is the SEPARATE post-v1-GM commitment (#40).
 This row discloses the partial-pinning substrate honestly; it is not a closed guarantee. **Cross-ref:**
 Compromise #32 (ML-KEM production impl); Compromise #40 (reproducible-builds); R0.7 §2.2 (tactical picks);
 §5.2 (O-1).
 
-> **Dependency-posture note (Layer-C HPKE):** the McMillion-`hpke`-not-Cryspen choice above is a
-> **dependency-pinning posture** recorded for the audit window. At v1-beta the Layer-C `0x647a` X-Wing KEM-DEM is
-> implemented over Benten's own vetted-primitive call site (`ml-kem` + `x25519-dalek` + `sha3` +
-> `chacha20poly1305`; see `docs/CRYPTO-CODEPOINTS.md` §"HPKE KEM-extensibility (NQ-C1)") — so the on-tree
-> dependency set reflects that. The McMillion-vs-Cryspen pin is the standing posture for the HPKE
-> key-schedule/AEAD surface, recorded so the choice does not drift.
+> **Dependency-posture note (Layer-C — no `hpke` crate; R10-council GAP-A).** At v1-beta the Layer-C `0x647a`
+> X-Wing **KEM-DEM** is implemented over Benten's own vetted-primitive call site (`libcrux-ml-kem` (via
+> `benten_crypto_suite::mlkem`; RustCrypto `ml-kem` is the dev-only KAT witness) + `x25519-dalek` + `sha3` +
+> `chacha20poly1305`; see `docs/CRYPTO-CODEPOINTS.md` §"HPKE KEM-extensibility (NQ-C1)"). There is **NO `hpke`
+> crate and no HPKE key-schedule** on this live path. The McMillion-`hpke`-not-Cryspen choice is a **RESERVED**
+> dependency-pinning posture for the additive RFC-9180-faithful HPKE key-schedule/AEAD branch ONLY (a Ben-gated
+> NQ-C1 wire decision), recorded so the choice does not drift if that branch is later adopted.
 
 ### Compromise #40 — Build-time / reproducible-builds + SLSA-3+ posture (post-v1-GM)
 
@@ -2795,11 +3007,28 @@ class (#56), kept sharply distinct so the audit does not read the two as duplica
 Envelope metadata observable to an untrusted relay is an **accepted trade-off**, materially **IMPROVED** by the
 Sealed-Sender DEFAULT (BR-1). The default Layer-C path (`0x6510`, Sealed-Sender) **removes the plaintext sender-DID**
 from the wire; there is **NO coarse-epoch on the Drop wire** (the 1-hour bucket is Layer-D-only per RULING-1 / M-14);
-and group-AAD set-identifying material is **BLINDED** (`audience_set_commitment` + `membership_set_id_commitment` per
-Compromise #61's BLAKE3-keyed-blinding construction). The **residual** observable on the default Drop wire is the recipient
-DID plus linkable-but-blinded group tags. Full per-send unlinkability is roadmap (U22–U28; **U25 is the v1-GM-reserve**
-for full per-send unlinkability). Disclosed as an honest, scoped residual — not an over-claim of network-observer
-invisibility. **Cross-ref:** Compromise #58 (insider-correlation boundary — unlinkability is network-observer-only);
+and group-AAD set-identifying material is **BLINDED** — the `membership_set_id_commitment` is a K_Set-**KEYED** BLAKE3 MAC
+(per Compromise #61) while the `audience_set_commitment` is an **UNKEYED** `BLAKE3` over the sorted roster. The
+**residual** observable on the default Drop wire is the recipient DID plus linkable-but-blinded group tags; and because
+the `audience_set_commitment` is unkeyed it hides only a **high-entropy** roster — for a **guessable / low-entropy**
+roster (the guess space narrowed by the plaintext `member_count`) it is itself a confirmation-oracle + equality-linker
+(recompute `BLAKE3(sorted-roster)` to confirm a guess; identical rosters → identical tags → linkable), the audience-axis
+sibling of the `body_cid` residual disclosed below. Full per-send unlinkability is roadmap (U22–U28; **U25 is the
+v1-GM-reserve** for the linkage half; a keyed `audience_set_commitment` per Row D-36 is the additive guess-confirmation
+half). Disclosed as an honest, scoped residual — not an over-claim of network-observer invisibility.
+
+**`body_cid` low-entropy confirmation/equality-linkability residual (R10 F-01, honest disclosure).** The Layer-C
+AAD carries the wire `body_cid` as an **unsalted** `self_describing_cid(BLAKE3(plaintext))`
+(`benten_drop::layer_c::self_describing_cid` over `blake3::hash(&body)`), emitted **in plaintext**. For **low-entropy /
+guessable** bodies this is (a) a **confirmation oracle** for a Tier-1 network observer (guess a candidate body → recompute
+`BLAKE3` → compare against the wire `body_cid`, no key material required) and (b) a **plaintext-equality linker**
+(two sends of the identical body carry the identical `body_cid`, independent of the random-nonce ciphertext
+distinctness). This is bounded to low-entropy payloads — high-entropy bodies keep the guess space intractable — and
+the `body_cid`-in-AAD is load-bearing (origin-auth binding + U3 length-injectivity; `open_group_stanza` recomputes
+and fail-closes on mismatch, so it is NOT droppable). **Mitigations:** application-layer padding / randomization for
+low-entropy payloads; a **per-send `body_cid` salt** is additively reservable (codepoint-reserve, no wire-break per
+CLAUDE.md baked-in #5) if judged load-bearing. DOC-ONLY disclosure — no wire byte changes. **Cross-ref:**
+`docs/SECURITY-PROOFS.md` §4.2; `docs/THREAT-MODEL.md` §1 (Tier-1 row `body_cid` note). **Cross-ref:** Compromise #58 (insider-correlation boundary — unlinkability is network-observer-only);
 Compromise #61 (gossip-topic blinding); Compromise #63 (Sealed-Sender abuse-control trade-off); `THREAT-MODEL.md`
 (network-observer-only unlinkability scoping); R0.7 §3.8.
 
@@ -2816,6 +3045,8 @@ hybrid (post-quantum) signing key. This is an enforced strength, not a residual.
 `docs/SECURITY-PROOFS.md` §4.1 (the inter-member non-forgeability decomposition + the substantive `f_lc_3_*`
 defense arms: second-sealer-spoof / second-member-spoof / re-target / stale-generation / strip-PQ-half);
 `docs/THREAT-MODEL.md` §1 (the positive-property tier note).
+
+**Generation-staleness / anti-re-target defense of record (R9 F-07).** The cross-generation-replay / stale-generation / anti-re-target defense IS the B2 `M_auth` recompute-on-open described above: each recipient re-derives the key-epoch generation words (`recipient_key_generation` for `0x6510`/`0x6520`; `member_key_generation` ‖ `membership_set_generation` ‖ `role_assignments_generation` for the `0x6610` group path) from its OWN independently-held set-state (NEVER the wire) and fail-closes the hybrid LAMPS verify (`crates/benten-drop/src/layer_c.rs`, `open_group_stanza` / `open_membership_set_group`). The earlier `benten_sync::two_cid_store::verify_stanza_generation` — a plaintext, unsigned, monotonic `<` compare with NO seal-side producer — was a strictly-weaker parallel model with no live call site and was **DROPPED (R9 F-07)**; its `DualCidStore` / `reseal` / `blind_set_cid` siblings were byte-for-byte redundant with the live `body_cid` recompute + `membership_set_id_commitment` and were dropped with it. The `k_principal_generation` (U20) axis it modeled is subsumed **by construction**: `K_principal` is the at-rest / vault (encrypt-to-**self**) key and is ABSENT from the recipient Layer-C path, so no per-stanza `k_principal_generation` rides the live wire; K_principal rotation is reseal-heavy (a rotated principal yields a fresh envelope that an old-generation body cannot verify under), and sender signing-key rotation needs no live counter-compare inside `verify_m_auth` (`crates/benten-drop/src/layer_c.rs:283`): both v1-beta identity methods are self-certifying — **`did:key`**, where the DID *is* the verifying key, and **`did:benten`**, whose method-specific-id EMBEDS the composite signing multikey ahead of the committed key-set CID, so `Did::resolve_signing` recovers the sender key zero-I/O from the DID itself; either way there is no DID→key indirection to consult and no `RotationLog` reference exists anywhere in `benten-drop`. `RotationLog` applies only to *rotatable* DID methods and is an out-of-band identity-resolution concern (resolved before the sender key reaches `verify_m_auth`), not a live consult inside it. No standalone counter-compare is needed.
 
 ### Compromise #44 — Long-term-confidentiality posture (BSI TR-02102-1; acceptable-migration-window)
 
@@ -2848,6 +3079,31 @@ The multi-stanza `HpkeMultiBase` group send carries one HPKE stanza per recipien
 those caps the linear cost is the accepted trade-off of the per-recipient-stanza design (the alternative — a shared
 mutable group object — is the deferred CGKA class). Accepted at v1-beta. **Cross-ref:** Compromise #42 (FS-gap, same
 no-shared-mutable-object posture); R0.7 §3.3 (`HpkeMultiBase`).
+
+**DOS-6520-QUADRATIC-SEAL sub-note (R18; SGD resource-bound disclosure — SENDER-side, typed cap at the hard limit).**
+Beyond the O(N) *wire* cost, the `0x6520` / `0x6610` group **seal** has an O(N²) *compute* cost at the extreme:
+each stanza's per-stanza AAD assembly re-derives the roster / `audience_set_commitment` over the full N-member
+member-DID list (`group_roster` + `audience_set_commitment` per stanza, `crates/benten-drop/src/layer_c.rs`), so
+sealing an N-recipient group is O(N) stanzas × O(N) per-stanza roster work = **O(N²)**. This is **SENDER-driven**
+(only a sender who chooses a large roster pays it — a relay / recipient cannot inflict it), and it is HARD-CAPPED:
+the roster ceiling `MAX_LAYER_C_GROUP_RECIPIENTS` (65 535, `u16::MAX`) is enforced with a typed
+`LayerCError::RecipientCountExceedsBandWidth` at the single seal-entry choke point `validate_group_roster_len`
+(applied to BOTH `seal_group_impl` (`0x6520`) AND `seal_membership_set_group` (`0x6610`) as of R18 C2) — an
+over-cap roster typed-rejects; it never panics or unbounded-loops inside the seal. So the worst-case compute is a
+sender's own choice, bounded by the typed cap. Not a network-edge DoS (no relay/recipient amplification); the
+per-Kind cardinality caps (Atrium ≤32 / DeviceMesh ≤5) keep production rosters far below the ceiling. Accepted at
+v1-beta. **Cross-ref:** row 46 above; Compromise index row 46 (O(N) wire-cost); R12 F-11 / R18 C2
+(`validate_group_roster_len` typed ceiling); `docs/V1-WIRE-FORMAT-INVENTORY.md §26` (F-11 by-band width note).
+
+**F-33 seal-band-vs-construction-ceiling decoupling note (R20).** The seal-band `u16::MAX` roster ceiling
+(`MAX_LAYER_C_GROUP_RECIPIENTS`, enforced by `validate_group_roster_len`) is **decoupled BY DESIGN** from any
+MembershipSet-construction ceiling (the `wire_cost_ceiling` / per-Kind cardinality bounds in `benten-membership-set`).
+The seal-band cap bounds a **sender-only CPU cost** (the O(N²) per-stanza roster work a sender pays when it *chooses*
+a large roster) — it is NOT a construction-time bound on how large a `MembershipSet` may be built, nor a
+recipient-/relay-inflictable limit. The two ceilings are independent knobs: the construction-side per-Kind
+cardinality caps (Atrium ≤32 / DeviceMesh ≤5 / SingleDevice =1) govern what a well-formed MembershipSet may hold; the
+`u16::MAX` seal-band cap is only the hard upper bound on the sender's own choke-point cost. Neither is derived from
+the other.
 
 ### Compromise #47 — Collaborative-edit-via-re-drop accepted v1-beta trade-off
 
@@ -2959,14 +3215,51 @@ Disclosed so operators understand grant lifecycle is issue-and-replace, not edit
 
 An admin (or any insider) holding the audit-log + the `members_table` **CAN correlate members** — the
 per-recipient-unlinkability property is **network-observer-only** (m-7), NOT admin-hidden. The Layer-C / `0x6610`
-group-AAD blinding (`audience_set_commitment` + `membership_set_id_commitment`) hides the roster from a **network
-observer / untrusted relay**, but a member-or-admin who holds `K_Set` + the member list recomputes the commitments
-and sees the correlation. This is a composition-hazard honest disclosure: the unlinkability claim is scoped, not
+group-AAD blinding hides a **high-entropy** roster from a **network observer / untrusted relay** — the
+`membership_set_id_commitment` is K_Set-keyed, but the `audience_set_commitment` is **unkeyed** and therefore
+itself guess-confirmable for a **low-entropy / guessable** roster (Compromise #43 / Row D-36) — while a
+member-or-admin who holds `K_Set` + the member list recomputes the commitments and sees the correlation. This is a composition-hazard honest disclosure: the unlinkability claim is scoped, not
 absolute. The **threshold-admin opt-in** (no single admin sees the full audit-log) closes the insider vector for
 deployments that adopt it. This row is the load-bearing #58 the `THREAT-MODEL.md` network-observer-only scope
 cross-links — the boundary that keeps the unlinkability claim honest, not over-claimed. **Cross-ref:**
 `THREAT-MODEL.md` (network-observer-only unlinkability scoping); Compromise #43 (envelope-metadata leakage);
 Compromise #61 (gossip-topic blinding); R0.7 §3.8 (m-7).
+
+### Compromise #59 — Delivery-token / KEM-key-confirmation abuse-control residual
+
+**Status.** SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** MembershipSet / Layer-C abuse-control panel (R0.7
+§3.11 / §5.2). Detail section added at R18 (F-DISC-1 ledger-coherence — the index row + cross-refs pre-existed; the
+body is authored here from R0.7 §5.2 to match the F-DISC-1 disclosure-coherence contract).
+
+The Sealed-Sender delivery-token admit path provides **KEM-key-confirmation** (a recipient's delivery token binds
+the recipient's own KEM key, so a non-recipient cannot mint an admittable token), but it does **NOT** by itself
+bound the RATE at which a *legitimate* recipient over-issues delivery tokens. A recipient who over-issues delivery
+tokens can re-admit spam through its own admit gate — the KEM-key-confirmation property is re-scoped to this abuse
+surface: it confirms *who* may issue, not *how many*. **Residual (the compromise):** recipient-side
+over-issuance re-admits spam. Mitigated by default-conservative per-token rate-limits + the delivery token's own
+UCAN `nbf`/`exp` + revocation substrate (the token-binding AAD carries NO `coarse_epoch` — freshness rides the
+UCAN window + the `jti`-keyed nonce-cache, §3.10, never a time-bucket). Accepted at v1-beta; the bounded
+abuse-surface is the residual. **Cross-ref:** Compromise #63 (Sealed-Sender abuse-control trade-off); Compromise
+#30 (audit-gated PQ window); §3.10 (nonce-cache spec); R0.7 §3.11 / §5.2.
+
+### Compromise #60 — Role/generation transitions do not invalidate prior-issued UCANs (tight-`exp` bound)
+
+**Status.** SUBSTRATE-GUARANTEE DISCLOSURE (`SGD`). **Source.** MembershipSet RBAC / Layer-D grant panel (R0.7
+§3.4 / §5.2). Detail section added at R18 (F-DISC-1 ledger-coherence — the index row + cross-refs pre-existed; the
+body is authored here from R0.7 §5.2 to match the F-DISC-1 disclosure-coherence contract).
+
+A MembershipSet role-transition (a role downgrade / re-assignment) or a generation bump does **NOT** synchronously
+invalidate UCANs already issued under the prior role/generation: a UCAN is valid until its own `exp` (or explicit
+revocation), so a member downgraded at time T can still exercise a grant minted before T until that grant expires.
+This is the grant-axis analogue of the #52 fork-on-kick property (a removed/downgraded member retains
+prior-derived keys until the next fork) and the #64/O-4 revocation-propagation-lag (a stale grant is exercisable
+during a partition). **Residual (the compromise):** a window — bounded by the grant's `exp` — in which a prior-role
+grant remains exercisable after the role/generation transition. Mitigated by the **tight-`exp` default mandate**
+(§3.4): short delivery-token / grant `exp` bounds how long any single prior-role grant is exercisable at all, plus
+explicit revocation for the immediate case. Accepted at v1-beta; closing it synchronously (cross-device
+grant-invalidation on every role change) is out of scope for the P2P model. **Cross-ref:** Compromise #52
+(fork-on-kick — the keying-axis analogue); Compromise #64 (cross-device nonce-window) + its O-4
+revocation-propagation-lag sub-clause; §3.4 (tight-`exp` default mandate); R0.7 §3.4 / §5.2.
 
 ### Compromise #61 — MembershipSet-fingerprint-leak via iroh-gossip topic (CLOSED by HMAC-blinded topic)
 
@@ -2996,8 +3289,10 @@ the audit path) is pinned by two complementary arms in
 
 - **Arm (a)** — the `enforced_write_*` arms drive the **model-shape**
   `benten_membership_set::audit::emit_audit_event_via_engine` /
-  `emit_audit_event_via_bare_put` helpers, which model the enforced-vs-bare
-  distinction by constructing the `AuditEmitResult` directly (the enforced helper
+  `emit_audit_event_via_bare_put` helpers (both
+  `#[cfg(any(test, feature = "testing"))]`-gated OFF the frozen v1-beta public
+  surface at the R6 tail fold-in F11 — zero production callers), which model the
+  enforced-vs-bare distinction by constructing the `AuditEmitResult` directly (the enforced helper
   fills the full `Some(...)` triple + advances the chain; the bare helper leaves
   all three `None`). This pins the SHAPE of the property but is a model, not a
   drive of the real engine.
@@ -3046,8 +3341,8 @@ Three load-bearing AEAD-layer defenses ride on the per-Node AEAD wrap
    arm for Nodes ≥ 64 KiB).** Per `§1.A.FROZEN item 15(g)` the
    per-chunk AEAD uses
    `aad_per_chunk(plaintext_cid, chunk_index, total_chunks) =
-   b"benten-aead:chunk:" || plaintext_cid_bytes || chunk_index_u64_le
-   || total_chunks_u32_le`. Shuffling chunk-N's ciphertext to
+   b"benten-aead:chunk:" || plaintext_cid_bytes || chunk_index_u64_be
+   || total_chunks_u32_be`. Shuffling chunk-N's ciphertext to
    index-M (the **cross-chunk rebinding attack** — silently
    reordering content within a Node) fails because the reconstructed
    AAD (binding `chunk_index=M`) doesn't match the seal-time AAD
@@ -3155,6 +3450,18 @@ replaces only the `K_principal` synthesis step; the function
 signature + the AEAD-wrap layer + the per-chunk size are all
 stable.
 
+**This limit is now a NUMBERED Compromise (#65; R13 F-07)** so it is
+registry-tracked + auto-swept by the `f_disc_1` compromise-disclosure
+catch-net. The companion `docs/THREAT-MODEL.md` §1 untrusted-host tier
+row + honesty note match this disclosure: per CLAUDE.md baked-in #18
+the confidentiality half of the Principal primitive is DEFERRED
+(#1301 / D-64), so per-Node AEAD is a publicly-derivable-`K_principal`
+STAND-IN at v1-beta and an untrusted *storage host* CAN read the
+partition plaintext — the LIVE protection is the AUTHORITY half
+(capability / namespace isolation, cooperating-engine-only). The
+relay-facing "sees plaintext = NO" (Tier-1) is a DIFFERENT, live
+mechanism (Layer-C encrypt-to-recipient), not this stand-in.
+
 ### Per-chunk-AEAD chunk size = `IROH_BLOCK_SIZE` (16 KiB)
 
 Per `§1.A.FROZEN item 15(g)` the per-chunk AEAD chunk size MUST equal
@@ -3180,6 +3487,10 @@ crypto-primitive call site (crypto-agility-contract:6). Never
 hardcoded key/nonce/tag sizes outside the cipher-suite dispatch arm
 (the nonce length of 12 B is algorithm-parameter-fixed for
 ChaCha20-Poly1305, not a CLAUDE.md #5 "no-hardcoded-sizes" violation).
+Note: the secret-size scanner intentionally EXEMPTS ephemeral `[u8; 32]`
+values (e.g. random ephemeral / nonce-seed material) — these are
+fixed-width ephemeral bytes, not agility-bearing algorithm key/sig sizes,
+so a literal `32` there is not a "no-hardcoded-sizes" violation either.
 
 ### Cross-refs
 
@@ -3386,3 +3697,33 @@ take it back. The cryptographic property:
   `crates/benten-id/src/did_rotation.rs` (`RotationLog`) +
   `crates/benten-caps/src/grant_backed.rs` (the UCAN-gated cap policy
   consulted at the ALPN boundary).
+
+---
+
+### Compromise #67 — First-contact / TOFU DID-authenticity bootstrap (GAP-KDB Shape-B residual)
+
+**Status.** SUBSTRATE-GUARANTEE HONEST DISCLOSURE (`SGD`); OPEN residual — NOT eliminated (the honest
+bind-once boundary). **Source.** GAP-KDB Shape-B identity-model council (design
+`.addl/phase-4-meta/GAP-KDB-B-DESIGN-R1.md` §8 / R1 §5; disposition per the R0.7 §5.2 registry conventions).
+
+Shape-B — the content-addressed `did:benten` key-set + `Did::resolve_kem` + the `RecipientBinding`
+sole-constructor typestate + Inv-23 — closes *key-substitution-given-a-known-DID*: an active attacker can no
+longer swap the recipient KEM key under a `did:benten` a sender already holds, because doing so requires a
+BLAKE3-256 2nd-preimage over the canonical DAG-CBOR key-set (infeasible). It does **NOT** shut
+*DID-authenticity-at-first-contact*: whoever controls the channel where a sender **first learns**
+"Alice ↔ `did:benten:…`" can hand them their own self-consistent `did:benten`, which then resolves and verifies
+cleanly.
+
+Shape-B therefore **reduces the** confidentiality trust window from **continuous** (swap the address-book KEM
+key at any time) to **bind-once** (substitute the DID only at the single moment of first contact) — the
+identical posture to Signal safety numbers, MLS, and PGP fingerprints, all of which share this exact residual.
+Authenticating that initial DID↔principal binding is **out-of-band** and the user's responsibility; Benten
+provides no PKI / CA for it and **cannot authenticate the first** contact. The bare-`did:key` / Shape-A fallback
+has the *same* residual — no reviewer's push for A can frame it as "eliminating" this.
+
+**Not eliminated — reduced.** The honest statement is: *post*-first-contact key substitution is infeasible
+(a 2nd-preimage); *first-contact* DID-authenticity is a bind-once, TOFU boundary the user bootstraps out-of-band.
+**Cross-ref:** Inv-23 (`INVARIANT-COVERAGE.md`); `SECURITY-PROOFS.md` §4.1 (the recipient-key premise now cites
+the binding rather than assuming an honest address book); `THREAT-MODEL.md` (recipient-key closure + the
+DISTINCT seal-path revocation-reach residual, Compromise #62 — a separate open residual, NOT this one); design
+§8 / R1 §5.

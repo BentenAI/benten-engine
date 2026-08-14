@@ -75,14 +75,14 @@ fn materializer_rejects_handcoded_spec_referencing_kv_write_host_fn() {
     let alice = materializer_fixtures::actor_principal_alice_cid();
     let spec = handcoded_spec_with_sandbox_host_fn("kv:write");
     let err = HtmlJsonMaterializer
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: cid,
-            walk_principal: alice,
-            cap_recheck: allow_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            cid,
+            alice,
+            allow_all_cap_recheck(),
+            Vec::new(),
+        ))
         .expect_err("kv:write host-fn MUST trip defense-in-depth materializer entry-check");
     assert_eq!(err.code(), ErrorCode::MaterializerSchemaMismatch);
     match err {
@@ -103,14 +103,14 @@ fn materializer_rejects_handcoded_spec_referencing_kv_delete_host_fn() {
     let alice = materializer_fixtures::actor_principal_alice_cid();
     let spec = handcoded_spec_with_sandbox_host_fn("kv:delete");
     let err = HtmlJsonMaterializer
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: cid,
-            walk_principal: alice,
-            cap_recheck: allow_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            cid,
+            alice,
+            allow_all_cap_recheck(),
+            Vec::new(),
+        ))
         .expect_err("kv:delete host-fn MUST trip defense-in-depth materializer entry-check");
     assert!(matches!(err, MaterializerError::SchemaMismatch { .. }));
 }
@@ -122,14 +122,14 @@ fn materializer_rejects_handcoded_spec_referencing_edges_add_host_fn() {
     let alice = materializer_fixtures::actor_principal_alice_cid();
     let spec = handcoded_spec_with_sandbox_host_fn("edges:add");
     let err = HtmlJsonMaterializer
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: cid,
-            walk_principal: alice,
-            cap_recheck: allow_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            cid,
+            alice,
+            allow_all_cap_recheck(),
+            Vec::new(),
+        ))
         .expect_err("edges:add host-fn MUST trip defense-in-depth materializer entry-check");
     assert!(matches!(err, MaterializerError::SchemaMismatch { .. }));
 }
@@ -147,14 +147,14 @@ fn materializer_rejects_handcoded_spec_referencing_edges_remove_host_fn() {
     let alice = materializer_fixtures::actor_principal_alice_cid();
     let spec = handcoded_spec_with_sandbox_host_fn("edges:remove");
     let err = HtmlJsonMaterializer
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: cid,
-            walk_principal: alice,
-            cap_recheck: allow_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            cid,
+            alice,
+            allow_all_cap_recheck(),
+            Vec::new(),
+        ))
         .expect_err("edges:remove host-fn MUST trip defense-in-depth materializer entry-check");
     assert_eq!(err.code(), ErrorCode::MaterializerSchemaMismatch);
     match err {
@@ -177,13 +177,13 @@ fn materializer_accepts_handcoded_spec_with_no_sandbox_node() {
     let alice = materializer_fixtures::actor_principal_alice_cid();
     let spec = handcoded_clean_spec();
     let _out = HtmlJsonMaterializer
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: cid,
-            walk_principal: alice,
-            cap_recheck: allow_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            cid,
+            alice,
+            allow_all_cap_recheck(),
+            Vec::new(),
+        ))
         .expect("handcoded spec without SANDBOX must walk OK");
 }

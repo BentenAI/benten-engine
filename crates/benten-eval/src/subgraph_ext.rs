@@ -12,11 +12,16 @@
 //! - [`SubgraphBuilderExt`] — `build_validated`, `build_validated_with_max_depth`,
 //!   `build_validated_aggregate_all`. Re-runs the invariants validator against
 //!   the builder's snapshot before returning the finalized [`Subgraph`].
-//! - [`SubgraphExt`] — `validate`, `cumulative_budget_for_root_for_test`,
-//!   `cumulative_budget_for_handle_for_test`,
-//!   `has_multiplicative_budget_tracked_for_test`, `to_mermaid`,
-//!   `load_verified` (RegistrationError-typed). Backed by the same `invariants/`
-//!   module that the pre-relocation inherent methods called into.
+//! - [`SubgraphExt`] — `validate`, `to_mermaid`, `load_verified`
+//!   (RegistrationError-typed) on the default surface, plus the
+//!   `#[cfg(any(test, feature = "testing"))]`-gated budget-introspection trio
+//!   `cumulative_budget_for_root_for_test`,
+//!   `cumulative_budget_for_handle_for_test` and
+//!   `has_multiplicative_budget_tracked_for_test` (gated off the frozen v1
+//!   surface per the pre-freeze gating wave — they are NOT present in
+//!   `docs/public-api/benten-eval.txt` and are unavailable without the
+//!   `testing` feature). Backed by the same `invariants/` module that the
+//!   pre-relocation inherent methods called into.
 //!
 //! Existing callsites import the eval-side surface (`use benten_eval::{Subgraph,
 //! SubgraphBuilder};`); to keep `b.build_validated()?` / `sg.validate(&cfg)?`
@@ -156,15 +161,29 @@ pub trait SubgraphExt: private::Sealed {
 
     /// Phase 2a G4-A test helper: return the cumulative Inv-8 budget at
     /// the subgraph's worst-case path.
+    ///
+    /// Gated behind `#[cfg(any(test, feature = "testing"))]` per freeze
+    /// §8-A (R9 F-06): test-only helpers must not be in the default
+    /// (frozen) public surface. Discipline-consistent with the sibling
+    /// [`NodeHandleExt::build_validated_for_corruption_test`] gate.
+    #[cfg(any(test, feature = "testing"))]
     fn cumulative_budget_for_root_for_test(&self) -> u64;
 
     /// Phase 2a G4-A test helper: cumulative budget at an arbitrary handle.
     /// Returns `None` when the handle does not correspond to a node in this
     /// subgraph.
+    ///
+    /// Gated behind `#[cfg(any(test, feature = "testing"))]` per freeze
+    /// §8-A (R9 F-06) — see [`Self::cumulative_budget_for_root_for_test`].
+    #[cfg(any(test, feature = "testing"))]
     fn cumulative_budget_for_handle_for_test(&self, h: NodeHandle) -> Option<u64>;
 
     /// Phase 2a G4-A test helper: multiplicative Inv-8 budget tracking is
     /// live in Phase 2a.
+    ///
+    /// Gated behind `#[cfg(any(test, feature = "testing"))]` per freeze
+    /// §8-A (R9 F-06) — see [`Self::cumulative_budget_for_root_for_test`].
+    #[cfg(any(test, feature = "testing"))]
     fn has_multiplicative_budget_tracked_for_test(&self) -> bool;
 
     /// Mermaid flowchart serialization. Behind the `diag` feature; without
@@ -200,14 +219,17 @@ impl SubgraphExt for Subgraph {
         }
     }
 
+    #[cfg(any(test, feature = "testing"))]
     fn cumulative_budget_for_root_for_test(&self) -> u64 {
         invariants::budget::compute_cumulative(self)
     }
 
+    #[cfg(any(test, feature = "testing"))]
     fn cumulative_budget_for_handle_for_test(&self, h: NodeHandle) -> Option<u64> {
         invariants::budget::cumulative_at_handle(self, h)
     }
 
+    #[cfg(any(test, feature = "testing"))]
     fn has_multiplicative_budget_tracked_for_test(&self) -> bool {
         true
     }

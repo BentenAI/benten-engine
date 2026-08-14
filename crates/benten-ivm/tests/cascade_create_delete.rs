@@ -144,10 +144,9 @@ fn cascade_create_then_delete_converges_every_view_to_empty() {
         let view1 = CapabilityGrantsView::new();
         // Re-read via the subscriber so we exercise the read_view path.
         for grant_cid in &grant_cids {
-            let q = ViewQuery {
-                entity_cid: Some(*grant_cid),
-                ..ViewQuery::default()
-            };
+            // `#[non_exhaustive]` (F-22): default + field mutation.
+            let mut q = ViewQuery::default();
+            q.entity_cid = Some(*grant_cid);
             match subscriber.read_view("capability_grants", &q) {
                 Some(Ok(ViewResult::Cids(cids))) => {
                     assert_eq!(
@@ -165,11 +164,10 @@ fn cascade_create_then_delete_converges_every_view_to_empty() {
     }
     {
         // View 3 paginates by createdAt; ask for the full page.
-        let q = ViewQuery {
-            label: Some("post".into()),
-            limit: Some(100),
-            ..ViewQuery::default()
-        };
+        // `#[non_exhaustive]` (F-22): default + field mutation.
+        let mut q = ViewQuery::default();
+        q.label = Some("post".into());
+        q.limit = Some(100);
         match subscriber.read_view("content_listing", &q) {
             Some(Ok(ViewResult::Cids(cids))) => {
                 assert_eq!(
@@ -209,10 +207,9 @@ fn cascade_create_then_delete_converges_every_view_to_empty() {
 
     // Step 5: every view must converge to empty across the cascade.
     for grant_cid in &grant_cids {
-        let q = ViewQuery {
-            entity_cid: Some(*grant_cid),
-            ..ViewQuery::default()
-        };
+        // `#[non_exhaustive]` (F-22): default + field mutation.
+        let mut q = ViewQuery::default();
+        q.entity_cid = Some(*grant_cid);
         match subscriber.read_view("capability_grants", &q) {
             Some(Ok(ViewResult::Cids(cids))) => assert!(
                 cids.is_empty(),
@@ -222,11 +219,10 @@ fn cascade_create_then_delete_converges_every_view_to_empty() {
         }
     }
     {
-        let q = ViewQuery {
-            label: Some("post".into()),
-            limit: Some(100),
-            ..ViewQuery::default()
-        };
+        // `#[non_exhaustive]` (F-22): default + field mutation.
+        let mut q = ViewQuery::default();
+        q.label = Some("post".into());
+        q.limit = Some(100);
         match subscriber.read_view("content_listing", &q) {
             Some(Ok(ViewResult::Cids(cids))) => assert!(
                 cids.is_empty(),

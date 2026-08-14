@@ -20,6 +20,7 @@
 //! platform-glue task; the seam + fallback are frozen here.
 
 use std::collections::HashMap;
+use zeroize::Zeroize as _;
 
 /// Typed secret-store rejections (fail-closed; never silent data loss).
 ///
@@ -84,6 +85,18 @@ impl KeyringCoreStore {
     }
 }
 
+/// Zeroize-on-drop (D-74/75/76): the in-RAM DAK-wrap secret values are raw
+/// secret `Vec<u8>` bytes; wipe every stored value on drop so they do not
+/// linger in freed heap / coredump. Keys are non-secret store paths. No wire
+/// / serialization impact (drop-behavior only).
+impl Drop for KeyringCoreStore {
+    fn drop(&mut self) {
+        for secret in self.items.values_mut() {
+            secret.zeroize();
+        }
+    }
+}
+
 impl SecretStore for KeyringCoreStore {
     fn store(&mut self, key: &str, secret: &[u8]) -> Result<(), SecretStoreError> {
         if !self.available {
@@ -117,6 +130,17 @@ impl FileVaultStore {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+}
+
+/// Zeroize-on-drop (D-74/75/76): same in-RAM raw-secret-value wipe as
+/// [`KeyringCoreStore`] — the file-vault fallback also holds the DAK-wrap
+/// secret bytes in RAM. No wire / serialization impact (drop-behavior only).
+impl Drop for FileVaultStore {
+    fn drop(&mut self) {
+        for secret in self.items.values_mut() {
+            secret.zeroize();
+        }
     }
 }
 

@@ -144,6 +144,13 @@ pub fn verify_envelope(
     })?;
     let sig = Signature::from_bytes(&sig_arr);
 
+    // Classical Ed25519 by design: envelope_sig is INTEGRITY-only (the
+    // outer defense-in-depth layer). Authority comes from the issuer-
+    // anchored `auth_grant` (verified in `consume_offline` Layer 2 +
+    // anchored to `auth_grant.issuer_verifying_key` in Layer 2b / F-INJ-2),
+    // NOT from envelope_sig — on its own this is "a signature-by-nobody".
+    // So there is no authority PQ-strip to close here; it correctly stays
+    // classical and does NOT route through the Fork-A hybrid chokepoint.
     vk.verify(msg, &sig)
         .map_err(|e| EnvelopeSigError::VerifyFailed(format!("{e}")))
 }

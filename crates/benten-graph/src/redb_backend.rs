@@ -123,7 +123,7 @@ pub(crate) const TWO_CID_MAP_TABLE: TableDefinition<&[u8], &[u8]> =
 /// The structural-KDF chain is:
 ///
 /// ```text
-/// K_principal = HKDF-SHA256(domain_tag, info = did.as_bytes())
+/// K_principal = blake3::keyed_hash(domain_tag, did.as_bytes())
 /// K(root)     = derive_root(K_principal, root_cid = cid.as_bytes())
 /// K(N)        = K(root)   // single-Node walk at this seam; the
 ///                         // multi-edge derive_step chain lands at
@@ -140,7 +140,7 @@ pub(crate) const TWO_CID_MAP_TABLE: TableDefinition<&[u8], &[u8]> =
 /// behind a per-deployment secret store at the production wire-up
 /// (#989 / #1301 substrate). At this wave the K_principal is
 /// deterministically derived from the namespace_did via
-/// HKDF-SHA256 over a domain-tag — this lets the wave-3e
+/// `blake3::keyed_hash` over a 32-byte domain-tag key — this lets the wave-3e
 /// per-recipient seal/unseal path produce stable keys without the
 /// K_principal storage seam landing first. The seam is named at
 /// `docs/future/phase-4-backlog.md` §3.10 G-CORE-3e (K_principal
@@ -173,8 +173,8 @@ pub fn derive_test_seam_key_from_cid_with_namespace(did: Option<&Cid>, cid: &Cid
         // any real DID so collisions are impossible.
         None => b"benten/g-core-3e/unscoped-principal/v1",
     };
-    // 32-byte domain key for the K_principal HKDF input. Stable
-    // across runs (the test-seam path is deterministic at this
+    // 32-byte domain key for the K_principal blake3::keyed_hash key.
+    // Stable across runs (the test-seam path is deterministic at this
     // wave); the production wire-up reads this from the per-DID
     // secret-material backend.
     // Literal carries 32 bytes — exactly the BLAKE3 keyed-hash KEY_LEN.
@@ -207,17 +207,6 @@ pub fn derive_test_seam_key_from_cid_with_namespace(did: Option<&Cid>, cid: &Cid
         benten_crypto_suite::CipherSuiteCodepoint::HYBRID_X25519_MLKEM768.raw(),
     );
     k_root.as_bytes().to_vec()
-}
-
-/// G-CORE-3d back-compat shim — the un-namespaced legacy callers
-/// that previously called `derive_test_seam_key_from_cid(&cid)`
-/// route through the new namespace-aware helper with
-/// `namespace = None`. Kept as a thin shim so any in-flight call
-/// site keeps compiling; new callers should prefer the
-/// namespace-aware form directly.
-#[allow(dead_code)]
-fn derive_test_seam_key_from_cid(cid: &Cid) -> Vec<u8> {
-    derive_test_seam_key_from_cid_with_namespace(None, cid)
 }
 
 /// G-CORE-3e: parse the namespace_did `Cid` out of a TWO_CID_MAP_TABLE
@@ -2248,6 +2237,7 @@ impl RedbBackend {
     /// - [`GraphError::TxAborted`] with the closure's inner reason if the
     ///   closure itself returned `Err`.
     /// - [`GraphError::NestedTransactionNotSupported`] on a nested call.
+    #[cfg(any(test, feature = "testing"))]
     pub fn transaction_with_deny_on_commit<F, R>(&self, f: F) -> Result<R, GraphError>
     where
         F: FnOnce(&mut Transaction<'_>) -> Result<R, GraphError>,

@@ -44,11 +44,15 @@ fn workspace_root() -> PathBuf {
         .expect("workspace root")
 }
 
+/// F-073: un-ignored. The `G26-A wave-10` destination shipped two phases ago;
+/// every assertion below has been true since Phase-4-Foundation close, so the
+/// ignore was pure staleness.
+///
+/// FAILS ON THIS ONE-LINE MUTATION: delete `docs/future/phase-4-backlog.md` —
+/// which is the point, because that file is the named destination for every
+/// open `Phase-4-Meta` / `v1-assessment-window` HARD-RULE-12 clause-(b)
+/// deferral in the tree. Losing it turns all of them into phantom destinations.
 #[test]
-#[ignore = "phase-4-foundation R4-FP-3 RED-PHASE — G26-A wave-10 un-ignores. \
-    Pin source: r2-test-landscape.md §2.12 row 5 + meth-r1-15. phase-4-backlog.md skeleton \
-    is the named-destination for Phase-4-Meta carries; without it Phase-4-Foundation findings \
-    citing 'Phase-4-Meta' are phantom destinations (HARD RULE rule-12 violation)."]
 fn docs_future_phase_4_backlog_md_skeleton_created() {
     let path = workspace_root().join("docs/future/phase-4-backlog.md");
 

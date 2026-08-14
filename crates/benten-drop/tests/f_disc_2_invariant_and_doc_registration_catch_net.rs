@@ -144,29 +144,37 @@ fn f_disc_2_registers_inv_16_through_22() {
     );
 }
 
-/// PIN 2 — header invariant-COUNT is the correct end-state (M-15) AND
-/// Inv-15 is NOT RE-registered (no duplicate). The header count MUST
-/// equal the highest registered invariant (22). Would-FAIL if the header
-/// drifts from the body (a classic registry-drift) or Inv-15 is duplicated.
+/// PIN 2 — header invariant-COUNT is the correct end-state (M-15 + GAP-KDB)
+/// AND Inv-15 is NOT RE-registered (no duplicate). The header count MUST
+/// equal the highest registered invariant. Would-FAIL if the header drifts
+/// from the body (a classic registry-drift) or Inv-15 is duplicated.
+///
+/// **GAP-KDB Shape-B update:** the end-state advanced 22 → **23** when the
+/// GAP-KDB recipient-binding closure minted **Inv-23** ("a Layer-C seal's
+/// KEM key is committed by its audience DID"; design §5). This catch-net
+/// tracks the current highest — bumping it here is the coupled consequence
+/// of the ratified Inv-23 mint (like a CATALOG_VARIANT_COUNT bump).
 #[test]
 fn f_disc_2_header_count_correct_and_inv15_not_re_registered() {
     let doc = invariant_coverage_md();
     let invs = registered_invariants(&doc);
     let highest = invs.iter().copied().max().unwrap_or(0);
     assert_eq!(
-        highest, 22,
-        "the highest registered invariant MUST be Inv-22 at the F-full \
-         end-state. Got highest = Inv-{highest}."
+        highest, 23,
+        "the highest registered invariant MUST be Inv-23 at the GAP-KDB \
+         Shape-B end-state (Inv-16..22 F-full + Inv-23 GAP-KDB). Got highest \
+         = Inv-{highest}."
     );
-    // The header MUST name the count (22) — drift-defense between header
+    // The header MUST name the count (23) — drift-defense between header
     // and body. We look for the literal count token near a header marker.
     assert!(
-        doc.contains("22 invariant")
-            || doc.contains("22 Invariant")
-            || doc.contains("Inv-1..Inv-22")
-            || doc.contains("Inv-1 .. Inv-22"),
+        doc.contains("23 invariant")
+            || doc.contains("23 Invariant")
+            || doc.contains("Inv-1..Inv-23")
+            || doc.contains("Inv-1 .. Inv-23"),
         "the INVARIANT-COVERAGE.md header MUST state the end-state count \
-         (22 invariants) so header and body don't drift (M-15)."
+         (23 invariants) so header and body don't drift (M-15 + GAP-KDB \
+         Inv-23)."
     );
     // Inv-15 appears, but MUST NOT be RE-registered as a NEW row in the
     // F-full mint block (no duplicate registration). We bound the count of
@@ -360,14 +368,17 @@ fn f_disc_2_records_r46_group_codepoints_0x6610_0x6520() {
 // observable consequences. would-FAIL-if-no-op'd.
 // ===========================================================================
 
+use benten_crypto_suite::cipher_suite::{
+    CipherSuite, CipherSuiteCodepoint, RecipientPublic, RecipientSecret,
+};
 use benten_crypto_suite::sig::{Keypair as SigKeypair, SignatureSuite};
 use benten_drop::layer_c::group_posture::{
     GroupError, GroupSealParams, GroupVerifyContext, open_membership_set_group,
     seal_membership_set_group,
 };
 use benten_drop::layer_c::{
-    AAD_VERSION, EncryptedEnvelope, LayerCError, RecipientPubKey, group_roster_for_test,
-    open_single, seal_sealed_sender, sealed_aad,
+    AAD_VERSION, EncryptedEnvelope, LayerCError, RecipientBinding, binding_for_test,
+    group_bindings_for_test, member_dids_for_test, open_single, seal_sealed_sender, sealed_aad,
 };
 use benten_id::did::Did;
 
@@ -379,15 +390,34 @@ fn hybrid_sender() -> (SigKeypair, Vec<u8>) {
     (kp, did_str.into_bytes())
 }
 
+/// R9 GAP-1 recipient-key helpers: a stable REAL hybrid keypair per `seed`
+/// (secret seed → both halves via BLAKE3 expansion; `.public()`/`.secret()`
+/// genuinely correspond). Replaces the deleted `[u8; 32]` placeholder pubkeys.
+fn fixed_kp(seed: u8) -> benten_crypto_suite::cipher_suite::RecipientKeypair {
+    CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
+        .expect("0x647a wire-locked")
+        .generate_recipient_keypair_deterministic_for_test(&[seed; 32])
+}
+fn fixed_pk(seed: u8) -> RecipientPublic {
+    RecipientPublic::from_bytes(
+        CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+        &fixed_kp(seed).public().to_bytes(),
+    )
+    .expect("re-parse of recipient public must succeed")
+}
+fn fixed_sk(seed: u8) -> RecipientSecret {
+    RecipientSecret::from_bytes(
+        CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+        &fixed_kp(seed).secret().to_bytes(),
+    )
+    .expect("re-parse of recipient secret must succeed")
+}
+
 /// The independently-held `GroupVerifyContext` for a `0x6610` membership-set
 /// round-trip with all generations = 1 (the common fixture shape here).
-fn verify_ctx_gen1(pks: &[RecipientPubKey]) -> GroupVerifyContext {
-    let member_dids = group_roster_for_test(pks)
-        .iter()
-        .map(|d| String::from_utf8_lossy(d).into_owned())
-        .collect();
+fn verify_ctx_gen1(bindings: &[RecipientBinding]) -> GroupVerifyContext {
     GroupVerifyContext {
-        member_dids,
+        member_dids: member_dids_for_test(bindings),
         member_key_generation: 1,
         membership_set_generation: 1,
         role_assignments_generation: 1,
@@ -408,14 +438,16 @@ fn verify_ctx_gen1(pks: &[RecipientPubKey]) -> GroupVerifyContext {
 #[test]
 fn f_disc_2_inv16_codepoint_dispatch_enforced_fail_closed() {
     use benten_drop::layer_c::seal_group_multi;
-    let pks: [RecipientPubKey; 2] = [[0x21u8; 32], [0x22u8; 32]];
+    let pks = [fixed_pk(0x21), fixed_pk(0x22)];
+    let bindings = group_bindings_for_test(&pks);
     let body_cid = *blake3::hash(b"inv16 enforced body").as_bytes();
     let (sender_kp, sender) = hybrid_sender();
-    let group_env = seal_group_multi(&pks, &sender, &sender_kp, &body_cid, 1, b"inv16 body");
+    let group_env = seal_group_multi(&bindings, &sender, &sender_kp, &body_cid, 1, b"inv16 body")
+        .expect("group seal within recipient limit");
 
     // The single-recipient open arm MUST refuse a group envelope by codepoint
     // (the dispatch strict-rejects BEFORE any decrypt/verify).
-    let outcome = open_single(&[0xA1u8; 32], &b"did:key:zAUD".to_vec(), 1, &group_env);
+    let outcome = open_single(&fixed_sk(0xA1), &b"did:key:zAUD".to_vec(), 1, &group_env);
     assert_eq!(
         outcome,
         Err(LayerCError::UnsupportedCodepoint(
@@ -464,9 +496,9 @@ fn f_disc_2_inv18_sealed_sender_default_metadata_disclosure_enforced() {
 
     // (2) A REAL seal's plaintext AAD region MUST NOT contain the sender-DID.
     let (sender_kp, sender) = hybrid_sender();
+    let binding = binding_for_test(&fixed_pk(0x31));
     let env = seal_sealed_sender(
-        &[0x31u8; 32],
-        &b"did:key:zAUDIENCE".to_vec(),
+        &binding,
         &sender,
         &sender_kp,
         &[0x07u8; 32],
@@ -500,7 +532,7 @@ fn f_disc_2_inv18_sealed_sender_default_metadata_disclosure_enforced() {
 /// emitting the raw set-id/roster flips the blinding assertion.
 #[test]
 fn f_disc_2_inv20_clause_c_group_aad_field_set_enforced_blinded() {
-    let pks: [RecipientPubKey; 3] = [[0x41u8; 32], [0x42u8; 32], [0x43u8; 32]];
+    let pks = [fixed_pk(0x41), fixed_pk(0x42), fixed_pk(0x43)];
     let k_set = [0x55u8; 32];
     let set_id: Vec<u8> = b"benten:set:inv20-RAW-SETID-MARKER".to_vec();
     let params = GroupSealParams {
@@ -510,14 +542,16 @@ fn f_disc_2_inv20_clause_c_group_aad_field_set_enforced_blinded() {
         role_assignments_generation: 1,
     };
     let (sender_kp, sender) = hybrid_sender();
+    let bindings = group_bindings_for_test(&pks);
     let env = seal_membership_set_group(
-        &pks,
+        &bindings,
         &sender,
         &sender_kp,
         &k_set,
         &params,
         b"inv20 enforced group body",
-    );
+    )
+    .expect("valid roster must seal (R18 C2)");
     let aad = env.stanza_aad_for_test(0);
 
     assert_eq!(
@@ -553,8 +587,10 @@ fn f_disc_2_inv20_clause_c_group_aad_field_set_enforced_blinded() {
 /// `Ok(plaintext)` — silent censorship.
 #[test]
 fn f_disc_2_inv19_inv20_truncation_defense_enforced_fail_closed() {
-    let pks: [RecipientPubKey; 3] = [[0x61u8; 32], [0x62u8; 32], [0x63u8; 32]];
-    let sks: [[u8; 32]; 3] = [[0xE1u8; 32], [0xE2u8; 32], [0xE3u8; 32]];
+    // R9 GAP-1: pk + sk must be the SAME real keypair per recipient (the old
+    // fixture paired them via the deleted `sk = pk + 0x80` placeholder).
+    let pks = [fixed_pk(0x61), fixed_pk(0x62), fixed_pk(0x63)];
+    let sks = [fixed_sk(0x61), fixed_sk(0x62), fixed_sk(0x63)];
     let params = GroupSealParams {
         membership_set_id: b"benten:set:inv19".to_vec(),
         member_key_generation: 1,
@@ -562,15 +598,17 @@ fn f_disc_2_inv19_inv20_truncation_defense_enforced_fail_closed() {
         role_assignments_generation: 1,
     };
     let (sender_kp, sender) = hybrid_sender();
+    let bindings = group_bindings_for_test(&pks);
     let env = seal_membership_set_group(
-        &pks,
+        &bindings,
         &sender,
         &sender_kp,
         &[0x77u8; 32],
         &params,
         b"inv19 body",
-    );
-    let ctx = verify_ctx_gen1(&pks);
+    )
+    .expect("valid roster must seal (R18 C2)");
+    let ctx = verify_ctx_gen1(&bindings);
     // Pre-condition (would-FAIL-on-revert witness): the FULL envelope opens.
     assert!(
         open_membership_set_group(&sks[1], 1, &ctx, &env).is_ok(),
@@ -614,10 +652,12 @@ fn f_disc_2_inv21_inv22_enforcement_owned_elsewhere_flag() {
     assert!(
         invs.contains(&21) && invs.contains(&22),
         "Inv-21 + Inv-22 MUST stay registered in INVARIANT-COVERAGE.md. Their \
-         ENFORCEMENT, however, is OWNED ELSEWHERE (Inv-21 → benten-sync CRDT \
-         fork tie-break; Inv-22 → graph-native member-nature derivation) — NOT \
-         in benten-drop. This catch-net deliberately does NOT assert their \
-         enforcement; that backing belongs in the owner crates' test targets."
+         ENFORCEMENT, however, is OWNED ELSEWHERE (Inv-21 → the fork tie-break \
+         rule `benten_membership_set::set::crdt::fork_a_wins`, over the \
+         benten-sync CRDT/HLC substrate; Inv-22 → graph-native member-nature \
+         derivation) — NOT in benten-drop. This catch-net deliberately does NOT \
+         assert their enforcement; that backing belongs in the owner crates' \
+         test targets."
     );
 }
 
@@ -653,6 +693,20 @@ fn f_disc_2_codepoint_ssot_cross_crate_const_equality() {
         "0x6610 MEMBERSHIP_SET_GROUP_MULTI_STANZA drifted between \
          benten_membership_set::codepoints and benten_crypto_suite::registry"
     );
+    // R14 F-13: the 4TH independent `0x6610` literal — the drop crate's OWN
+    // group-send producer const (`benten_drop::layer_c::group_posture::
+    // MEMBERSHIP_SET_GROUP_MULTI_STANZA`, which EMITS the wire codepoint at the
+    // Layer-C group-seal sites) — was NOT pinned here. Pin it too so a one-sided
+    // edit to the drop-crate producer fails the build (the AAD-byte-equality
+    // `f_02_*` cross-check locks the assembled AAD *output*, not this codepoint
+    // *value*; this arm closes that gap).
+    assert_eq!(
+        benten_drop::layer_c::group_posture::MEMBERSHIP_SET_GROUP_MULTI_STANZA,
+        registry::MEMBERSHIP_SET_GROUP_MULTI_STANZA,
+        "0x6610 MEMBERSHIP_SET_GROUP_MULTI_STANZA drifted between \
+         benten_drop::layer_c::group_posture (the drop-crate group-send \
+         producer) and benten_crypto_suite::registry"
+    );
     assert_eq!(
         codepoints::MEMBERSHIP_SET_RESERVED_0X6620,
         registry::MEMBERSHIP_SET_SUBSET_REF,
@@ -672,6 +726,27 @@ fn f_disc_2_codepoint_ssot_cross_crate_const_equality() {
         registry::LAYER_C_DROP_MULTI_RECIPIENT,
         "0x6520 LAYER_C_DROP_MULTI_RECIPIENT drifted between \
          benten_drop::layer_c and benten_crypto_suite::registry"
+    );
+    // R13 F-03: the DEFAULT Sealed-Sender codepoint (0x6510) is
+    // independently defined in benten_drop::layer_c and mirrored to the
+    // registry — pin their agreement so a one-sided edit fails the build.
+    assert_eq!(
+        benten_drop::layer_c::DROP_TO_RECIPIENT_SEALED_SENDER,
+        registry::DROP_TO_RECIPIENT_SEALED_SENDER,
+        "0x6510 DROP_TO_RECIPIENT_SEALED_SENDER drifted between \
+         benten_drop::layer_c and benten_crypto_suite::registry"
+    );
+    // R13 F-03: the wave-live default cipher-suite codepoint (0x647a) is
+    // defined as the `CipherSuiteCodepoint::HYBRID_X25519_MLKEM768` newtype
+    // in benten_crypto_suite::codepoint and mirrored as a bare u16 in the
+    // registry allocation map — pin their raw() agreement (cross-definition,
+    // NOT an `assert_eq!(CONST, literal)` self-walker).
+    assert_eq!(
+        benten_crypto_suite::codepoint::CipherSuiteCodepoint::HYBRID_X25519_MLKEM768.raw(),
+        registry::CIPHER_HYBRID_X25519_MLKEM768,
+        "0x647a HYBRID_X25519_MLKEM768 drifted between \
+         benten_crypto_suite::codepoint (the newtype) and \
+         benten_crypto_suite::registry (the allocation map)"
     );
 }
 

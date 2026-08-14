@@ -337,6 +337,7 @@ impl LoroDoc {
     /// Returns the document with `set_peer_id` applied; on Loro's
     /// rejection of the peer-id (very rare — only `u64::MAX` is
     /// rejected) returns `None`.
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn with_peer_id(peer_id: u64) -> Option<Self> {
         let inner = InnerLoroDoc::new();
@@ -783,7 +784,7 @@ impl LoroDoc {
         // examining the doc's container set.
         let deep = self.inner.get_deep_value();
         if let LoroValue::Map(m) = deep {
-            for (k, _v) in m.iter() {
+            for k in m.keys() {
                 if k.starts_with(RICH_PREFIX) {
                     out.push(OpLogTarget {
                         container_name: k.clone(),

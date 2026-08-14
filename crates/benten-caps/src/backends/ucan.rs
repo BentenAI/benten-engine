@@ -19,17 +19,25 @@
 //!   the canonical-DAG-CBOR encoding of the full `Ucan` envelope
 //!   (claims + signature) — matching Benten's content-address scheme
 //!   and giving the durable store a single identity for each token.
-//! - Revocations persist as empty markers under `g14b:revoked:<ucan_cid>`
-//!   (presence == revoked). Re-opening the backend at the same path
-//!   re-observes the marker, so revocation persists across engine
-//!   restarts. This per-UCAN-CID revocation marker is the single,
-//!   self-anchored, user-root-traced revocation mechanism.
+//! - Revocations persist as empty markers under
+//!   `g14b:revoked:<payload_cid>` (presence == revoked). Re-opening the
+//!   backend at the same path re-observes the marker, so revocation
+//!   persists across engine restarts. The marker is keyed on the
+//!   token's **signature-EXCLUSIVE payload CID** (BLAKE3 over the
+//!   `Ucan` `claims` alone — `ucan_payload_cid`), NOT the
+//!   sig-inclusive `g14b:grant:` identity: keying revocation off the
+//!   signature would let a holder re-encode a to-be-revoked token
+//!   (Ed25519 malleability, or a re-randomized ML-DSA hybrid half) into
+//!   a distinct-but-still-verifying token that dodges the marker —
+//!   the pattern Inv-15 forbids (F-03). This per-token payload-CID
+//!   marker is the single, self-anchored, user-root-traced revocation
+//!   mechanism.
 //! - **(COLLAPSE-WITH-RESIDUAL, refinement-audit-2026-05 S3 P1):** the
 //!   former parallel `g14b:dev_revoke:<device_did>` device-revocation
 //!   store + `record_revocation` + `validate_chain_with_durable_revocations`
 //!   were DELETED — the un-anchored bare-device-DID revocation pipe was
 //!   the #1230 perpetual-DoS BLOCKER. Device-key revocation now flows
-//!   through the per-UCAN-CID `g14b:revoked:<ucan_cid>` marker above
+//!   through the per-token `g14b:revoked:<payload_cid>` marker above
 //!   (user-root UCAN-grant revocation) — there is exactly one
 //!   revocation seam. See `docs/SECURITY-POSTURE.md` Compromise #23
 //!   SUPERSEDED-BY-COLLAPSE.
@@ -110,7 +118,7 @@ use benten_graph::GraphBackend;
 use benten_graph::backend::KVBackend;
 use benten_id::did::Did;
 use benten_id::errors::UcanError;
-use benten_id::ucan::{Ucan, validate_chain_at, validate_chain_for_audience};
+use benten_id::ucan::{MAX_UCAN_PROOF_DEPTH, Ucan, validate_chain_at, validate_chain_for_audience};
 use serde_ipld_dagcbor as cbor;
 
 use crate::error::CapError;
@@ -130,6 +138,41 @@ const KV_REVOKED_PREFIX: &[u8] = b"g14b:revoked:";
 fn ucan_cid(ucan: &Ucan) -> Result<Cid, CapError> {
     let bytes = cbor::to_vec(ucan).map_err(|e| CapError::BackendStorage {
         reason: format!("encode UCAN for CID: {e}"),
+    })?;
+    let digest = blake3::hash(&bytes);
+    Ok(Cid::from_blake3_digest(*digest.as_bytes()))
+}
+
+/// Compute the **signature-EXCLUSIVE payload CID** of a UCAN — the
+/// load-bearing revocation identity.
+///
+/// Hashes the DAG-CBOR-encoded `claims` field ALONE (`Ucan =
+/// { claims, signature }`), deliberately excluding the top-level
+/// `signature`, then wraps in the standard Benten CIDv1 layout
+/// (multicodec `0x71` dag-cbor, multihash `0x1e` BLAKE3). Because
+/// `claims` is byte-identical across ANY re-encoding of a token's
+/// signature, this CID is **provably signature-independent**.
+///
+/// # Why this is not `ucan_cid` (F-03 / Inv-15)
+///
+/// `ucan_cid` content-addresses the FULL envelope (claims +
+/// signature) and is correct for the grant store (`g14b:grant:*`),
+/// where a token's identity is its exact bytes. It MUST NOT key
+/// revocation: Ed25519 signatures are malleable (a non-canonical `S`
+/// re-encodes the same signed claims into distinct bytes) and the
+/// v1-beta hybrid signature default (Ed25519⊕ML-DSA-65) is
+/// *randomized* (ML-DSA re-signing the same claims yields distinct
+/// bytes) — either yields a different `ucan_cid` for the SAME
+/// authority, letting a holder dodge a revocation marker keyed on the
+/// sig-inclusive CID while the token still verifies. That is exactly
+/// the pattern **Inv-15 forbids** ("sig-bundle CIDs are never
+/// load-bearing identifiers"). Keying revocation on the payload CID
+/// closes the vector structurally; the companion `verify_strict`
+/// hardening (benten-crypto-suite `sig.rs`) closes the classical-half
+/// malleability primitive at verify time. Both were Ben-ratified.
+fn ucan_payload_cid(ucan: &Ucan) -> Result<Cid, CapError> {
+    let bytes = cbor::to_vec(&ucan.claims).map_err(|e| CapError::BackendStorage {
+        reason: format!("encode UCAN claims for revocation CID: {e}"),
     })?;
     let digest = blake3::hash(&bytes);
     Ok(Cid::from_blake3_digest(*digest.as_bytes()))
@@ -324,15 +367,28 @@ impl<B: GraphBackend> UCANBackend<B> {
     /// `[nbf, exp]` window. Revocation persists across engine
     /// restarts via the underlying KV.
     ///
+    /// The marker is keyed on the token's **signature-exclusive
+    /// payload CID** (`ucan_payload_cid`), NOT the sig-inclusive
+    /// `ucan_cid` grant identity (F-03 / Inv-15): a revocation keyed
+    /// off the signature could be dodged by a holder re-encoding the
+    /// signature (Ed25519 malleability, or a re-randomized ML-DSA
+    /// hybrid half) into a distinct-but-still-verifying token. Keying
+    /// on the payload CID means every signature encoding of the SAME
+    /// claims hits the SAME marker. The `&Ucan` argument (vs a raw
+    /// `&Cid`) makes it structurally impossible to key revocation on a
+    /// sig-inclusive identifier.
+    ///
     /// # Errors
     ///
-    /// Returns [`CapError::BackendStorage`] on KV write failure.
-    pub fn revoke(&self, ucan_cid: &Cid) -> Result<(), CapError> {
-        let key = kv_key(KV_REVOKED_PREFIX, ucan_cid);
+    /// Returns [`CapError::BackendStorage`] on encode or KV write
+    /// failure.
+    pub fn revoke(&self, ucan: &Ucan) -> Result<(), CapError> {
+        let cid = ucan_payload_cid(ucan)?;
+        let key = kv_key(KV_REVOKED_PREFIX, &cid);
         self.backend
             .put(&key, &[])
             .map_err(|e| CapError::BackendStorage {
-                reason: format!("KV put revocation marker {ucan_cid}: {e}"),
+                reason: format!("KV put revocation marker {cid}: {e}"),
             })
     }
 
@@ -382,7 +438,12 @@ impl<B: GraphBackend> UCANBackend<B> {
             // that an installed proof failed to decode. The skip
             // behavior is preserved (non-fatal by design); the
             // `tracing::warn!` makes it forensically auditable.
-            match cbor::from_slice::<Ucan>(value) {
+            // safe-2 #549: decode through the depth-bounded entry point so a
+            // stored proof with a pathologically-deep `prf` chain is rejected
+            // (skipped) at the byte boundary rather than stack-overflowing the
+            // recursive serde deserialize. A well-formed proof decodes to a
+            // byte-identical `Ucan` (same underlying `from_slice`).
+            match Ucan::from_canonical_bytes_bounded(value, MAX_UCAN_PROOF_DEPTH) {
                 Ok(token) => proofs.push(token),
                 Err(decode_err) => {
                     tracing::warn!(
@@ -391,8 +452,8 @@ impl<B: GraphBackend> UCANBackend<B> {
                         key = %String::from_utf8_lossy(key),
                         error = %decode_err,
                         "skipping un-decodable installed UCAN proof \
-                         (corrupt or forward-compat envelope); proof \
-                         excluded from the cap-check chain set (#492)"
+                         (corrupt / forward-compat / over-deep envelope); proof \
+                         excluded from the cap-check chain set (#492, #549)"
                     );
                 }
             }
@@ -400,18 +461,22 @@ impl<B: GraphBackend> UCANBackend<B> {
         Ok(proofs)
     }
 
-    /// Probe whether `ucan_cid` is recorded as revoked.
+    /// Probe whether `ucan` is recorded as revoked. Keyed on the
+    /// signature-exclusive payload CID (`ucan_payload_cid`),
+    /// symmetric with [`UCANBackend::revoke`] (F-03 / Inv-15).
     ///
     /// # Errors
     ///
-    /// Returns [`CapError::BackendStorage`] on KV read failure.
-    pub fn is_revoked(&self, ucan_cid: &Cid) -> Result<bool, CapError> {
-        let key = kv_key(KV_REVOKED_PREFIX, ucan_cid);
+    /// Returns [`CapError::BackendStorage`] on encode or KV read
+    /// failure.
+    pub fn is_revoked(&self, ucan: &Ucan) -> Result<bool, CapError> {
+        let cid = ucan_payload_cid(ucan)?;
+        let key = kv_key(KV_REVOKED_PREFIX, &cid);
         let opt = self
             .backend
             .get(&key)
             .map_err(|e| CapError::BackendStorage {
-                reason: format!("KV get revocation marker {ucan_cid}: {e}"),
+                reason: format!("KV get revocation marker {cid}: {e}"),
             })?;
         Ok(opt.is_some())
     }
@@ -430,8 +495,7 @@ impl<B: GraphBackend> UCANBackend<B> {
     pub fn validate_chain_at(&self, chain: &[Ucan], now: u64) -> Result<(), CapError> {
         validate_chain_at(chain, now).map_err(cap_err_from_ucan)?;
         for token in chain {
-            let cid = ucan_cid(token)?;
-            if self.is_revoked(&cid)? {
+            if self.is_revoked(token)? {
                 return Err(CapError::Revoked);
             }
         }
@@ -488,10 +552,10 @@ impl<B: GraphBackend> UCANBackend<B> {
         // 2. Standard chain-walk (signature + time-window at every
         //    link + chain integrity).
         validate_chain_at(chain, now).map_err(cap_err_from_ucan)?;
-        // 3. Durable revocation lookup.
+        // 3. Durable revocation lookup (keyed on the sig-exclusive
+        //    payload CID per F-03 / Inv-15).
         for token in chain {
-            let cid = ucan_cid(token)?;
-            if self.is_revoked(&cid)? {
+            if self.is_revoked(token)? {
                 return Err(CapError::Revoked);
             }
         }

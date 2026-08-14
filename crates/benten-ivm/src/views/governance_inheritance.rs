@@ -39,6 +39,8 @@ const VIEW_ID: &str = "governance_inheritance";
 
 /// View 4 — governance inheritance transitive closure.
 #[derive(Debug)]
+// §11 SemVer-readiness (F-22 pre-tag): a hand-written view instance; additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct GovernanceInheritanceView {
     /// Adjacency map: child → parent (single parent per child, matching the
     /// current `GovernedBy` cardinality; multi-parent is a later-phase
@@ -207,6 +209,8 @@ impl GovernanceInheritanceView {
 /// cycle-induced stops. R4 triage (m5) pinned the separation so a regression
 /// that silently conflates the two reasons fails the cycle test.
 #[derive(Debug, Clone)]
+// §11 SemVer-readiness (F-22 pre-tag): the resolved-rules result; additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct EffectiveRules {
     depth: usize,
     was_truncated: bool,

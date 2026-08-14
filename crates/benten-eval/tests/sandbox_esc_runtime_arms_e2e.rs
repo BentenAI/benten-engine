@@ -139,10 +139,8 @@ fn esc_7_runtime_arm_fires_via_time_host_fn_re_entry_injection() {
     let registry = ManifestRegistry::new();
     let inline = CapBundle::new(vec!["host:compute:time".to_string()], None);
     let attribution = test_attribution();
-    let config = SandboxConfig {
-        testing_inject_attack: TestEscAttackInjection::Esc7ReEntryAttempt,
-        ..SandboxConfig::default()
-    };
+    let mut config = SandboxConfig::default();
+    config.testing_inject_attack = TestEscAttackInjection::Esc7ReEntryAttempt;
 
     let err = execute_with_live_cap_check(
         &bytes,
@@ -267,10 +265,8 @@ fn esc_13_runtime_arm_fires_via_panic_in_host_fn_callback() {
     let registry = ManifestRegistry::new();
     let inline = CapBundle::new(vec!["host:compute:time".to_string()], None);
     let attribution = test_attribution();
-    let config = SandboxConfig {
-        testing_inject_attack: TestEscAttackInjection::Esc13FuelMeterCallbackTrap,
-        ..SandboxConfig::default()
-    };
+    let mut config = SandboxConfig::default();
+    config.testing_inject_attack = TestEscAttackInjection::Esc13FuelMeterCallbackTrap;
 
     let err = execute_with_live_cap_check(
         &bytes,
@@ -315,10 +311,8 @@ fn esc_13_recovery_path_next_call_fresh_store_no_poison_leak() {
     // Call #1: ESC-13 attack-pattern injected. Must fail with ESC-13.
     {
         let inline = CapBundle::new(vec!["host:compute:time".to_string()], None);
-        let cfg = SandboxConfig {
-            testing_inject_attack: TestEscAttackInjection::Esc13FuelMeterCallbackTrap,
-            ..SandboxConfig::default()
-        };
+        let mut cfg = SandboxConfig::default();
+        cfg.testing_inject_attack = TestEscAttackInjection::Esc13FuelMeterCallbackTrap;
         let err = execute_with_live_cap_check(
             &bytes,
             ManifestRef::Inline(inline),

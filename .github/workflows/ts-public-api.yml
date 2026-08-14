@@ -22,11 +22,16 @@ name: ts-public-api (TS API drift detector)
 # to the required-status-checks list; live branch-protection PATCH
 # command in the R6-FP-D commit body for orchestrator/Ben to apply.
 #
-# Initial implementation uses an extract-from-.d.ts structural diff
-# against `packages/engine/etc/public-api.txt`. Migration to
-# `@microsoft/api-extractor` (richer structural diff per the
-# build-backlog recommendation) is a v1-Composing window enhancement
-# — the seam is the workflow itself + the baseline-file location.
+# Implementation is a whole-.d.ts-text structural diff against
+# `packages/engine/etc/public-api.txt`, with comments stripped by the
+# TypeScript compiler (`--removeComments`). Hardened at the
+# CI-integrity pass (S-2): the prior shape grepped only
+# `^(export |declare )` opening lines, so class methods + interface
+# members + multi-line signatures were invisible to this gate.
+# Migration to `@microsoft/api-extractor` (richer structural diff per
+# the build-backlog recommendation) is a v1-Composing window
+# enhancement — the seam is the workflow itself + the baseline-file
+# location.
 
 on:
   push:
@@ -87,41 +92,110 @@ jobs:
         run: pnpm --filter @benten/engine build
 
       - name: Regenerate baseline (against fresh build)
-        # Same shape as the baseline-author script; the diff against the
-        # committed baseline file is the drift signal.
+        # S-2 close (CI-integrity pass): the prior shape grepped
+        # `^(export |declare )` out of the shipped dist/*.d.ts, which
+        # recorded declaration OPENING lines only. Class methods,
+        # interface members and multi-line signature continuations are
+        # indented, so they never matched: `export declare class Engine {`
+        # was the ENTIRE frozen record of that class (849 emitted lines,
+        # 3 captured; 372 of 5798 emitted lines captured overall).
+        #
+        # New shape: whole emitted .d.ts text, with comments stripped by
+        # the TypeScript compiler itself. Comment-stripping is done by
+        # tsc (--removeComments), NOT by regex, because a regex stripper
+        # corrupts string-literal types containing comment-like bytes and
+        # this package has many (errors.generated CATALOG_CODES is a
+        # 189-element string-literal union).
+        #
+        # This emits declarations ONLY, into a temp dir, so the shipped
+        # packages/engine/dist build (which intentionally KEEPS its JSDoc
+        # for consumer DX) is untouched. Cost is ~3.5s.
         shell: bash
         run: |
           set -o pipefail
           mkdir -p packages/engine/etc
+
+          # Resolve tsc without depending on pnpm exec workspace context.
+          TSC="packages/engine/node_modules/.bin/tsc"
+          if [ ! -x "$TSC" ]; then TSC="node_modules/.bin/tsc"; fi
+          if [ ! -x "$TSC" ]; then
+            echo "::error::tsc not found at packages/engine/node_modules/.bin/tsc or node_modules/.bin/tsc"
+            exit 1
+          fi
+
+          # Declaration-emit FORMATTING is not a TypeScript stability
+          # guarantee, and CI installs with --no-frozen-lockfile against
+          # "typescript": "^5.6.0", so it resolves to the latest 5.x at run
+          # time. Logging the version makes a baseline churn caused by a
+          # toolchain bump immediately legible instead of being mistaken for
+          # API drift.
+          echo "tsc version: $("$TSC" --version)"
+
+          DTS_DIR="$(mktemp -d)"
+          trap 'rm -rf "$DTS_DIR"' EXIT
+
+          # --emitDeclarationOnly : no .js noise (verified byte-identical
+          #                         .d.ts to a full emit)
+          # --removeComments      : compiler-lexer comment strip
+          # --declarationMap/--sourceMap false : no .map files and no
+          #                         trailing `//# sourceMappingURL=` pragma
+          #                         (that pragma also lacks a trailing
+          #                         newline, which would corrupt concatenation)
+          "$TSC" -p packages/engine/tsconfig.json \
+            --emitDeclarationOnly \
+            --removeComments \
+            --declarationMap false \
+            --sourceMap false \
+            --outDir "$DTS_DIR"
+
+          # `--removeComments` also strips `/// <reference ... />` directives,
+          # which would make an ambient type dependency invisible to the
+          # baseline. Zero exist today; this pins that fact so introducing one
+          # becomes a deliberate, reviewed act rather than a silent hole.
+          if grep -rqs '^///' "$DTS_DIR" --include='*.d.ts'; then
+            echo "::error::A /// <reference> directive appeared in emitted .d.ts. --removeComments strips these, so the baseline cannot record it. Review the ambient type dependency before proceeding."
+            exit 1
+          fi
+
           {
-            echo "# @benten/engine TypeScript Public API Baseline"
-            echo "#"
-            echo "# Generated at G-CORE-9 V1-FROZEN-INTERFACE row 2 (2026-05-23)."
-            echo "#"
-            echo "# This baseline captures the structural shape of the public TS API"
-            echo "# at the v1-beta freeze. The ts-public-api workflow diffs this file"
-            echo "# against a fresh rebuild on every PR; any drift = baseline-update"
-            echo "# PR + manifest-review per V1-FROZEN-INTERFACE.md item 10 contract."
-            echo "#"
-            echo "# Per V1-FROZEN-INTERFACE-BUILD-BACKLOG.md row 2 the long-term path"
-            echo "# is @microsoft/api-extractor (richer structural diff); this initial"
-            echo "# baseline uses extract-exports-from-.d.ts as a simpler structural"
-            echo "# backstop that catches add/remove of exports + obvious signature"
-            echo "# changes. api-extractor migration is a v1-Composing window enhancement."
-            echo ""
-            # psf-2 (R6 round-7): glob is RECURSIVE (`dist/**/*.d.ts`) so the
-            # publicly-exported `dist/internal/trace.d.ts` subpath (exported
-            # via package.json `./internal/trace`) is COVERED — a top-level-
-            # only `dist/*.d.ts` glob missed it, so a signature change there
-            # would not trip this required-failing parity gate. The `## `
-            # header is the path RELATIVE TO dist/ (so nested files are
-            # unambiguous; top-level headers are byte-identical to before).
-            for f in $(find packages/engine/dist -name '*.d.ts' | sort); do
-              rel="${f#packages/engine/dist/}"
-              echo "## $rel"
-              grep -E "^(export |declare )" "$f" | sort -u
-              echo ""
-            done
+            echo '# @benten/engine TypeScript Public API Baseline'
+            echo '#'
+            echo '# Generated at G-CORE-9 V1-FROZEN-INTERFACE row 2 (2026-05-23).'
+            echo '#'
+            echo '# This baseline captures the FULL declaration text of the public TS API'
+            echo '# at the v1-beta freeze. The ts-public-api workflow diffs this file'
+            echo '# against a fresh rebuild on every PR; any drift = baseline-update'
+            echo '# PR + manifest-review per V1-FROZEN-INTERFACE.md item 10 contract.'
+            echo '#'
+            echo '# CAPTURE SHAPE (hardened at the CI-integrity pass; supersedes the'
+            echo '# prior grep-openers shape): the whole emitted .d.ts text per file,'
+            echo '# with comments stripped by the TypeScript compiler itself'
+            echo '# (--removeComments) so a doc-only edit does not churn the baseline.'
+            echo '# The prior shape grepped only lines matching ^(export |declare ),'
+            echo '# which recorded declaration OPENING lines only -- class methods,'
+            echo '# interface members and multi-line signatures were all invisible, so'
+            echo '# "export declare class Engine {" was the entire frozen record of that'
+            echo '# class (849 emitted lines, 3 captured).'
+            echo '#'
+            echo '# Determinism: the file list is sorted under LC_ALL=C; within a file'
+            echo '# the emit order of the compiler is preserved (the text is brace-'
+            echo '# structured and cannot be line-sorted). No timestamps, no absolute'
+            echo '# paths, no source maps.'
+            echo '#'
+            echo '# Per V1-FROZEN-INTERFACE-BUILD-BACKLOG.md row 2 the long-term path is'
+            echo '# @microsoft/api-extractor (richer structural diff); this shape is the'
+            echo '# structural backstop until then.'
+            echo ''
+            # Recursive find (psf-2, R6 round-7): covers the publicly-exported
+            # `internal/trace.d.ts` subpath, not just top-level files. LC_ALL=C
+            # makes the file order locale-independent. Subshell so the `cd`
+            # does not leak into the enclosing redirect.
+            ( cd "$DTS_DIR" && find . -name '*.d.ts' | LC_ALL=C sort | while IFS= read -r f; do
+                rel="${f#./}"
+                echo "## $rel"
+                cat "$rel"
+                echo ""
+              done )
           } > packages/engine/etc/public-api.txt.regen
 
       - name: Diff regenerated vs committed baseline (required-failing per V1-FROZEN-INTERFACE item 10)

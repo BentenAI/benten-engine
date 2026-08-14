@@ -12,6 +12,10 @@ use std::sync::Arc;
 
 #[test]
 fn sandbox_end_to_end() {
+    // Populates the shared MODULE_CACHE — hold the serializer so the
+    // sibling cache-size snapshot test cannot observe our insert
+    // mid-window (see MODULE_CACHE_TEST_SERIALIZER).
+    let _serial_guard = module_cache_guard();
     // Wave-8b: minimal echo-shaped module returning a constant via the
     // primitive-level `sandbox::execute` surface.
     use benten_core::Cid;
@@ -48,6 +52,8 @@ fn sandbox_end_to_end() {
 
 #[test]
 fn sandbox_no_state_persists_across_calls() {
+    // Populates the shared MODULE_CACHE — see MODULE_CACHE_TEST_SERIALIZER.
+    let _serial_guard = module_cache_guard();
     // wsa-15 — module-global memory MUST reset across primitive calls
     // (per-call Store+Instance lifecycle, D3-RESOLVED).
     use benten_core::Cid;
@@ -111,6 +117,9 @@ fn sandbox_no_state_persists_across_calls() {
 
 #[test]
 fn sandbox_engine_singleton_lifetime() {
+    // Touches the shared wasmtime Engine/cache statics — see
+    // MODULE_CACHE_TEST_SERIALIZER.
+    let _serial_guard = module_cache_guard();
     // wsa-20 + D3-RESOLVED — `wasmtime::Engine` constructed ONCE per
     // benten Engine open (not per primitive call). White-box test:
     // `benten_eval::sandbox::instance::shared_engine()` returns the
@@ -134,26 +143,38 @@ fn sandbox_engine_singleton_lifetime() {
 /// r6-r3-cr-2 closure: a process-wide mutex is the smallest correct
 /// fix that doesn't pull a new dev-dep (`serial_test`) into the
 /// workspace.
+///
+/// **The guard must be taken by the cache WRITERS too, not only by the
+/// reader.** As originally landed only
+/// `sandbox_module_cache_avoids_recompilation_on_repeated_call`
+/// acquired it, while all three sibling tests in this file populate the
+/// same `MODULE_CACHE` through `execute` without acquiring it — so the
+/// snapshot window was never actually exclusive and the documented race
+/// remained wide open. It was observed firing during a full
+/// `cargo test -p benten-eval --features testing` run (1 of 2 runs;
+/// the test passes in isolation and 12/12 standalone). Every test that
+/// can add a cache entry now takes the same lock.
 static MODULE_CACHE_TEST_SERIALIZER: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Acquire [`MODULE_CACHE_TEST_SERIALIZER`], consuming poison.
+///
+/// Poisoning means a prior test panicked while holding the guard; the
+/// cache state is recoverable for our purposes (read+compare, plus
+/// idempotent content-addressed inserts), so consume the poison and
+/// proceed.
+fn module_cache_guard() -> std::sync::MutexGuard<'static, ()> {
+    MODULE_CACHE_TEST_SERIALIZER
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
 
 #[test]
 fn sandbox_module_cache_avoids_recompilation_on_repeated_call() {
-    // R6-R3 r6-r3-cr-2 closure: serialize against any other test in
-    // this file (or any future test in the workspace that reads
-    // module_cache_size) so the initial_size / after_size snapshot
-    // window is exclusive. Without this guard the Coverage workflow
-    // alternates failure/success because `MODULE_CACHE` is shared
-    // across tests and parallel execution can interleave a sibling
-    // test's module load between this test's two snapshots.
-    let _serial_guard = MODULE_CACHE_TEST_SERIALIZER
-        .lock()
-        .unwrap_or_else(|poisoned| {
-            // Poisoning means a prior test panicked while holding the
-            // guard; the cache state is recoverable for our purposes
-            // (we read+compare, no mutation), so consume the poison +
-            // proceed.
-            poisoned.into_inner()
-        });
+    // R6-R3 r6-r3-cr-2 closure: serialize against every other test in
+    // this file so the initial_size / after_size snapshot window is
+    // exclusive. This only works because the cache WRITERS take the
+    // same lock — see the note on MODULE_CACHE_TEST_SERIALIZER.
+    let _serial_guard = module_cache_guard();
 
     // wsa-20 — `wasmtime::Module` is content-CID-cached. The cold-start
     // budget (D22 ≤2ms p95 Linux x86_64) is unmeetable if Module

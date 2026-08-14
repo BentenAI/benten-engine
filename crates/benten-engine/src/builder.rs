@@ -24,7 +24,9 @@ use benten_caps::{
 };
 use benten_core::{Cid, Value};
 use benten_errors::ErrorCode;
-use benten_eval::{HlcTimeSource, InstantMonotonicSource, MonotonicSource, TimeSource};
+use benten_eval::{
+    HlcTimeSource, InstantMonotonicSource, InvariantConfig, MonotonicSource, TimeSource,
+};
 use benten_graph::{ChangeSubscriber, RedbBackend};
 
 use crate::change::ChangeBroadcast;
@@ -68,6 +70,13 @@ pub struct EngineBuilder {
     /// Upper bound on the in-memory change-event buffer. `None` defaults to
     /// [`CHANGE_STREAM_MAX_BUFFERED`]. See r6-sec-5.
     change_stream_capacity: Option<usize>,
+    /// Registration-time structural bounds. `None` defaults to
+    /// [`InvariantConfig::default`]. See [`Self::invariant_config`].
+    invariant_config: Option<InvariantConfig>,
+    /// Inv-8 runtime cumulative-step budget. `None` defaults to
+    /// [`benten_eval::evaluator::DEFAULT_ITERATION_BUDGET`]. See
+    /// [`Self::iteration_budget`].
+    iteration_budget: Option<u64>,
     /// Phase 2a G9-A-cont: explicit monotonic clock source used by the
     /// evaluator's wall-clock-refresh cadence (§9.13 refresh point #3).
     /// `None` defaults to [`InstantMonotonicSource`] at build time.
@@ -107,6 +116,8 @@ impl EngineBuilder {
             use_ucan_grounded: false,
             ucan_grounded_now_secs: None,
             change_stream_capacity: None,
+            invariant_config: None,
+            iteration_budget: None,
             monotonic_source: None,
             time_source: None,
             suspension_store: None,
@@ -323,6 +334,77 @@ impl EngineBuilder {
         self
     }
 
+    /// Configure the registration-time structural bounds every
+    /// `register_subgraph` / `register_subgraph_replace` /
+    /// `register_subgraph_aggregate` call is validated against —
+    /// Inv-2 `max_depth`, Inv-3 `max_fanout`, Inv-5 `max_nodes`, Inv-6
+    /// `max_edges`, plus the Inv-4 SANDBOX nest-depth and Inv-7 SANDBOX
+    /// cumulative-output ceilings.
+    ///
+    /// Unset defaults to [`InvariantConfig::default`] — the same values the
+    /// engine has always used (`max_depth = 64`, `max_fanout = 16`,
+    /// `max_nodes = 4096`, `max_edges = 8192`).
+    ///
+    /// # This is the knob that makes `InvariantConfig` real
+    ///
+    /// `InvariantConfig` has been a public type documented as "configurable
+    /// invariant thresholds" since Phase 1, but until this method landed the
+    /// three engine registration paths each constructed
+    /// `InvariantConfig::default()` inline, so **no deployment could supply a
+    /// non-default one through the `Engine`**. That is the FALSE-RECORD shape
+    /// CLAUDE.md rule 14 names: a documented guarantee with no writer. The
+    /// fix is this knob, not a retensed doc.
+    ///
+    /// # `max_depth` also derives the runtime frame cap
+    ///
+    /// `benten_eval::Evaluator::max_stack_depth` bounds the number of frames
+    /// the walker may push along one path, and `Evaluator::step` pushes one
+    /// frame per non-terminal step. That is the same quantity Inv-2 bounds at
+    /// registration. Both defaulted to the literal `64`, so they agreed by
+    /// coincidence; a raised `max_depth` alone would have let a 100-node
+    /// handler register cleanly and then die at call time with
+    /// `EvalError::StackOverflow`. The engine therefore DERIVES the runtime
+    /// cap from `max_depth` — raising this one field raises both bounds
+    /// together and the mismatch is unrepresentable.
+    ///
+    /// # Security note
+    ///
+    /// These are DoS bounds. Raising them widens the worst-case work a single
+    /// registered handler can demand; the engine still terminates (the DAG is
+    /// acyclic, ITERATE is bounded, and [`Self::iteration_budget`] is the
+    /// runtime backstop) but it may take proportionally longer. Lower them
+    /// freely; raise them deliberately.
+    #[must_use]
+    pub fn invariant_config(mut self, cfg: InvariantConfig) -> Self {
+        self.invariant_config = Some(cfg);
+        self
+    }
+
+    /// Configure the Inv-8 runtime cumulative-step budget applied to every
+    /// [`Engine::call`] / `Engine::trace` walk. Exhaustion surfaces
+    /// `E_INV_ITERATE_BUDGET` (and a terminal `TraceStep::BudgetExhausted`
+    /// row when tracing).
+    ///
+    /// Unset defaults to [`benten_eval::evaluator::DEFAULT_ITERATION_BUDGET`]
+    /// (100 000 primitive evaluations).
+    ///
+    /// This is the PRODUCTION sibling of `Engine::testing_set_iteration_budget`,
+    /// which is gated behind the `iteration-budget-test-grade` feature and is
+    /// therefore absent from a default build. Before this method existed the
+    /// engine-level budget was reachable only from a test build — the
+    /// `RunOptions::budget` axis was real on `benten_eval::Evaluator` but had
+    /// no operator-facing writer on the `Engine`.
+    ///
+    /// A budget of `0` rejects every call before its first step. That is
+    /// fail-CLOSED (no work is performed), so it is accepted rather than
+    /// clamped: an operator who writes `0` gets exactly the deny-everything
+    /// engine they asked for instead of a silently different bound.
+    #[must_use]
+    pub fn iteration_budget(mut self, budget: u64) -> Self {
+        self.iteration_budget = Some(budget);
+        self
+    }
+
     /// Provide a pre-opened backend.
     #[must_use]
     pub fn backend(mut self, b: RedbBackend) -> Self {
@@ -422,7 +504,15 @@ impl EngineBuilder {
         let capacity = self
             .change_stream_capacity
             .unwrap_or(CHANGE_STREAM_MAX_BUFFERED);
-        let inner = Arc::new(EngineInner::with_change_stream_capacity(capacity));
+        let invariant_config = self.invariant_config.clone().unwrap_or_default();
+        let iteration_budget = self
+            .iteration_budget
+            .unwrap_or(benten_eval::evaluator::DEFAULT_ITERATION_BUDGET);
+        let inner = Arc::new(EngineInner::with_limits(
+            capacity,
+            invariant_config,
+            iteration_budget,
+        ));
         let broadcast = Arc::new(ChangeBroadcast::new());
 
         // Always attach a tap that records every ChangeEvent into the

@@ -1,14 +1,34 @@
 # cargo-vet exemptions — Phase-3 G20-A3 onboarding baseline (sec-r1-5)
 # + Phase-4-Meta-Core libcrux-ml-kem adoption (2026-06-05).
 #
+# VERSION BUMP 2026-07-18 (Ben-ratified; reflected in the per-crate
+# `version =` strings below): the libcrux family bumped 0.0.9→0.0.10
+# (+ libcrux-sha3 0.0.10, libcrux-secrets 0.0.6, libcrux-traits/-intrinsics
+# 0.0.8, core-models 0.0.7, hax-lib/-macros/-macros-types 0.3.7) to clear
+# RUSTSEC-2026-0207; wasm32-verified byte-identical. The 0.0.10 bump pulls
+# `crabgrind 0.2.6` (a Valgrind constant-time-test C-FFI binding, the
+# least-well-known crate in the tree) as a NEW transitive edge under
+# libcrux-secrets 0.0.6 (libcrux-ml-kem 0.0.10 → libcrux-secrets → crabgrind);
+# crabgrind in turn build-depends on bindgen + clang-sys (+ cc / pkg-config /
+# cexpr/nom/libloading/glob/minimal-lexical/prettyplease). **This entire
+# crabgrind → bindgen/clang-sys chain is `cfg(valgrind_ct_test)`-gated** — a cfg
+# Benten NEVER sets — so it is present in `Cargo.lock` but is NOT compiled in
+# Benten's build (`cargo tree -i bindgen` on the default target prints nothing;
+# the chain surfaces only under `cargo tree --target all`). Host build-tooling,
+# non-crypto-trust-path, feature-gated-OFF, import-covered by the
+# mozilla/google/bytecode-alliance corpora + [policy.'*'] safe-to-deploy; the
+# '13 net-new' Cryspen/hax framing below is unchanged (those are the runtime
+# deps; this build-tooling is host-only and gated-off).
+#
 # Onboarding policy per sec-r1-5: exemption-budget was 5 entries max at
 # Phase-3-close. An audit landing in `audits.toml` is the budget-free
 # path (requires `cargo vet certify`, i.e. tooling installed in the
 # dev/CI environments — not yet wired). An exemption = "unaudited but
 # ACCEPTED" (NOT a fabricated audit); each costs against the budget.
 #
-# ⚠️ FLAG-FOR-BEN (2026-06-05) — exemption-budget raised 5 → 18 for the
-# libcrux-ml-kem adoption. The Cryspen ML-KEM-768 swap (Compromise #32
+# ✅ RATIFIED (2026-06-05) — exemption-budget raised 5 → 18 for the
+# libcrux-ml-kem adoption (Ben-RATIFIED; the ratified cap is 18). The
+# Cryspen ML-KEM-768 swap (Compromise #32
 # → mitigated-live) pulls 13 net-new transitive crates: 10 are
 # Cryspen/libcrux/hax (libcrux-ml-kem / libcrux-sha3 / libcrux-secrets /
 # libcrux-traits / libcrux-intrinsics / libcrux-platform / core-models /
@@ -22,10 +42,11 @@
 # because the cargo-vet CI gate is INFORMATIONAL-ONLY — `|| true`, not a
 # required check). Per the task's "add HONEST exemptions for the new
 # unaudited crates" they ARE recorded here as accepted-unaudited rather
-# than left silent. The budget bump is the one POLICY decision needing
-# Ben ratification: (a) accept the 18-entry budget for the libcrux
-# substrate (recorded here + reflected in the
-# `cargo_vet_exemption_budget_*` self-test), or (b) upgrade these to
+# than left silent. The budget bump was the one POLICY decision needing
+# Ben ratification, and it is now RATIFIED at 18: (a) the 18-entry budget
+# for the libcrux substrate is accepted (recorded here + reflected in the
+# `cargo_vet_exemption_budget_*` self-test), and going forward quarterly
+# review may (b) upgrade these to
 # certified `audits.toml` entries during the quarterly cargo-vet pass
 # (the budget-free path) once cargo-vet is installed in CI, or (c) fold
 # the libcrux family under the bytecode-alliance/mozilla import corpora
@@ -37,32 +58,32 @@
 # Pinned by:
 #   `crates/benten-engine/tests/cargo_vet_policy_self_test.rs::cargo_vet_exemption_budget_within_ratified_cap`
 # (count cap updated 5 → 18 on 2026-06-05 alongside the libcrux-ml-kem
-# adoption, pending Ben ratification per the FLAG above).
+# adoption — Ben-RATIFIED; the ratified cap is 18).
 
 # --- libcrux-ml-kem ML-KEM-768 trust path (Compromise #32 mitigation) ---
 
 [[exemptions.libcrux-ml-kem]]
-version = "0.0.9"
+version = "0.0.10"
 criteria = "safe-to-deploy"
-notes = "Cryspen hax/F*-verified ML-KEM-768 — the PRODUCTION ML-KEM impl (swapped from RustCrypto ml-kem 2026-06-05). Apache-2.0. Unaudited-by-Benten; interim until NF-2/C-GM-AUDIT (which covers the pinned ML-KEM impl). Byte-identical to RustCrypto FIPS-203 (f_kat_1). Pinned exactly =0.0.9 (pre-0.1 maturity)."
+notes = "Cryspen hax/F*-verified ML-KEM-768 — the PRODUCTION ML-KEM impl (swapped from RustCrypto ml-kem 2026-06-05). Apache-2.0. Unaudited-by-Benten; interim until NF-2/C-GM-AUDIT (which covers the pinned ML-KEM impl). Byte-identical to RustCrypto FIPS-203 (f_kat_1). Pinned exactly =0.0.10 (bumped 0.0.9→0.0.10 2026-07-18, Ben-ratified, to clear RUSTSEC-2026-0207; wasm32-verified byte-identical; pre-0.1 maturity — the 0.0.10 bump pulls bindgen/clang-sys as HOST build-deps, import-covered, non-crypto-path)."
 
 [[exemptions.libcrux-sha3]]
-version = "0.0.9"
+version = "0.0.10"
 criteria = "safe-to-deploy"
 notes = "Cryspen SHA-3/Keccak used internally by libcrux-ml-kem (Keccak permutation for FIPS-203 hashing). Apache-2.0. Unaudited-by-Benten; interim."
 
 [[exemptions.libcrux-secrets]]
-version = "0.0.5"
+version = "0.0.6"
 criteria = "safe-to-deploy"
 notes = "Cryspen secret-typed-integer classification crate (the check-secret-independence substrate). Apache-2.0. Unaudited-by-Benten; interim."
 
 [[exemptions.libcrux-traits]]
-version = "0.0.7"
+version = "0.0.8"
 criteria = "safe-to-deploy"
 notes = "Cryspen KEM/primitive trait definitions consumed by libcrux-ml-kem. Apache-2.0. Unaudited-by-Benten; interim."
 
 [[exemptions.libcrux-intrinsics]]
-version = "0.0.7"
+version = "0.0.8"
 criteria = "safe-to-deploy"
 notes = "Cryspen SIMD-intrinsics wrappers (simd128/simd256; portable backend on wasm where neither fires). Apache-2.0. Unaudited-by-Benten; interim."
 
@@ -72,24 +93,24 @@ criteria = "safe-to-deploy"
 notes = "Cryspen runtime CPU-feature detection (guards the SIMD backends so they're never blind-called). Apache-2.0. Unaudited-by-Benten; interim."
 
 [[exemptions.core-models]]
-version = "0.0.6"
+version = "0.0.7"
 criteria = "safe-to-deploy"
 notes = "Cryspen hax model-crate dependency. Apache-2.0. Build/verification-support; unaudited-by-Benten; interim."
 
 # --- hax verification-tooling support crates (proc-macro / build-time) ---
 
 [[exemptions.hax-lib]]
-version = "0.3.6"
+version = "0.3.7"
 criteria = "safe-to-deploy"
 notes = "Cryspen hax verification annotations (build-time / proc-macro-adjacent; no runtime crypto surface). Apache-2.0. Unaudited-by-Benten; interim."
 
 [[exemptions.hax-lib-macros]]
-version = "0.3.6"
+version = "0.3.7"
 criteria = "safe-to-deploy"
 notes = "Cryspen hax proc-macros (build-time only). Apache-2.0. Unaudited-by-Benten; interim."
 
 [[exemptions.hax-lib-macros-types]]
-version = "0.3.6"
+version = "0.3.7"
 criteria = "safe-to-deploy"
 notes = "Cryspen hax macro type definitions (build-time only). Apache-2.0. Unaudited-by-Benten; interim."
 

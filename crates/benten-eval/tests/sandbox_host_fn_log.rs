@@ -44,10 +44,8 @@ fn sandbox_host_fn_log_respects_byte_volume_cap_64kb() {
     )
     .unwrap();
     let registry = ManifestRegistry::new();
-    let cfg = SandboxConfig {
-        output_bytes: 1024 * 1024,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.output_bytes = 1024 * 1024;
     let attribution = dummy_attribution();
     let res = execute(
         &bytes,
@@ -77,10 +75,8 @@ fn sandbox_host_fn_log_respects_byte_volume_cap_64kb() {
     )
     .unwrap();
     let registry = ManifestRegistry::new();
-    let cfg = SandboxConfig {
-        output_bytes: 1024 * 1024,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.output_bytes = 1024 * 1024;
     let attribution = dummy_attribution();
     let err = execute(
         &bytes,

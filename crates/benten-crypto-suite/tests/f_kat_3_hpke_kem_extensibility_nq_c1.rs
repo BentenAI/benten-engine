@@ -96,7 +96,7 @@ pub const NQ_C1_RESOLUTION: Option<HpkeKemBinding> =
     Some(HpkeKemBinding::BentenSuppliesKemReuseKeySchedule);
 
 /// Deterministic recipient seed for the fixed Branch-B fixture — a stable
-/// 32-byte seed fed to [`CipherSuite::generate_recipient_keypair_deterministic`]
+/// 32-byte seed fed to [`CipherSuite::generate_recipient_keypair_deterministic_for_test`]
 /// so the recipient identity is reproducible without a keystore round-trip.
 const FIXTURE_RECIPIENT_SEED: [u8; 32] = [0x42u8; 32];
 
@@ -109,7 +109,7 @@ const FIXTURE_K_ROOT: [u8; 32] = [0x11u8; 32];
 /// `(ss_M=[0x01;32], ss_X=[0x02;32], ct_X=[0x03;32], pk_X=[0x04;32])` =
 /// `SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel)` with the 6-byte
 /// `XWingLabel` (`0x5c2e2f2f5e5c`) **APPENDED** as the trailing suffix
-/// (draft-connolly-cfrg-xwing-kem-10 §6). Computed by M-20 throwaway-compute
+/// (draft-connolly-cfrg-xwing-kem-10 §5.3 "Combiner"). Computed by M-20 throwaway-compute
 /// + independently cross-checked against a standalone SHA3-256. This is the
 /// Benten-canonical key-derivation that Branch B's on-wire bytes commit to.
 const BRANCH_B_COMBINER_GOLDEN: [u8; 32] = [
@@ -137,7 +137,7 @@ fn seal_fixture() -> (
 ) {
     let suite = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768)
         .expect("0x647a hybrid is LIVE");
-    let kp = suite.generate_recipient_keypair_deterministic(&FIXTURE_RECIPIENT_SEED);
+    let kp = suite.generate_recipient_keypair_deterministic_for_test(&FIXTURE_RECIPIENT_SEED);
     // PRODUCTION call site: the Layer-C single-recipient KEM-DEM seal.
     let wrapped =
         wrap_key_to_recipient(kp.public(), &FIXTURE_K_ROOT).expect("Layer-C seal MUST succeed");
@@ -287,7 +287,7 @@ fn nq_c1_branch_b_distinct_and_recipient_bound() {
     // (b) The recipient binding is real — a WRONG recipient secret fails
     // closed (would-FAIL on a key-independent unwrap).
     let suite = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768).unwrap();
-    let attacker_kp = suite.generate_recipient_keypair_deterministic(&[0xEEu8; 32]);
+    let attacker_kp = suite.generate_recipient_keypair_deterministic_for_test(&[0xEEu8; 32]);
     let outcome = unwrap_key_from_recipient(attacker_kp.secret(), &wrapped);
     assert!(
         outcome.is_err(),

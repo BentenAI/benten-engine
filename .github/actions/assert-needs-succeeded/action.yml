@@ -1,0 +1,95 @@
+# Usage — the calling job needs BOTH halves:
+#
+#     some-gate-job:
+#       name: ...
+#       needs: [upstream-a, upstream-b]
+#       if: always()
+#       steps:
+#         - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+#         - name: Assert every upstream job succeeded
+#           uses: ./.github/actions/assert-needs-succeeded
+#           with:
+#             needs-json: ${{ toJSON(needs) }}
+#
+# `if: always()` makes the job RUN when an upstream died; this action makes
+# it FAIL. Without both, the job is skipped — and GitHub reports a skipped
+# job to branch protection as SUCCESS.
+#
+# Make this the first step after `actions/checkout` so an already-red
+# upstream costs seconds rather than the job's full timeout budget.
+# (It must come after checkout: local `./.github/actions/...` composite
+# actions are resolved from the checked-out working tree.)
+
+name: 'Assert upstream needs succeeded'
+description: >-
+  Fail the calling job unless every job it declares in `needs:` reported a
+  `success` result. Closes S-4 of the 2026-07-26 CI-integrity audit: an
+  aggregate job whose dependencies fail is SKIPPED rather than failed, and
+  a skipped job satisfies a required status check. Verified live on the
+  r9-base freeze run 29879772757, where two `build+test` legs died and both
+  `cross-leg byte-equality gate (T9)` and `create-benten-app cold install`
+  — both REQUIRED contexts — reported `skipping` while the board read green.
+  Treats `failure`, `cancelled` and `skipped` alike as "no verdict".
+
+inputs:
+  needs-json:
+    description: >-
+      The calling job's whole `needs` context, serialised with toJSON. Passing
+      the whole context rather than naming each upstream is deliberate: a
+      future edit that adds a job to `needs:` is then covered automatically,
+      so this guard cannot drift out of sync with the list it guards.
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Assert every upstream job reported success
+      shell: bash
+      env:
+        # Passed via env, never interpolated into the script body.
+        NEEDS_JSON: ${{ inputs.needs-json }}
+      run: |
+        set -euo pipefail
+
+        if ! printf '%s' "$NEEDS_JSON" | jq -e 'type == "object"' >/dev/null 2>&1; then
+          echo "::error::assert-needs-succeeded: needs-json is not a JSON object."
+          echo "Received: $NEEDS_JSON"
+          exit 1
+        fi
+
+        count=$(printf '%s' "$NEEDS_JSON" | jq -r 'length')
+        if [ "$count" -eq 0 ]; then
+          echo "::error::assert-needs-succeeded: the calling job declares no 'needs:', so this guard asserts nothing. Either add the dependency back or drop this step — a guard that cannot fail is worse than no guard."
+          exit 1
+        fi
+
+        echo "Upstream job results ($count):"
+        printf '%s' "$NEEDS_JSON" | jq -r 'to_entries[] | "  \(.key) = \(.value.result)"'
+
+        bad=$(printf '%s' "$NEEDS_JSON" \
+          | jq -r 'to_entries[] | select(.value.result != "success") | "\(.key)=\(.value.result)"' \
+          | tr '\n' ' ')
+
+        if [ -n "${bad// /}" ]; then
+          echo "::error::Upstream job(s) did not report success: ${bad}"
+          echo "This gate ran under 'if: always()' precisely so that it renders a verdict"
+          echo "instead of being skipped. A skipped job is reported to branch protection"
+          echo "as SUCCESS, which is how a required check goes green without ever having"
+          echo "executed. Fix or re-run the upstream job(s) listed above."
+          exit 1
+        fi
+
+        echo "OK: all $count upstream job(s) reported success."
+
+        # Self-test, mirroring the established precedent in ci.yml: pipe a
+        # synthesized regression through the same filter and assert it
+        # MATCHES. If a future edit weakens the jq expression, this fires
+        # before the OK above silently becomes meaningless.
+        probe='{"ok":{"result":"success"},"dead":{"result":"skipped"}}'
+        probe_bad=$(printf '%s' "$probe" \
+          | jq -r 'to_entries[] | select(.value.result != "success") | "\(.key)=\(.value.result)"')
+        if [ "$probe_bad" != "dead=skipped" ]; then
+          echo "::error::(self-test) the filter no longer detects a non-success upstream (got '${probe_bad}'). The OK above is meaningless — fix the jq expression before merging."
+          exit 1
+        fi
+        echo "OK (self-test): filter correctly detects a skipped upstream."

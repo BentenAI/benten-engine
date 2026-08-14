@@ -17,39 +17,28 @@
 //!     (Inv-14/Inv-13 attribution-string-mirror) +
 //!     `crates/benten-graph/tests/inv_13_dedup_path_does_not_advance_audit_sequence.rs`.
 //!
-//! # RED-PHASE STATUS (pim-12 §3.6e) + STUB-SHIM DISCIPLINE
+//! # SHIPPED STATUS (R17 retense; formerly RED-PHASE pim-12 §3.6e)
 //!
 //! The `benten-membership-set` crate (15th workspace member) + its
 //! `audit` module + the `AdminOp`/`emit_audit_event_via_engine` surface
-//! DO NOT YET EXIST at this SHA — R5 (the W6 closing wave) mints them.
-//! Per the in-tree RED-phase precedent (`tf3a_structural_kdf_*`), this
-//! file commits a **local self-contained stub-shim module** matching the
-//! intended W6 public surface so the file COMPILES GREEN at baseline +
-//! `#[ignore = "RED-PHASE…"]` keeps the runtime gate (pim-12). The stub
-//! bodies `unimplemented!()` so a forgotten un-ignore / left-in stub
-//! fails LOUD, never silent-green (the OPPOSITE of a pim-18 SHAPE-trap).
-//!
-//! The W6 R5 closing-wave implementer MUST:
-//!   1. DELETE the local `mset_w6_audit_stub` module,
-//!   2. INSERT `use benten_membership_set::audit::{...};`,
-//!   3. UN-IGNORE the stub-driven tests (`#[ignore = "RED-PHASE…"]` →
-//!      `#[test]`),
-//!   4. Verify all pins PASS green.
-//! Reviewer verifies landing-status (un-ignored + green), not just
-//! spec-pin presence (pim-12 §3.6e).
+//! EXIST at HEAD. This file `use`s the REAL surface (see the `use` below);
+//! every arm is a live `#[test]` (NO `#[ignore]`). The prior RED-PHASE
+//! staging — a local self-contained stub-shim module (`mset_w6_audit_stub`)
+//! matching the intended W6 public surface, `#[ignore = "RED-PHASE…"]`-gated
+//! until the W6 closing wave minted the crate — is fully discharged: the
+//! stub is deleted, the real `use` is wired, and the arms run green.
 //!
 //! # Production-arm shape (pim-2 sub-rule-4 + pim-18 + §3.6f-ext)
 //!
 //! Two complementary arms:
-//!   (a) The `enforced_write_*` STUB-driven arms exercise the production
+//!   (a) The `enforced_write_*` arms exercise the production
 //!       audit-emit surface (membership-set → engine enforced WRITE);
 //!       load-bearing property = the triple is populated ONLY via the
 //!       enforced path, never via a bare backend `put_node`.
 //!   (b) The `engine_enforced_path_*` arm drives the **REAL** `Engine`
-//!       at baseline (no stub) — `audit_sequence()` advances on an
-//!       enforced grant WRITE but NOT on a dedup-replay — proving the
-//!       enforced-vs-unenforced distinction is live in the substrate the
-//!       W6 audit chain rides on. This arm is `#[test]` (green now).
+//!       — `audit_sequence()` advances on an enforced grant WRITE but NOT
+//!       on a dedup-replay — proving the enforced-vs-unenforced distinction
+//!       is live in the substrate the W6 audit chain rides on.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![allow(unused_imports)]
@@ -135,14 +124,13 @@ fn bare_put_node_leaves_attribution_triple_unset_and_chain_not_advanced() {
     );
 }
 
-/// F-AUDIT-1 (b'): SUBSTANTIVE baseline arm — drives the REAL `Engine`
-/// (no stub) to prove the enforced-vs-unenforced audit-sequence
+/// F-AUDIT-1 (b'): SUBSTANTIVE arm — drives the REAL `Engine`
+/// to prove the enforced-vs-unenforced audit-sequence
 /// distinction is LIVE in the substrate the W6 audit chain rides on.
 /// `Engine::audit_sequence()` advances on an enforced grant WRITE but NOT
-/// on a dedup-replay of identical bytes (pure-read short-circuit). This is
-/// `#[test]` (green now) — it is NOT red-phase; it pins the enforced-path
-/// substrate W6 builds on so the red-phase stub assertions above are
-/// anchored to a real engine property.
+/// on a dedup-replay of identical bytes (pure-read short-circuit). It pins
+/// the enforced-path substrate W6 builds on so the membership-set audit-emit
+/// assertions above are anchored to a real engine property.
 #[test]
 fn engine_enforced_path_advances_audit_sequence_but_dedup_does_not() {
     let dir = tempfile::tempdir().unwrap();

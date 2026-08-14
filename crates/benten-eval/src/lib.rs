@@ -812,6 +812,26 @@ pub(crate) struct SubgraphSnapshot<'a> {
 }
 
 /// Configurable invariant thresholds.
+///
+/// # Who configures these
+///
+/// Every `benten_eval::invariants` entry point takes an `&InvariantConfig`,
+/// so a downstream crate driving the validator directly has always been able
+/// to supply one. The `Engine` could not: until 2026-08-11 its three
+/// registration paths each constructed `InvariantConfig::default()` inline,
+/// which made this type's "configurable" doc a FALSE RECORD at the surface
+/// almost everyone actually uses. The production writer is now
+/// `benten_engine::EngineBuilder::invariant_config`.
+///
+/// # `max_depth` also bounds the runtime walk
+///
+/// `benten_engine` DERIVES [`Evaluator::max_stack_depth`] from
+/// [`Self::max_depth`]. The two bound the same quantity — nodes traversable
+/// along one path — and both defaulted to `64`, so they agreed only by
+/// coincidence. Any caller assembling an evaluator by hand and raising
+/// `max_depth` past `Evaluator::new()`'s literal `64` MUST raise the frame
+/// cap to match, or deep-but-valid handlers register and then fail at run
+/// time with [`EvalError::StackOverflow`].
 #[derive(Debug, Clone)]
 pub struct InvariantConfig {
     /// Invariant 2: maximum operation-subgraph depth.
@@ -833,11 +853,20 @@ pub struct InvariantConfig {
     pub max_sandbox_nest_depth: u8,
     /// Phase-2b G7-B / Inv-7: maximum per-call SANDBOX cumulative-output
     /// ceiling in bytes. Registration rejects any SANDBOX node that
-    /// declares `output_max_bytes` greater than this value; runtime
-    /// `CountedSink` enforces the per-node value (or the engine default
-    /// when omitted) against this same hard ceiling. Default is
+    /// declares `output_max_bytes` greater than this value. Default is
     /// [`invariants::sandbox_output::DEFAULT_MAX_SANDBOX_OUTPUT_BYTES`]
     /// (16 MiB) per D15 trap-loudly framing.
+    ///
+    /// **This bound is registration-time ONLY. A declared `output_max_bytes`
+    /// does NOT become the runtime budget.** The runtime `CountedSink` is
+    /// sized from a *differently named* node property, `output_limit`
+    /// (`SandboxConfig::output_bytes`, default 1 MiB), so a node declaring
+    /// `output_max_bytes = 4_000_000` registers cleanly and then executes
+    /// under 1 MiB with nothing raised. Connecting the two names is a
+    /// behaviour change with a freeze implication and is held for decision
+    /// at `docs/future/phase-4-backlog.md` §4.173 A.1; this rustdoc
+    /// previously asserted the runtime honoured the per-node value, which
+    /// was a false record and is struck here rather than left to freeze.
     pub max_sandbox_output_bytes: u64,
 }
 
@@ -872,6 +901,20 @@ pub struct Evaluator {
     /// Stopgap for Inv-2 — process-level overflow becomes a typed
     /// [`EvalError::StackOverflow`] when the stack would exceed this
     /// depth.
+    ///
+    /// **This is a step counter, not a nesting counter.** [`Evaluator::step`]
+    /// pushes one frame per non-terminal step and pops only on a `"terminal"`
+    /// edge, so the bound is "how many nodes may be walked along one path" —
+    /// the same quantity [`InvariantConfig::max_depth`] bounds at
+    /// registration. Consequence worth knowing: at the `64` default this
+    /// guard fires long before
+    /// [`evaluator::DEFAULT_ITERATION_BUDGET`] (100 000) on any walk that
+    /// revisits nodes.
+    ///
+    /// [`Evaluator::new`] sets `64` and nothing in `benten-eval` changes it.
+    /// The engine assigns it from its configured `InvariantConfig::max_depth`
+    /// so the registration bound and this one cannot drift apart; a caller
+    /// driving the evaluator directly owns that coupling itself.
     pub max_stack_depth: u32,
 }
 

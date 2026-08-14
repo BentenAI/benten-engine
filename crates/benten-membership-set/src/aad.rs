@@ -85,7 +85,7 @@ pub fn canonical_members_table_bytes(table: &BTreeMap<Did, MemberEntry>) -> Vec<
 /// roster + raw set-id are BLINDED. On the DEFAULT (Sealed-Sender) path the
 /// inner-sender-DID lives in `sealed_inner` (recovered post-decrypt) and is
 /// NEVER bound into the plaintext AAD (F4-001 / F-LC-9).
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct GroupAadInputs {
     /// The group per-stanza codepoint (`0x6610`
     /// `MEMBERSHIP_SET_GROUP_MULTI_STANZA` on the DEFAULT path) — BE u16.
@@ -96,6 +96,16 @@ pub struct GroupAadInputs {
     /// Member-DID list (canonicalized — sorted — by the assembler; a reorder
     /// is byte-neutral because only the COMMITMENT over the sorted list and
     /// the count are bound). NOT published in the clear (BLINDED).
+    ///
+    /// **CALLER CONTRACT (R6-tail F-38): this MUST be the DEDUPED members-table
+    /// key set** — i.e. the keys of the `BTreeMap<Did, MemberEntry>`
+    /// `members_table` (Inv-20 clause-i, one-DID-one-record), which are unique
+    /// by construction. The assembler SORTS but does **NOT** dedup: a repeated
+    /// DID is hashed twice into `audience_set_commitment` AND counted twice in
+    /// `member_count`, so two engines that disagree about duplicates produce
+    /// DIFFERENT AAD for the SAME logical membership and cross-engine AEAD-open
+    /// fails (the NQ-W4 divergence mode). This precondition is NOT checked at
+    /// the assembly seam; it is a caller obligation.
     pub member_dids: Vec<String>,
     /// The group key `K_Set` (keys the `membership_set_id_commitment` keyed MAC).
     pub k_set: [u8; 32],
@@ -122,6 +132,44 @@ pub struct GroupAadInputs {
     pub plaintext_sender_did: Option<String>,
 }
 
+/// R19 secret-hygiene: `Debug` redacts the group key `k_set` so the raw secret
+/// never renders into logs / panics (the manual impl replaces the derived
+/// `Debug`; all other fields still render for diagnostics). Mirrors the
+/// crypto-suite `RecipientSecret` redacted-Debug convention.
+impl core::fmt::Debug for GroupAadInputs {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("GroupAadInputs")
+            .field("codepoint", &self.codepoint)
+            .field("body_cid", &self.body_cid)
+            .field("member_dids", &self.member_dids)
+            .field("k_set", &"<redacted>")
+            .field("stanza_index", &self.stanza_index)
+            .field("stanza_count", &self.stanza_count)
+            .field("member_key_generation", &self.member_key_generation)
+            .field("membership_set_id", &self.membership_set_id)
+            .field("membership_set_generation", &self.membership_set_generation)
+            .field(
+                "role_assignments_generation",
+                &self.role_assignments_generation,
+            )
+            .field("sealed_inner", &self.sealed_inner)
+            .field("plaintext_sender_did", &self.plaintext_sender_did)
+            .finish()
+    }
+}
+
+/// R19 secret-hygiene: wipe the transient `k_set` group-key copy on drop so
+/// freed-heap / coredump exposure does not leak it. All field access is by-ref
+/// (no partial-move), so the manual `Drop` is hazard-free. No wire /
+/// serialization change (`GroupAadInputs` is never (de)serialized — it is an
+/// AAD-input holder the assembler reads then drops).
+impl Drop for GroupAadInputs {
+    fn drop(&mut self) {
+        use zeroize::Zeroize as _;
+        self.k_set.zeroize();
+    }
+}
+
 /// `audience_set_commitment = BLAKE3(0x01 || lp(did_0) || lp(did_1) || …)`
 /// over the CANONICAL SORTED recipient-DID list (`lp` = u32-BE length prefix).
 /// Replaces the raw roster (BLINDED). The `0x01` domain-separation prefix
@@ -139,10 +187,15 @@ pub fn audience_set_commitment(member_dids: &[String]) -> [u8; 32] {
 }
 
 /// `membership_set_id_commitment = blake3::keyed_hash(K_Set,
-/// "benten:setid:v1" || membership_set_id)` — the SAME §3.9 gossip-topic
-/// keyed-MAC primitive (R0.7 §4.1: `HMAC` = `blake3::keyed_hash`; BLAKE3 is
-/// 32-wide so the truncation is the identity). Replaces the raw set-id
-/// (BLINDED).
+/// "benten:setid:v1" || membership_set_id)` — the SAME keyed-MAC PRIMITIVE the
+/// §3.9 gossip-topic uses (R0.7 §4.1: `HMAC` = `blake3::keyed_hash`; BLAKE3 is
+/// 32-wide so the truncation is the identity), but a DISTINCT construction: this
+/// §3.10 commitment PREPENDS the `"benten:setid:v1"` domain-separation label,
+/// whereas the §3.9 gossip-topic ([`crate::keying::gossip_topic`]) is UNLABELLED
+/// and instead APPENDS `BE(generation)`. Same primitive, different preimage —
+/// the two never collide (see the `keying::gossip_topic` doc for the
+/// authoritative §3.9-labelled-vs-§3.10-unlabelled disambiguation). Replaces the
+/// raw set-id (BLINDED).
 #[must_use]
 pub fn membership_set_id_commitment(k_set: &[u8; 32], membership_set_id: &[u8]) -> [u8; 32] {
     let mut msg = Vec::new();
@@ -173,6 +226,18 @@ pub fn membership_set_id_commitment(k_set: &[u8; 32], membership_set_id: &[u8]) 
 ///
 /// On the DEFAULT (Sealed-Sender) path the sender-DID is NOT bound here — it is
 /// sealed inside `sealed_inner`, recovered post-decrypt (F4-001 / F-LC-9).
+///
+/// # Caller contract — `member_dids` MUST be deduped (R6-tail F-38)
+///
+/// The assembler CANONICALIZES `t.member_dids` by SORTING it (inside
+/// [`audience_set_commitment`]) but does **NOT** dedup it. A duplicate DID is
+/// therefore hashed twice into `audience_set_commitment` and counted twice in
+/// `member_count`. Callers MUST pass the DEDUPED members-table key set (the
+/// keys of the `BTreeMap<Did, MemberEntry>` snapshot — unique by Inv-20
+/// clause-i); passing a duplicate-bearing list yields AAD that a peer deriving
+/// its roster from the members-table will not reproduce, and the group stanza
+/// fails to open. Unchecked here by design (the assembler is byte-frozen); see
+/// the [`GroupAadInputs::member_dids`] field doc.
 ///
 /// # Panics
 ///
@@ -235,12 +300,6 @@ fn lp(buf: &mut Vec<u8>, bytes: &[u8]) {
         &(u32::try_from(bytes.len()).expect("field length fits u32")).to_be_bytes(),
     );
     buf.extend_from_slice(bytes);
-}
-
-/// The default group codepoint the `0x6610` per-stanza AAD assembler binds.
-#[must_use]
-pub fn default_group_codepoint() -> u16 {
-    MEMBERSHIP_SET_GROUP_MULTI_STANZA
 }
 
 #[cfg(test)]

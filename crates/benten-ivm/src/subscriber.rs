@@ -48,6 +48,8 @@ extern crate alloc;
 /// The [`ChangeSubscriber`] impl, which takes `&self`, wraps the views in a
 /// [`std::sync::Mutex`] so the engine can share the subscriber across the
 /// commit thread and the IVM worker without any caller-side synchronization.
+// §11 SemVer-readiness (F-22 pre-tag): the IVM subscriber registry; additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct Subscriber {
     /// Registered views. Heterogeneous — each view is a different concrete
     /// type under a `Box<dyn View>`. Held behind a `Mutex` so the

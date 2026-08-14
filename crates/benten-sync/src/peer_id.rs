@@ -37,6 +37,16 @@
 use benten_id::keypair::PublicKey;
 use serde::{Deserialize, Serialize};
 
+/// Fail-closed ceiling on the raw wire bytes accepted by
+/// [`PeerId::from_dag_cbor_bytes`] (Compromise #28 / META #629 DoS-sweep).
+///
+/// A `PeerId` is a fixed ~32-byte public key, so its DAG-CBOR byte-string
+/// envelope is tiny; a legitimate blob is well under 64 bytes. 4 KiB is
+/// generous headroom while bounding an adversarial pre-auth blob (otherwise
+/// bounded only by the transport `RECV_CAP` at the caller) to a fixed
+/// allocation before `serde` runs.
+pub const MAX_PEER_ID_CBOR_BYTES: usize = 4 * 1024;
+
 /// Peer identifier — 32-byte Ed25519 public-key bytes.
 ///
 /// Identical to the iroh `EndpointId` per crypto-minor-4 (pre-iroh-0.98 `NodeId`). See module-level
@@ -122,6 +132,17 @@ impl PeerId {
     /// Returns a typed [`PeerIdDecodeError`] if the bytes are not a
     /// valid 32-byte byte-string CBOR encoding.
     pub fn from_dag_cbor_bytes(bytes: &[u8]) -> Result<Self, PeerIdDecodeError> {
+        // Fail-closed byte cap (Compromise #28 / META #629): reject an
+        // over-large blob BEFORE `serde` runs. A legitimate PeerId envelope is
+        // tiny (~32-byte key), so any large input is adversarial.
+        if bytes.len() > MAX_PEER_ID_CBOR_BYTES {
+            return Err(PeerIdDecodeError {
+                reason: format!(
+                    "peer-id CBOR {} bytes exceeds cap {MAX_PEER_ID_CBOR_BYTES}",
+                    bytes.len()
+                ),
+            });
+        }
         serde_ipld_dagcbor::from_slice::<Self>(bytes).map_err(|e| PeerIdDecodeError {
             reason: format!("dag-cbor decode failed: {e}"),
         })

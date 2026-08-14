@@ -457,6 +457,26 @@ fn verify_via_ucan_chain(
         .resolve()
         .map_err(|e| ManifestVerifyError::UcanInvalid(format!("issuer DID resolve: {e}")))?;
     let sig = signature_from_bytes(sig_bytes)?;
+    // R6-R1 fold-in (F-03 security-review observation 2) — determination:
+    // manifest signatures are structurally **did:key-only 64-byte Ed25519
+    // by format**, so this classical `PublicKey::verify` is CORRECT and
+    // does NOT need to route through the Fork-A hybrid chokepoint
+    // (`benten_id::authority_verify::verify_authority_signature`). Evidence:
+    //   - the sig FIELD is `ManifestSignature { ed25519: Option<String> }`
+    //     (module_manifest.rs) — no composite/PQ/codepoint carrier — and
+    //     `signature_from_bytes` / `decode_signature` REQUIRE exactly 64
+    //     bytes, so the wire cannot hold a LAMPS composite (`mldsaSig ‖
+    //     tradSig`).
+    //   - the issuer key is resolved via classical `Did::resolve` (did:key
+    //     Ed25519-multicodec only; a `did:benten` string returns
+    //     `InvalidPrefix`, a hybrid did:key body returns `UnknownMulticodec`).
+    // A hybrid `did:benten` author therefore CANNOT produce a manifest
+    // signature this path accepts — there is NO composite wire from which
+    // a PQ half could be silently stripped (unlike the authority path that
+    // Fork-A closes). Routing through the hybrid chokepoint would be needed
+    // ONLY once the manifest sig format gains a composite field.
+    // Hybrid-manifest-author support is name-carried to
+    // Phase-4-Meta-Composing (V1-FROZEN-INTERFACE-DEFERRED.md Row D-88).
     issuer_pk
         .verify(signed_bytes, &sig)
         .map_err(|_| ManifestVerifyError::UcanInvalid("signature does not verify".to_string()))?;
@@ -469,6 +489,12 @@ fn verify_via_registry_key(
     registry_pk: &PublicKey,
 ) -> Result<(), ManifestVerifyError> {
     let sig = signature_from_bytes(sig_bytes)?;
+    // Classical Ed25519 verify by design — manifest signatures are
+    // structurally did:key-only 64-byte Ed25519 by format (see the
+    // determination comment in `verify_via_ucan_chain`; there is no
+    // composite wire to strip, so this does NOT route through the Fork-A
+    // hybrid chokepoint). Hybrid-manifest-author support is name-carried
+    // to Phase-4-Meta-Composing (V1-FROZEN-INTERFACE-DEFERRED.md Row D-88).
     registry_pk
         .verify(signed_bytes, &sig)
         .map_err(|_| ManifestVerifyError::RegistryInvalid)?;
@@ -660,23 +686,6 @@ impl<'a> PublisherRegistry<'a> {
         _publisher_pk: &PublicKey,
     ) -> Result<(), PublisherRegistryError> {
         Err(PublisherRegistryError::UcanRequired)
-    }
-
-    /// Add a publisher with a UCAN delegation chain.
-    ///
-    /// # Errors
-    ///
-    /// [`EngineError::Other`] wrapping a [`PublisherRegistryError`] on
-    /// chain verification failure; [`EngineError::Graph`] on backend
-    /// write error.
-    pub fn add_publisher_with_ucan(
-        &self,
-        publisher_did: &Did,
-        publisher_pk: &PublicKey,
-        delegation: &Ucan,
-        now: u64,
-    ) -> Result<(), EngineError> {
-        self.add_publisher(publisher_did, publisher_pk, Some(delegation), now)
     }
 
     fn require_ucan_delegation(

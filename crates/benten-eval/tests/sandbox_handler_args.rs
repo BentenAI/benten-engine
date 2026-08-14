@@ -86,11 +86,9 @@ fn sandbox_per_handler_wallclock_ms_camel_case_dsl_round_trips_to_eval_side_snak
         wat::parse_str("(module (func (export \"run\") (result i32) (loop $L br $L) i32.const 0))")
             .unwrap();
     let registry = ManifestRegistry::new();
-    let cfg = SandboxConfig {
-        fuel: u64::MAX / 2,
-        wallclock_ms: 80, // <- threaded from DSL surface camelCase wallclockMs
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.fuel = u64::MAX / 2;
+    cfg.wallclock_ms = 80; // <- threaded from DSL surface camelCase wallclockMs
     let err = execute(
         &bytes,
         ManifestRef::named("compute-basic"),
@@ -163,12 +161,10 @@ fn sandbox_per_handler_output_limit_bytes_camel_case_dsl_round_trips() {
     )
     .unwrap();
     let registry = ManifestRegistry::new();
-    let cfg = SandboxConfig {
-        fuel: u64::MAX / 2,
-        wallclock_ms: 30_000,
-        output_bytes: 4096, // <- threaded from DSL surface camelCase outputLimitBytes (drops `Bytes`)
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.fuel = u64::MAX / 2;
+    cfg.wallclock_ms = 30_000;
+    cfg.output_bytes = 4096; // <- threaded from DSL surface camelCase outputLimitBytes (drops `Bytes`)
     let err = execute(
         &bytes,
         ManifestRef::named("compute-basic"),

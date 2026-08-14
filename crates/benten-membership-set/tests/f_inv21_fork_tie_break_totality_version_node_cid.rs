@@ -391,6 +391,47 @@ fn f_inv21_2_totality_via_version_node_cid() {
     );
 }
 
+// ── F5 (R19): STRICT-`<` comparator — equal keys are undefined-order-free ──
+
+/// R19 (F5): `fork_a_wins` uses a STRICT `<` so an equal total-order key
+/// (equal HLC AND equal Version-Node CID) never produces an ambiguous
+/// "both win" result. Under the old `<=`, `fork_a_wins(k, k)` was `true`
+/// in BOTH orderings — a doubly-true (undefined) order. Under strict `<`
+/// it is `false` in BOTH orderings — neither wins — so the degenerate
+/// equal-CID case is undefined-order-free. Distinct fork events (distinct
+/// CIDs) still pick exactly one winner (asserted throughout the totality
+/// pins above).
+#[test]
+fn f5_equal_key_fork_tie_break_is_strict_not_ambiguous() {
+    let hlc = Hlc {
+        physical_ms: 100,
+        logical: 0,
+        node_id: 7,
+    }
+    .into_benten();
+    let same_cid = cid(b"identical-fork-event");
+
+    // Equal HLC + equal CID ⇒ equal total-order key. Strict `<` yields
+    // `false` in BOTH argument orders (neither wins) — NOT doubly-true.
+    let a_wins = fork_a_wins(hlc, &same_cid, hlc, &same_cid);
+    let b_wins = fork_a_wins(hlc, &same_cid, hlc, &same_cid);
+    assert!(
+        !a_wins && !b_wins,
+        "equal fork total-order keys must be undefined-order-FREE under strict `<` \
+         (neither wins), not doubly-true"
+    );
+
+    // Sanity: distinct CIDs still produce exactly ONE winner (antisymmetric).
+    let cid_lo = cid(b"aaaa-lower");
+    let cid_hi = cid(b"zzzz-higher");
+    let fwd = fork_a_wins(hlc, &cid_lo, hlc, &cid_hi);
+    let rev = fork_a_wins(hlc, &cid_hi, hlc, &cid_lo);
+    assert_ne!(
+        fwd, rev,
+        "distinct-CID forks are strictly ordered — exactly one wins (antisymmetry)"
+    );
+}
+
 // ── F-INV21-3 ───────────────────────────────────────────────────────────
 
 /// F-INV21-3 — Inv-21 convergence proof (proptest surrogate; v1-beta floor).

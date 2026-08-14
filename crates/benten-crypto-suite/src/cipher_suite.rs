@@ -4,9 +4,10 @@
 //! # G-CORE-3a deliverables (this wave)
 //!
 //! - LIVE codepoint `0x647a` = X25519⊕ML-KEM-768 hybrid KEM
-//!   (vendored ~30-LOC X-Wing-style combiner over `ml-kem` +
-//!   `x25519-dalek` + `sha3`; per Spike I + CLAUDE.md baked-in #5
-//!   + RATIFIED-S&C §1 refinement #6).
+//!   (vendored ~30-LOC X-Wing-style combiner over `libcrux-ml-kem` (via
+//!   `crate::mlkem`) + `x25519-dalek` + `sha3`; the RustCrypto `ml-kem` crate
+//!   is the dev-only FIPS-203 KAT witness, NOT the production impl; per Spike I
+//!   + CLAUDE.md baked-in #5 + RATIFIED-S&C §1 refinement #6).
 //! - LIVE codepoint `0x6400` = classical-only X25519 KEM (non-default
 //!   downgrade arm of the swap matrix).
 //! - Typed-reject (NEVER silent-fallback) on every other codepoint —
@@ -35,7 +36,7 @@
 //!          ct_X       = X25519 ciphertext (the ephemeral encapsulation pubkey)
 //!          pk_X       = recipient X25519 public key
 //!          XWingLabel = 0x5c2e2f2f5e5c  (ASCII `\.//^\`, the 6-byte
-//!                       draft-connolly §6 label — APPENDED, not prepended)
+//!                       draft-connolly §5.3 label — APPENDED, not prepended)
 //!
 //! WRAP(recipient_pub):
 //!     (ct_x, ss_x)     = X25519.encapsulate(recipient_pub.x25519)
@@ -75,7 +76,7 @@
 use rand_core::OsRng as RandOsRng;
 use sha3::Digest as _;
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey, StaticSecret};
-use zeroize::Zeroizing;
+use zeroize::{Zeroize as _, Zeroizing};
 
 use crate::aead::{
     AeadEnvelope, AeadError, AeadKeyMaterial, aad_whole_content, unwrap as aead_unwrap,
@@ -85,17 +86,89 @@ pub use crate::codepoint::CipherSuiteCodepoint;
 use crate::error::UnsupportedAlgorithm;
 use crate::mlkem;
 
+/// X25519 public-key serialized length — the fixed 32-byte Curve25519
+/// field-element wire size of [`x25519_dalek::PublicKey`] (`.as_bytes()`
+/// yields `&[u8; 32]`; `PublicKey::from([u8; 32])` round-trips). Named
+/// here (not hardcoded at call sites) per CLAUDE.md baked-in #5; the
+/// `x25519_public_len_matches_type_width` test pins it against an actual
+/// key's serialized width so it can never silently drift.
+pub const X25519_PUBLIC_LEN: usize = 32;
+
+/// X25519 secret-scalar serialized length — the fixed 32-byte Curve25519
+/// wire size of [`x25519_dalek::StaticSecret`] (`.to_bytes()` yields
+/// `[u8; 32]`; `StaticSecret::from([u8; 32])` round-trips). Named here per
+/// CLAUDE.md baked-in #5; the `x25519_secret_len_matches_type_width` test
+/// pins it against an actual key's serialized width.
+pub const X25519_SECRET_LEN: usize = 32;
+
+/// FIPS-203 ML-KEM-768 serialized sizes — public SSOT re-exports of the
+/// production `crate::mlkem` size consts (R13 F-11), placed alongside the
+/// `X25519_*_LEN` consts so a caller pinning the hybrid halves' wire widths
+/// has one public home. Exposing FIPS-203 facts is benign + mirrors the
+/// existing `X25519_PUBLIC_LEN`/`X25519_SECRET_LEN` public precedent; the
+/// `f_kat_1` libcrux KAT drives real ML-KEM output against these so a
+/// silent production-const drift away from FIPS-203 fails there.
+pub use crate::mlkem::{
+    ML_KEM_768_CT_LEN, ML_KEM_768_DK_LEN, ML_KEM_768_EK_LEN, ML_KEM_768_SS_LEN,
+};
+
+/// Multicodec varint prefix for the **X25519** KEM public-key COMPONENT —
+/// the registered `x25519-pub = 0xec`, unsigned-varint-encoded as
+/// `[0xec, 0x01]`. Per the multiformats multicodec table
+/// (<https://github.com/multiformats/multicodec/blob/master/table.csv>).
+///
+/// The **first** component of a GAP-KDB Shape-B key-set `kem` multikey
+/// (X25519-first per design correction C2 — matches the already-frozen
+/// [`RecipientPublic::to_bytes`] order so no reorder is needed). Un-confusable
+/// with the `[0x8c, 0x24]` ML-KEM tag. This is a component *algorithm* ID that
+/// references a REGISTERED multiformats codec (CLAUDE.md baked-in #5 — Benten
+/// never mints algorithm numbers).
+const X25519_PUB_MULTICODEC: [u8; 2] = [0xec, 0x01];
+
+/// Multicodec varint prefix for the **ML-KEM-768** KEM public-key COMPONENT —
+/// the registered `mlkem-768-pub = 0x120c`, unsigned-varint-encoded as
+/// `[0x8c, 0x24]`. Per the multiformats multicodec table.
+///
+/// The **second** component of a GAP-KDB Shape-B key-set `kem` multikey
+/// (X25519-first per C2). Retires the #5-risky reserved-private
+/// `HYBRID_KEM_MULTICODEC = 0xf0` in favor of the registered component codes
+/// (design §5 + the `did:benten` HYBRID DID layout).
+const MLKEM768_PUB_MULTICODEC: [u8; 2] = [0x8c, 0x24];
+
 /// The real draft-connolly X-Wing `XWingLabel` — the 6 bytes
 /// `0x5c2e2f2f5e5c` (ASCII `\.//^\`). **APPENDED** as the trailing suffix
-/// of the combiner pre-image per `draft-connolly-cfrg-xwing-kem-10` §6
-/// (R4.2-corrected 2026-06-03 — the prepended form is the superseded
-/// v01-v02 ordering and would freeze a non-interoperable KEM at the
-/// IETF-reserved `0x647A`).
+/// of the combiner pre-image per `draft-connolly-cfrg-xwing-kem-10` §5.3
+/// ("Combiner"; §6 is "Security Considerations" — the section-number cite
+/// was R18-corrected §6→§5.3, DOC-ONLY, zero wire/byte change: the label
+/// bytes + APPEND order are unchanged and stay R4.2-verified 2026-06-03 —
+/// the prepended form is the superseded v01-v02 ordering and would freeze
+/// a non-interoperable KEM at the IETF-reserved `0x647A`).
 pub const X_WING_LABEL: [u8; 6] = [0x5c, 0x2e, 0x2f, 0x2f, 0x5e, 0x5c];
 
 /// Classical-only `0x6400` combiner domain-separation info string. ASCII;
 /// NOT an integer wire/AAD field (m-1: not flagged by the BE scanner).
-const X25519_CLASSICAL_INFO_V1: &[u8] = b"x25519-classical-v1-benten-0x6400";
+///
+/// ENROLLED (D-95 closure; was the R17 F-09 NAMED UN-ENROLLED carve-out). This
+/// is a Benten-minted tag that applies the domain-separation idiom over KEY
+/// material — it is folded into the `0x6400` classical-combiner preimage — so it
+/// now carries a [`crate::domain_registry::registered_domain_tags`] entry and is
+/// covered by the corpus-wide `all_domain_tags_are_prefix_free` gate, the same
+/// treatment the structural-KDF and swap-matrix labels received at R6-final F-06
+/// on identical reasoning (single-surface, secret-keying, prefix-free, and
+/// therefore zero-wire-byte to enroll).
+///
+/// `pub(crate)` so `domain_registry` can name it directly in the corpus vec.
+/// There is deliberately NO mirror constant in `domain_registry` — the registry
+/// references THIS definition, so unlike a mirrored tag there is no second copy
+/// that could drift, and no `HOME == MIRROR` drift-assert is needed (the
+/// `structural_kdf` / `swap_matrix` idiom).
+///
+/// The sibling [`X_WING_LABEL`] remains deliberately un-enrolled and that
+/// exemption is now sharper by contrast: its bytes are NOT Benten-minted (they
+/// are fixed by `draft-connolly-cfrg-xwing-kem-10` §5.3) and it lives inside the
+/// single `0x647a` combiner preimage, so it is a spec-mandated constant rather
+/// than a Benten domain separator.
+pub(crate) const X25519_CLASSICAL_INFO_V1: &[u8] = b"x25519-classical-v1-benten-0x6400";
 
 /// Deterministic-recipient-seed BLAKE3 expansion domain-separation label —
 /// prefixed into the keyed-hash that expands a recipient `seed` into the three
@@ -151,18 +224,18 @@ impl CipherSuite {
                 // Hybrid: BOTH X25519 + ML-KEM-768 halves.
                 let x_sec = StaticSecret::random_from_rng(&mut RandOsRng);
                 let x_pub = X25519PublicKey::from(&x_sec);
-                let mlkem_kp = mlkem::generate();
+                let (mlkem_ek, mlkem_dk) = mlkem::generate().into_parts();
                 RecipientKeypair {
                     codepoint: suite.codepoint,
                     public: RecipientPublic {
                         codepoint: suite.codepoint,
                         x25519: Some(x_pub),
-                        mlkem768_ek: Some(mlkem_kp.ek),
+                        mlkem768_ek: Some(mlkem_ek),
                     },
                     secret: RecipientSecret {
                         codepoint: suite.codepoint,
                         x25519: Some(x_sec),
-                        mlkem768_dk: Some(mlkem_kp.dk),
+                        mlkem768_dk: Some(mlkem_dk),
                     },
                 }
             }
@@ -188,22 +261,37 @@ impl CipherSuite {
         }
     }
 
-    /// Deterministically derive a recipient keypair from a 32-byte `seed`.
+    /// TEST-ONLY: deterministically derive a recipient keypair from a
+    /// 32-byte `seed`.
     ///
     /// Both halves are derived from the seed via BLAKE3 domain-separated
     /// expansion (the X25519 `StaticSecret` from one 32-byte block; the
     /// ML-KEM-768 `(d, z)` from two more) so the same seed always yields
-    /// the same keypair. Used by the Layer-C drop path to map a stable
-    /// recipient pubkey *fingerprint* to a real hybrid keypair without a
-    /// keystore round-trip (the `0x647a` hybrid + the `0x6400` classical
-    /// downgrade are both supported; other codepoints would have been
-    /// rejected by [`Self::resolve`]).
+    /// the same keypair. Test fixtures use this to map a stable recipient
+    /// pubkey *fingerprint* to a real hybrid keypair without a keystore
+    /// round-trip (the `0x647a` hybrid + the `0x6400` classical downgrade
+    /// are both supported; other codepoints would have been rejected by
+    /// [`Self::resolve`]).
+    ///
+    /// **⚠️ NOT a production surface (R13 F-01 freeze-hygiene).** A
+    /// keypair whose seed can be a *public* value is the GAP-1 footgun: if
+    /// the seed is derivable by an attacker, the "secret" is forgeable
+    /// (the `real_entropy_differs_from_public_seed_deterministic` unit test
+    /// feeds it a `public_seed` and names its output `forgeable`). It has
+    /// ZERO production callers — production keying goes through
+    /// [`Self::generate_recipient_keypair`] (REAL OS entropy). So this is
+    /// cfg-gated `#[cfg(any(test, feature = "testing"))]` + `_for_test`-named
+    /// to keep it OFF the frozen default-feature public API entirely.
     ///
     /// Per CLAUDE.md baked-in #5 this stays the ONLY crypto-primitive call
     /// site — the seed expansion goes through the vetted `blake3` MAC and
     /// the keys through `x25519-dalek` / `ml-kem`; no primitive is forked.
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
-    pub fn generate_recipient_keypair_deterministic(&self, seed: &[u8; 32]) -> RecipientKeypair {
+    pub fn generate_recipient_keypair_deterministic_for_test(
+        &self,
+        seed: &[u8; 32],
+    ) -> RecipientKeypair {
         // Domain-separated expansion of the seed into the three 32-byte
         // blocks the two key halves need.
         let block = |tag: u8| -> [u8; 32] {
@@ -226,23 +314,28 @@ impl CipherSuite {
                 let mut dz = [0u8; mlkem::KEYGEN_SEED_LEN];
                 dz[..32].copy_from_slice(&block(0x02));
                 dz[32..].copy_from_slice(&block(0x03));
-                let mlkem_kp = mlkem::generate_deterministic(&dz);
+                let (mlkem_ek, mlkem_dk) = mlkem::generate_deterministic(&dz).into_parts();
                 RecipientKeypair {
                     codepoint: self.codepoint,
                     public: RecipientPublic {
                         codepoint: self.codepoint,
                         x25519: Some(x_pub),
-                        mlkem768_ek: Some(mlkem_kp.ek),
+                        mlkem768_ek: Some(mlkem_ek),
                     },
                     secret: RecipientSecret {
                         codepoint: self.codepoint,
                         x25519: Some(x_sec),
-                        mlkem768_dk: Some(mlkem_kp.dk),
+                        mlkem768_dk: Some(mlkem_dk),
                     },
                 }
             }
-            // Classical-only `0x6400`: X25519 half only.
-            _ => RecipientKeypair {
+            // Classical-only `0x6400`: X25519 half only. Explicit codepoint
+            // arm + `unreachable!` tail (no silent downgrade-to-classical on an
+            // unknown codepoint — CLAUDE.md #5 typed-reject-never-silent-fallback;
+            // matches `generate_recipient_keypair_for_test`). `CipherSuite`
+            // instances only exist via `resolve`, which rejects any other
+            // codepoint before construction.
+            0x6400 => RecipientKeypair {
                 codepoint: self.codepoint,
                 public: RecipientPublic {
                     codepoint: self.codepoint,
@@ -255,6 +348,71 @@ impl CipherSuite {
                     mlkem768_dk: None,
                 },
             },
+            _ => unreachable!("CipherSuite::resolve guards against unsupported codepoints"),
+        }
+    }
+
+    /// Generate a REAL-entropy recipient keypair appropriate to this
+    /// suite — the production keying path the engine mints identity key
+    /// material through (R9-S1; closes GAP-1's root: the prior Layer-C
+    /// placeholder derived the "secret" from the public fingerprint, so
+    /// there was ZERO secret entropy).
+    ///
+    /// Both halves are seeded from the crate's OS RNG (`rand_core::OsRng`,
+    /// the SAME source the seal path uses for ephemerals + the SAME source
+    /// `crate::mlkem::generate` fills its `d‖z` seed from). This is
+    /// **NON-deterministic**: two calls yield distinct public AND secret
+    /// bytes. Contrast `Self::generate_recipient_keypair_deterministic_for_test`
+    /// (seeded from a public fingerprint → forgeable; test-only) and
+    /// `generate_recipient_keypair_for_test` (test-fixture entropy).
+    ///
+    /// Per CLAUDE.md baked-in #5 this stays crypto-primitive glue — x25519
+    /// keygen via `x25519-dalek` + ML-KEM-768 keygen via the vetted
+    /// libcrux wrapper (`crate::mlkem`); no primitive is forked, no size
+    /// is hardcoded.
+    #[must_use]
+    pub fn generate_recipient_keypair(&self) -> RecipientKeypair {
+        // X25519 half — real OS entropy (same RNG source as the seal
+        // path's ephemerals + the deterministic path's structural key).
+        let x_sec = StaticSecret::random_from_rng(&mut RandOsRng);
+        let x_pub = X25519PublicKey::from(&x_sec);
+        match self.codepoint.raw() {
+            0x647a => {
+                // Hybrid: real ML-KEM-768 keygen (libcrux fills its 64-byte
+                // `d‖z` seed from the same OS RNG per `mlkem::generate`).
+                let (mlkem_ek, mlkem_dk) = mlkem::generate().into_parts();
+                RecipientKeypair {
+                    codepoint: self.codepoint,
+                    public: RecipientPublic {
+                        codepoint: self.codepoint,
+                        x25519: Some(x_pub),
+                        mlkem768_ek: Some(mlkem_ek),
+                    },
+                    secret: RecipientSecret {
+                        codepoint: self.codepoint,
+                        x25519: Some(x_sec),
+                        mlkem768_dk: Some(mlkem_dk),
+                    },
+                }
+            }
+            // Classical-only `0x6400`: X25519 half only (resolve() already
+            // rejected every other codepoint). Explicit arm + `unreachable!`
+            // tail — no silent downgrade-to-classical on an unknown codepoint
+            // (CLAUDE.md #5 typed-reject-never-silent-fallback).
+            0x6400 => RecipientKeypair {
+                codepoint: self.codepoint,
+                public: RecipientPublic {
+                    codepoint: self.codepoint,
+                    x25519: Some(x_pub),
+                    mlkem768_ek: None,
+                },
+                secret: RecipientSecret {
+                    codepoint: self.codepoint,
+                    x25519: Some(x_sec),
+                    mlkem768_dk: None,
+                },
+            },
+            _ => unreachable!("CipherSuite::resolve guards against unsupported codepoints"),
         }
     }
 
@@ -512,12 +670,25 @@ impl CipherSuite {
 /// sequence fed to `SHA3-256`):
 /// `ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel` — the 6-byte `XWingLabel` is
 /// **APPENDED** as the trailing suffix per `draft-connolly-cfrg-xwing-kem-10`
-/// §6 (R4.2-corrected). `ss_M` = ML-KEM-768 shared secret, `ss_X` = X25519
+/// §5.3 "Combiner" (R4.2-corrected; §6→§5.3 section-cite R18-corrected, DOC-ONLY).
+/// `ss_M` = ML-KEM-768 shared secret, `ss_X` = X25519
 /// shared secret, `ct_X` = the X25519 ephemeral public key (the X25519
 /// "ciphertext"), `pk_X` = the recipient X25519 public key.
 ///
 /// Exposed so the F-W0-1-LABEL construction-order witness pin can assert the
 /// label is the appended suffix (and NOT a prepended prefix).
+///
+/// **`ct_mlkem` is DELIBERATELY absent from the pre-image — SPEC-FAITHFUL
+/// (freeze-record; R9-council GAP-3; DO NOT "fix" by adding `ct_mlkem`).** The
+/// combiner binds `ct_X` (the X25519 ciphertext) but NOT `ct_mlkem` (the
+/// ML-KEM-768 ciphertext) directly, EXACTLY as `draft-connolly-cfrg-xwing-kem-10`
+/// §5.3 "Combiner" specifies. This is not an omission: ML-KEM-768 is IND-CCA2, so its shared
+/// secret `ss_M` **transitively binds** `ct_mlkem` (the FO-transform ties the
+/// ML-KEM shared secret to its own ciphertext), giving X-Wing its LEAK-freeness
+/// / binding property without re-hashing `ct_mlkem`. Adding `ct_mlkem` to the
+/// pre-image would DIVERGE from the IETF-faithful construction at the reserved
+/// `0x647A` codepoint (a wire-break) for zero security gain. Cross-record:
+/// Inv-17 (hybrid floor); the `tf2_*` strip-resistance pins.
 #[must_use]
 pub fn x_wing_combiner_preimage(ss_m: &[u8], ss_x: &[u8], ct_x: &[u8], pk_x: &[u8]) -> Vec<u8> {
     let mut pre = Vec::with_capacity(ss_m.len() + ss_x.len() + ct_x.len() + pk_x.len() + 6);
@@ -525,7 +696,7 @@ pub fn x_wing_combiner_preimage(ss_m: &[u8], ss_x: &[u8], ct_x: &[u8], pk_x: &[u
     pre.extend_from_slice(ss_x);
     pre.extend_from_slice(ct_x);
     pre.extend_from_slice(pk_x);
-    // APPENDED suffix (draft-connolly §6; NOT prepended).
+    // APPENDED suffix (draft-connolly §5.3 "Combiner"; NOT prepended).
     pre.extend_from_slice(&X_WING_LABEL);
     pre
 }
@@ -533,8 +704,14 @@ pub fn x_wing_combiner_preimage(ss_m: &[u8], ss_x: &[u8], ct_x: &[u8], pk_x: &[u
 /// The real draft-connolly X-Wing combiner:
 /// `SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ XWingLabel)`.
 ///
-/// This replaces the prior HKDF-SHA256 mislabel (`cipher_suite.rs:404` at
-/// the corpus base) with the IETF-faithful construction at the IETF-reserved
+/// This replaces the prior HKDF-SHA256 mislabel — the
+/// `HKDF-SHA256(… info = "x-wing-v1-benten-0x647a")` combiner this file
+/// shipped at the corpus base. **No line cite is given: that combiner no longer exists in
+/// production code at HEAD** — the only HEAD occurrence is the deliberate
+/// `legacy_hkdf_combine` reference fixture in
+/// `tests/f_w0_envelope_v2_migration.rs`, so any production line number
+/// would be wrong.
+/// The replacement is the IETF-faithful construction at the IETF-reserved
 /// codepoint `0x647A`. Per CLAUDE.md baked-in #5 the SHA3-256 primitive is
 /// wrapped from the vetted upstream `sha3` crate — no reimplementation.
 ///
@@ -559,6 +736,21 @@ pub fn combine_x_wing(
 /// (matching the hybrid arm's hash family) so the two arms share the same
 /// hash primitive but derive distinct keys (distinct input set + distinct
 /// trailing domain-separation string).
+///
+/// **Preimage length-injectivity (R17 F-26; mirrors the Row D-13
+/// concatenation-injectivity criterion).** The un-length-prefixed
+/// concatenation `ss_X ‖ ek_X ‖ pub_X ‖ INFO` is injective — i.e. two
+/// distinct input tuples cannot produce the same preimage bytes — ONLY
+/// because every field is FIXED-LENGTH at this call: `ss_x` / `ek_x` /
+/// `pub_x` are each the 32-byte X25519 output/pubkey and `X25519_CLASSICAL_INFO_V1`
+/// is a fixed constant. The carve-out criterion (same as Row D-13's
+/// info-tag folding): a bare concatenation is a sound domain separator IFF
+/// every component has a fixed, statically-known length OR is length-prefixed.
+/// If a future edit ever feeds a VARIABLE-length component into this
+/// combiner, it MUST length-prefix that component (or the concat stops being
+/// injective and opens a preimage-collision confusion path). The trailing
+/// constant `INFO` string additionally domain-separates this arm from the
+/// hybrid X-Wing combiner (which uses the appended [`X_WING_LABEL`]).
 #[must_use]
 pub fn classical_combine(ss_x: &[u8], ek_x: &[u8], pub_x: &[u8]) -> [u8; 32] {
     let mut pre =
@@ -634,6 +826,207 @@ impl RecipientPublic {
     pub const fn codepoint(&self) -> CipherSuiteCodepoint {
         self.codepoint
     }
+
+    /// Serialize the recipient public material to its canonical byte layout
+    /// (so it can be advertised via a DID / stored in the vault).
+    ///
+    /// Layout is codepoint-dispatched (the codepoint is carried out-of-band
+    /// alongside these bytes; the caller pairs it back in
+    /// [`Self::from_bytes`]):
+    ///
+    /// - `0x647a` hybrid: `x25519_pub(32) ‖ mlkem768_ek(1184)` — the x25519
+    ///   public key followed by the FIPS-203 ML-KEM-768 encapsulation key.
+    /// - `0x6400` classical: `x25519_pub(32)`.
+    ///
+    /// Sizes flow from the upstream type constants
+    /// (`crate::mlkem::ML_KEM_768_EK_LEN` + the x25519 32-byte public key)
+    /// — never hardcoded (CLAUDE.md baked-in #5).
+    #[must_use]
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut out = Vec::new();
+        if let Some(x_pub) = self.x25519.as_ref() {
+            out.extend_from_slice(x_pub.as_bytes());
+        }
+        if let Some(ek) = self.mlkem768_ek.as_ref() {
+            out.extend_from_slice(ek);
+        }
+        out
+    }
+
+    /// Parse a recipient public byte blob for `codepoint` back into a
+    /// [`RecipientPublic`]. Fail-closed typed-reject on any malformed /
+    /// wrong-length input — NEVER a silent default (CLAUDE.md baked-in #5).
+    ///
+    /// The `codepoint` is supplied out-of-band (it travels with the blob in
+    /// the DID / vault record) and drives the expected layout — see
+    /// [`Self::to_bytes`].
+    ///
+    /// # Errors
+    ///
+    /// - [`AeadError::MalformedRecipientPublic`] if `bytes` is the wrong
+    ///   length for `codepoint`, or the ML-KEM-768 encapsulation key does
+    ///   not parse.
+    /// - [`AeadError::Unsupported`] if `codepoint` is not a live cipher
+    ///   suite.
+    pub fn from_bytes(codepoint: CipherSuiteCodepoint, bytes: &[u8]) -> Result<Self, AeadError> {
+        // Reject unknown/reserved codepoints up-front (never silent default).
+        CipherSuite::resolve(codepoint)?;
+        match codepoint.raw() {
+            0x647a => {
+                let expect = X25519_PUBLIC_LEN + mlkem::ML_KEM_768_EK_LEN;
+                if bytes.len() != expect {
+                    return Err(AeadError::MalformedRecipientPublic(
+                        "hybrid recipient public wrong length (expected x25519_pub||mlkem768_ek)",
+                    ));
+                }
+                let (x_bytes, ek_bytes) = bytes.split_at(X25519_PUBLIC_LEN);
+                let x_arr: [u8; X25519_PUBLIC_LEN] = x_bytes.try_into().map_err(|_| {
+                    AeadError::MalformedRecipientPublic("x25519 public wrong length")
+                })?;
+                // Reject a malformed ML-KEM ek eagerly (encapsulate() would
+                // otherwise surface it later); a byte-length-correct ek that
+                // fails structural parse is caught by the encapsulate path,
+                // but we validate the length invariant here so from_bytes is
+                // total over its declared contract.
+                Ok(Self {
+                    codepoint,
+                    x25519: Some(X25519PublicKey::from(x_arr)),
+                    mlkem768_ek: Some(ek_bytes.to_vec()),
+                })
+            }
+            // Classical-only `0x6400`: x25519 half only.
+            _ => {
+                if bytes.len() != X25519_PUBLIC_LEN {
+                    return Err(AeadError::MalformedRecipientPublic(
+                        "classical recipient public wrong length (expected x25519_pub)",
+                    ));
+                }
+                let x_arr: [u8; X25519_PUBLIC_LEN] = bytes.try_into().map_err(|_| {
+                    AeadError::MalformedRecipientPublic("x25519 public wrong length")
+                })?;
+                Ok(Self {
+                    codepoint,
+                    x25519: Some(X25519PublicKey::from(x_arr)),
+                    mlkem768_ek: None,
+                })
+            }
+        }
+    }
+
+    /// Decode a **GAP-KDB Shape-B key-set `kem` multikey** (the `did:benten`
+    /// key-set-document `kem` field) into a [`RecipientPublic`] bound to
+    /// `codepoint`, cross-checking the component multicodecs against the
+    /// out-of-band `kem_cp` (design correction **C2**). Fail-closed
+    /// typed-reject on ANY malformed multikey / component-vs-`kem_cp`
+    /// disagreement / unsupported codepoint — NEVER a silent default
+    /// (CLAUDE.md baked-in #5).
+    ///
+    /// # The frozen wire (design §5 + C2)
+    ///
+    /// The `kem` multikey is **X25519-first** (matching the already-frozen
+    /// [`Self::to_bytes`] order, so no reorder is needed — the §5 REORDER
+    /// foot-gun is deleted by C2). Component algorithm IDs reference REGISTERED
+    /// multiformats codecs:
+    ///
+    /// - `0x647a` hybrid: `0xec01 ‖ x25519(32) ‖ 0x8c24 ‖ mlkem768_ek(1184)`
+    ///   (component set `{x25519-pub, mlkem-768-pub}`, in that order).
+    /// - `0x6400` classical: `0xec01 ‖ x25519(32)` (component set `{x25519-pub}`).
+    ///
+    /// # The `kem_cp` ⟺ component-set cross-check (C2 — the load-bearing check)
+    ///
+    /// [`Self::from_bytes`] dispatches purely on `codepoint` over the
+    /// component-varint-STRIPPED payload, so it cannot catch a multikey whose
+    /// payload length is correct for `codepoint` but whose component varints
+    /// declare the WRONG algorithms (X25519 ↔ ML-KEM swapped / ML-KEM-1024
+    /// substituted / a signing codec spliced into the KEM slot / a hybrid ML-KEM
+    /// component present under a classical claim). This decoder is the ONLY place
+    /// the component codecs are cross-checked against `kem_cp` — the
+    /// algorithm-confusion defense. Every component multicodec MUST match the
+    /// sequence mandated by `codepoint`, at its exact length, with NO trailing
+    /// bytes (Row-D-13 injectivity discipline).
+    ///
+    /// All sizes flow from the upstream size constants ([`X25519_PUBLIC_LEN`],
+    /// [`ML_KEM_768_EK_LEN`]) — never hardcoded (CLAUDE.md baked-in #5).
+    ///
+    /// # Errors
+    ///
+    /// - [`AeadError::MalformedRecipientPublic`] on a wrong total length, a
+    ///   wrong / mis-ordered component multicodec, or (via [`Self::from_bytes`])
+    ///   a malformed component payload.
+    /// - [`AeadError::Unsupported`] if `codepoint` is not a live cipher suite.
+    pub fn from_kem_multikey(
+        codepoint: CipherSuiteCodepoint,
+        kem_multikey: &[u8],
+    ) -> Result<Self, AeadError> {
+        // Reject unknown/reserved codepoints up-front (never silent default);
+        // this bounds the match below to the two live cipher suites.
+        CipherSuite::resolve(codepoint)?;
+        match codepoint.raw() {
+            0x647a => {
+                // Hybrid: 0xec01 ‖ x25519(32) ‖ 0x8c24 ‖ mlkem768_ek(1184).
+                let expected = X25519_PUB_MULTICODEC.len()
+                    + X25519_PUBLIC_LEN
+                    + MLKEM768_PUB_MULTICODEC.len()
+                    + mlkem::ML_KEM_768_EK_LEN;
+                if kem_multikey.len() != expected {
+                    return Err(AeadError::MalformedRecipientPublic(
+                        "hybrid kem multikey wrong length (expected \
+                         0xec‖x25519(32)‖0x120c‖mlkem768_ek(1184))",
+                    ));
+                }
+                // Component 1: x25519-pub (0xec01) — MUST lead (C2 X25519-first).
+                if kem_multikey[0] != X25519_PUB_MULTICODEC[0]
+                    || kem_multikey[1] != X25519_PUB_MULTICODEC[1]
+                {
+                    return Err(AeadError::MalformedRecipientPublic(
+                        "hybrid kem multikey: first component multicodec != \
+                         x25519-pub 0xec (kem_cp⟺components cross-check — C2 \
+                         mandates X25519-first)",
+                    ));
+                }
+                let x_start = X25519_PUB_MULTICODEC.len();
+                let ml_tag = x_start + X25519_PUBLIC_LEN;
+                // Component 2: mlkem-768-pub (0x120c → varint 0x8c24).
+                if kem_multikey[ml_tag] != MLKEM768_PUB_MULTICODEC[0]
+                    || kem_multikey[ml_tag + 1] != MLKEM768_PUB_MULTICODEC[1]
+                {
+                    return Err(AeadError::MalformedRecipientPublic(
+                        "hybrid kem multikey: second component multicodec != \
+                         mlkem-768-pub 0x120c (kem_cp⟺components cross-check — \
+                         wrong ML-KEM parameter / wrong-role codec / classical-\
+                         only-under-hybrid)",
+                    ));
+                }
+                let ek_start = ml_tag + MLKEM768_PUB_MULTICODEC.len();
+                // Reassemble the X25519-first from_bytes payload
+                // `x25519(32) ‖ mlkem768_ek(1184)` (no reorder — C2).
+                let mut payload = Vec::with_capacity(X25519_PUBLIC_LEN + mlkem::ML_KEM_768_EK_LEN);
+                payload.extend_from_slice(&kem_multikey[x_start..ml_tag]);
+                payload.extend_from_slice(&kem_multikey[ek_start..]);
+                Self::from_bytes(codepoint, &payload)
+            }
+            // Classical-only `0x6400`: 0xec01 ‖ x25519(32), no ML-KEM component.
+            _ => {
+                let expected = X25519_PUB_MULTICODEC.len() + X25519_PUBLIC_LEN;
+                if kem_multikey.len() != expected {
+                    return Err(AeadError::MalformedRecipientPublic(
+                        "classical kem multikey wrong length (expected \
+                         0xec‖x25519(32)) — a hybrid ML-KEM component under a \
+                         classical kem_cp fails closed here",
+                    ));
+                }
+                if kem_multikey[0] != X25519_PUB_MULTICODEC[0]
+                    || kem_multikey[1] != X25519_PUB_MULTICODEC[1]
+                {
+                    return Err(AeadError::MalformedRecipientPublic(
+                        "classical kem multikey: component multicodec != \
+                         x25519-pub 0xec (kem_cp⟺components cross-check)",
+                    ));
+                }
+                Self::from_bytes(codepoint, &kem_multikey[X25519_PUB_MULTICODEC.len()..])
+            }
+        }
+    }
 }
 
 /// Recipient's secret material (X25519 secret + optionally ML-KEM-768
@@ -649,6 +1042,118 @@ impl RecipientSecret {
     #[must_use]
     pub const fn codepoint(&self) -> CipherSuiteCodepoint {
         self.codepoint
+    }
+
+    /// Serialize the recipient secret material to its canonical byte layout
+    /// (so the vault can seal it at rest). Layout is codepoint-dispatched
+    /// (the codepoint travels alongside; the caller pairs it back in
+    /// [`Self::from_bytes`]):
+    ///
+    /// - `0x647a` hybrid: `x25519_sec(32) ‖ mlkem768_dk(2400)` — the x25519
+    ///   secret scalar followed by the FIPS-203 ML-KEM-768 decapsulation
+    ///   key (full expanded form).
+    /// - `0x6400` classical: `x25519_sec(32)`.
+    ///
+    /// Sizes flow from the upstream type constants
+    /// (`crate::mlkem::ML_KEM_768_DK_LEN` + the x25519 32-byte secret) —
+    /// never hardcoded (CLAUDE.md baked-in #5).
+    ///
+    /// The returned `Vec` is raw secret bytes — callers MUST wipe it (seal
+    /// it into the vault + drop, or wrap in [`zeroize::Zeroizing`]).
+    #[must_use]
+    pub fn to_bytes(&self) -> Zeroizing<Vec<u8>> {
+        let mut out = Vec::new();
+        if let Some(x_sec) = self.x25519.as_ref() {
+            out.extend_from_slice(&x_sec.to_bytes());
+        }
+        if let Some(dk) = self.mlkem768_dk.as_ref() {
+            out.extend_from_slice(dk);
+        }
+        Zeroizing::new(out)
+    }
+
+    /// Parse a recipient secret byte blob for `codepoint` back into a
+    /// [`RecipientSecret`]. Fail-closed typed-reject on any malformed /
+    /// wrong-length input — NEVER a silent default (CLAUDE.md baked-in #5).
+    ///
+    /// The `codepoint` is supplied out-of-band (it travels with the blob in
+    /// the vault record) and drives the expected layout — see
+    /// [`Self::to_bytes`].
+    ///
+    /// # Errors
+    ///
+    /// - [`AeadError::MalformedRecipientSecret`] if `bytes` is the wrong
+    ///   length for `codepoint`.
+    /// - [`AeadError::Unsupported`] if `codepoint` is not a live cipher
+    ///   suite.
+    pub fn from_bytes(codepoint: CipherSuiteCodepoint, bytes: &[u8]) -> Result<Self, AeadError> {
+        // Reject unknown/reserved codepoints up-front (never silent default).
+        CipherSuite::resolve(codepoint)?;
+        match codepoint.raw() {
+            0x647a => {
+                let expect = X25519_SECRET_LEN + mlkem::ML_KEM_768_DK_LEN;
+                if bytes.len() != expect {
+                    return Err(AeadError::MalformedRecipientSecret(
+                        "hybrid recipient secret wrong length (expected x25519_sec||mlkem768_dk)",
+                    ));
+                }
+                let (x_bytes, dk_bytes) = bytes.split_at(X25519_SECRET_LEN);
+                let x_arr: [u8; X25519_SECRET_LEN] = x_bytes.try_into().map_err(|_| {
+                    AeadError::MalformedRecipientSecret("x25519 secret wrong length")
+                })?;
+                Ok(Self {
+                    codepoint,
+                    x25519: Some(StaticSecret::from(x_arr)),
+                    mlkem768_dk: Some(dk_bytes.to_vec()),
+                })
+            }
+            // Classical-only `0x6400`: x25519 half only.
+            _ => {
+                if bytes.len() != X25519_SECRET_LEN {
+                    return Err(AeadError::MalformedRecipientSecret(
+                        "classical recipient secret wrong length (expected x25519_sec)",
+                    ));
+                }
+                let x_arr: [u8; X25519_SECRET_LEN] = bytes.try_into().map_err(|_| {
+                    AeadError::MalformedRecipientSecret("x25519 secret wrong length")
+                })?;
+                Ok(Self {
+                    codepoint,
+                    x25519: Some(StaticSecret::from(x_arr)),
+                    mlkem768_dk: None,
+                })
+            }
+        }
+    }
+}
+
+/// Debug-redacting: the secret bytes MUST NOT leak into logs / panics.
+/// `StaticSecret` already redacts, but we print neither half's bytes — only
+/// the codepoint + a redaction marker (mirrors `AeadKeyMaterial` /
+/// `StructuralKdfKey` hygiene).
+impl core::fmt::Debug for RecipientSecret {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RecipientSecret")
+            .field("codepoint", &self.codepoint)
+            .field("x25519", &"<redacted>")
+            .field("mlkem768_dk", &"<redacted>")
+            .finish()
+    }
+}
+
+/// Zeroize-on-drop for the recipient secret. `x25519_dalek::StaticSecret`
+/// already zeroizes its own scalar on drop (the `zeroize` feature is
+/// enabled in `Cargo.toml`); the ML-KEM-768 decapsulation-key `Vec<u8>` is
+/// NOT self-zeroizing, so we wipe it explicitly here — the raw dk bytes are
+/// a long-lived at-rest secret (coredump / freed-heap exposure) per the
+/// F-08 memory-hygiene contract.
+impl Drop for RecipientSecret {
+    fn drop(&mut self) {
+        if let Some(dk) = self.mlkem768_dk.as_mut() {
+            dk.zeroize();
+        }
+        // `self.x25519: Option<StaticSecret>` zeroizes via StaticSecret's
+        // own Drop when this struct's fields drop.
     }
 }
 
@@ -704,8 +1209,12 @@ impl WrappedKey {
     }
 }
 
-/// Recovered key material from `unwrap_key_material`.
-#[derive(Debug)]
+/// Recovered key material from `unwrap_key_material` (Compromise #66).
+///
+/// The `bytes` are recovered SECRET key material (`k_root`). R19 secret-
+/// hygiene: the raw bytes are zeroized on drop and NEVER rendered by
+/// `Debug` (redaction marker only) — mirrors the `RecipientSecret` /
+/// `AeadKeyMaterial` / `StructuralKdfKey` hygiene in this crate.
 pub struct UnwrappedKey {
     bytes: Vec<u8>,
 }
@@ -718,7 +1227,31 @@ impl UnwrappedKey {
     }
 }
 
+/// Debug-redacting: the recovered `k_root` bytes MUST NOT leak into logs /
+/// panics (Compromise #66 memory-hygiene). Prints only a redaction marker.
+impl core::fmt::Debug for UnwrappedKey {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("UnwrappedKey")
+            .field("bytes", &"<redacted>")
+            .finish()
+    }
+}
+
+/// Zeroize-on-drop: the recovered `k_root` `Vec<u8>` is a recovered secret;
+/// wipe it explicitly so freed-heap / coredump exposure does not leak it.
+impl Drop for UnwrappedKey {
+    fn drop(&mut self) {
+        self.bytes.zeroize();
+    }
+}
+
 /// Recovered plaintext from `open_aead`.
+///
+/// The `bytes` are recovered SECRET content (the decrypted Node body). R19
+/// secret-hygiene: the raw bytes are zeroized on drop and NEVER rendered by
+/// `Debug` (redaction marker only) — mirrors the sibling [`UnwrappedKey`] /
+/// `RecipientSecret` / `AeadKeyMaterial` / `StructuralKdfKey` hygiene in this
+/// crate.
 pub struct DecryptedPlaintext {
     bytes: Vec<u8>,
 }
@@ -728,6 +1261,25 @@ impl DecryptedPlaintext {
     #[must_use]
     pub fn as_slice(&self) -> &[u8] {
         &self.bytes
+    }
+}
+
+/// Debug-redacting: recovered plaintext MUST NOT leak into logs / panics.
+/// Prints only a redaction marker.
+impl core::fmt::Debug for DecryptedPlaintext {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("DecryptedPlaintext")
+            .field("bytes", &"<redacted>")
+            .finish()
+    }
+}
+
+/// Zeroize-on-drop: the recovered plaintext `Vec<u8>` is recovered secret
+/// content; wipe it explicitly so freed-heap / coredump exposure does not
+/// leak it.
+impl Drop for DecryptedPlaintext {
+    fn drop(&mut self) {
+        self.bytes.zeroize();
     }
 }
 
@@ -747,6 +1299,35 @@ mod tests {
             RECIPIENT_SEED_LABEL,
             reg::RECIPIENT_SEED_LABEL,
             "RECIPIENT_SEED_LABEL drifted from the central domain_registry mirror"
+        );
+        // S-6 ABSOLUTE pin. The mirror-equality above moves under a coordinated
+        // rename of BOTH sides; the literal does not. (The registry side is
+        // additionally pinned by the `f_dt_1_domain_tag_absolute_byte_pins`
+        // corpus test — this arm keeps the home honest on its own.)
+        assert_eq!(
+            RECIPIENT_SEED_LABEL, b"benten-crypto-suite:recipient-seed",
+            "the frozen deterministic-recipient-seed expansion label is exactly \
+             `benten-crypto-suite:recipient-seed`"
+        );
+        // S-6 ABSOLUTE pin for the `0x6400` classical-combiner info string. It
+        // keys material (folded into the `classical_combine` SHA3-256 preimage),
+        // so a rename silently re-keys every `0x6400` shared secret while every
+        // round-trip stays green — the absolute literal is what catches that.
+        assert_eq!(
+            X25519_CLASSICAL_INFO_V1, b"x25519-classical-v1-benten-0x6400",
+            "the frozen 0x6400 classical-combiner info string is exactly \
+             `x25519-classical-v1-benten-0x6400`"
+        );
+        // D-95 closure — it is ENROLLED in the prefix-free corpus (it was the
+        // R17 F-09 named un-enrolled carve-out). MUTATION THAT MUST MAKE THIS
+        // FAIL: remove the `crate::cipher_suite::X25519_CLASSICAL_INFO_V1` entry
+        // from `domain_registry::registered_domain_tags()`. Without this arm,
+        // dropping the entry only trips the corpus COUNT assertion, which a
+        // future tag addition would mask.
+        assert!(
+            reg::registered_domain_tags().contains(&X25519_CLASSICAL_INFO_V1),
+            "the 0x6400 classical-combiner info string MUST stay enrolled in the \
+             prefix-free domain-tag corpus (D-95)"
         );
     }
 
@@ -857,6 +1438,206 @@ mod tests {
             outcome,
             Err(UnsupportedAlgorithm::CipherSuite { codepoint: 0x647b })
         ));
+    }
+
+    // ---- R9-S1: real-entropy generation + serialization round-trip ----
+
+    /// The named x25519 length constants MUST equal the actual serialized
+    /// width of the upstream types (no-hardcoded-sizes discipline — if a
+    /// future x25519-dalek changed the wire size this fails, rather than
+    /// silently mis-serializing).
+    #[test]
+    fn x25519_public_len_matches_type_width() {
+        let x_sec = StaticSecret::random_from_rng(&mut RandOsRng);
+        let x_pub = X25519PublicKey::from(&x_sec);
+        assert_eq!(x_pub.as_bytes().len(), X25519_PUBLIC_LEN);
+    }
+
+    #[test]
+    fn x25519_secret_len_matches_type_width() {
+        let x_sec = StaticSecret::random_from_rng(&mut RandOsRng);
+        assert_eq!(x_sec.to_bytes().len(), X25519_SECRET_LEN);
+    }
+
+    /// REAL-ENTROPY (GAP-1 root): two `generate_recipient_keypair()` calls
+    /// yield DISTINCT public AND secret bytes. This test would FAIL if the
+    /// generation were deterministic (as the placeholder path was).
+    #[test]
+    fn generate_recipient_keypair_is_real_entropy_hybrid() {
+        let suite = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768).unwrap();
+        let a = suite.generate_recipient_keypair();
+        let b = suite.generate_recipient_keypair();
+
+        // Distinct public material (x25519 + ML-KEM ek).
+        assert_ne!(
+            a.public().to_bytes(),
+            b.public().to_bytes(),
+            "two hybrid keygens MUST yield distinct public bytes (real entropy)"
+        );
+        // Distinct secret material (x25519 + ML-KEM dk).
+        assert_ne!(
+            a.secret().to_bytes().as_slice(),
+            b.secret().to_bytes().as_slice(),
+            "two hybrid keygens MUST yield distinct secret bytes (real entropy)"
+        );
+
+        // Real hybrid material is present (both halves).
+        let pub_len = a.public().to_bytes().len();
+        assert_eq!(pub_len, X25519_PUBLIC_LEN + mlkem::ML_KEM_768_EK_LEN);
+        let sec_len = a.secret().to_bytes().len();
+        assert_eq!(sec_len, X25519_SECRET_LEN + mlkem::ML_KEM_768_DK_LEN);
+    }
+
+    #[test]
+    fn generate_recipient_keypair_is_real_entropy_classical() {
+        let suite = CipherSuite::resolve(CipherSuiteCodepoint::CLASSICAL_X25519).unwrap();
+        let a = suite.generate_recipient_keypair();
+        let b = suite.generate_recipient_keypair();
+        assert_ne!(a.public().to_bytes(), b.public().to_bytes());
+        assert_ne!(
+            a.secret().to_bytes().as_slice(),
+            b.secret().to_bytes().as_slice()
+        );
+        // Classical: x25519 half only.
+        assert_eq!(a.public().to_bytes().len(), X25519_PUBLIC_LEN);
+        assert_eq!(a.secret().to_bytes().len(), X25519_SECRET_LEN);
+    }
+
+    /// Real-entropy vs deterministic: a fresh keygen MUST differ from the
+    /// public-seed-derived deterministic keypair (the placeholder path had
+    /// ZERO secret entropy — this pins the fix).
+    #[test]
+    fn real_entropy_differs_from_public_seed_deterministic() {
+        let suite = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768).unwrap();
+        let real = suite.generate_recipient_keypair();
+        // The placeholder derived the "secret" from a PUBLIC fingerprint seed.
+        let public_seed = *real.public().x25519.as_ref().unwrap().as_bytes();
+        let forgeable = suite.generate_recipient_keypair_deterministic_for_test(&public_seed);
+        assert_ne!(
+            real.secret().to_bytes().as_slice(),
+            forgeable.secret().to_bytes().as_slice(),
+            "real-entropy secret MUST NOT be derivable from a public seed"
+        );
+    }
+
+    /// ROUND-TRIP: generate → to_bytes → from_bytes → wrap(pub)/unwrap(sec)
+    /// recovers the wrapped key material — proving the serialized REAL keys
+    /// drive the real KEM end to end (hybrid `0x647a`).
+    #[test]
+    fn serialized_real_keys_drive_kem_round_trip_hybrid() {
+        let suite = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768).unwrap();
+        let cp = suite.codepoint();
+        let kp = suite.generate_recipient_keypair();
+
+        // Serialize both halves, then reconstruct from bytes.
+        let pub_bytes = kp.public().to_bytes();
+        let sec_bytes = kp.secret().to_bytes();
+        let rebuilt_pub = RecipientPublic::from_bytes(cp, &pub_bytes).expect("pub from_bytes");
+        let rebuilt_sec = RecipientSecret::from_bytes(cp, &sec_bytes).expect("sec from_bytes");
+
+        // Wrap to the reconstructed public; unwrap with the reconstructed secret.
+        let k_root = [0xA5u8; 32];
+        let wrapped = suite
+            .wrap_key_material(&rebuilt_pub, &k_root)
+            .expect("wrap to serialized pub MUST succeed");
+        let recovered = suite
+            .unwrap_key_material(&rebuilt_sec, &wrapped)
+            .expect("unwrap with serialized sec MUST succeed");
+        assert_eq!(
+            recovered.as_bytes(),
+            &k_root,
+            "serialized real keys MUST drive the real KEM end to end"
+        );
+    }
+
+    #[test]
+    fn serialized_real_keys_drive_kem_round_trip_classical() {
+        let suite = CipherSuite::resolve(CipherSuiteCodepoint::CLASSICAL_X25519).unwrap();
+        let cp = suite.codepoint();
+        let kp = suite.generate_recipient_keypair();
+        let rebuilt_pub = RecipientPublic::from_bytes(cp, &kp.public().to_bytes()).unwrap();
+        let rebuilt_sec = RecipientSecret::from_bytes(cp, &kp.secret().to_bytes()).unwrap();
+        let k_root = [0x5Au8; 32];
+        let wrapped = suite.wrap_key_material(&rebuilt_pub, &k_root).unwrap();
+        let recovered = suite.unwrap_key_material(&rebuilt_sec, &wrapped).unwrap();
+        assert_eq!(recovered.as_bytes(), &k_root);
+    }
+
+    /// from_bytes rejects malformed / truncated input with the typed error
+    /// (fail-closed; never a silent default).
+    #[test]
+    fn from_bytes_rejects_malformed_public() {
+        let cp = CipherSuiteCodepoint::HYBRID_X25519_MLKEM768;
+        // Truncated hybrid public.
+        let truncated = vec![0u8; X25519_PUBLIC_LEN + mlkem::ML_KEM_768_EK_LEN - 1];
+        assert!(matches!(
+            RecipientPublic::from_bytes(cp, &truncated),
+            Err(AeadError::MalformedRecipientPublic(_))
+        ));
+        // Empty.
+        assert!(matches!(
+            RecipientPublic::from_bytes(cp, &[]),
+            Err(AeadError::MalformedRecipientPublic(_))
+        ));
+        // Wrong length for classical.
+        assert!(matches!(
+            RecipientPublic::from_bytes(CipherSuiteCodepoint::CLASSICAL_X25519, &[0u8; 31]),
+            Err(AeadError::MalformedRecipientPublic(_))
+        ));
+        // Unknown codepoint typed-rejects (never silent default).
+        assert!(matches!(
+            RecipientPublic::from_bytes(CipherSuiteCodepoint::from_raw(0xCAFE), &[0u8; 32]),
+            Err(AeadError::Unsupported(UnsupportedAlgorithm::CipherSuite {
+                codepoint: 0xCAFE
+            }))
+        ));
+    }
+
+    #[test]
+    fn from_bytes_rejects_malformed_secret() {
+        let cp = CipherSuiteCodepoint::HYBRID_X25519_MLKEM768;
+        let truncated = vec![0u8; X25519_SECRET_LEN + mlkem::ML_KEM_768_DK_LEN - 1];
+        assert!(matches!(
+            RecipientSecret::from_bytes(cp, &truncated),
+            Err(AeadError::MalformedRecipientSecret(_))
+        ));
+        assert!(matches!(
+            RecipientSecret::from_bytes(cp, &[]),
+            Err(AeadError::MalformedRecipientSecret(_))
+        ));
+        assert!(matches!(
+            RecipientSecret::from_bytes(CipherSuiteCodepoint::CLASSICAL_X25519, &[0u8; 33]),
+            Err(AeadError::MalformedRecipientSecret(_))
+        ));
+        assert!(matches!(
+            RecipientSecret::from_bytes(CipherSuiteCodepoint::from_raw(0xCAFE), &[0u8; 32]),
+            Err(AeadError::Unsupported(UnsupportedAlgorithm::CipherSuite {
+                codepoint: 0xCAFE
+            }))
+        ));
+    }
+
+    /// The secret's Debug MUST NOT leak either half's bytes (redaction
+    /// hygiene — mirrors AeadKeyMaterial / StructuralKdfKey).
+    #[test]
+    fn recipient_secret_debug_is_redacted() {
+        let suite = CipherSuite::resolve(CipherSuiteCodepoint::HYBRID_X25519_MLKEM768).unwrap();
+        let kp = suite.generate_recipient_keypair();
+        let dbg = format!("{:?}", kp.secret());
+        assert!(
+            dbg.contains("<redacted>"),
+            "Debug MUST redact secret halves"
+        );
+        // The raw dk bytes MUST NOT appear. A leak would render the dk as a
+        // decimal byte array (e.g. `[203, 17, ...]`); a redacting Debug is
+        // short. Pin both: the redaction marker is present AND the output is
+        // far shorter than a full 2400-byte dk dump would be.
+        let dk_len = kp.secret().mlkem768_dk.as_ref().map_or(0, Vec::len);
+        assert_eq!(dk_len, mlkem::ML_KEM_768_DK_LEN, "hybrid dk present");
+        assert!(
+            dbg.len() < 128,
+            "redacting Debug MUST be short (a leaked {dk_len}-byte dk dump would be far longer): {dbg}"
+        );
     }
 
     #[test]

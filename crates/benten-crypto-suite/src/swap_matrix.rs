@@ -52,7 +52,7 @@
 //!   BOTH shared secrets into the SHA3-256 combiner means stripping
 //!   either half yields a different key → AEAD authenticated decrypt
 //!   fails closed. (The X-Wing combiner is `SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖
-//!   pk_X ‖ XWingLabel)` per `draft-connolly-cfrg-xwing-kem-10` §6 —
+//!   pk_X ‖ XWingLabel)` per `draft-connolly-cfrg-xwing-kem-10` §5.3 "Combiner" —
 //!   [`crate::cipher_suite::combine_x_wing`] — NOT HKDF.)
 //! - **No-silent-downgrade**: hybrid-signed content handed to a
 //!   `classical_only` decrypt path surfaces [`SwapMatrixError::ConfigMismatch`]
@@ -124,6 +124,7 @@ use crate::sig::{
     VerifyError,
 };
 use crate::sizes::ml_dsa_65_sig_len;
+use zeroize::Zeroize as _;
 
 // =====================================================================
 // AUDIT-LANDED FLAG (the C11b safety invariant)
@@ -397,10 +398,10 @@ impl SwapMatrix {
             }
             EncryptionArm::None => SwapRecipientKeypair::None,
             EncryptionArm::PurePqMlKem768Only => {
-                let mlkem_kp = mlkem::generate();
+                let (mlkem_ek, mlkem_dk) = mlkem::generate().into_parts();
                 SwapRecipientKeypair::PurePqMlKem(Box::new(PurePqMlKemKeypair {
-                    public_bytes: mlkem_kp.ek,
-                    secret_bytes: mlkem_kp.dk,
+                    public_bytes: mlkem_ek,
+                    secret_bytes: mlkem_dk,
                 }))
             }
         }
@@ -818,7 +819,9 @@ impl SwapMatrixError {
     fn from_aead(e: AeadError) -> Self {
         match e {
             AeadError::AeadAuthFailed => Self::AeadAuthFailed,
-            AeadError::MalformedEnvelope(m) => Self::CipherSuite(m),
+            AeadError::MalformedEnvelope(m)
+            | AeadError::MalformedRecipientPublic(m)
+            | AeadError::MalformedRecipientSecret(m) => Self::CipherSuite(m),
             AeadError::RecipientLacksKeysForSuite => Self::ConfigMismatch {
                 detail: "recipient lacks one of the required key halves for the suite",
             },
@@ -846,6 +849,12 @@ impl SwapMatrixError {
 // =====================================================================
 
 /// Sender keypair (hybrid arm OR pure-PQ arm).
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future signature arm (an
+/// additional PQ⊕PQ combiner, a new NF-1 shape) lands as an ADDITIVE variant
+/// without a breaking SemVer bump on the frozen v1 API; cross-crate consumers
+/// MUST fail-CLOSED on an unrecognized arm (reject, never silently dispatch).
+#[non_exhaustive]
 pub enum SwapKeypair {
     /// Hybrid-or-classical arm — wraps the live [`SigKeypair`]
     /// produced by [`SignatureSuite::generate_keypair`].
@@ -857,6 +866,14 @@ pub enum SwapKeypair {
 
 /// Pure-PQ NF-1 keypair internals (boxed so the [`SwapKeypair`]
 /// discriminant size stays small).
+///
+/// Secret-hygiene (D-74/75/76): BOTH raw signing keys zeroize on drop.
+/// `slh_sk` wipes via `slh-dsa`'s `zeroize` feature; `pq_sk` wipes via
+/// `ml-dsa`'s `ZeroizeOnDrop for SigningKey<P>`, enabled by the
+/// `ml-dsa = { features = [..., "zeroize"] }` entry in this crate's
+/// `Cargo.toml` (previously `pq_sk` lingered in freed heap because the
+/// feature was off). Deliberately NOT `#[derive(Debug)]` so the raw
+/// signing keys never reach a `Debug` sink.
 pub struct PurePqKeypairInner {
     pq_sk: MlDsaSigningKey<MlDsa65>,
     slh_sk: SlhDsaSigningKey<Sha2_128s>,
@@ -877,6 +894,11 @@ impl SwapKeypair {
 }
 
 /// Public-key handle for either arm.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future signature arm lands as an
+/// ADDITIVE variant without a breaking SemVer bump on the frozen v1 API;
+/// cross-crate consumers MUST fail-CLOSED on an unrecognized arm.
+#[non_exhaustive]
 pub enum SwapPublicKey {
     /// Hybrid-or-classical arm.
     Hybrid(Box<SigPublicKey>),
@@ -891,6 +913,12 @@ pub struct PurePqPublicKey {
 }
 
 /// Recipient keypair (encryption-side; varies per encryption arm).
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future encryption arm (a new
+/// KEM combiner, a PQ⊕PQ KEM) lands as an ADDITIVE variant without a breaking
+/// SemVer bump on the frozen v1 API; cross-crate consumers MUST fail-CLOSED on
+/// an unrecognized arm.
+#[non_exhaustive]
 pub enum SwapRecipientKeypair {
     /// Hybrid-or-classical encryption — wraps the live [`RecipientKeypair`].
     Cipher(RecipientKeypair),
@@ -901,11 +929,30 @@ pub enum SwapRecipientKeypair {
 }
 
 /// Pure-PQ NF-1 ML-KEM-only keypair.
+///
+/// The secret half ([`Self::secret_bytes`], the ML-KEM-768 decapsulation key)
+/// is zeroized on drop (R18 C3 / F-08 memory-hygiene contract), matching the
+/// live [`crate::cipher_suite::RecipientSecret`] / [`crate::aead::AeadKeyMaterial`]
+/// pattern. Deliberately NOT `#[derive(Debug)]` so the raw decapsulation key
+/// never reaches a `Debug` sink. The `Vec<u8>` field types are unchanged, so
+/// there is NO serialization / wire / public-API-shape change — zeroize is a
+/// drop-behavior addition only.
 pub struct PurePqMlKemKeypair {
     /// Encapsulation key bytes (public).
     pub public_bytes: Vec<u8>,
-    /// Decapsulation key bytes (secret).
+    /// Decapsulation key bytes (secret). Zeroized on drop (R18 C3).
     pub secret_bytes: Vec<u8>,
+}
+
+/// R18 C3: zeroize the ML-KEM-768 decapsulation key on drop so the long-lived
+/// pure-PQ secret does not linger in freed heap (coredump / freed-heap
+/// exposure) — the F-08 memory-hygiene contract, identical in shape to the
+/// [`crate::cipher_suite::RecipientSecret`] `Drop`. `public_bytes` is
+/// non-sensitive but harmless to clear. No wire/serialization impact.
+impl Drop for PurePqMlKemKeypair {
+    fn drop(&mut self) {
+        self.secret_bytes.zeroize();
+    }
 }
 
 impl SwapRecipientKeypair {
@@ -941,6 +988,11 @@ impl SwapRecipientKeypair {
 }
 
 /// Recipient's public material (suite-tagged).
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future encryption arm lands as
+/// an ADDITIVE variant without a breaking SemVer bump on the frozen v1 API;
+/// cross-crate consumers MUST fail-CLOSED on an unrecognized arm.
+#[non_exhaustive]
 pub enum SwapRecipientPublic<'a> {
     /// Hybrid-or-classical cipher-suite recipient (borrowed).
     Cipher(CipherRecipientPublicRef<'a>),
@@ -967,6 +1019,11 @@ impl<'a> SwapRecipientPublic<'a> {
 }
 
 /// Recipient's secret material (suite-tagged).
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future encryption arm lands as
+/// an ADDITIVE variant without a breaking SemVer bump on the frozen v1 API;
+/// cross-crate consumers MUST fail-CLOSED on an unrecognized arm.
+#[non_exhaustive]
 pub enum SwapRecipientSecret<'a> {
     /// Hybrid-or-classical cipher-suite recipient secret (borrowed).
     Cipher(CipherRecipientSecretRef<'a>),
@@ -1075,6 +1132,13 @@ enum SwapSignature {
 // them in as a separate test-corpus fixture.
 
 /// ML-DSA-65 / FIPS-204 KAT vector.
+///
+/// R18 C4: a TEST-ONLY conformance fixture (consumed exclusively by the
+/// `#[cfg(any(test, feature = "testing"))]` `load_fips_204_kat_vector_for_test`
+/// loader + the `tf4_gcore3c_*` pins). Gated off the frozen default-feature
+/// public-api surface so a KAT-fixture shape change never touches the frozen
+/// v1 baseline (companion to the `FZ-KAT-LEAK` scanner-widening backlog row).
+#[cfg(any(test, feature = "testing"))]
 pub struct SignatureKatVector {
     /// Deterministic seed used to derive the keypair.
     pub seed: Vec<u8>,
@@ -1093,6 +1157,13 @@ pub struct SignatureKatVector {
 }
 
 /// ML-KEM-768 / FIPS-203 KAT vector.
+///
+/// R18 C4: a TEST-ONLY conformance fixture (consumed exclusively by the
+/// `#[cfg(any(test, feature = "testing"))]` `load_fips_203_kat_vector_for_test`
+/// loader + the `tf4_gcore3c_*` pins). Gated off the frozen default-feature
+/// public-api surface so a KAT-fixture shape change never touches the frozen
+/// v1 baseline (companion to the `FZ-KAT-LEAK` scanner-widening backlog row).
+#[cfg(any(test, feature = "testing"))]
 pub struct KemKatVector {
     /// Deterministic seed used to derive the keypair.
     pub seed: Vec<u8>,
@@ -1136,16 +1207,37 @@ impl PureKemEnc {
     }
 }
 
-/// Pure-KEM decapsulation output.
+/// Pure-KEM decapsulation output — carries a recovered ML-KEM-768 shared
+/// SECRET.
+///
+/// Secret-hygiene (D-74/75/76): this handle is produced ONLY by the
+/// `#[cfg(any(test, feature = "testing"))]` conformance loader
+/// [`SwapMatrix::ml_kem_768_decapsulate_for_test`] (no production
+/// constructor), so it is itself cfg-gated OFF the default-feature frozen
+/// public-api baseline — a raw recovered shared secret must not sit on the
+/// production public surface (matches the R18 C4 `KatVector` precedent). The
+/// `shared_secret` bytes are additionally zeroized on drop so the recovered
+/// KEM secret does not linger in freed heap.
+#[cfg(any(test, feature = "testing"))]
 pub struct PureKemDec {
     shared_secret: Vec<u8>,
 }
 
+#[cfg(any(test, feature = "testing"))]
 impl PureKemDec {
     /// Encoded shared-secret bytes.
     #[must_use]
     pub fn shared_secret_bytes(&self) -> &[u8] {
         &self.shared_secret
+    }
+}
+
+/// Zeroize-on-drop: the recovered ML-KEM-768 shared secret must not linger
+/// in freed heap / coredump.
+#[cfg(any(test, feature = "testing"))]
+impl Drop for PureKemDec {
+    fn drop(&mut self) {
+        self.shared_secret.zeroize();
     }
 }
 
@@ -1204,15 +1296,22 @@ impl PurePqNf1SignatureArm {
 // Process-cache for KAT vectors keyed by name.
 // -----------------------------------------------------------------
 
+// R18 C4: these KAT caches hold the test-only `*KatVector` fixtures and are
+// referenced ONLY from `#[cfg(any(test, feature = "testing"))]` loaders /
+// self-checks, so they carry the same gate (keeps the fixture types off the
+// frozen default-feature surface without an unused-item warning in release).
+#[cfg(any(test, feature = "testing"))]
 struct MlDsaKatCacheEntry {
     sk: MlDsaSigningKey<MlDsa65>,
     vector: SignatureKatVector,
 }
 
+#[cfg(any(test, feature = "testing"))]
 struct MlKemKatCacheEntry {
     vector: KemKatVector,
 }
 
+#[cfg(any(test, feature = "testing"))]
 fn ml_dsa_kat_cache()
 -> &'static std::sync::Mutex<std::collections::HashMap<String, MlDsaKatCacheEntry>> {
     static CACHE: OnceLock<
@@ -1221,6 +1320,7 @@ fn ml_dsa_kat_cache()
     CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
 }
 
+#[cfg(any(test, feature = "testing"))]
 fn ml_kem_kat_cache()
 -> &'static std::sync::Mutex<std::collections::HashMap<String, MlKemKatCacheEntry>> {
     static CACHE: OnceLock<
@@ -1308,9 +1408,7 @@ impl SwapMatrix {
             };
         }
         let seed = derive_named_seed(b"fips-203-ml-kem-768", name);
-        let mlkem_kp = mlkem::generate();
-        let pubkey_bytes = mlkem_kp.ek.clone();
-        let secret_bytes = mlkem_kp.dk;
+        let (pubkey_bytes, secret_bytes) = mlkem::generate().into_parts();
         let encap_randomness = derive_named_seed(b"fips-203-ml-kem-768-encap", name);
         let (ct, ss) = mlkem::encapsulate(&pubkey_bytes).expect("ML-KEM-768 encap against own ek");
         let vector = KemKatVector {
@@ -1431,9 +1529,7 @@ impl SwapMatrix {
                 public: entry.vector.pubkey.clone(),
             };
         }
-        let mlkem_kp = mlkem::generate();
-        let pubkey_bytes = mlkem_kp.ek;
-        let secret_bytes = mlkem_kp.dk;
+        let (pubkey_bytes, secret_bytes) = mlkem::generate().into_parts();
         let vector = KemKatVector {
             seed: seed.to_vec(),
             pubkey: pubkey_bytes.clone(),
@@ -1515,13 +1611,21 @@ impl SwapMatrix {
 // HELPERS
 // =====================================================================
 
+/// The swap-matrix sign-and-seal AEAD associated-data domain-separation prefix
+/// (`"sm-aad:" || sig_cp_be || cipher_cp_be || signature_bytes`). Enrolled in
+/// `crate::domain_registry::registered_domain_tags()` (R6-final F-06 follow-up)
+/// so the prefix-free forward-fire invariant covers this production AAD-commit
+/// surface (`compose_aad` ← `sign_and_seal`). Crate-visible (not part of the
+/// frozen public API).
+pub(crate) const SWAP_MATRIX_AAD_DOMAIN: &[u8] = b"sm-aad:";
+
 fn compose_aad(
     sig_cp: SigCodepoint,
     cipher_cp: CipherSuiteCodepoint,
     signature_bytes: &[u8],
 ) -> Vec<u8> {
-    let mut aad = Vec::with_capacity(8 + signature_bytes.len() + 32);
-    aad.extend_from_slice(b"sm-aad:");
+    let mut aad = Vec::with_capacity(SWAP_MATRIX_AAD_DOMAIN.len() + 4 + signature_bytes.len());
+    aad.extend_from_slice(SWAP_MATRIX_AAD_DOMAIN);
     // M-19: codepoints BIG-ENDIAN (migrated from LE at F-full Wave-0).
     aad.extend_from_slice(&sig_cp.raw().to_be_bytes());
     aad.extend_from_slice(&cipher_cp.raw().to_be_bytes());
@@ -1567,8 +1671,17 @@ fn split_payload_from_plaintext_with_sig(
         plaintext_with_sig[6],
         plaintext_with_sig[7],
     ]) as usize;
-    let payload_start = 8 + sig_len;
-    let payload_end = payload_start + payload_len;
+    // F-12-style overflow-safe bound: `payload_len` is read from the
+    // (authenticated) plaintext header and added to a running `usize` offset.
+    // On a 32-bit target (wasm32 — a first-class deployment shape) a naive
+    // `payload_start + payload_len` could WRAP and spuriously pass the length
+    // guard, then panic on the slice. `checked_add` fails closed instead.
+    let payload_start = 8usize
+        .checked_add(sig_len)
+        .ok_or(SwapMatrixError::Signature("payload offset overflow"))?;
+    let payload_end = payload_start
+        .checked_add(payload_len)
+        .ok_or(SwapMatrixError::Signature("payload range overflow"))?;
     if plaintext_with_sig.len() < payload_end {
         return Err(SwapMatrixError::Signature("plaintext_with_sig truncated"));
     }

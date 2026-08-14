@@ -121,10 +121,49 @@ docs/future/*
 !docs/future/phase-4-backlog.md
 !docs/future/kith-decentralized-identity.md
 !docs/future/v1-gate-refactor.md
+# Adopter-driven engine findings. Tracked because it is read BY reviewers and
+# review councils, and because its own §1 banner forbids it being used as a
+# deferral destination — a rule nobody can check inside a gitignored file.
+# F-066 is the precedent: 93 findings were written off as lost because agents
+# cannot read gitignored paths and inferred does-not-exist from cannot-see.
+!docs/future/engine-fit-and-gaps.md
+# R0-input design record for the binding grammar (E3 reopened); cited as the
+# named destination by engine-fit-and-gaps §3.1 and by the pre-tag freeze-record
+# disclosure — a destination must be readable to have received anything.
+!docs/future/binding-grammar.md
+# R0-input design record for IVM aggregation (fit-gaps §3.3); cited as the
+# named destination by engine-fit-and-gaps §3.3 and phase-4-backlog §4.171.
+!docs/future/ivm-aggregation.md
+# R0-input design record for bounded resources (fit-gaps §3.4); canonical
+# tracked home for the executionPolicy taxonomy (PLATFORM-DESIGN.md is
+# local-only); cited by engine-fit-and-gaps §3.4 and phase-4-backlog §4.172.
+!docs/future/bounded-resources.md
+# The design-space map above the museum-regime record (fit-gaps §3.4, widened to
+# the whole "at most N" taxonomy). Tracked for the same reason as its siblings:
+# it is cited BY bounded-resources.md and phase-4-backlog §4.172, and §8 records
+# two refuted-refutations a future reviewer must be able to read.
+!docs/future/bounded-resources-spectrum.md
+# The measured self-balancing law (fit-gaps 3.4). Tracked because every number in it
+# came from code that was RUN, and the reproduction sources must be findable by a
+# future reviewer; it also records two premises of OURS that measurement killed.
+!docs/future/bounded-resources-balancing-law.md
+# Where the engine is STRONG for the two adopter workloads (prefix-cache, offline VC
+# reciprocity) + where bulk content can actually live. Tracked because it carries two
+# ORCH false-records and their corrections, which a future reviewer must be able to read.
+!docs/future/engine-fit-strengths.md
+# How far the engine should reach into GPU compute (kernels, dispatch, RAM tier,
+# LAN-distributed inference). Tracked: it carries the kernel-containment refusal and
+# two more ORCH false-records, and a future reviewer must be able to read both.
+!docs/future/gpu-compute.md
 # F-full doc-wave (R5 TIER-3): the compute-marketplace deferral destination
 # is cited from in-tree code (F-FREEZE-1 / F-DISC-2 doc-coupling tests assert
 # it exists; V1-FROZEN Rows D-28/D-29 name it) — track it (HARD RULE clause-b).
 !docs/future/compute-marketplace.md
+# The measured close of the museum adoption question: 1.76M-row volume (MEASURED on the
+# real RedbBackend write path) + whether IVM/handlers can express their 159 invariants.
+# Tracked because it carries a FALSE-RECORD found on the FROZEN public API
+# (`subscribe_with_handler`) and two reachability corrections a reviewer must be able to read.
+!docs/future/museum-fit-close.md
 crates/benten-graph/benches/README.md
 crates/README.md
 bindings/README.md
@@ -134,3 +173,7 @@ tests/README.md
 # through a non-sentinel path. Tracked separately as part of the
 # packages/engine vitest cluster investigation.
 packages/engine/:memory:
+
+# Python bytecode from .github/scripts helpers — never a repo artifact.
+__pycache__/
+*.pyc

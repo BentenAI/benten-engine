@@ -187,10 +187,9 @@ pub struct StreamHandle {
     /// `true` once the producer has indicated end-of-stream.
     closed: bool,
     /// Pre-populated terminal error returned on the next `next()` call.
-    /// Used by the test-factory paths (`with_pending_error` /
-    /// `open_with_pending_error`) to inject a typed error before any
-    /// chunk is drained, so unit tests can exercise the error-edge
-    /// shape without running a producer thread.
+    /// Used by the test-factory path (`with_pending_error`) to inject a
+    /// typed error before any chunk is drained, so unit tests can
+    /// exercise the error-edge shape without running a producer thread.
     pending_error: Option<EngineError>,
     /// Engine-assigned sequence counter; bumped per delivered chunk so
     /// the TS wrapper can expose `chunk.seq` for replay/dedup symmetry
@@ -310,30 +309,15 @@ impl StreamHandle {
         }
     }
 
-    /// Like [`Self::with_pending_error`] but flagged as the
-    /// explicit-close lifecycle (G6-B `open_stream` form). The TS
-    /// wrapper enforces `close()` was called before the handle is
-    /// dropped; the Rust API does not enforce this directly because
-    /// `Drop` cannot return an error and silently swallowing the leak
-    /// would defeat the contract.
-    #[must_use]
-    pub fn open_with_pending_error(err: EngineError) -> Self {
-        Self {
-            chunks: std::collections::VecDeque::new(),
-            closed: true,
-            pending_error: Some(err),
-            next_seq: 0,
-            requires_explicit_close: true,
-            bridge_source: None,
-            producer_thread: None,
-            counter_released: false,
-        }
-    }
-
     /// Construct a handle pre-populated with the given chunks. The
     /// handle is closed (no further chunks will arrive) once the
     /// vector drains. Test-factory entry point used by the napi
     /// `testing_open_stream_for_test` symbol per ts-r4-2 R4 finding.
+    ///
+    /// Test-only factory (R10-council F-03): gated behind
+    /// `#[cfg(any(test, feature = "test-helpers"))]` — its sole non-test caller
+    /// (`testing_open_stream_for_test`) is behind the same gate.
+    #[cfg(any(test, feature = "test-helpers"))]
     #[must_use]
     pub fn from_test_chunks(chunks: Vec<Chunk>) -> Self {
         Self {

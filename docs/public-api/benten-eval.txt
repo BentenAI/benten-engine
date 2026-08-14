@@ -63,8 +63,6 @@ pub benten_eval::chunk_sink::SinkTraceEntry::BackpressureDropped::seq: u64
 pub benten_eval::chunk_sink::SinkTraceEntry::WallclockExceeded
 pub benten_eval::chunk_sink::SinkTraceEntry::WallclockExceeded::budget_ms: u64
 pub benten_eval::chunk_sink::SinkTraceEntry::WallclockExceeded::elapsed_ms: u64
-impl benten_eval::chunk_sink::SinkTraceEntry
-pub fn benten_eval::chunk_sink::SinkTraceEntry::is_backpressure_dropped(&self) -> bool
 impl core::clone::Clone for benten_eval::chunk_sink::SinkTraceEntry
 pub fn benten_eval::chunk_sink::SinkTraceEntry::clone(&self) -> benten_eval::chunk_sink::SinkTraceEntry
 impl core::cmp::Eq for benten_eval::chunk_sink::SinkTraceEntry
@@ -314,8 +312,6 @@ pub benten_eval::exec_state::ExecutionStatePayload::resumption_principal_cid: be
 impl benten_eval::exec_state::ExecutionStatePayload
 pub fn benten_eval::exec_state::ExecutionStatePayload::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
 pub fn benten_eval::exec_state::ExecutionStatePayload::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::CoreError>
-impl benten_eval::exec_state::ExecutionStatePayload
-pub fn benten_eval::exec_state::ExecutionStatePayload::new_with_pinned(alloc::vec::Vec<benten_core::Cid>) -> Self
 impl core::clone::Clone for benten_eval::exec_state::ExecutionStatePayload
 pub fn benten_eval::exec_state::ExecutionStatePayload::clone(&self) -> benten_eval::exec_state::ExecutionStatePayload
 impl core::cmp::Eq for benten_eval::exec_state::ExecutionStatePayload
@@ -520,7 +516,6 @@ impl core::marker::Unpin for benten_eval::expr::UnaryOp
 impl core::marker::UnsafeUnpin for benten_eval::expr::UnaryOp
 impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::expr::UnaryOp
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::expr::UnaryOp
-pub fn benten_eval::expr::make_map(alloc::vec::Vec<(alloc::string::String, benten_core::value::Value)>) -> benten_core::value::Value
 pub mod benten_eval::host
 pub struct benten_eval::host::NullHost
 impl benten_eval::host::PrimitiveHost for benten_eval::host::NullHost
@@ -791,7 +786,6 @@ pub benten_eval::primitives::sandbox::SandboxError::WallclockExceeded::limit_ms:
 impl benten_eval::primitives::sandbox::SandboxError
 pub fn benten_eval::primitives::sandbox::SandboxError::budget_type(&self) -> core::option::Option<&'static str>
 pub fn benten_eval::primitives::sandbox::SandboxError::code(&self) -> benten_errors::ErrorCode
-pub fn benten_eval::primitives::sandbox::SandboxError::to_budget_exhausted_trace(&self, alloc::vec::Vec<alloc::string::String>) -> core::option::Option<benten_eval::TraceStep>
 impl core::clone::Clone for benten_eval::primitives::sandbox::SandboxError
 pub fn benten_eval::primitives::sandbox::SandboxError::clone(&self) -> benten_eval::primitives::sandbox::SandboxError
 impl core::cmp::Eq for benten_eval::primitives::sandbox::SandboxError
@@ -815,7 +809,7 @@ impl core::marker::Unpin for benten_eval::primitives::sandbox::SandboxError
 impl core::marker::UnsafeUnpin for benten_eval::primitives::sandbox::SandboxError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::primitives::sandbox::SandboxError
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::primitives::sandbox::SandboxError
-pub struct benten_eval::primitives::sandbox::SandboxConfig
+#[non_exhaustive] pub struct benten_eval::primitives::sandbox::SandboxConfig
 pub benten_eval::primitives::sandbox::SandboxConfig::fuel: u64
 pub benten_eval::primitives::sandbox::SandboxConfig::max_nest_depth: u8
 pub benten_eval::primitives::sandbox::SandboxConfig::max_wasm_stack: u64
@@ -1189,7 +1183,6 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::primitives::subscr
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::primitives::subscribe::TestPrincipal
 pub fn benten_eval::primitives::subscribe::active_subscription_count() -> usize
 pub fn benten_eval::primitives::subscribe::execute(&benten_core::subgraph::OperationNode, &dyn benten_eval::host::PrimitiveHost) -> core::result::Result<benten_eval::StepResult, benten_eval::EvalError>
-pub fn benten_eval::primitives::subscribe::inject_event(&benten_eval::primitives::subscribe::ActiveSubscription, benten_core::change_stream::ChangeEvent) -> core::result::Result<(), benten_eval::primitives::subscribe::SubscribeError>
 pub fn benten_eval::primitives::subscribe::make_change_event(benten_core::Cid, benten_core::change_stream::ChangeKind, serde_json::value::Value) -> benten_core::change_stream::ChangeEvent
 pub fn benten_eval::primitives::subscribe::next_engine_seq() -> u64
 pub fn benten_eval::primitives::subscribe::on_change_registration_count() -> usize
@@ -1200,7 +1193,6 @@ pub fn benten_eval::primitives::subscribe::register(benten_eval::primitives::sub
 pub fn benten_eval::primitives::subscribe::register_as(alloc::sync::Arc<benten_eval::primitives::subscribe::TestPrincipal>, benten_eval::primitives::subscribe::SubscriptionSpec) -> core::result::Result<benten_eval::primitives::subscribe::ActiveSubscription, benten_eval::primitives::subscribe::SubscribeError>
 pub fn benten_eval::primitives::subscribe::register_on_change(benten_eval::primitives::subscribe::ChangePattern, benten_eval::primitives::subscribe::SubscribeCursor, benten_eval::primitives::subscribe::OnChangeDeliveryCallback, core::option::Option<benten_eval::primitives::subscribe::DeliveryCapRecheck>, alloc::sync::Arc<core::sync::atomic::AtomicBool>, alloc::sync::Arc<core::sync::atomic::AtomicU64>, core::option::Option<benten_eval::primitives::subscribe::TerminationNotifyCallback>, alloc::sync::Arc<std::sync::poison::mutex::Mutex<core::option::Option<benten_errors::ErrorCode>>>) -> core::result::Result<benten_core::change_stream::SubscriberId, benten_eval::primitives::subscribe::SubscribeError>
 pub fn benten_eval::primitives::subscribe::register_with_store(benten_eval::primitives::subscribe::SubscriptionSpec, alloc::sync::Arc<dyn benten_eval::suspension_store::SuspensionStore>) -> core::result::Result<benten_eval::primitives::subscribe::ActiveSubscription, benten_eval::primitives::subscribe::SubscribeError>
-pub fn benten_eval::primitives::subscribe::subscribe_revoked_mid_stream_count() -> u64
 pub fn benten_eval::primitives::subscribe::subscription_exists(&benten_core::change_stream::SubscriberId) -> bool
 pub fn benten_eval::primitives::subscribe::take_active_handle(&benten_core::change_stream::SubscriberId) -> core::option::Option<benten_eval::primitives::subscribe::ActiveSubscription>
 pub fn benten_eval::primitives::subscribe::unregister_on_change(&benten_core::change_stream::SubscriberId)
@@ -1278,8 +1270,6 @@ impl core::marker::UnsafeUnpin for benten_eval::primitives::wait::SuspendedHandl
 impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::primitives::wait::SuspendedHandle
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::primitives::wait::SuspendedHandle
 pub struct benten_eval::primitives::wait::ZoneWriteCapture
-impl benten_eval::primitives::wait::ZoneWriteCapture
-pub fn benten_eval::primitives::wait::ZoneWriteCapture::zone_writes_for_label(&self, &str) -> alloc::vec::Vec<&(alloc::string::String, benten_core::Cid)>
 impl core::clone::Clone for benten_eval::primitives::wait::ZoneWriteCapture
 pub fn benten_eval::primitives::wait::ZoneWriteCapture::clone(&self) -> benten_eval::primitives::wait::ZoneWriteCapture
 impl core::default::Default for benten_eval::primitives::wait::ZoneWriteCapture
@@ -1478,7 +1468,7 @@ impl core::marker::Unpin for benten_eval::sandbox::host_fns::CapRecheckPolicy
 impl core::marker::UnsafeUnpin for benten_eval::sandbox::host_fns::CapRecheckPolicy
 impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::sandbox::host_fns::CapRecheckPolicy
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::sandbox::host_fns::CapRecheckPolicy
-pub enum benten_eval::sandbox::host_fns::HostFnBehavior
+#[non_exhaustive] pub enum benten_eval::sandbox::host_fns::HostFnBehavior
 pub benten_eval::sandbox::host_fns::HostFnBehavior::KvRead
 pub benten_eval::sandbox::host_fns::HostFnBehavior::KvRead::per_call_read_cap: u64
 pub benten_eval::sandbox::host_fns::HostFnBehavior::LogSink
@@ -1550,7 +1540,7 @@ impl<'a> core::marker::Unpin for benten_eval::sandbox::host_fns::HostFnContext<'
 impl<'a> core::marker::UnsafeUnpin for benten_eval::sandbox::host_fns::HostFnContext<'a>
 impl<'a> !core::panic::unwind_safe::RefUnwindSafe for benten_eval::sandbox::host_fns::HostFnContext<'a>
 impl<'a> !core::panic::unwind_safe::UnwindSafe for benten_eval::sandbox::host_fns::HostFnContext<'a>
-pub struct benten_eval::sandbox::host_fns::HostFnSpec
+#[non_exhaustive] pub struct benten_eval::sandbox::host_fns::HostFnSpec
 pub benten_eval::sandbox::host_fns::HostFnSpec::behavior: benten_eval::sandbox::host_fns::HostFnBehavior
 pub benten_eval::sandbox::host_fns::HostFnSpec::bypass_output_budget: bool
 pub benten_eval::sandbox::host_fns::HostFnSpec::cap_recheck: benten_eval::sandbox::host_fns::CapRecheckPolicy
@@ -1582,7 +1572,9 @@ pub const benten_eval::sandbox::host_fns::RESERVED_HOST_ASYNC_CAP: &str
 pub fn benten_eval::sandbox::host_fns::default_host_fns() -> alloc::sync::Arc<alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_eval::sandbox::host_fns::HostFnSpec>>
 pub fn benten_eval::sandbox::host_fns::host_fn_names() -> &'static [&'static str]
 pub mod benten_eval::sandbox::instance
+pub const benten_eval::sandbox::instance::ENGINE_MAX_WASM_STACK_BYTES: usize
 pub const benten_eval::sandbox::instance::MODULE_CACHE_MAX_ENTRIES: usize
+pub fn benten_eval::sandbox::instance::engine_max_wasm_stack_bytes() -> u64
 pub fn benten_eval::sandbox::instance::hash_module_bytes(&[u8]) -> benten_eval::sandbox::instance::ModuleCidHash
 pub fn benten_eval::sandbox::instance::module_cache_size() -> usize
 pub fn benten_eval::sandbox::instance::module_for_bytes(&[u8]) -> core::result::Result<alloc::sync::Arc<wasmtime::runtime::module::Module>, wasmtime_internal_core::error::error::Error>
@@ -1731,7 +1723,6 @@ pub benten_eval::sandbox::primitives_sandbox::SandboxError::WallclockExceeded::l
 impl benten_eval::primitives::sandbox::SandboxError
 pub fn benten_eval::primitives::sandbox::SandboxError::budget_type(&self) -> core::option::Option<&'static str>
 pub fn benten_eval::primitives::sandbox::SandboxError::code(&self) -> benten_errors::ErrorCode
-pub fn benten_eval::primitives::sandbox::SandboxError::to_budget_exhausted_trace(&self, alloc::vec::Vec<alloc::string::String>) -> core::option::Option<benten_eval::TraceStep>
 impl core::clone::Clone for benten_eval::primitives::sandbox::SandboxError
 pub fn benten_eval::primitives::sandbox::SandboxError::clone(&self) -> benten_eval::primitives::sandbox::SandboxError
 impl core::cmp::Eq for benten_eval::primitives::sandbox::SandboxError
@@ -1755,7 +1746,7 @@ impl core::marker::Unpin for benten_eval::primitives::sandbox::SandboxError
 impl core::marker::UnsafeUnpin for benten_eval::primitives::sandbox::SandboxError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::primitives::sandbox::SandboxError
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::primitives::sandbox::SandboxError
-pub struct benten_eval::sandbox::primitives_sandbox::SandboxConfig
+#[non_exhaustive] pub struct benten_eval::sandbox::primitives_sandbox::SandboxConfig
 pub benten_eval::sandbox::primitives_sandbox::SandboxConfig::fuel: u64
 pub benten_eval::sandbox::primitives_sandbox::SandboxConfig::max_nest_depth: u8
 pub benten_eval::sandbox::primitives_sandbox::SandboxConfig::max_wasm_stack: u64
@@ -1955,7 +1946,7 @@ impl core::marker::Unpin for benten_eval::sandbox::escape_defenses::EscVector
 impl core::marker::UnsafeUnpin for benten_eval::sandbox::escape_defenses::EscVector
 impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::sandbox::escape_defenses::EscVector
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::sandbox::escape_defenses::EscVector
-pub enum benten_eval::sandbox::HostFnBehavior
+#[non_exhaustive] pub enum benten_eval::sandbox::HostFnBehavior
 pub benten_eval::sandbox::HostFnBehavior::KvRead
 pub benten_eval::sandbox::HostFnBehavior::KvRead::per_call_read_cap: u64
 pub benten_eval::sandbox::HostFnBehavior::LogSink
@@ -2091,7 +2082,6 @@ pub benten_eval::sandbox::SandboxError::WallclockExceeded::limit_ms: u64
 impl benten_eval::primitives::sandbox::SandboxError
 pub fn benten_eval::primitives::sandbox::SandboxError::budget_type(&self) -> core::option::Option<&'static str>
 pub fn benten_eval::primitives::sandbox::SandboxError::code(&self) -> benten_errors::ErrorCode
-pub fn benten_eval::primitives::sandbox::SandboxError::to_budget_exhausted_trace(&self, alloc::vec::Vec<alloc::string::String>) -> core::option::Option<benten_eval::TraceStep>
 impl core::clone::Clone for benten_eval::primitives::sandbox::SandboxError
 pub fn benten_eval::primitives::sandbox::SandboxError::clone(&self) -> benten_eval::primitives::sandbox::SandboxError
 impl core::cmp::Eq for benten_eval::primitives::sandbox::SandboxError
@@ -2206,7 +2196,7 @@ impl<'a> core::marker::Unpin for benten_eval::sandbox::host_fns::HostFnContext<'
 impl<'a> core::marker::UnsafeUnpin for benten_eval::sandbox::host_fns::HostFnContext<'a>
 impl<'a> !core::panic::unwind_safe::RefUnwindSafe for benten_eval::sandbox::host_fns::HostFnContext<'a>
 impl<'a> !core::panic::unwind_safe::UnwindSafe for benten_eval::sandbox::host_fns::HostFnContext<'a>
-pub struct benten_eval::sandbox::HostFnSpec
+#[non_exhaustive] pub struct benten_eval::sandbox::HostFnSpec
 pub benten_eval::sandbox::HostFnSpec::behavior: benten_eval::sandbox::host_fns::HostFnBehavior
 pub benten_eval::sandbox::HostFnSpec::bypass_output_budget: bool
 pub benten_eval::sandbox::HostFnSpec::cap_recheck: benten_eval::sandbox::host_fns::CapRecheckPolicy
@@ -2275,7 +2265,7 @@ impl core::marker::Unpin for benten_eval::sandbox::manifest::ManifestSignature
 impl core::marker::UnsafeUnpin for benten_eval::sandbox::manifest::ManifestSignature
 impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::sandbox::manifest::ManifestSignature
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::sandbox::manifest::ManifestSignature
-pub struct benten_eval::sandbox::SandboxConfig
+#[non_exhaustive] pub struct benten_eval::sandbox::SandboxConfig
 pub benten_eval::sandbox::SandboxConfig::fuel: u64
 pub benten_eval::sandbox::SandboxConfig::max_nest_depth: u8
 pub benten_eval::sandbox::SandboxConfig::max_wasm_stack: u64
@@ -2364,6 +2354,7 @@ impl core::marker::UnsafeUnpin for benten_eval::sandbox::fingerprint::WallclockT
 impl core::panic::unwind_safe::RefUnwindSafe for benten_eval::sandbox::fingerprint::WallclockTaintedAddress
 impl core::panic::unwind_safe::UnwindSafe for benten_eval::sandbox::fingerprint::WallclockTaintedAddress
 pub const benten_eval::sandbox::DEFAULT_RANDOM_BUDGET_BYTES_PER_CALL: u64
+pub const benten_eval::sandbox::ENGINE_MAX_WASM_STACK_BYTES: usize
 pub const benten_eval::sandbox::FINGERPRINT_COLLAPSE_THRESHOLD: u32
 pub const benten_eval::sandbox::MAX_WASM_STACK_DEFAULT: u64
 pub const benten_eval::sandbox::RESERVED_HOST_ASYNC_CAP: &str
@@ -2372,6 +2363,7 @@ pub const benten_eval::sandbox::WALLCLOCK_MAX_MS: u64
 pub fn benten_eval::sandbox::default_host_fns() -> alloc::sync::Arc<alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_eval::sandbox::host_fns::HostFnSpec>>
 pub fn benten_eval::sandbox::default_manifest_names() -> &'static [&'static str]
 pub fn benten_eval::sandbox::default_manifests() -> alloc::collections::btree::map::BTreeMap<alloc::string::String, benten_eval::sandbox::manifest::CapBundle>
+pub fn benten_eval::sandbox::engine_max_wasm_stack_bytes() -> u64
 pub fn benten_eval::sandbox::execute(&[u8], benten_eval::sandbox::manifest::ManifestRef, &benten_eval::sandbox::manifest::ManifestRegistry, benten_eval::primitives::sandbox::SandboxConfig, &[alloc::string::String], &benten_eval::exec_state::AttributionFrame) -> core::result::Result<benten_eval::primitives::sandbox::SandboxResult, benten_eval::primitives::sandbox::SandboxError>
 pub fn benten_eval::sandbox::execute_with_live_cap_check(&[u8], benten_eval::sandbox::manifest::ManifestRef, &benten_eval::sandbox::manifest::ManifestRegistry, benten_eval::primitives::sandbox::SandboxConfig, &[alloc::string::String], &benten_eval::exec_state::AttributionFrame, core::option::Option<benten_eval::primitives::sandbox::LiveCapCheck>) -> core::result::Result<benten_eval::primitives::sandbox::SandboxResult, benten_eval::primitives::sandbox::SandboxError>
 pub fn benten_eval::sandbox::host_fn_names() -> &'static [&'static str]
@@ -2400,16 +2392,10 @@ pub fn benten_core::subgraph::SubgraphBuilder::build_validated_aggregate_all(sel
 pub fn benten_core::subgraph::SubgraphBuilder::build_validated_with_max_depth(self, usize) -> core::result::Result<benten_core::subgraph::Subgraph, benten_eval::RegistrationError>
 pub fn benten_core::subgraph::SubgraphBuilder::wait_signal_typed(&mut self, benten_core::subgraph::NodeHandle, impl core::convert::Into<alloc::string::String>, benten_eval::primitives::wait::SignalShape) -> benten_core::subgraph::NodeHandle
 pub trait benten_eval::subgraph_ext::SubgraphExt: benten_eval::subgraph_ext::private::Sealed
-pub fn benten_eval::subgraph_ext::SubgraphExt::cumulative_budget_for_handle_for_test(&self, benten_core::subgraph::NodeHandle) -> core::option::Option<u64>
-pub fn benten_eval::subgraph_ext::SubgraphExt::cumulative_budget_for_root_for_test(&self) -> u64
-pub fn benten_eval::subgraph_ext::SubgraphExt::has_multiplicative_budget_tracked_for_test(&self) -> bool
 pub fn benten_eval::subgraph_ext::SubgraphExt::load_verified_with_cid(&benten_core::Cid, &[u8]) -> core::result::Result<benten_core::subgraph::Subgraph, benten_eval::RegistrationError>
 pub fn benten_eval::subgraph_ext::SubgraphExt::to_mermaid(&self) -> alloc::string::String
 pub fn benten_eval::subgraph_ext::SubgraphExt::validate(&self, &benten_eval::InvariantConfig) -> core::result::Result<(), benten_eval::EvalError>
 impl benten_eval::subgraph_ext::SubgraphExt for benten_core::subgraph::Subgraph
-pub fn benten_core::subgraph::Subgraph::cumulative_budget_for_handle_for_test(&self, benten_core::subgraph::NodeHandle) -> core::option::Option<u64>
-pub fn benten_core::subgraph::Subgraph::cumulative_budget_for_root_for_test(&self) -> u64
-pub fn benten_core::subgraph::Subgraph::has_multiplicative_budget_tracked_for_test(&self) -> bool
 pub fn benten_core::subgraph::Subgraph::load_verified_with_cid(&benten_core::Cid, &[u8]) -> core::result::Result<benten_core::subgraph::Subgraph, benten_eval::RegistrationError>
 pub fn benten_core::subgraph::Subgraph::to_mermaid(&self) -> alloc::string::String
 pub fn benten_core::subgraph::Subgraph::validate(&self, &benten_eval::InvariantConfig) -> core::result::Result<(), benten_eval::EvalError>
@@ -3050,8 +3036,6 @@ pub benten_eval::ExecutionStatePayload::resumption_principal_cid: benten_core::C
 impl benten_eval::exec_state::ExecutionStatePayload
 pub fn benten_eval::exec_state::ExecutionStatePayload::cid(&self) -> core::result::Result<benten_core::Cid, benten_core::CoreError>
 pub fn benten_eval::exec_state::ExecutionStatePayload::to_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, benten_core::CoreError>
-impl benten_eval::exec_state::ExecutionStatePayload
-pub fn benten_eval::exec_state::ExecutionStatePayload::new_with_pinned(alloc::vec::Vec<benten_core::Cid>) -> Self
 impl core::clone::Clone for benten_eval::exec_state::ExecutionStatePayload
 pub fn benten_eval::exec_state::ExecutionStatePayload::clone(&self) -> benten_eval::exec_state::ExecutionStatePayload
 impl core::cmp::Eq for benten_eval::exec_state::ExecutionStatePayload
@@ -3428,16 +3412,10 @@ pub fn benten_core::subgraph::SubgraphBuilder::build_validated_aggregate_all(sel
 pub fn benten_core::subgraph::SubgraphBuilder::build_validated_with_max_depth(self, usize) -> core::result::Result<benten_core::subgraph::Subgraph, benten_eval::RegistrationError>
 pub fn benten_core::subgraph::SubgraphBuilder::wait_signal_typed(&mut self, benten_core::subgraph::NodeHandle, impl core::convert::Into<alloc::string::String>, benten_eval::primitives::wait::SignalShape) -> benten_core::subgraph::NodeHandle
 pub trait benten_eval::SubgraphExt: benten_eval::subgraph_ext::private::Sealed
-pub fn benten_eval::SubgraphExt::cumulative_budget_for_handle_for_test(&self, benten_core::subgraph::NodeHandle) -> core::option::Option<u64>
-pub fn benten_eval::SubgraphExt::cumulative_budget_for_root_for_test(&self) -> u64
-pub fn benten_eval::SubgraphExt::has_multiplicative_budget_tracked_for_test(&self) -> bool
 pub fn benten_eval::SubgraphExt::load_verified_with_cid(&benten_core::Cid, &[u8]) -> core::result::Result<benten_core::subgraph::Subgraph, benten_eval::RegistrationError>
 pub fn benten_eval::SubgraphExt::to_mermaid(&self) -> alloc::string::String
 pub fn benten_eval::SubgraphExt::validate(&self, &benten_eval::InvariantConfig) -> core::result::Result<(), benten_eval::EvalError>
 impl benten_eval::subgraph_ext::SubgraphExt for benten_core::subgraph::Subgraph
-pub fn benten_core::subgraph::Subgraph::cumulative_budget_for_handle_for_test(&self, benten_core::subgraph::NodeHandle) -> core::option::Option<u64>
-pub fn benten_core::subgraph::Subgraph::cumulative_budget_for_root_for_test(&self) -> u64
-pub fn benten_core::subgraph::Subgraph::has_multiplicative_budget_tracked_for_test(&self) -> bool
 pub fn benten_core::subgraph::Subgraph::load_verified_with_cid(&benten_core::Cid, &[u8]) -> core::result::Result<benten_core::subgraph::Subgraph, benten_eval::RegistrationError>
 pub fn benten_core::subgraph::Subgraph::to_mermaid(&self) -> alloc::string::String
 pub fn benten_core::subgraph::Subgraph::validate(&self, &benten_eval::InvariantConfig) -> core::result::Result<(), benten_eval::EvalError>

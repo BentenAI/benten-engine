@@ -35,11 +35,9 @@ fn sandbox_wallclock_kills_routes_e_sandbox_wallclock_exceeded() {
         wat::parse_str("(module (func (export \"run\") (result i32) (loop $L br $L) i32.const 0))")
             .unwrap();
     let registry = ManifestRegistry::new();
-    let cfg = SandboxConfig {
-        fuel: u64::MAX / 2, // effectively infinite — wallclock should fire
-        wallclock_ms: 50,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.fuel = u64::MAX / 2; // effectively infinite — wallclock should fire
+    cfg.wallclock_ms = 50;
     let attribution = dummy_attribution();
     let err = execute(
         &bytes,
@@ -98,11 +96,9 @@ fn sandbox_wallclock_per_handler_override_via_subgraphspec_primitives() {
     // Caller-supplied per-handler override at 75ms — the eval-side
     // executor MUST observe this ceiling regardless of the default
     // 30-second SandboxConfig::default().wallclock_ms.
-    let cfg = SandboxConfig {
-        fuel: u64::MAX / 2,
-        wallclock_ms: 75,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.fuel = u64::MAX / 2;
+    cfg.wallclock_ms = 75;
     let attribution = dummy_attribution();
     let err = execute(
         &bytes,

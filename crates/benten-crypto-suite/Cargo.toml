@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "The ONE thin Benten-owned signature/hash/cipher-suite-agility integration crate — a codepoint-dispatched seam wrapping vetted upstream RustCrypto primitives. v1-beta signature default = hybrid Ed25519⊕ML-DSA-65 (NF-4 concatenated/committing/strip-resistant; both must verify); classical-only Ed25519 = non-default downgrade; typed unsupported-algorithm arm (never silent fallback); no hardcoded sizes (a v1-PRODUCTION-correctness property). The ONLY crypto-primitive call site per crypto-agility-contract:6."
+description = "The ONE thin Benten-owned signature/hash/cipher-suite-agility integration crate — a codepoint-dispatched seam wrapping vetted upstream RustCrypto primitives. v1-beta signature default = hybrid Ed25519⊕ML-DSA-65 (byte-faithful IETF LAMPS composite id-MLDSA65-Ed25519-SHA512; wire mldsaSig || tradSig, NO commitment trailer; both must verify); classical-only Ed25519 = non-default downgrade; typed unsupported-algorithm arm (never silent fallback); no hardcoded sizes (a v1-PRODUCTION-correctness property). The ONLY crypto-primitive call site per crypto-agility-contract:6."
 
 [lints]
 workspace = true
@@ -27,18 +27,20 @@ testing = []
 # leak a secret-dependent timing path — the genuine build-level gate the
 # `check-secret-independence` CI step would run.
 #
-# ⚠️ FLAG-FOR-BEN (2026-06-05): at the pinned `libcrux-ml-kem =0.0.9` this
-# feature DOES NOT COMPILE — libcrux-ml-kem 0.0.9's `impl_kem_trait!` macro
-# does not propagate the secret-typed signatures to its `keygen`/`encaps`/
-# `decaps` trait methods (E0053 incompatible-type, reproduced 2026-06-05;
-# this is an UPSTREAM 0.0.9 defect, independent of Benten's usage). So the
-# runnable CI secret-independence gate is NOT honestly wireable at 0.0.9.
-# This feature is kept as the one-flag-away seam (and intent record) for when
-# libcrux ships a 0.0.x/0.1 that compiles cleanly under it; it is NOT enabled
-# by default and is NOT exercised in CI yet. f_kat_2 pins the REAL assurance
-# that IS available at 0.0.9 (the production impl is the verified libcrux; the
-# portable backend is hax/F*-verified constant-time) and leaves the
-# CI-gate-specific arm #[ignore]'d with this same flag. Honesty over green.
+# ⚠️ FLAG-FOR-BEN (2026-06-05; re-verified at =0.0.10 on 2026-07-20): at the
+# pinned `libcrux-ml-kem =0.0.10` this feature STILL DOES NOT COMPILE —
+# libcrux-ml-kem's `impl_kem_trait!` macro does not propagate the secret-typed
+# signatures to its `keygen`/`encaps`/`decaps` trait methods (E0053
+# incompatible-type: `expected Secret<u8>, found u8` at
+# `libcrux-ml-kem-0.0.10/src/mlkem768.rs`; first reproduced 2026-06-05 at 0.0.9,
+# E0053 PERSISTS at 0.0.10, re-verified 2026-07-20 — an UPSTREAM defect,
+# independent of Benten's usage). So the runnable CI secret-independence gate is
+# NOT honestly wireable at 0.0.10. This feature is kept as the one-flag-away seam
+# (and intent record) for when libcrux ships a version that compiles cleanly
+# under it; it is NOT enabled by default and is NOT exercised in CI yet. f_kat_2
+# pins the REAL assurance that IS available at 0.0.10 (the production impl is the
+# verified libcrux; the portable backend is hax/F*-verified constant-time) and
+# leaves the CI-gate-specific arm #[ignore]'d with this same flag. Honesty over green.
 mlkem-ct-check = ["libcrux-ml-kem/check-secret-independence"]
 
 # G-CORE-2 (#1300) — the integration crate is the ONE crypto-primitive
@@ -83,7 +85,20 @@ ed25519-dalek = { workspace = true }
 # sidesteps the version-skew). `pkcs8` feature NOT enabled — the
 # Benten wire format uses raw `Encoded` bytes (`encode()` /
 # `decode()`) NOT PKCS#8 envelopes.
-ml-dsa = { version = "0.1", default-features = false, features = ["alloc", "rand_core", "getrandom"] }
+#
+# `zeroize` feature ENABLED (D-74/75/76 secret-hygiene sweep): `ml-dsa`
+# gates its `impl ZeroizeOnDrop for SigningKey<P>` (signing.rs:230-231)
+# behind `#[cfg(feature = "zeroize")]` — it is NOT unconditional (an
+# earlier comment on the slh-dsa dep below wrongly claimed it was). With
+# the feature OFF the raw ML-DSA-65 signing-key material (`seed` + the
+# expanded `s1`/`s2`/`t0`/`K`/`tr` polynomials) lingered in freed heap on
+# drop. Enabling `zeroize` turns on the upstream `ZeroizeOnDrop` so every
+# holder of `ml_dsa::SigningKey<MlDsa65>` — `sig::Keypair.pq` and
+# `swap_matrix::PurePqKeypairInner.pq_sk` — wipes on drop, reaching R18-C3
+# parity with the `slh-dsa` `slh_sk` sibling. This is a pure drop-behavior
+# addition: NO wire / serialization / public-API-shape change (the
+# `zeroize 1.8.2` in the lockfile already satisfies ml-dsa's `^1.8.1`).
+ml-dsa = { version = "0.1", default-features = false, features = ["alloc", "rand_core", "getrandom", "zeroize"] }
 
 # NF-1 PQ⊕PQ end-state non-default arm (ML-DSA-65 ⊕ SLH-DSA): G-CORE-3c
 # wires the live arm. `slh-dsa 0.2.0-rc.5` pulls `sha2 ^0.11` + `sha3
@@ -105,7 +120,13 @@ ml-dsa = { version = "0.1", default-features = false, features = ["alloc", "rand
 # `0x0003` reserves the *suite* not a specific parameter set; the wire
 # format can pin Sha2_192s at G-CORE-9 without re-spending the
 # codepoint).
-slh-dsa = { version = "0.2.0-rc.5" }
+# `zeroize` feature enables `SlhDsaSigningKey`'s `ZeroizeOnDrop` (it is
+# `#[cfg(feature = "zeroize")]`-gated in slh-dsa — as it likewise is in
+# `ml-dsa`, whose `zeroize` feature we now also enable above) so the
+# pure-PQ NF-1 arm's `slh_sk` secret is wiped on drop, matching the
+# `ml-dsa` `pq_sk` sibling (R18 C3-A memory-hygiene parity; the `zeroize`
+# crate is already vendored).
+slh-dsa = { version = "0.2.0-rc.5", features = ["zeroize"] }
 
 # `getrandom 0.4` brings the `SysRng` adapter that adapts the OS entropy
 # source to `rand_core 0.10`'s `TryCryptoRng` trait. `slh-dsa 0.2.0-rc.5`
@@ -147,7 +168,7 @@ x25519-dalek = { version = "2", default-features = false, features = ["alloc", "
 #
 # The swap is BYTE-SAFE (proven by the canary spike at
 # `.addl/phase-4-meta/libcrux-canary-spike.md`): for a fixed FIPS-203
-# deterministic seed `libcrux-ml-kem 0.0.9` produces byte-identical
+# deterministic seed `libcrux-ml-kem 0.0.10` produces byte-identical
 # ek(1184)/ct(1088)/dk(2400)/ss(32) vs RustCrypto `ml-kem 0.2.3` and
 # cross-decapsulates both directions. Every on-wire ML-KEM-768 byte + every
 # frozen golden survives unchanged. `f_kat_1` asserts this cross-impl
@@ -165,15 +186,31 @@ x25519-dalek = { version = "2", default-features = false, features = ["alloc", "
 # (drops mlkem512/1024 + std + the `rand` randomized helpers we don't use).
 # On wasm32 the portable (formally-verified, constant-time) backend is
 # auto-selected (libcrux's build.rs enables simd128 only on aarch64, simd256
-# only on x86_64; neither fires on wasm) — `getrandom` is absent from the
-# wasm tree entirely (caller-supplied randomness), so the historical wasm
-# getrandom pain does not recur. Pinned EXACTLY (`=0.0.9`) per the spike's
+# only on x86_64; neither fires on wasm) — `getrandom` is absent from
+# libcrux-ml-kem's OWN subtree (this backend takes caller-supplied
+# randomness), so the historical libcrux wasm getrandom pain does not recur.
+# NOTE (R15 GAP-1): this "absent" scope is the libcrux subtree ONLY — the
+# crate as a whole DOES pull `getrandom` at the top level (the `getrandom
+# 0.4 sys_rng` dep above + `ml-dsa`'s `getrandom` feature), so a
+# `wasm32-unknown-unknown` build of the whole crate is NOT
+# getrandom-free and its entropy/getrandom-backend story on that target is
+# CI-unexercised (native-only by dep-graph today; see
+# `docs/future/phase-3-backlog.md`). Pinned EXACTLY (`=0.0.10`) per the spike's
 # maturity caveat (libcrux-ml-kem is pre-0.1; expect API/SemVer churn —
 # vendor-lock the audited version; the NF-2 / C-GM-AUDIT covers whichever
 # impl is pinned at v1-GM). NOT a crypto-primitive FORK — this is the ONLY
 # crypto-primitive call site wrapping a vetted upstream crate per
 # CLAUDE.md baked-in #5 / crypto-agility-contract:6.
-libcrux-ml-kem = { version = "=0.0.9", default-features = false, features = ["mlkem768"] }
+# BUMP 0.0.9 -> 0.0.10 (Ben-ratified 2026-07-18): clears RUSTSEC-2026-0207 +
+# -0208 (libcrux-sha3 SHAKE bugs) + RUSTSEC-2026-0212 (libcrux-secrets CT
+# swap/select on aarch64) via the transitive chain (libcrux-sha3 =0.0.10 +
+# libcrux-secrets =0.0.6). VERIFIED byte-identical: every FIPS-203/204 KAT +
+# X-Wing + DAK + keyset/DID golden reproduces the frozen bytes unchanged
+# (0.0.10 is a bugfix-only release on the portable/verified backend Benten
+# uses). 0.0.10 pulls bindgen/clang-sys as HOST build-deps — these run on the
+# build host, not the wasm target, so the wasm32 required builds are
+# unaffected (validated pre-commit).
+libcrux-ml-kem = { version = "=0.0.10", default-features = false, features = ["mlkem768"] }
 chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc", "getrandom", "rand_core"] }
 hkdf = { version = "0.12", default-features = false }
 

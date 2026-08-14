@@ -8,7 +8,8 @@
 use benten_id::UcanError;
 use benten_id::keypair::Keypair;
 use benten_id::ucan::{
-    Ucan, validate_chain_at, validate_chain_for_audience, validate_chain_no_time_check,
+    Capability, Ucan, validate_chain_at, validate_chain_for_audience,
+    validate_chain_for_capability, validate_chain_no_time_check,
 };
 
 fn now_secs() -> u64 {
@@ -110,6 +111,69 @@ fn ucan_exp_time_window_post_expiration_rejects() {
     assert!(
         matches!(err, UcanError::Expired { .. }),
         "expected Expired, got {err:?}"
+    );
+}
+
+// F-01 (authority-widening prefix-confusion) PRODUCTION-ENTRY pin.
+//
+// Exercises the real authority path — `validate_chain_for_capability`
+// (pub; reached from the engine's `typed_call_dispatch` →
+// `benten_id::ucan::validate_chain_for_capability`) — which delegates the
+// leaf-claim check to `caps_match_or_subsume(granted_cap, required)`.
+//
+// WOULD-FAIL-ON-REVERT: before the segment-boundary guard, a chain
+// granting `/zone/posts` would wrongly ACCEPT a required capability for
+// the sibling `/zone/posts-secret` (because the bare `starts_with` prefix
+// branch matched), silently widening authority to a resource the grant
+// never named. Reverting the guard flips the `-secret` assertion below
+// from reject → accept.
+#[test]
+fn validate_chain_rejects_sibling_resource_prefix_confusion() {
+    let issuer = Keypair::generate();
+    let audience = Keypair::generate();
+    let now = now_secs();
+
+    // Leaf grants /zone/posts read, bound to `audience`.
+    let leaf = Ucan::builder()
+        .issuer(issuer.public_key().to_did().as_str())
+        .audience(audience.public_key().to_did().as_str())
+        .capability("/zone/posts", "read")
+        .not_before(now - 1)
+        .expiry(now + 3600)
+        .sign(&issuer);
+    let chain = vec![leaf];
+    let aud_did = audience.public_key().to_did();
+
+    // ACCEPT: a true sub-path of the granted resource.
+    validate_chain_for_capability(
+        &chain,
+        &aud_did,
+        &Capability::new("/zone/posts/foo", "read"),
+        now,
+    )
+    .expect("true sub-path `/zone/posts/foo` must be granted");
+
+    // ACCEPT: the exact granted resource.
+    validate_chain_for_capability(
+        &chain,
+        &aud_did,
+        &Capability::new("/zone/posts", "read"),
+        now,
+    )
+    .expect("exact resource `/zone/posts` must be granted");
+
+    // REJECT: the sibling resource sharing a textual prefix. This is the
+    // authority-widening case the F-01 guard closes.
+    let err = validate_chain_for_capability(
+        &chain,
+        &aud_did,
+        &Capability::new("/zone/posts-secret", "read"),
+        now,
+    )
+    .expect_err("F-01: sibling `/zone/posts-secret` must NOT be granted by `/zone/posts`");
+    assert!(
+        matches!(err, UcanError::CapabilityNotGranted { .. }),
+        "expected CapabilityNotGranted for the sibling resource, got {err:?}"
     );
 }
 

@@ -5,7 +5,7 @@
 > Per `docs/V1-FROZEN-INTERFACE.md` item 4 (D2 v1-canonical-bytes contract):
 > "BYTEWISE: a one-bit change to any encoded value ... is a P-III re-decision Ben must make."
 >
-> This doc enumerates every wire-format-bearing surface + the byte-pin test that locks its canonical bytes + the explicit `format_version: u32` discriminator (where present). The drift-detect CI lane walks this inventory + asserts a byte-pin test exists for every surface; missing pins are added in the same wave per the V1-FROZEN-INTERFACE row 8d FIX-NOW.
+> This doc enumerates every wire-format-bearing surface + the byte-pin test that locks its canonical bytes + the explicit `format_version: u32` discriminator (where present). At v1-beta each surface is covered by roundtrip + constant-position + format-version-byte-position pins; the full HEX-PINNED byte-pin sweep (a drift-detect CI lane that walks this inventory and asserts a hex byte-pin test exists for every surface) is a **DEFERRED** lane — 6 of 8 hex byte-pins ship at the **G-COMP-1** wave per `docs/V1-FROZEN-INTERFACE-DEFERRED.md` **Row D-9**, NOT a live lane at v1-beta. See V1-FROZEN-INTERFACE row 8d.
 >
 > **Authority:** V1-FROZEN-INTERFACE.md item 4 + RATIFIED-S&C §R2 + CLAUDE.md baked-in #5 (multiformats framing).
 >
@@ -73,28 +73,34 @@
 - Per-chunk AEAD with chunk size = `IROH_BLOCK_SIZE = 16384` (`crates/benten-crypto-suite/src/aead.rs:52`).
 - AAD binds `(plaintext_cid: &[u8], chunk_index: u64, total_chunks: u32)` per `crates/benten-crypto-suite/src/aead.rs::aad_per_chunk` (4-segment layout: `b"benten-aead:chunk:" || plaintext_cid || chunk_index.to_be_bytes() || total_chunks.to_be_bytes()`; **big-endian per M-19**, migrated from LE at F-full Wave-0). The `total_chunks` segment closes the cross-chunk-truncation attack (an attacker truncating a 10-chunk ciphertext to 5 chunks cannot fabricate per-chunk AAD-matching tags). **R6 R1 fix-pass:** the prior G-CORE-9 R1 Fork-1 2-tuple disposition was RETRACTED; code revised to match the spec text. Pinned at `crates/benten-crypto-suite/tests/canonical_bytes_v1_codepoints_and_aad.rs::aad_per_chunk_canonical_layout_pinned` + behavioral pins at `crates/benten-graph/src/aead_wrap.rs::tests::{cross_chunk_truncation_fails, cross_chunk_inflation_fails}`. The M-19 endianness gate is golden-pinned with an **explicit anti-LE differential guard**: `aad_per_chunk_canonical_layout_pinned` asserts the `chunk_index`/`total_chunks` tail equals `to_be_bytes()` AND asserts it is NOT `to_le_bytes()` (a `to_le_bytes()` regression on `aead.rs` would-FAIL the pin), so a silent LE re-introduction is caught at test-time, not at a future wire-incompat.
 - 64 KiB threshold for chunked-vs-whole-AEAD heuristic.
-- Codepoint-dispatched: `HYBRID_X25519_MLKEM768 = 0x647a` (default), `CLASSICAL_X25519 = 0x6400` (downgrade), `NONE_PLAINTEXT = 0x0000`, `HYBRID_MLKEM768_HQC = 0x647b` (reserved), `PURE_PQ_MLKEM768_ONLY = 0x647c` (reserved, audit-gated).
+- Codepoint-dispatched: `HYBRID_X25519_MLKEM768 = 0x647a` (default), `CLASSICAL_X25519 = 0x6400` (downgrade), `NONE_PLAINTEXT = 0x0000` (typed-rejected at `CipherSuiteCodepoint::resolve` by design; reachable only via `SwapMatrix::no_encryption_public_class()` / `sign_only`), `HYBRID_MLKEM768_HQC = 0x647b` (reserved), `PURE_PQ_MLKEM768_ONLY = 0x647c` (reserved, audit-gated).
 
-**Format version:** Codepoint table (item 6) is the format discriminator; new ciphers land at unused codepoints.
+**Format version:** Codepoint table (item 6) is the cipher-suite discriminator; new ciphers land at unused codepoints. **F-08 (R20) — explicit `format_version` byte at offset 1.** In addition to the codepoint axis, the `AeadEnvelope` wire prefix carries an EXPLICIT `format_version: u8` discriminator at **byte offset 1** (byte 0 = `ENVELOPE_MAGIC`, byte 1 = `format_version`, `ENVELOPE_FORMAT_VERSION_V1 = 0x01`; `crates/benten-crypto-suite/src/aead.rs` — `to_wire_bytes` writes it, `from_wire_bytes` reads `bytes[1]`, and `unwrap` fail-closes on a non-`V1` value). This gives a first-class envelope-format version axis distinct from the cipher-suite codepoint. Pinned by `aead.rs::tests::wire_format_carries_explicit_format_version_byte` (asserts `bytes[0] == ENVELOPE_MAGIC` + `bytes[1] == ENVELOPE_FORMAT_VERSION_V1`).
 
 **Byte-pin test coverage:**
 - `crates/benten-crypto-suite/tests/tf3a_*.rs` + `crates/benten-crypto-suite/tests/tf4_*.rs` — AEAD round-trip + codepoint dispatch pins.
-- `crates/benten-crypto-suite/tests/tf3a_pq_hybrid_wasm32_roundtrip.rs` — wasm32 cross-target PQ-hybrid round-trip, **CI-gated under wasm32-wasip1** by the `crypto-suite-wasm-roundtrip` job in `.github/workflows/wasm-conformance.yml` (F-full R6 R1 finding F-06; the encryption layer is now exercised on the wasm target through wasmtime, not just compile-checked / native-run).
-- `crates/benten-graph/src/aead_wrap.rs` — production wrap path; consumed by every encryption-bearing test.
+- `crates/benten-crypto-suite/tests/tf3a_pq_hybrid_wasm32_roundtrip.rs` — same-target PQ-hybrid self-round-trip (recovered-plaintext byte-identity; NOT cross-target wire-byte identity — fresh random ephemeral/nonce per seal), **CI-gated under wasm32-wasip1** by the `crypto-suite-wasm-roundtrip` job in `.github/workflows/wasm-conformance.yml` (F-full R6 R1 finding F-06; the encryption layer is now exercised on the wasm target through wasmtime, not just compile-checked / native-run). **Scope (R10-council F-04):** this gate guards **wasm32-wasip1**, NOT **wasm32-unknown-unknown** — the target the BrowserBackend thin-compute shape (CLAUDE.md baked-in #17) actually ships on. wasm32-wasip1 cleanliness is a strong necessary condition for BrowserBackend but is a distinct target; the wasm32-unknown-unknown crypto round-trip drift-gate is a NAMED CI follow-up (row below).
+- `crates/benten-graph/src/aead_wrap.rs` — production wrap path. **R6 round #1 correction:** "consumed by every encryption-bearing test" was the whole of this bullet, and consumption is not coverage — it is the tautology shape the falsification sweep exists to find. The `encode_encrypted_node` STORAGE framing had a golden for the `Whole` arm only; the `Chunked` arm (every stored object ≥ 64 KiB) had none, and flipping its variant tag (`:614`) plus the u32 chunk count BE→LE (`:622` encode / `:679` decode) left all nine benten-graph corpus targets at 27/27 PASS. Now really pinned at `crates/benten-graph/tests/canonical_bytes_v1_aead_wrap.rs::{encode_encrypted_node_chunked_layout_frozen, threshold_dispatch_reaches_the_chunked_discriminant, decode_chunked_reads_big_endian_count_and_length_prefixes, chunked_storage_envelope_header_absolute_golden_hex}` + the full-interleave absolute golden `crates/benten-graph/src/aead_wrap.rs::tests::encode_encrypted_node_chunked_absolute_golden_hex`. The decode-side arm never calls the encoder (it hand-authors BE spec bytes and asserts LE-poisoned variants are REJECTED), so a bilateral encoder+decoder flip is caught too.
+
+**crypto-suite target-story note (R15 F-23).** `benten-crypto-suite` is **native-only by its dep graph** today (top-level `getrandom 0.4 sys_rng` + `ml-dsa`'s `getrandom` feature + `libcrux-ml-kem`). Its **`wasm32-unknown-unknown` build story is CI-unexercised** — the wasm CI gate above (`crypto-suite-wasm-roundtrip`) targets **wasm32-wasip1**, and no job builds the crate for `wasm32-unknown-unknown`, so its entropy / `getrandom`-backend selection on that target is unproven. Named follow-up: `docs/future/phase-3-backlog.md §15.4 / §15.5`.
 
 **M-19 endianness conformance scanner (`benten_crypto_suite::conformance::endianness`).** The flagship M-19 gate
 `wire_path_le_survivor_count()` is a REAL source-scanner over `include_str!`-embedded module source (not a
 hand-coded `0`): it counts surviving `to_le_bytes` / `from_le_bytes` on any wire/AAD/keying path and MUST report
-**0** (live survivor count = **0** at HEAD; F-W0-3 pin). The `WIRE_PATH_SOURCES` site-list it scans embeds **8
+**0** (live survivor count = **0** at HEAD; F-W0-3 pin). The `WIRE_PATH_SOURCES` site-list it scans embeds **10
 crypto-suite source modules** — `aead.rs`, `structural_kdf.rs`, `varsig.rs`, `sizes.rs`, `swap_matrix.rs`,
-`envelope.rs`, `vault.rs`, `cipher_suite.rs` (an earlier framing under-counted this set; the array, not the prose
-list, is authoritative). This gate covers the crypto-suite's OWN wire surfaces; the **cross-crate** M-19
-producers (`benten-graph::aead_wrap`, `benten-platform-foundation::plugin_manifest`) are scanned by their own
-crates' tests today. **Intended widened scope:** consolidating the cross-crate producers under one workspace-wide
+`envelope.rs`, `vault.rs`, `cipher_suite.rs`, plus `hpke.rs` + `mlkem.rs` (enrolled at R6-final F-27; two earlier
+framings under-counted this set at 8 — the array, not the prose list, is authoritative). This gate covers the
+crypto-suite's OWN wire surfaces. Of the **cross-crate** M-19 producers,
+`benten-platform-foundation::plugin_manifest` IS scanned by its own crate
+(`tests/m19_endianness_scanner_platform_foundation.rs`, added at R6 round #1 alongside the E-02 signing-pre-image
+golden); `benten-graph::aead_wrap` is **NOT** scanned by any survivor scanner and rests on its golden byte-pins
+(the prior claim that both were "scanned by their own crates' tests today" was verified false).
+**Intended widened scope:** consolidating the cross-crate producers under one workspace-wide
 M-19 survivor scan (so a single gate covers every wire/AAD/keying path in the workspace, not just the
 crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZEN-INTERFACE-DEFERRED.md`.
 
-**FREEZE-WAVE status:** ✅ COVERED — `IROH_BLOCK_SIZE = 16 * 1024` constant pin lives in the aead module's golden-constant tests.
+**FREEZE-WAVE status:** ✅ COVERED — `IROH_BLOCK_SIZE = 16 * 1024` constant pin lives in the aead module's golden-constant tests, and (since R6 round #1) the `encode_encrypted_node` **`Chunked`** storage arm carries real layout + endianness + absolute-hex goldens on both the encode and decode sides. **Prior to R6 round #1 this row read `✅ COVERED` on the strength of the `IROH_BLOCK_SIZE` constant pin alone** — a constant pin says nothing about the framing that carries it, and the chunked framing was in fact unpinned. Corrected per the E-03/E-04 findings.
 
 ---
 
@@ -144,10 +150,10 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 **Surface:** `benten_drop::bundle::DropBundle`.
 
 **Wire format:**
-- DAG-CBOR encoded: `{format_version: DropBundleVersion, content_mode: DropContentMode, restricted_spec: RestrictedScope, spec_cid: Cid, authorization_grant: AuthorizationGrant, ...}`.
+- DAG-CBOR encoded: `{version: DropBundleVersion, mode: DropContentMode, spec_cid: Cid, audience: Cid, auth_grant: AuthorizationGrant, content: Vec<EncryptedContent>, restricted_spec: RestrictedScope, ...}`. The struct carries no `#[serde(rename)]`, so for DAG-CBOR the field name IS the wire key (`version` / `mode` / `auth_grant`, NOT `format_version` / `content_mode` / `authorization_grant`).
 - Full S&C composition in CBOR-on-disk per RATIFIED-S&C 8 spike-derived refinements item 8.
 
-**Format version:** `DropBundleVersion` enum at `crates/benten-drop/src/lib.rs` — explicit-version discriminator.
+**Format version:** `DropBundleVersion` enum at `crates/benten-drop/src/bundle.rs` — explicit-version discriminator.
 
 **Byte-pin test coverage:**
 - `crates/benten-drop/tests/tf3f_drop_bundle_offline_consume.rs` + `crates/benten-drop/src/bundle.rs` (DropBundleVersion roundtrip + version-mismatch arms).
@@ -171,8 +177,9 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 **Byte-pin test coverage:**
 - `crates/benten-sync/src/two_cid_store.rs` — internal round-trip pins.
 - `crates/benten-sync/tests/tf3e_*.rs` family — UCAN-blobs ALPN handler round-trip pins exercise the mapping.
+- `crates/benten-graph/tests/canonical_bytes_v1_two_cid_key_layout.rs` — the **at-rest KEY layout** this mapping is stored under, `benten_graph::two_cid_map::TwoCidMap::{table_key, partition_table_key}` (`m:<cid>` and `d:<did>:m:<cid>`), full-layout + absolute-hex goldens. **Added at R6 round #1 (W-08b):** this row's Surface line names only `benten_sync::TwoCidStore`, so the benten-graph key producer — the bytes redb actually keys on — sat outside every inventory row. Its own unit pin asserted `starts_with(b"d:")` plus "`:m:` appears somewhere", both of which survive **swapping the two `extend_from_slice` arguments**; that swap cross-wires every per-DID lookup and makes `redb_backend.rs::parse_namespace_from_mapping_key` recover the plaintext CID as the namespace DID — a partition-isolation failure (`multitenant-r1-5`). The replacement pins assert each segment positionally with `assert_ne!` guards and distinct DID/CID fixtures.
 
-**FREEZE-WAVE status:** ✅ COVERED.
+**FREEZE-WAVE status:** ✅ COVERED — for the `benten-sync` mapping table AND (since R6 round #1) the `benten-graph` at-rest key layout it is stored under.
 
 ---
 
@@ -430,7 +437,7 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 **Byte-pin test coverage:**
 - `crates/benten-engine/tests/g12_e_suspension_store_round_trips.rs` + `crates/benten-engine/tests/redb_suspension_in_process.rs` round-trip + cross-process resume + forward-compat pins.
 
-**FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level. Note: these are CRATE-PRIVATE wire-format-bearing surfaces (not part of the public freeze contract — listed here for completeness per the L11 phase-wide sweep; the freeze-contract-public scope covers items 1-23).
+**FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level. Note: these are CRATE-PRIVATE wire-format-bearing surfaces (not part of the public freeze contract — listed here for completeness per the L11 phase-wide sweep; item 24 is the ONLY crate-private row — every other item in this inventory is in the freeze-contract-public scope).
 
 ---
 
@@ -441,7 +448,7 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 **Wire format:**
 - The MembershipSet band is `0x6600..=0x66FF` (Inv-18 / NQ-W2 FROZEN-band ownership). Three values assigned at v1-beta.
 - `0x6600` set-keying envelope (every `MembershipSetKind` binds here); `0x6610` group multi-stanza per-stanza AAD (the BLINDED 11-field set, big-endian, length-injective per R0.7 §3.10/§4.1); both Sealed-Sender by default.
-- **`0x6620` is RESERVED + ENCODE-ONLY at v1-beta** — the `SubsetRef` federation shape is reserved-and-refused (typed-reject) at v1-beta; the value is allocated/encoded in the band but NOT a live decode/dispatch arm until a future additive wave (never a wire break; F-full R6 R1 finding F-21).
+- **`0x6620` is RESERVED + ENCODE-ONLY at v1-beta** — the `SubsetRef` federation shape is reserved-and-refused (typed-reject) at v1-beta; the value is allocated/encoded in the band but NOT a live decode/dispatch arm until a future additive wave (never a wire break; F-full R6 R1 finding F-21). **R19 (F4) injective-encoding hardening (RESOLVED):** `KSetAcquisitionPath::to_wire_v2_be` (the `0x6620` encoder) previously concatenated variable-length fields (`target_set_id`, each hop, `acquisition_proof_cid`) with NO length prefix — non-injective. R19 added a `u32`-BE length prefix on every variable-length field (mirroring the `benten-engine` `remote_permission.rs` `be_u32_len` + Row D-13 `derive_step` length-prefix precedent) so the encoding is injective. **This is NOT a live wire change** — `0x6620` has zero live decoder and zero non-test callers of the encoder; the `f_fed_1_2_subset_ref_federation.rs::fed1_wire_is_v2_big_endian` golden was updated to the new length-prefixed bytes accordingly. A future additive wave that wires the `0x6620` decoder MUST parse these length prefixes.
 - The group AAD 11-field set is OPAQUE bytes across the m-15 GNC-5 crypto-suite seam.
 - **B2 sender ORIGIN-AUTH (always-on; `benten_drop::layer_c::group_posture`):** the `0x6610` once-sealed body region is `body_v2 = sig_codepoint(u16 BE) ‖ sender_sig_len(u32 BE) ‖ sender_sig ‖ body`, sealed under the K_Set-derived CEK. `sender_sig` is one per-MESSAGE LAMPS-hybrid `id-MLDSA65-Ed25519-SHA512` (`0x0001`) signature over the domain-separated `M_auth` (`SENDER_AUTH_DOMAIN` ‖ codepoints ‖ sender-DID ‖ body_cid ‖ blinded `audience_set_commitment` ‖ the THREE generation words `[member_key_generation, membership_set_generation, role_assignments_generation]` ‖ stanza_count ‖ body-AAD digest). The per-stanza 11-field AAD is **byte-UNCHANGED** (the sig lives in the body region, not the AAD). Verified post-decrypt against the hybrid key resolved from the recovered sender-DID, recomputing the commitment + generations from the recipient's INDEPENDENTLY-held set-state (F-2/F-3). **Goldens pin wire-SHAPE + a sign→verify round-trip, NOT signature hex** — the ML-DSA half is hedged/randomized (FLAG-6).
 
@@ -449,8 +456,9 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 
 **Byte-pin test coverage:**
 - `crates/benten-crypto-suite/tests/f_cp_codepoint_registry_dispatch.rs` (`MEMBERSHIP_SET_GROUP_MULTI_STANZA == 0x6610` integer pin).
-- `crates/benten-membership-set/tests/f_aad_1_members_table_canonical_cbor_length_injective.rs` + `f_aad_2_nine_tuple_injectivity_opaque_boundary.rs` (the 11-field AAD injectivity + canonical-CBOR length-injectivity).
+- `crates/benten-membership-set/tests/f_aad_1_members_table_canonical_cbor_length_injective.rs` + `f_aad_2_nine_tuple_injectivity_opaque_boundary.rs` (the 11-field AAD injectivity + canonical-CBOR length-injectivity; the `nine_tuple` FILENAME is stale — rename tracked at `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-32).
 - `crates/benten-membership-set/tests/f_fed_1_2_subset_ref_federation.rs` (`0x6620` reserved-and-refused typed-reject at v1-beta).
+- `crates/benten-drop/tests/f_02_group_aad_11field_and_f_01_truncation.rs` (the `F_02_LIVE_SEAL_STANZA0_AAD_HEX` golden). **R9 GAP-1 fixture refresh (NOT a format change):** the golden's 32-byte `audience_set_commitment` component was **regenerated** because the recipient-key representation went placeholder→real — the roster DIDs the commitment hashes over derive from the recipient public-key bytes (`RecipientPublic::to_bytes` = `x25519_pub(32) ‖ mlkem768_ek(1184)`), which changed when the `[u8; 32]` placeholder fingerprint became a real hybrid public key. The AAD **SHAPE / field-set / blinding construction / `aad_version` (`0x01`)** and the cross-engine byte-equality + sign→verify round-trip goldens are **UNCHANGED** — this is a fixture-value refresh, not a wire-format change.
 
 **FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level; `0x6620` reserved-encode-only.
 
@@ -463,7 +471,9 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 **Wire format:**
 - The Layer-C drop band is `0x6500..=0x65FF`. Three values assigned at v1-beta: `0x6500` (plaintext-sender, NON-default), `0x6510` (Sealed-Sender, the v1-beta DEFAULT, BR-1), `0x6520` (`HpkeMultiBase` group multi-stanza).
 - **Plaintext AAD field-set (relay-visible) — UNCHANGED by B2.** `0x6500`/`0x6510` single-recipient AAD = `{aad_version(u8), codepoint(u16 BE), audience(u32-BE-lp), body_cid(self-describing CIDv1 36B), recipient_key_generation(u32 BE)}` (`0x6500` additionally appends `lp(sender_did)`, U4). `0x6520` per-stanza AAD = the BLINDED `{aad_version, codepoint, body_cid, recipient_count(u16 BE), audience_set_commitment(32B), stanza_index(u32 BE), stanza_count(u32 BE), recipient_key_generation(u32 BE)}` (+ optional `lp(sender_did)` on the non-default plaintext-sender variant). The KEM is HPKE `mode_base[MLKEM768-X25519]` (`0x647A`); bulk AEAD is ChaCha20-Poly1305.
+- **LC-DOC-BYBAND-1 — BY-BAND plaintext-sender-DID length-prefix width (AS-BUILT freeze note).** The optional non-default plaintext-sender-DID trailer's length-prefix width is **BY-BAND**: `0x6500` single-recipient (`sender_len u16 BE ‖ sender_did`, `layer_c.rs:559-562`) and `0x6520` group (`sender_len u16 BE ‖ sender_did`, same `plaintext_aad_bytes`) both use **`u16` BE**, while the MembershipSet `0x6610` group plaintext-sender AAD trailer (§25) uses **`u32` BE** (`sender_len u32 BE ‖ sender_did`, `layer_c.rs:2192-2195` — matches the `0x6610` per-DID `u32-BE` roster framing). The DEFAULT (Sealed-Sender) path carries NO plaintext sender on any band. Mirrored in `crates/benten-drop/src/layer_c.rs` module-doc "BY BAND" callout. AS-BUILT + golden-pinned (`f_lc_09_plaintext_sender_len_is_u16_be_not_u32_frozen_golden`); not a change request.
 - **B2 sender ORIGIN-AUTH (always-on; BD-2) — inside the once-sealed body region, NOT on the plaintext wire.** `0x6510` (single): `inner_v2 = lp_u32(sender_did) ‖ sig_codepoint(u16 BE) ‖ sender_sig_len(u32 BE) ‖ sender_sig ‖ body`, sealed under the CEK. `0x6520` (group): `body_v2 = sig_codepoint(u16 BE) ‖ sender_sig_len(u32 BE) ‖ sender_sig ‖ body`, PREPENDED into the once-bulk-sealed body (the per-stanza `sealed_inner = lp_u32(sender_did)` is unchanged). `sender_sig` is one per-MESSAGE LAMPS-hybrid `id-MLDSA65-Ed25519-SHA512` (`0x0001`) signature over `M_auth` (`SENDER_AUTH_DOMAIN` ‖ codepoints ‖ sender-DID ‖ body_cid ‖ audience commitment ‖ generation words ‖ stanza_count ‖ body-AAD digest). The sender-DID + signature are BOTH inside the ciphertext (sender-confidential); the on-wire plaintext AAD field-set is byte-identical to pre-B2.
+- **F-11 (R12) — BY-BAND recipient-cardinality width (AS-BUILT freeze note; Ben-CONFIRMED intentional).** The recipient/member-cardinality integer in the group AADs is **BY-BAND asymmetric**: the Layer-C `0x6520` group per-stanza AAD encodes `recipient_count` as **`u16` BE** (this section, line above), while the MembershipSet `0x6610` group per-stanza AAD (§25) encodes `member_count` as **`u32` BE** (the BLINDED 11-field set; verified against `crates/benten-drop/tests/f_02_group_aad_11field_and_f_01_truncation.rs` golden — "4 (member_count)" u32 segment). This is AS-BUILT and both widths are golden-pinned + round-trip-tested; it is **NOT a blocker** (each band's width is internally consistent, and `0x6520`'s `stanza_index`/`stanza_count` are `u32` so the `u16` is only the roster-cardinality field). **RESOLVED (R12):** the `0x6520` u16 vs `0x6610` u32 by-band asymmetry is confirmed **intentional per Ben** — a >65535-recipient single `0x6520` send is out of scope by design (split into multiple sends). The u16 saturation is now enforced with a typed `LayerCError::RecipientCountExceedsBandWidth` at the seal entry (`validate_group_roster_len`, the single choke point) + a named `benten_drop::layer_c::MAX_LAYER_C_GROUP_RECIPIENTS` const (65535) — an over-limit roster typed-rejects, it never panics inside the seal. Unifying the widths to `u32` is a **REJECTED** freeze record (do NOT touch the `0x6610` band). This is a registration + AS-BUILT record, not a change request.
 - Verified post-decrypt against the hybrid verifying key resolved from the recovered sender-DID (`benten_id::did::Did::resolve_hybrid`), recomputing the audience commitment + key-generation from the recipient's INDEPENDENTLY-held audience/roster (F-2). The unauthenticated sealed-sender variant is DELETED (an unauthenticated-but-claimed sender = indistinguishable from forgery).
 
 **Format version:** `ENVELOPE_FORMAT_VERSION = 2` (the envelope serialization byte) + `aad_version: u8 = 0x01` (the AAD prefix axis, DISTINCT from the format byte) + `sig_codepoint` (the auth-suite axis, inside the sealed body region).
@@ -472,6 +482,9 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 - `crates/benten-drop/tests/f_lc_hpke_encrypt_to_recipient_sealed_sender.rs` (F-LC-1/2/3: single + group round-trip, BLINDED AAD goldens, the substantive B2 `f_lc_3` arms — second-sealer-spoof / second-member-spoof / re-target / stale-generation / strip-PQ-half).
 - `crates/benten-drop/tests/f_lc_abuse_control_group_posture_and_inv18.rs` (F-LC-9 group Sealed-Sender posture + Inv-18 AAD field-set golden) + `f_02_group_aad_11field_and_f_01_truncation.rs` (F-02 11-field AAD golden + F-01 truncation) + `f_disc_2_invariant_and_doc_registration_catch_net.rs` (Inv-16/18/20 enforcement).
 - **Goldens pin wire-SHAPE + a sign→verify round-trip, NOT a fixed `sender_sig` hex** (the ML-DSA half is hedged/randomized — FLAG-6); the AAD-region goldens are byte-frozen.
+- **R9 GAP-1 fixture refresh (NOT a format change).** Where a `0x6520` group AAD golden pins a specific `audience_set_commitment`, that 32-byte component regenerated on the placeholder→real recipient-key transition (the blinded roster derives from `RecipientPublic::to_bytes`, which grew from a `[u8; 32]` fingerprint to `x25519_pub(32) ‖ mlkem768_ek(1184)`). Same as the `0x6610` §25 note: the AAD SHAPE / field-set / blinding / `aad_version` and the round-trip goldens are UNCHANGED — value refresh, not a wire-format change.
+
+- **F-04 (R20) — CITE-ONLY correction to the LC-DOC-BYBAND-1 line references.** The AAD length-prefix WIDTHS above are verified CORRECT and unchanged (u16 BE for `0x6500`/`0x6520` via `plaintext_aad_bytes`; u32 BE for the `0x6610` group plaintext-sender trailer via the `assemble_group_aad_local` path). Only the exact line-cites in LC-DOC-BYBAND-1 (`layer_c.rs:559-562` for the u16 sites, `layer_c.rs:2192-2195` for the u32 site) have drifted with churn. Per §3.5b HARDENED (high-churn line numbers), resolve these by GREP: the u16 sites are the `plaintext_aad_bytes` methods in `crates/benten-drop/src/layer_c.rs` (the `sender_len u16 BE ‖ sender_did` writes, `u16::try_from(sender_did.len())`); the u32 site is the `0x6610` sender-DID trailer reached through `assemble_group_aad_local` (`sender_len u32 BE ‖ sender_did`). The by-band widths + goldens (`f_lc_09_*`, `f_02_*`) are the authoritative lock; the line numbers are non-load-bearing.
 
 **FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level; B2 origin-auth always-on (pre-`phase-4-meta-core-close` in-place wire change, FLAG-1).
 
@@ -490,31 +503,40 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 
 **Byte-pin test coverage:**
 - `crates/benten-engine/tests/f_ld_2_remote_permission_wire_freeze.rs` (F-LD-2: `f_ld_2_operation_wire_encoding_is_big_endian_golden_pin` + `f_ld_2_full_struct_signing_bytes_golden_pin` + signature round-trip + `f_ld_2_out_of_band_codepoint_typed_rejects`).
-- `crates/benten-engine/tests/f_ld_4_multi_device_key_wrap_provisioning.rs` (F-LD-4: `f_ld_4_device_link_key_wrap_round_trips_to_device_b` + `f_ld_4_pubkey_substitution_post_fingerprint_rejects_k_principal_exfil` + `f_ld_4_replayed_session_id_rejects` + `f_ld_4_forged_offer_signature_rejects` + `f_ld_4_device_link_band_base_pinned` (`0x6310`) + `f_ld_4_k_principal_has_no_forward_secrecy_documented`).
+- `crates/benten-engine/tests/f_ld_4_multi_device_key_wrap_provisioning.rs` (F-LD-4: `f_ld_4_device_link_key_wrap_round_trips_to_device_b` + `f_ld_4_recipient_confidentiality_wrong_secret_rejects_k_principal_exfil` + `f_ld_4_model_only_session_id_replay_pin` (model-only; NOT a production-path pin per Row D-30) + `f_ld_4_forged_offer_signature_rejects` + `f_ld_4_device_link_band_base_pinned` (`0x6310`) + `f_ld_4_k_principal_has_no_forward_secrecy_documented`).
 - `crates/benten-engine/tests/f_ld_8_layer_d_timestamp_exclusion.rs` (F-LD-8: `f_ld_8_drop_to_recipient_carries_no_timestamp_field` + the differential `f_ld_8_drop_serialization_has_no_timestamp_bytes` (would-FAIL-on-no-op) + `f_ld_8_device_link_carries_the_one_hour_bucket` (inverse pin) + `f_ld_8_bucket_is_round_down_no_jitter_nq_c5_gated`).
 - The Layer-D drops REUSE the Layer-C `0x6610` / `0x6520` BLINDED group-AAD; that AAD shape is golden-pinned by `crates/benten-drop/tests/f_02_group_aad_11field_and_f_01_truncation.rs` (`f_02_live_0x6610_seal_binds_canonical_11_field_aad_golden` + `f_02_local_assembler_matches_canonical_membership_set_byte_for_byte` + `f_02_seal_open_round_trip_under_11_field_aad`; F-01 truncation arms `f_01_0x6610_dropped_stanza_fails_closed` + `f_01_0x6520_dropped_stanza_fails_closed`).
 
 **FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level; the `0x6310`/`0x6320` bands + the drop timestamp-exclusion invariant are wire-locked (V2 + BE + canonical-TLV from first commit, M-20).
 
+**Wiring carve-out (Composing).** The Layer-D grant/peer *signature* is classical-only Ed25519 at this wave (same path-(b) defer as §25 `peer_signature`; see `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-15e), and the six-class acceptance pipeline `benten_engine::layer_d::grant_acceptance::accept_grant` has **zero live (non-test) callers at HEAD** — it gains its first production caller at Phase-4-Meta-**Composing** engine-wiring (grant-signature verify + `request_id` binding are wire-layer caller preconditions per Row D-1/D-64-adjacent `accept_grant` caller-contract note). The wire bytes above are frozen; only the live call path is Composing-wired.
+
 ---
 
-## 30. Layer-A vault on-disk DAG-CBOR envelope (`${BENTEN_DATA_DIR}/vault.cbor`)
+## 28. Layer-A vault on-disk AEAD frame (`${BENTEN_DATA_DIR}/vault.cbor`)
 
-**Surface:** `benten_crypto_suite::vault` — `VaultPayload` + `serialize_vault` / `decode_vault` / `decode_vault_strict`; the DAK derivation `derive_dak` (`benten_crypto_suite::vault`). This is an **at-rest** wire-format-bearing surface (in scope per the redb at-rest precedent — items 1 / 8 / 11 / 12 / 24 all enumerate at-rest formats).
+<!-- R13 F-17: prose section header renumbered §30 → §28 to restore sequential
+     prose-section numbering (the prior §27 prose section folds summary-table
+     rows 27/28/29 — the Layer-D bands — into one section, so this is the 28th
+     prose section; the summary table below keeps its item-row numbering 1..32,
+     which counts wire-surfaces not prose sections — no hex / layout change). -->
 
-**Wire format:**
-- DAG-CBOR over the vault payload `{ k_principal: [u8;32], user_did_signing_key (HybridSigningKeySerialized, Ed25519⊕ML-DSA-65), user_did_creation_time: u64 }` — canonical field-order is part of the freeze (re-serialize is byte-identical).
+**Surface:** `benten_crypto_suite::vault` — `VaultPayload` + `serialize_vault` / `decode_vault` / `open_vault` / `decode_vault_strict`; the DAK derivation `derive_dak` (`benten_crypto_suite::vault`). This is an **at-rest** wire-format-bearing surface (in scope per the redb at-rest precedent — items 1 / 8 / 11 / 12 / 24 all enumerate at-rest formats).
+
+**Wire format (R11 MC-6 frame extension — salt + Argon2id params in-header; pre-freeze):**
+- **Outer on-disk frame** is a **hand-rolled magic-prefixed AEAD frame** (NOT a DAG-CBOR-encoded `EncryptedEnvelope`): `magic 0xae | format-version V2 | codepoint(BE u16) | salt(16 B) | m_cost(u32 BE) | t_cost(u32 BE) | p_cost(u32 BE) | nonce_len(u8) | nonce | ct` (`serialize_vault`, `crates/benten-crypto-suite/src/vault.rs`). **R11 MC-6:** the frame now persists the 16-byte Argon2id salt + the `{m_cost, t_cost, p_cost}` params in the header (NON-secret; the standard PBKDF-header shape) so that `vault.cbor` bytes + password ALONE re-derive the DAK and decrypt across a restart (`open_vault` reads salt+params from the frame — no external salt source). Before MC-6 the frame was `magic 0xae | V2 | codepoint(BE) | nonce_len | nonce | ct` and the salt+params lived only in an un-persisted in-RAM struct. Redefining V2 carries no migration burden (F-VA-1: no surviving V1/V2 vault golden vector). The frame is NO LONGER a byte-twin of the `EncryptedEnvelope` symmetric-AEAD wire header (that twin holds only for pre-MC-6 bytes); the vault frame now carries the extra salt+params header that the general envelope does not.
+- **AEAD-sealed inner payload** is canonical DAG-CBOR — the vault payload `{ k_principal: [u8;32], user_did_signing_key (HybridSigningKeySerialized, Ed25519⊕ML-DSA-65), user_did_creation_time: u64 }` — canonical field-order is part of the freeze (re-serialize is byte-identical).
 - Sealed under XChaCha20-Poly1305 with a **24-byte XNonce** (`VAULT_XNONCE_LEN = 24`, m-4: the vault is reseal-heavy — `K_principal` rotation + multi-device key-wrap re-seals — so a 12-byte ChaCha20 nonce would hit the 2^32 random-nonce birthday bound).
 - Wire codepoint = `SymmetricAeadXNonce` `VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT = 0x6100` (NOT the 12-byte `SYMMETRIC_AEAD_12B_CODEPOINT = 0x6101` sibling; a 12-byte nonce presented under `0x6100` is typed-rejected at strict decode — codepoint discriminates nonce width).
-- DAK derivation: `DAK = HKDF-SHA256( Argon2id(pw, salt; m=19456, t=2, p=1), info = "benten-dak-v1" )` with a 16-byte salt; the frozen `OWASP_DEFAULT` Argon2id params (`m_cost = 19456`, `t_cost = 2`, `p_cost = 1`) + the `"benten-dak-v1"` HKDF info-tag are the freeze (the info-tag is the codepoint slot for a future Argon2id-v2 param set).
+- DAK derivation: `DAK = HKDF-SHA256( Argon2id(pw, salt; m=19456, t=2, p=1), info = "benten-dak-v1" )` with a 16-byte salt; the `"benten-dak-v1"` HKDF info-tag is part of the freeze. **The Argon2id PARAMETER VALUES are NOT.** Post-MC-6 the params are per-vault header fields and the freeze tests pin their OFFSETS, not their values (`f_va_1` asserts `header[20..24] == params.m_cost` for whatever was passed), so provisioning MAY and SHOULD originate stronger values — `OWASP_DEFAULT` (19456/2/1) is today's default, not a ceiling. The floors/ceilings in `vault.rs` are DoS-policy constants OUTSIDE the frozen-bytes contract and are additively adjustable. **Correction (D-94):** the info-tag is NOT a version slot for a future param set — an info-tag mismatch surfaces as `AeadFailed`, which F-VA-3 deliberately collapses into the same typed rejection as a wrong password, so rotating it would tell a user "your password is wrong", not "unsupported KDF version". The honest version axes are the `format_version` byte and the vault-band codepoint.
 
 **Format version:** the `0x6100` vault codepoint + the `"benten-dak-v1"` HKDF info-tag are the version axes (codepoint-dispatched per CLAUDE.md baked-in #5; a future param set re-versions via a new info-tag / codepoint slot, never an in-place reinterpretation).
 
 **Byte-pin test coverage:**
-- `crates/benten-crypto-suite/tests/f_va_1_vault_ondisk_format_freeze.rs` (F-VA-1: `vault_uses_24_byte_xchacha20_nonce` + the `0x6100` codepoint pin + 12-byte-nonce-under-XNonce-codepoint strict-reject + canonical CBOR field-order byte-identity).
+- `crates/benten-crypto-suite/tests/f_va_1_vault_ondisk_format_freeze.rs` (F-VA-1: `vault_uses_24_byte_xchacha20_nonce` + the `0x6100` codepoint pin + 12-byte-nonce-under-XNonce-codepoint strict-reject + canonical CBOR field-order byte-identity + R11 MC-6 `vault_frame_persists_salt_and_params_in_header` header-offset freeze + `vault_opens_from_bytes_and_password_alone` self-containment).
 - `crates/benten-crypto-suite/tests/f_va_2_argon2id_dak_derivation.rs` (F-VA-2: the Argon2id→HKDF DAK derivation determinism + param binding).
 
-**FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level; the `0x6100` codepoint + 24-byte XNonce + Argon2id `OWASP_DEFAULT` params + canonical CBOR field-order are byte-locked (V2 + `EncryptedEnvelope` from first commit, M-20).
+**FREEZE-WAVE status:** ✅ COVERED at v1-beta substrate-level; the hand-rolled `magic 0xae | V2 | codepoint | salt(16) | m_cost | t_cost | p_cost | nonce_len | nonce | ct` frame (R11 MC-6 salt+params in-header) + the `0x6100` codepoint + 24-byte XNonce + canonical CBOR inner-payload field-order are byte-locked (the Argon2id param VALUES are per-vault header data, NOT byte-locked — only their offsets are) (format-version V2 from first commit, M-20).
 
 ---
 
@@ -527,7 +549,7 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 | 3 | MerkleRangeProof v2 | TBD per Option (b) | — | ⚠️ DEFERRED to G-COMP-1 |
 | 4 | Per-chunk AEAD (4-segment AAD per F3 R6 R1 fix-pass) | Cipher codepoint | tf3a_*.rs + tf4_*.rs + canonical_bytes_v1_codepoints_and_aad.rs (aad_per_chunk_canonical_layout_pinned) | ✅ COVERED |
 | 5 | UCAN-Varsig v1 header | Sig codepoint | tf3a_ucan_varsig_v1_header_carries_hybrid_signature.rs + tf4_gcore3c_swap_matrix_conformance*.rs | ✅ COVERED |
-| 6 | AuthorizationGrant CBOR (audience-pubkey-binding-message at v3 per R6-R2-FP-A; scope-binding at v2 per L3-r1-1 R6 R1) | #[non_exhaustive] + BINDING_SIG_DOMAIN v3 | tf3b_authorization_grant_*.rs + tf3b_scope_substitution_post_sign_rejected.rs + tf3b_audience_substitution_post_sign_rejected.rs | ✅ COVERED |
+| 6 | AuthorizationGrant CBOR (binding-message at v4 / 7-segment self-bind: R6-R2-FP-A folded audience_pubkey at v3, then the Item-3 issuer_verifying_key self-bind bumped it to v4; scope-binding at v2 per L3-r1-1 R6 R1) | #[non_exhaustive] + BINDING_SIG_DOMAIN v4 | tf3b_authorization_grant_*.rs + tf3b_scope_substitution_post_sign_rejected.rs + tf3b_audience_substitution_post_sign_rejected.rs + tf3b_issuer_verifying_key_substitution_post_sign_rejected.rs | ✅ COVERED |
 | 7 | Drop bundle CBOR | `DropBundleVersion` enum | benten-drop/tests/ | ✅ COVERED |
 | 8 | TwoCidStore mapping | redb schema-version | tf3e_*.rs | ✅ COVERED |
 | 9 | EncryptionClass codepoint (NEW G-CORE-9) | #[non_exhaustive] + codepoint table | encryption_class.rs unit tests | ✅ COVERED |
@@ -549,11 +571,15 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 | 25 | MembershipSet codepoint band (`0x6600`/`0x6610`/`0x6620`) + `0x6610` group 11-field AAD + B2 body-region sender-sig | `aad_version: u8 = 0x01` + codepoint band + `sig_codepoint` | f_cp_codepoint_registry_dispatch.rs + benten-membership-set/tests/f_aad_1_*.rs + f_aad_2_*.rs + f_fed_1_2_subset_ref_federation.rs + benten-drop/tests/f_lc_hpke_*.rs (B2 0x6610 arms) | ✅ COVERED (substrate-level; `0x6620` reserved-encode-only at v1-beta) |
 | 26 | Layer-C drop band (`0x6500`/`0x6510`/`0x6520`) + B2 sender-origin-auth body region | `ENVELOPE_FORMAT_VERSION = 2` + `aad_version: u8 = 0x01` + `sig_codepoint` | benten-drop/tests/f_lc_hpke_encrypt_to_recipient_sealed_sender.rs + f_lc_abuse_control_group_posture_and_inv18.rs + f_02_group_aad_11field_and_f_01_truncation.rs | ✅ COVERED (substrate-level; B2 origin-auth always-on; goldens pin shape+round-trip not sig-hex per FLAG-6) |
 | 27 | Layer-D RemotePermission band (`0x6320..0x632F`) — `PermissionRequest`/`PermissionGrant` | `REMOTE_PERMISSION_WIRE_VERSION = 2` + `aad_version: u8 = 0x01` | benten-engine/tests/f_ld_2_remote_permission_wire_freeze.rs (operation BE golden + full-struct signing-bytes golden + out-of-band codepoint typed-reject) | ✅ COVERED (substrate-level; canonical-TLV BE, NOT DAG-CBOR) |
-| 28 | Layer-D DeviceLink band (`0x6310..0x631F`) — multi-device key-wrap `Provisioning*` | `PROVISIONING_WIRE_VERSION = 2` + `aad_version: u8 = 0x01` | benten-engine/tests/f_ld_4_multi_device_key_wrap_provisioning.rs (round-trip + pubkey-substitution-reject + replay-reject + `0x6310` band pin) + f_02_group_aad_11field_and_f_01_truncation.rs (reused 0x6610 AAD golden) | ✅ COVERED (substrate-level; reuses Layer-C KEM-DEM; K_principal no-FS by design) |
+| 28 | Layer-D DeviceLink band (`0x6310..0x631F`) — multi-device key-wrap `Provisioning*` | `PROVISIONING_WIRE_VERSION = 2` + `aad_version: u8 = 0x01` | benten-engine/tests/f_ld_4_multi_device_key_wrap_provisioning.rs (round-trip + pubkey-substitution-reject + session-id-replay MODEL-only pin (Row D-30 deferred) + `0x6310` band pin) + f_02_group_aad_11field_and_f_01_truncation.rs (reused 0x6610 AAD golden) | ✅ COVERED (substrate-level; reuses Layer-C KEM-DEM; K_principal no-FS by design) |
 | 29 | Layer-D drop timestamp-EXCLUSION + 1-hr bucket (DeviceLink/RemotePermission only) | structural (NO timestamp field on `DropToRecipient`) + `LAYER_D_BUCKET_SECS = 3600` | benten-engine/tests/f_ld_8_layer_d_timestamp_exclusion.rs (no-timestamp-field + differential no-timestamp-bytes + inverse bucket pin + round-down-no-jitter NQ-C5) | ✅ COVERED (substrate-level; drops forever-valid per #62; NQ-C5/NQ-T2 RATIFIED) |
-| 30 | Layer-A vault on-disk DAG-CBOR envelope (`vault.cbor`) | `0x6100` `SymmetricAeadXNonce` codepoint + 24-byte XNonce + Argon2id `OWASP_DEFAULT` (m=19456/t=2/p=1) + `"benten-dak-v1"` HKDF info-tag | benten-crypto-suite/tests/f_va_1_vault_ondisk_format_freeze.rs (24-byte-nonce + `0x6100` codepoint + 12-byte-under-XNonce strict-reject + canonical CBOR field-order) + f_va_2_argon2id_dak_derivation.rs | ✅ COVERED (substrate-level; at-rest format, redb-precedent scope) |
+| 30 | Layer-A vault on-disk AEAD frame (`vault.cbor`) — hand-rolled magic-prefixed frame (R11 MC-6: salt+params in-header; no longer a byte-twin of `EncryptedEnvelope` header), DAG-CBOR inner payload | `0x6100` `SymmetricAeadXNonce` codepoint + 24-byte XNonce + salt(16)+`{m,t,p}`-in-header + Argon2id params as per-vault HEADER FIELDS at frozen offsets (values NOT frozen; `OWASP_DEFAULT` m=19456/t=2/p=1 is the current default) + `"benten-dak-v1"` HKDF info-tag | benten-crypto-suite/tests/f_va_1_vault_ondisk_format_freeze.rs (24-byte-nonce + `0x6100` codepoint + 12-byte-under-XNonce strict-reject + canonical CBOR field-order + MC-6 salt/params header-offset freeze + bytes+password self-containment) + f_va_2_argon2id_dak_derivation.rs | ✅ COVERED (substrate-level; at-rest format, redb-precedent scope) |
+| 31 | did:benten method-specific-id byte layout (GAP-KDB Shape-B content-addressed key-set DID) — `[varint(0x1211) ‖ mldsa(1952)] ‖ [varint(0xed) ‖ ed25519(32)] ‖ [CIDv1 0x01,0x71,0x1e,0x20 ‖ blake3(32)]`, no framing byte (C1), trailing-reject | `did:benten` method (the trailing CIDv1 is the BLAKE3-256 commitment of the canonical KeySetDocument; `did:key` bytes unchanged) | crates/benten-id/tests/kdb_did_benten_codec.rs (DID-1 golden byte-layout + DID-2 round-trip + DID-5 did:key zero-migration) + crates/benten-id/tests/kdb_f_inj_did_benten_reject.rs (DID-3 exact-consume trailing/truncation reject matrix) | ✅ COVERED (v1-beta freeze surface) |
+| 32 | KeySetDocument v1 canonical DAG-CBOR schema (GAP-KDB Shape-B) — `{v, sig, kem, sig_cp=0x0001, kem_cp=0x647a}`, `kem` X25519-first `[0xec‖x25519(32)‖0x120c‖mlkem768(1184)]` (C2), no `dev` field at v1-beta | `v = 1` (KeySetDocument format version) | crates/benten-id/tests/kdb_canonical_bytes_v1_keyset.rs (KSD-1 golden-byte + golden-CID + KSD-6 sig_cp/kem_cp frozen values + KSD-7 kem-multikey X25519-first golden) + crates/benten-id/tests/kdb_f_inj_keyset_strict_canonical.rs (KSD-3 strict-canonical decode reject matrix) | ✅ COVERED (v1-beta freeze surface) |
 
-**Outcome (R6 R1 L11 expansion, 2026-05-24; extended at F-full R6 R1 with item 25; B2 sealed-sender origin-auth added item 26; Layer-D bands added items 27-29 at R6-round-2; Layer-A vault at-rest format added item 30 at R6-round-3 per GAP-B):** 29 of 30 surfaces have byte-pin / round-trip coverage at v1-beta substrate-level (items 11-24 added at R6 R1 L11 closure per the lens's phase-wide sweep finding L11-R6-R1-MAJOR-1; item 25 the MembershipSet codepoint band added at F-full R6 R1; item 26 the Layer-C drop band + B2 sender-origin-auth body region added with the sealed-sender-auth mini-ADDL; items 27-29 the Layer-D RemotePermission + DeviceLink + drop-timestamp-exclusion bands added at R6-round-2 — together discharging the R6-round-2 F-06 that the Layer-C drop rows AND the Layer-D bands were under-enumerated; item 30 the Layer-A vault on-disk DAG-CBOR envelope added at R6-round-3 per GAP-B, closing the at-rest-format gap the redb precedent put in scope). The one DEFERRED public surface (MerkleRangeProof, item 3) is genuinely-not-built (no phantom freeze). The G-COMP-1 wave consumes this expanded inventory for the hex-byte regression-pin sweep per Row D-9 widening. Item 24 is crate-private + retained for completeness; it is NOT in the public freeze contract scope.
+**Outcome (R6 R1 L11 expansion, 2026-05-24; extended at F-full R6 R1 with item 25; B2 sealed-sender origin-auth added item 26; Layer-D bands added items 27-29 at R6-round-2; Layer-A vault at-rest format added item 30 at R6-round-3 per GAP-B; GAP-KDB Shape-B added items 31-32 — did:benten method + KeySetDocument schema):** 31 of 32 surfaces have byte-pin / round-trip coverage at v1-beta substrate-level (items 11-24 added at R6 R1 L11 closure per the lens's phase-wide sweep finding L11-R6-R1-MAJOR-1; item 25 the MembershipSet codepoint band added at F-full R6 R1; item 26 the Layer-C drop band + B2 sender-origin-auth body region added with the sealed-sender-auth mini-ADDL; items 27-29 the Layer-D RemotePermission + DeviceLink + drop-timestamp-exclusion bands added at R6-round-2 — together discharging the R6-round-2 F-06 that the Layer-C drop rows AND the Layer-D bands were under-enumerated; item 30 the Layer-A vault on-disk AEAD frame added at R6-round-3 per GAP-B, closing the at-rest-format gap the redb precedent put in scope). The one DEFERRED public surface (MerkleRangeProof, item 3) is genuinely-not-built (no phantom freeze). The G-COMP-1 wave consumes this expanded inventory for the hex-byte regression-pin sweep per Row D-9 widening. Item 24 is crate-private + retained for completeness; it is NOT in the public freeze contract scope.
+
+**Section-to-row mapping (this doc's body has 28 numbered sections; the summary above has 32 rows).** The two sequences are NOT 1:1 and never were: sections `1.`–`26.` map one-to-one to rows 1-26; section `27.` ("Layer-D bands") covers rows **27, 28 and 29** (DeviceLink, RemotePermission, and the drop timestamp-EXCLUSION); section `28.` ("Layer-A vault on-disk AEAD frame") is row **30**; and rows **31** (`did:benten` method-specific-id byte layout) and **32** (`KeySetDocument` v1 canonical DAG-CBOR schema) — both GAP-KDB Shape-B surfaces — have **no separate body section**. For those two the summary row above IS the inventory entry, and the normative byte detail lives in their pinning tests: `crates/benten-id/tests/kdb_did_benten_codec.rs` + `crates/benten-id/tests/kdb_f_inj_did_benten_reject.rs` (row 31) and `crates/benten-id/tests/kdb_canonical_bytes_v1_keyset.rs` + `crates/benten-id/tests/kdb_f_inj_keyset_strict_canonical.rs` (row 32). Stating the mapping here keeps "32 surfaces / 28 sections" from reading as four missing surfaces.
 
 ¹ **Format note (L11-MIN-2 close at R6-FP-D 2026-05-24):** the glob-form `tf3a_*.rs` / `tf3b_authorization_grant_*.rs` / `tf4_*.rs` cites resolve at wave-time to multiple discrete test files under `crates/benten-crypto-suite/tests/` + `crates/benten-caps/tests/`. The glob-form is intentional for items where the byte-pin coverage spans a test-file family (multiple swap-matrix arms × wire directions); items 1, 2, 7, 8, 9, 10 reference single test files because their byte-pin coverage IS in one file. A future CI inventory-walk lane that resolves these cites should expand the glob via `git ls-files` rather than treating it as a literal path.
 
@@ -563,11 +589,90 @@ crypto-suite's) is the intended post-v1-beta widening — named in `docs/V1-FROZ
 
 This inventory is the wave-time enumeration; Ben signs the freeze decision separately at the V1-FROZEN-INTERFACE.md item 4 P-III decision-point sweep. The decision-point question Ben answers:
 
-> "Are the 23 covered wire-format surfaces + the deferred MerkleRangeProof surface the COMPLETE v1-beta wire-format inventory (with item 24's suspension_store records noted as crate-private)? Is there any surface NOT listed above whose bytes the v1-beta lock-in needs to bind?"
+> "Are the 31 covered wire-format surfaces + the 1 deferred MerkleRangeProof surface (item 3) — 32 enumerated in total — the COMPLETE v1-beta wire-format inventory (with item 24's suspension_store records noted as crate-private, not in the public freeze scope)? Is there any surface NOT listed above whose bytes the v1-beta lock-in needs to bind?"
 
 A "yes, complete" answer locks the inventory; a "no, add X" answer adds the missing surface inline + extends the byte-pin coverage at the same wave.
 
 **R6 R1 expansion provenance (2026-05-24):** items 11-24 were added at R6 R1 phase-close council per L11 lens finding `L11-R6-R1-MAJOR-1` (phase-wide canonical-bytes sweep). The 9-of-10 prior framing was scoped to the G-CORE-9 R4 FREEZE subset; R6 R1 widened to phase-wide which surfaced 14 additional wire-format-bearing surfaces. Per L11 lens recommendation path-(1): expand inventory items 11-24 for the 12 publicly-observable surfaces + retain item 24 (crate-private suspension_store) for completeness.
+
+---
+
+## CI follow-up rows (named-carry)
+
+- **CI-FU-1 (R10-council F-04; reworded F-25 R12) — wasm32-unknown-unknown
+  bundle-composition drift-gate.**
+  The `crypto-suite-wasm-roundtrip` job (`.github/workflows/wasm-conformance.yml`)
+  gates the tf3a PQ-hybrid round-trip on **wasm32-wasip1** (via wasmtime), which
+  proves the crypto layer is wasm-CLEAN under wasip1. **F-25 correction:** the
+  earlier framing ("add a wasm32-unknown-unknown crypto *round-trip*") is wrong —
+  `benten-crypto-suite` is **structurally EXCLUDED from the wasm32-unknown-unknown
+  BrowserBackend thin-compute bundle** (CLAUDE.md baked-in #17: the thin-compute
+  target ships NO crypto / sync / SANDBOX state; crypto lives on the full-peer
+  shape a). So there is nothing to run a *crypto round-trip* against on
+  wasm32-unknown-unknown — the crate isn't in that bundle. The correct follow-up
+  gate is a **bundle-composition drift-gate**: a wasm32-unknown-unknown build of
+  the BrowserBackend thin-compute artifact that ASSERTS `benten-crypto-suite` (and
+  the other full-peer-only crates) is NOT linked in — so a future dependency edit
+  that accidentally pulls crypto-suite into the browser bundle fires at PR time
+  (the structural-exclusion invariant, mirroring the per-crate `wasm32_excluded`
+  compile-fence tests). **Destination:** a new `wasm-browser.yml` (or
+  `wasm-checks.yml`) job; Phase-4-Meta-Composing browser-runtime CI hardening. Not
+  a wire-format change — a CI coverage enhancement. Anchor: R10-council F-04 /
+  R12-council F-25.
+
+---
+
+## G-COMP-1 sweep notes (named-carry; R17 council)
+
+- **GCS-16 (R17 F-16) — `ENVELOPE_MAGIC` / `ENVELOPE_FORMAT_VERSION`
+  dual-homed with NO cross-home byte-equality pin.** `ENVELOPE_MAGIC = 0xae`
+  is defined in BOTH `crates/benten-crypto-suite/src/envelope.rs` AND
+  `crates/benten-crypto-suite/src/aead.rs`; `ENVELOPE_FORMAT_VERSION` is
+  likewise multi-homed (`benten-drop/src/layer_c.rs` `= 2`,
+  `benten-crypto-suite/src/envelope.rs` `_V2 = 0x02`,
+  `benten-crypto-suite/src/aead.rs`). Each home is independently
+  byte-correct at HEAD, but there is NO single cross-home byte-equality
+  regression pin asserting the copies stay equal — a future edit to one home
+  could silently diverge the magic/version byte across the envelope vs aead
+  layers. **G-COMP-1 sweep item:** add a cross-home equality assertion (mirror
+  the `domain_registry` home-crate drift-assert idiom) OR consolidate to one
+  canonical const re-exported at each home. No wire change at v1-beta (the
+  bytes agree today); this pins that they STAY agreeing.
+
+- **GCS-24 (R17 F-24; extends Row D-9; LC-COV-SENDERTRAILER-1 R18 extension) —
+  item 27/§Row-D-9 missing bytes→struct decoder + by-band `sender_len`
+  width-pins.** The Layer-C single-recipient plaintext-sender wire trailer
+  `sender_len u16 BE | sender_did` (`benten-drop/src/layer_c.rs`, the plaintext-sender encode path)
+  is byte-pinned on the ENCODE side
+  (`f_lc_09_plaintext_sender_len_is_u16_be_not_u32_frozen_golden`), but there
+  is no round-tripping **bytes→struct DECODER** pinned for the trailer, and the
+  u16 (not u32) `sender_len` width is asserted only via the encode golden.
+  **The GROUP plaintext-sender AAD trailers are ALSO under-pinned by band:** the
+  `0x6520` group trailer (`sender_len u16 BE | sender_did`,
+  `layer_c.rs` `plaintext_aad_bytes`) and the `0x6610` MembershipSet group trailer
+  (`sender_len u32 BE | sender_did`, `layer_c.rs` `assemble_group_aad_local`;
+  line-cite resolve-by-grep per the F-04 R20 disclaimer above) each need an
+  explicit golden byte-pin on their *plaintext-sender variant's* `sender_len`
+  width (the DEFAULT Sealed-Sender path pins already exist; the non-default
+  plaintext-sender trailer widths are only exercised structurally). **G-COMP-1
+  sweep item:** add (a) a decode-side pin parsing the single-recipient trailer
+  back to `(sender_len, sender_did)` asserting u16-BE round-trips (a decoder
+  reading u32 would mis-frame); (b) an explicit **`0x6520` plaintext-sender
+  `sender_len` u16-BE golden byte-pin**; (c) an explicit **`0x6610`
+  plaintext-sender `sender_len` u32-BE golden byte-pin** (a mixed-width regression
+  where either band drifted to the other's width would surface). Bundled with
+  the Row D-9 hex-byte-pin sweep.
+
+- **GCS-17 (R17 F-17) — `VaultError::WrongPassword` dead variant on the
+  frozen enum.** `crates/benten-crypto-suite/src/vault.rs` declares
+  `VaultError::WrongPassword`, but at v1-beta the vault open path surfaces a
+  wrong password as an AEAD-open failure (the AEAD tag check), not via this
+  named variant — so the variant is currently unconstructed (dead). It is on
+  the frozen `VaultError` enum, so it stays (removing it would be a
+  surface-breaking change; the enum is additive-frozen). **G-COMP-1 sweep
+  item:** either wire `WrongPassword` at the open-path AEAD-failure site (a
+  more specific typed error) OR document it as an intentionally-reserved
+  variant. Doc note only at v1-beta; no enum change.
 
 ---
 

@@ -206,6 +206,8 @@ pub fn deny_all_cap_recheck() -> MaterializerCapRecheck {
 /// `code: ErrorCode` field that is structurally constant per variant is
 /// duplicate state).
 #[derive(Debug, Error)]
+// §11 SemVer-readiness (F-22 pre-tag): a future materializer-error variant lands additively; cross-crate consumers add a `_` wildcard arm.
+#[non_exhaustive]
 pub enum MaterializerError {
     /// Materializer's entry validation refused the spec.
     /// Surfaces [`ErrorCode::MaterializerSchemaMismatch`].
@@ -254,6 +256,8 @@ impl MaterializerError {
 /// bytes; this frame carries the typed code so the consumer (admin UI) can
 /// render an explanation.
 #[derive(Debug, Clone)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate construction uses the crate's constructors (field READS unaffected).
+#[non_exhaustive]
 pub struct MaterializerDenialFrame {
     /// The CID that was denied.
     pub node_cid: Cid,
@@ -287,6 +291,8 @@ impl MaterializerDenialFrame {
 /// views over the same content tile should pass distinct
 /// `SchemaSubgraphSpec` values; consumers that want multiple views
 /// over the same shape should pass distinct content CIDs.
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate construction uses the crate's constructor (field READS unaffected).
+#[non_exhaustive]
 pub struct MaterializerWalkInputs<'a, E: MaterializerEngine> {
     /// Engine seam used for content reads (`read_node_as`).
     pub engine: &'a E,
@@ -311,6 +317,33 @@ pub struct MaterializerWalkInputs<'a, E: MaterializerEngine> {
     pub declared_requires: Vec<String>,
 }
 
+impl<'a, E: MaterializerEngine> MaterializerWalkInputs<'a, E> {
+    /// Construct a `MaterializerWalkInputs` from its parts.
+    ///
+    /// This is the cross-crate construction entry point — `#[non_exhaustive]`
+    /// (F-22 pre-tag §11 SemVer-readiness) blocks the equivalent struct-literal
+    /// from outside `benten-platform-foundation`. A future additive field lands
+    /// here without breaking external callers.
+    #[must_use]
+    pub fn new(
+        engine: &'a E,
+        spec: &'a SchemaSubgraphSpec,
+        content_cid: Cid,
+        walk_principal: Cid,
+        cap_recheck: MaterializerCapRecheck,
+        declared_requires: Vec<String>,
+    ) -> Self {
+        Self {
+            engine,
+            spec,
+            content_cid,
+            walk_principal,
+            cap_recheck,
+            declared_requires,
+        }
+    }
+}
+
 impl<'a, E: MaterializerEngine> Clone for MaterializerWalkInputs<'a, E> {
     fn clone(&self) -> Self {
         Self {
@@ -330,6 +363,8 @@ impl<'a, E: MaterializerEngine> Clone for MaterializerWalkInputs<'a, E> {
 
 /// Output bytes from a single materializer walk.
 #[derive(Debug, Clone)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct MaterializerOutput {
     /// Primary-format bytes (HTML for HtmlJson; plaintext for Plaintext).
     primary: Vec<u8>,
@@ -564,6 +599,8 @@ pub trait Renderer: Send + Sync {
 /// Renderer error type — opaque to keep transport concerns inside
 /// concrete impls.
 #[derive(Debug, Error)]
+// §11 SemVer-readiness (F-22 pre-tag): a future render-error variant lands additively; cross-crate consumers add a `_` wildcard arm.
+#[non_exhaustive]
 pub enum RenderError {
     /// Renderer transport failure.
     #[error("renderer transport failure: {0}")]
@@ -610,6 +647,8 @@ enum FormatBackend {
 /// using this token's pattern; the materializer-side seam is the trait
 /// surface lock.
 #[derive(Debug, Clone)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate construction uses the crate's constructor (field READS unaffected).
+#[non_exhaustive]
 pub struct SubscribeAttachToken {
     /// Pattern to be subscribed against; consumer passes this to
     /// `Engine::on_change_as_with_cursor(pattern, cursor, callback, actor)`.
@@ -1072,6 +1111,21 @@ trait ValueRender {
     }
     fn null(&self) -> String;
     fn bytes(&self, len: usize) -> String;
+    /// Render a [`Value`] variant this build does not know how to render.
+    ///
+    /// `Value` is `#[non_exhaustive]` (applied pre-freeze so a ninth variant
+    /// stays additive for downstream crates), so `render_value`'s match needs a
+    /// wildcard arm. The arm must NOT be silent: rendering an unknown variant
+    /// as empty or `null` would be invisible data loss in a UI, which is the
+    /// same failure class the engine rejects at codepoint dispatch (never a
+    /// silent fallback on an unknown algorithm). This surfaces it instead.
+    ///
+    /// Defaulted so adding a renderer cannot accidentally omit it — but note
+    /// the default is NOT valid JSON, so a format with syntax **must**
+    /// override it, exactly as [`ValueRender::bytes`] already does.
+    fn unsupported(&self) -> String {
+        "[unsupported value]".to_string()
+    }
     /// Join already-rendered list items into the list representation.
     fn list(&self, items: &[String]) -> String;
     /// Compose an already-rendered map of `(key, rendered_value)` pairs.
@@ -1099,6 +1153,13 @@ fn render_value<R: ValueRender>(v: &Value, r: &R) -> String {
                 .collect();
             r.map(&pairs)
         }
+        // `Value` is `#[non_exhaustive]`; a variant added in a later release
+        // lands here. Surfaced visibly rather than dropped — see
+        // `ValueRender::unsupported`. Unreachable today by construction (all
+        // eight variants are matched above), which is why the pin at
+        // `value_render_unsupported_is_wellformed_per_format` exercises the
+        // renderers directly instead of trying to synthesise a ninth variant.
+        _ => r.unsupported(),
     }
 }
 
@@ -1158,6 +1219,11 @@ impl ValueRender for JsonRender {
     }
     fn bytes(&self, len: usize) -> String {
         format!("\"[bytes:{len}]\"")
+    }
+    /// MUST override the default: the bare marker is not valid JSON. Same
+    /// reason `bytes` quotes its own marker.
+    fn unsupported(&self) -> String {
+        "\"[unsupported value]\"".to_string()
     }
     fn list(&self, items: &[String]) -> String {
         format!("[{}]", items.join(","))
@@ -1878,5 +1944,53 @@ mod inline_canary {
                 _ => panic!("schema_compiler emitted unexpected variant: {k:?}"),
             }
         }
+    }
+
+    /// `Value` is `#[non_exhaustive]` (applied pre-freeze so a ninth variant is
+    /// additive for downstream crates), so `render_value` carries a wildcard arm
+    /// that routes to [`ValueRender::unsupported`].
+    ///
+    /// The arm itself is unreachable today by construction — all eight variants
+    /// are matched above it — so this exercises the renderers directly. That is
+    /// the honest testable half: what can break is not the arm, it is a renderer
+    /// emitting a marker that is malformed for its own format.
+    ///
+    /// **would-FAIL-on-revert:** delete `JsonRender::unsupported` and the default
+    /// trait method takes over, emitting the bare `[unsupported value]` — which
+    /// is not valid JSON, and the `serde_json::from_str` assertion below fails.
+    /// That is exactly the bug the override exists to prevent, and it is silent
+    /// without this pin because no current input reaches the arm.
+    #[test]
+    fn value_render_unsupported_is_wellformed_per_format() {
+        // Positive control: the marker is non-empty everywhere. A renderer that
+        // returned "" would satisfy "valid JSON" vacuously for the plain formats
+        // and silently drop the value — the failure this whole arm exists to stop.
+        for (name, got) in [
+            ("html", HtmlRender.unsupported()),
+            ("plaintext", PlaintextRender.unsupported()),
+            ("json", JsonRender.unsupported()),
+        ] {
+            assert!(
+                !got.trim().is_empty(),
+                "{name} renderer must SURFACE an unknown Value kind, not drop it"
+            );
+        }
+
+        // The substantive arm: JSON must stay parseable. The default trait
+        // method is deliberately not valid JSON, so this pins the override.
+        let json = JsonRender.unsupported();
+        let parsed: serde_json::Value = serde_json::from_str(&json)
+            .expect("JsonRender::unsupported MUST emit valid JSON — the defaulted marker is not");
+        assert!(
+            parsed.as_str().is_some_and(|s| s.contains("unsupported")),
+            "the JSON marker must remain self-describing; got {json}"
+        );
+
+        // And it must not be confusable with a real Value::Null rendering.
+        assert_ne!(
+            JsonRender.unsupported(),
+            JsonRender.null(),
+            "an unknown kind must be distinguishable from a genuine null"
+        );
     }
 }

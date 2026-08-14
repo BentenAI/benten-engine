@@ -328,6 +328,57 @@ fn ucan_validate_chain_returns_true_for_well_formed_chain() {
     }
 }
 
+/// safe-2 #549 regression pin: the live `UcanValidateChain` op MUST
+/// reject a token blob whose CBOR container-nesting exceeds
+/// `MAX_UCAN_PROOF_DEPTH` with a typed `E_TYPED_CALL_DISPATCH_ERROR`
+/// (naming "proof chain too deep") instead of stack-overflowing the
+/// recursive serde deserialize. `Ucan::prf: Vec<Ucan>` is a
+/// directly-recursive proof-chain field; without the bounded-decode
+/// wiring an adversarial deeply-nested blob would abort the process.
+///
+/// The blob is a synthetic definite-length CBOR array nested
+/// `MAX_UCAN_PROOF_DEPTH + 8` levels deep (`0x81` = array(1), repeated,
+/// then a `0x00` leaf). The depth pre-walk trips BEFORE serde runs, so
+/// the exact shape of the leaf is irrelevant — the point is that the
+/// live op rejects over-deep input at the byte boundary.
+///
+/// Would FAIL-on-revert: reverting the `from_canonical_bytes_bounded`
+/// wiring at the two live sites restores the raw `from_slice`, which
+/// on this input recurses to stack-overflow (process abort) rather
+/// than returning a typed error — this test would then abort instead
+/// of asserting.
+#[test]
+fn ucan_validate_chain_rejects_over_deep_proof_chain_with_typed_error() {
+    let (_dir, engine) = fresh_engine();
+
+    // Synthetic over-deep CBOR: (MAX_UCAN_PROOF_DEPTH + 8) nested
+    // 1-element arrays wrapping a leaf unsigned int.
+    let depth = benten_id::ucan::MAX_UCAN_PROOF_DEPTH + 8;
+    let mut over_deep = vec![0x81u8; depth]; // array(1) header, repeated
+    over_deep.push(0x00); // leaf: unsigned int 0
+
+    let input = map_value(&[
+        ("tokens", Value::List(vec![Value::Bytes(over_deep)])),
+        ("audience", Value::Text("did:key:zdummy".to_string())),
+        ("capability", Value::Text("zone:user:write".to_string())),
+        ("now", Value::Int(1_500_000)),
+    ]);
+
+    let err = engine
+        .dispatch_typed_call(TypedCallOp::UcanValidateChain, &input)
+        .expect_err("over-deep proof chain MUST produce a typed dispatch error, not abort");
+    assert_eq!(
+        err.code(),
+        ErrorCode::TypedCallDispatchError,
+        "over-deep proof chain MUST map to E_TYPED_CALL_DISPATCH_ERROR; got {err:?}"
+    );
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains("too deep"),
+        "dispatch error reason MUST name the proof-chain-too-deep cause; got '{rendered}'"
+    );
+}
+
 #[test]
 fn ucan_validate_chain_returns_false_with_reason_on_audience_mismatch() {
     let (_dir, engine) = fresh_engine();

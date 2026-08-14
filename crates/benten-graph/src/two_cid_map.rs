@@ -150,23 +150,72 @@ pub enum TwoCidMapError {
 mod tests {
     use super::*;
 
+    /// `table_key` was already a full-layout pin (prefix + exact remainder);
+    /// this only adds the exact total width so a trailing padding byte fails
+    /// here rather than at a downstream scan.
+    ///
+    /// MUTATION THAT MUST MAKE THIS FAIL: `k.extend_from_slice(b"m:")` ->
+    /// `b"n:"`, or dropping the `plaintext_cid` push.
     #[test]
     fn table_key_prefixes_with_m_colon() {
         let cid = Cid::from_blake3_digest([0x42u8; 32]);
         let key = TwoCidMap::table_key(&cid);
+        assert_eq!(key.len(), 2 + cid.as_bytes().len(), "exact at-rest width");
         assert!(key.starts_with(b"m:"));
         assert_eq!(&key[2..], cid.as_bytes());
     }
 
+    /// W-08b (R6 round-#1 falsification sweep). The superseded version of this
+    /// test asserted only `starts_with(b"d:")` plus "`:m:` appears SOMEWHERE".
+    /// Both survive swapping the two `extend_from_slice` arguments, which
+    /// silently cross-wires every per-DID mapping lookup and makes
+    /// `redb_backend.rs::parse_namespace_from_mapping_key` recover the
+    /// plaintext CID as if it were the namespace DID — a partition-isolation
+    /// failure (multitenant-r1-5) that this pin was supposed to guard.
+    ///
+    /// The DID and plaintext seeds are DISTINCT on purpose; with equal seeds
+    /// every assertion below is blind to the swap.
+    ///
+    /// MUTATIONS THAT MUST MAKE THIS FAIL (each is one line in this file):
+    ///   :80  `k.extend_from_slice(namespace_did.as_bytes());`
+    ///     -> `k.extend_from_slice(plaintext_cid.as_bytes());`
+    ///   :82  the mirror swap
+    ///   :79  `b"d:"`  -> `b"e:"` / `b"d"` / `b"dd:"`
+    ///   :81  `b":m:"` -> `b":n:"`, or moved ahead of the DID bytes
     #[test]
-    fn partition_table_key_starts_with_did_prefix() {
+    fn partition_table_key_full_layout_frozen() {
         let did = Cid::from_blake3_digest([0xaau8; 32]);
         let cid = Cid::from_blake3_digest([0x42u8; 32]);
+        let width = did.as_bytes().len();
         let key = TwoCidMap::partition_table_key(&did, &cid);
-        assert!(key.starts_with(b"d:"));
-        assert!(
-            key.windows(b":m:".len()).any(|w| w == b":m:"),
-            "partition table key must contain `:m:` after the DID bytes"
+
+        assert_eq!(
+            key.len(),
+            2 + width + 3 + width,
+            "partition-key total width drifted — at-rest layout break"
+        );
+        assert_eq!(&key[0..2], b"d:", "partition-key DID prefix drifted");
+        assert_eq!(
+            &key[2..2 + width],
+            did.as_bytes(),
+            "segment 2 MUST be the NAMESPACE DID, not the plaintext CID"
+        );
+        assert_ne!(
+            &key[2..2 + width],
+            cid.as_bytes(),
+            "the two extend_from_slice arguments are swapped — every per-DID \
+             lookup is cross-wired"
+        );
+        assert_eq!(
+            &key[2 + width..2 + width + 3],
+            b":m:",
+            "mapping delimiter drifted or moved (the old pin only asked \
+             whether `:m:` appeared anywhere)"
+        );
+        assert_eq!(
+            &key[2 + width + 3..],
+            cid.as_bytes(),
+            "segment 4 MUST be the PLAINTEXT CID, not the namespace DID"
         );
     }
 }

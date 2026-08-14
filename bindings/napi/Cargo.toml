@@ -111,6 +111,12 @@ data-encoding = { workspace = true }
 napi = { workspace = true, features = ["napi4", "serde-json"], optional = true }
 napi-derive = { workspace = true, optional = true }
 serde_json = { workspace = true }
+# B8: the napi boundary's bounded DAG-CBOR decoder delegates to the canonical
+# codec after its pre-scan passes (see `src/input_limits.rs`). Already present
+# in this crate's dependency closure via `benten-core`, so naming it directly
+# adds no code to the cdylib or to the wasm32 browser bundle — it only makes
+# the dependency honest instead of implicit.
+serde_ipld_dagcbor = { workspace = true }
 # Phase-3 G19-B (§7.8): tempdir-scoped redb file for the rlib-side
 # `testing::emit_event_round_trip` helper. Optional — only pulled in
 # under `--features in-process-test` for tests; production cdylib build

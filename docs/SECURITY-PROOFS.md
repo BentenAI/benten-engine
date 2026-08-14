@@ -58,7 +58,15 @@ The **sealed-inner-sender-DID stays INSIDE the ciphertext** (NOT a plaintext AAD
 hold `K_Set` + the member list, so they **recompute + verify** both 32-byte commitments — ALL binding properties
 (cross-stanza substitution U17; inter-member non-forgeability) are PRESERVED; the relay sees only opaque 32-byte
 tags. (Why blinded: the prior raw shape published the roster + raw set-id in plaintext, contradicting the project's
-own §3.9 / Compromise #61 blinding posture; blinding makes the group AAD obey that rule.)
+own §3.9 / Compromise #61 blinding posture; blinding makes the group AAD obey that rule.) **Honest scope of the
+`audience_set_commitment` (metadata-privacy caveat).** It is an **UNKEYED** `BLAKE3` over the sorted roster
+(contrast the K_Set-**keyed** `membership_set_id_commitment`, which is not guess-confirmable), so it hides only a
+**high-entropy** roster: for a **guessable / low-entropy** roster (the guess space narrowed by the plaintext
+`member_count`) a network observer with a candidate-DID pool can **CONFIRM** a guessed roster by recomputing
+`BLAKE3(sorted-roster)`, and identical rosters carry identical tags (equality-linkable) — the audience-axis sibling
+of the deterministic-CEK / `body_cid` confirmation oracle (§4.2). The AEAD confidentiality + binding properties are
+unaffected. The future fixes are additive with no wire-break: U25 per-send-salt (linkage half) + a keyed
+`audience_set_commitment` (guess-confirmation half; Row D-36).
 
 ---
 
@@ -83,11 +91,32 @@ own §3.9 / Compromise #61 blinding posture; blinding makes the group AAD obey t
 `role_assignments_generation`** (those are MembershipSet-only fields). The sealed-inner-sender-DID stays INSIDE the
 ciphertext per stanza (post-decrypt-verified; F-LC-9 / BR-1). Honest scope: identity-HIDING, not unlinkability (the
 commitment recurs for a static recipient set); full per-send unlinkability = U25, CODEPOINT-RESERVE for v1-GM,
-additive with no wire-break.
+additive with no wire-break. The `0x6520` `audience_set_commitment` is the SAME unkeyed `BLAKE3`-over-roster
+construction as `0x6610` and is **structurally unkeyable** here (no `K_Set` on this band), so the low-entropy /
+guessable-roster confirmation-oracle + equality-linker caveat above applies IDENTICALLY (Row D-36).
 
 ---
 
 ## §4.1 — Sealed-Sender property + the per-stanza-LIVE binding (the proof shape)
+
+**Recipient-key premise (REAL, not a placeholder — R9 GAP-1; DISCHARGED by the GAP-KDB Shape-B binding).** The
+former "assume the recipient KEM key was honestly obtained" address-book assumption is now discharged: the KEM key
+is committed by its audience did:benten (Inv-23), recovered-and-verified from the DID via Did::resolve_kem behind
+the RecipientBinding sole-constructor typestate (a BLAKE3-256 2nd-preimage over the canonical DAG-CBOR key-set) —
+the recipient secret still carries genuine OS-RNG entropy and is unrecoverable from the public key, and now that
+public key is itself bound to the DID, so this premise rests on the binding, not on an honest address book. Every
+claim below stands on the CEK being
+HPKE-key-wrapped to a **REAL hybrid recipient key**: the seal path
+(`benten_drop::layer_c::seal_sealed_sender` / `seal_group_multi`) takes a `&RecipientBinding` (`&[RecipientBinding]`
+for the group — the Inv-23 sole-constructor typestate; the former `&RecipientPublic`-taking seal API is DELETED)
+and the open path (`open_single` / `open_group_stanza`) takes a `&RecipientSecret`, both re-exported
+by `benten-drop` from `benten_crypto_suite::cipher_suite`. The secret is an ML-KEM-768 decapsulation key ‖ X25519
+static secret carrying genuine OS-RNG entropy, **unrecoverable from the public key**. (The pre-fix corpus base wrapped
+to a `[u8; 32]` public *fingerprint* and reconstructed the "secret" from that public via `sk = pk + 0x80` — ZERO
+secret entropy, so any public-key holder could recover the CEK. That placeholder derivation is **DELETED**; a
+non-matching secret now yields a different X-Wing shared secret and the CEK-unwrap fails closed.) All the
+confidentiality + non-forgeability properties below assume, and now genuinely have, a recipient secret that only the
+intended recipient holds.
 
 **Sealed-Sender (BR-1 / F-LC-9 — RATIFIED).** EVERY group send is Sealed-Sender by default: the inner-sender-DID is
 bound **INSIDE** the sealed/encrypted part **per stanza** (HPKE inner-payload sender-DID + post-decrypt-verify),
@@ -102,17 +131,21 @@ own AAD field-set under its own HPKE-derived AEAD key, so **each stanza independ
 - **Truncation / censorship defense:** `stanza_count` is bound alongside `stanza_index`, so dropping trailing
   stanzas to censor a co-recipient is detectable — each surviving stanza still names the original `stanza_count`,
   which no longer matches the delivered count.
-- **Inter-member non-forgeability (B2 ORIGIN-AUTHENTICATION — NOW TRUE in code).** A member — even one holding
-  `K_Set` and thus able to derive the CEK and produce valid AEAD tags — **cannot** mint a send attributed to
-  another member, nor re-target another member's real body to a recipient set that member never chose. The AEAD
-  tag alone CANNOT provide this (a co-member can produce a valid tag), so the property rests on a real signature,
-  NOT on the un-authenticated sealed-inner-DID parse. Each Sealed-Sender send carries, **inside the once-sealed
+- **Inter-member non-forgeability (B2 ORIGIN-AUTHENTICATION — NOW TRUE in code).** A member who legitimately
+  holds the bulk-CEK and can produce valid AEAD tags — a `0x6610` member holding `K_Set` (which derives the
+  `0x6610` CEK), OR a `0x6520` **co-recipient** who HPKE-unwraps the fresh-random group CEK from its own stanza
+  (R11 MC-1) — **cannot** mint a send attributed to another member, nor re-target another member's real body to a
+  recipient set that member never chose. The AEAD tag alone CANNOT provide this (a CEK-holding co-member can
+  produce a valid tag), so the property rests on a real signature, NOT on the un-authenticated sealed-inner-DID
+  parse. Each Sealed-Sender send carries, **inside the once-sealed
   body region** (on the wire exactly ONCE; sender-confidential), a single per-MESSAGE LAMPS-hybrid
   `id-MLDSA65-Ed25519-SHA512` (`0x0001`) signature over a domain-separated binding `M_auth`
   (`SENDER_AUTH_DOMAIN` ‖ sig/envelope codepoints ‖ sender-DID ‖ `body_cid` ‖ audience commitment ‖ key-epoch
   generations ‖ `stanza_count` ‖ body-AAD digest). Each recipient resolves the recovered sender-DID to its
-  **hybrid** verifying key (self-certifying `did:key`, two-component multikey; `Did::resolve_hybrid`) and
-  cryptographically verifies **both halves** post-decrypt, fail-closed (`SenderOriginAuthFailed`). **Soundness
+  verifying key via the method-aware `Did::resolve_signing` (a `did:key` sender → the classical Ed25519 handle;
+  a `did:benten` sender → the composite hybrid key — the shipped origin-auth path `verify_m_auth` →
+  `parse_validated_signing`), then cryptographically verifies **both halves** of a hybrid sender post-decrypt,
+  fail-closed (`SenderOriginAuthFailed`). **Soundness
   (F-2):** the recipient re-derives the audience commitment + the key-epoch generations from the set-state it
   INDEPENDENTLY HOLDS (its own roster / `K_Set` / held generations), NEVER the attacker-controllable wire value —
   so a re-target (re-wrap to a new set) flips the commitment and a stale-generation replay (revoked-member
@@ -133,14 +166,25 @@ device-link / remote-permission flows admit a chosen-recipient-pubkey surface �
 **external-cryptographer-audit deliverable** (§9.3 audit line; Compromise #45 / #59), NOT a unit-test "proof" in
 this doc.
 
-**Inner-format domain-separation (single vs group).** The single (`benten_drop::layer_c::seal_inner`) and group
-(`benten_drop::layer_c::seal_group_impl`) inner formats are domain-separated by the distinct CEK
-domain-separators (`"benten-drop:layer-c:cek"` vs `"benten-drop:layer-c:group-cek"`) plus the outer per-stanza
-AAD context, **NOT** by the inner payload bytes themselves: a single-format inner and a group-format inner are
-sealed under independently-derived CEKs and bound to distinct AAD shapes, so neither can be reinterpreted as the
-other (cross-format substitution flips the AEAD tag). The property holds in the current code; documenting it here
-prevents a future inner-builder refactor (e.g. unifying or re-laying-out the inner bytes) from silently
-regressing it by accidentally collapsing the CEK separator or AAD distinction.
+**DropBundle envelope-signature is INTEGRITY-only, NOT origin-authority (R21 F-10).** The outer DropBundle
+`envelope_sig` (`ENVELOPE_SIG_DOMAIN`; `benten_drop::bundle::verify_envelope_signature`) verifies the header bytes
+under the bundle's OWN `issuer_verifying_key` — an attacker-controllable field anchored to nothing on its own, so a
+valid envelope-sig proves only header integrity, never who authored the bundle. **Origin AUTHORITY comes
+exclusively from the `auth_grant`** (the ONE signed `AuthorizationGrant` / UCAN, whose issuer is cryptographically
+self-bound): `consume_offline` verifies the grant binding AND requires `bundle.issuer_verifying_key ==
+auth_grant.issuer_verifying_key`, so a re-authored-header + fresh-key-re-sign ("signature-by-nobody") is rejected
+at the grant-anchor check (the F-INJ-2 / D-42 closure). Never treat the envelope-sig as an origin-authenticator.
+
+**Inner-format domain-separation (single vs group).** The single
+(`benten_drop::layer_c::seal_inner`, `0x6500`/`0x6510`) inner format is domain-separated from the group
+(`benten_drop::layer_c::seal_group_impl`, `0x6520`) inner format by **independently-keyed CEKs plus the outer
+per-stanza AAD context**, **NOT** by the inner payload bytes themselves: a single-format inner and a group-format
+inner are sealed under CEKs that can never coincide — the single CEK is a body-mixing BLAKE3 derivation under the
+`"benten-drop:layer-c:cek"` separator, while the group CEK is a **fresh random per-message value** (R11 MC-1, no
+longer derived under `"benten-drop:layer-c:group-cek"`) — and each is bound to a distinct AAD shape, so neither
+inner can be reinterpreted as the other (cross-format substitution flips the AEAD tag). The property holds in the
+current code; documenting it here prevents a future inner-builder refactor (e.g. unifying or re-laying-out the
+inner bytes) from silently regressing it by accidentally collapsing the CEK/AAD distinction.
 
 **Cross-surface domain-tag registry (prefix-free) — the v1-beta structural shape.** The single-vs-group CEK
 separation above is one instance of a **substrate-wide property**: every cryptographic surface that keys, signs,
@@ -153,15 +197,21 @@ CEK derivations, the chunked-AEAD info strings (`benten-aead:{whole,chunk,recipe
 envelope-signature binding domains (`SENDER_AUTH_DOMAIN` / `ENVELOPE_SIG_DOMAIN` — see §4.1 `M_auth`), the
 remote-grant / remote-request / exec-workflow AAD domains, the MembershipSet set-id (`benten:setid:v1`),
 the `K(V)` / `K(N)` keying-glue contexts, the Layer-A vault AAD label
-(`benten-vault:`) and DAK HKDF info-tag (`benten-dak-v1`), and the deterministic recipient-seed expansion label
-(`benten-crypto-suite:recipient-seed`). **Permanence:** the prefix-free property is the
+(`benten-vault:`) and DAK HKDF info-tag (`benten-dak-v1`), the deterministic recipient-seed expansion label
+(`benten-crypto-suite:recipient-seed`), the structural-KDF role-separation HKDF info-tag prefixes
+(`root:codepoint:` for `derive_root` / `step` for `derive_step`; R6-final F-06), and the swap-matrix
+sign-and-seal AAD-commit prefix (`sm-aad:` for `sign_and_seal` → `compose_aad`; R6-final F-06 follow-up).
+**Scope note:** the registry is scoped to surfaces that **key, sign, or AAD-commit**; a blake3 **hash-CID domain**
+(e.g. `benten/hybrid-sig-cid/v1\0` for the deliberately-non-load-bearing sig-bundle CID per Inv-15) is a
+distinct category — a content-hash domain separator, not a keying/signing/AAD tag — and is intentionally NOT
+enrolled. **Permanence:** the prefix-free property is the
 PERMANENT v1-beta commitment; the registry contents are additive (a new surface registers a new tag, which MUST
 clear the prefix-free check — a colliding or prefixing tag fails the build). A workspace regression test asserts
 mutual prefix-freedom over the whole registered set, so a future tag mint that would prefix an existing tag
 (e.g. minting `"benten-drop:layer-c:cek-v2"` while `"benten-drop:layer-c:cek"` exists) fails CI rather than
 silently opening a cross-surface confusion path. (Cross-ref: `docs/THREAT-MODEL.md` §5 T-DOMSEP / T-DOMSEP-MIT
 for the threat statement. The centralizing registry CODE + its prefix-free regression test have SHIPPED at
-`crates/benten-crypto-suite/src/domain_registry.rs` — a 19-tag corpus enumerated by `registered_domain_tags()`
+`crates/benten-crypto-suite/src/domain_registry.rs` — a 23-tag corpus enumerated by `registered_domain_tags()`
 with the `all_domain_tags_are_prefix_free` regression; this property records the structural shape that code
 realizes. **The §3.9 gossip-topic derivation is deliberately NOT a registered tag** — it is
 `blake3::keyed_hash(K_Set, membership_set_id ‖ BE(generation))` with NO domain-separation label (R0.7 §3.9
@@ -172,8 +222,25 @@ is no tag to register.)
 
 ## §4.2 — Deterministic-CEK confirmation-oracle property (GAP-2 honest disclosure)
 
-**Property (additive disclosure; does NOT weaken any claim above).** The Layer-C content-encryption key (CEK) is
-**deterministically derived** from the plaintext context, not freshly random:
+**Band scope (R11 MC-1).** This deterministic-CEK property is specific to the **single-recipient** Layer-C bands
+(`0x6500`/`0x6510`, `benten_drop::layer_c::seal_inner`). The **`0x6520` group** CEK is a **fresh random per-message
+value** sampled from the OS CSPRNG (R11 MC-1), delivered ONLY via each stanza's HPKE-wrap — it is NOT derived from
+any wire input, so the group band has **NO** CEK confirmation-oracle at all (a party without a recipient secret
+cannot even recover the group CEK; see §4.1 and the `mc_1_non_recipient_cannot_recover_group_cek` pin). The prior
+`0x6520` CEK derivation from PUBLIC inputs (`body_cid ‖ sender_did ‖ generation`) was a confidentiality break —
+any relay guessing the sender's public DID could recompute the CEK and decrypt the group body — and is **DELETED**.
+The residual `body_cid` low-entropy disclosure below applies to **all** bands (it is a property of the wire
+`body_cid`, not the CEK). The deterministic-CEK confirmation-oracle below applies **directly** to the
+single-recipient bands (`0x6500`/`0x6510`); the **`0x6610` MembershipSet group** CEK is `K_Set`-keyed and therefore
+**body-deterministic** (UNLIKE the fresh-random `0x6520` group CEK), so a member already holding `K_Set` has the
+same guess-confirmation capability for a `0x6610` send — but that capability is **strictly subsumed by the keyless
+`body_cid` oracle** (which confirms a low-entropy body with NO key material at all, `K_Set` or otherwise), so it
+discloses nothing beyond `body_cid`. Only `0x6520` — fresh-random CEK — has no deterministic-CEK
+confirmation-oracle of any kind; do NOT lump `0x6610` in with it.
+
+**Property (single-recipient bands; additive disclosure; does NOT weaken any claim above).** For the
+single-recipient bands the content-encryption key (CEK) is **deterministically derived** from the plaintext
+context, not freshly random:
 `CEK = BLAKE3("benten-drop:layer-c:cek" ‖ recipient_pk ‖ sender_did ‖ aad ‖ body)` (`benten_drop::layer_c::seal_inner`).
 Because the CEK is a deterministic function of the body, **a party that holds (or can recompute) the CEK can
 *confirm* a guessed plaintext**: re-deriving the CEK over a candidate `body` and checking it matches the bound
@@ -185,12 +252,35 @@ recovery to a party who does not.
 
 **Why this does NOT break confidentiality against the relay.** The bulk AEAD seal uses a **fresh random nonce per
 send** (`ChaCha20Poly1305::generate_nonce(&mut OsRng)`, `benten_crypto_suite::aead::wrap`), and the CEK is
-**HPKE-key-wrapped to the recipient** — the relay never sees the CEK. Consequently:
+**HPKE-key-wrapped to the recipient's REAL hybrid public key** — the relay never sees the CEK, and the CEK can be
+recovered **only** by a holder of the matching REAL hybrid recipient SECRET (ML-KEM-768 decapsulation key ‖ X25519
+static secret; `benten_drop::layer_c::open_single` / `open_group_stanza` take a `&RecipientSecret`, unwrap via
+`benten_crypto_suite::cipher_suite::CipherSuite::unwrap_key_material`, and **fail closed** on any non-matching
+secret). The recipient secret carries genuine OS-RNG entropy
+(`benten_crypto_suite::cipher_suite::CipherSuite::generate_recipient_keypair`) and is **NOT recoverable from the
+recipient public key** — a public-key-only party derives a different X-Wing shared secret and the ChaCha20-Poly1305
+CEK-unwrap fails closed. Consequently:
 
-- A **network observer / untrusted relay** (Tier-1; holds neither the CEK nor its derivation inputs) gains **no
-  confirmation oracle and no equality test**: the random nonce makes two seals of the same plaintext produce
-  distinct ciphertext bytes, and the wrapped CEK is opaque. The relay-facing confidentiality claim of §3.3 /
-  §4.1 is **UNCHANGED**.
+- A **network observer / untrusted relay** (Tier-1; holds neither the CEK nor its derivation inputs) gains no
+  confirmation oracle or equality test **from the CIPHERTEXT**: the random nonce makes two seals of the same
+  plaintext produce distinct ciphertext bytes, and the wrapped CEK is opaque. The relay-facing *ciphertext*
+  confidentiality claim of §3.3 / §4.1 is **UNCHANGED**.
+- **HOWEVER — `body_cid` low-entropy confirmation/equality-linkability (honest disclosure).** The wire `body_cid`
+  is an **unsalted** `self_describing_cid(BLAKE3(plaintext))` (`benten_drop::layer_c::self_describing_cid` over
+  `blake3::hash(&body)`) and is emitted **in plaintext** in every Layer-C AAD
+  (`0x6500`/`0x6510`/`0x6520`/`0x6610`). It therefore DOES give the Tier-1 observer two capabilities that the
+  ciphertext denies it, both bounded to **LOW-ENTROPY / guessable** bodies:
+  (1) a **confirmation oracle** — guess a candidate `body`, compute `self_describing_cid(BLAKE3(guess))`, and
+  compare against the wire `body_cid`; a match confirms the plaintext with no key material at all; and
+  (2) a **plaintext-equality linker** — two sends of the **identical** body carry the **identical** `body_cid`,
+  so the relay can link "same plaintext body" across sends (independent of the random-nonce ciphertext
+  distinctness). For **high-entropy** bodies both capabilities are computationally infeasible (the guess space is
+  intractable). **Mitigations:** senders with low-entropy-plaintext concerns should **pad / randomize the body at
+  the application layer** (this also mitigates the CEK confirmation oracle above); and a **per-send `body_cid`
+  salt** is additive over the field (codepoint-reserve, no wire-break per CLAUDE.md baked-in #5 crypto-agility) if
+  the `body_cid` oracle is later judged load-bearing. The `body_cid`-in-AAD is deliberate — it is the
+  origin-auth-binding + U3 length-injectivity anchor (`open_group_stanza` recomputes and fail-closes on mismatch);
+  this disclosure is DOC-ONLY and changes no wire byte.
 - The confirmation advantage is bounded to a party that can already reconstruct the CEK-derivation inputs
   (`recipient_pk`, `sender_did`, `aad`, and a *candidate* `body`) — i.e. the sealer, or a co-recipient holding the
   recovered CEK. For low-entropy / guessable plaintexts (short enumerable messages, known templates) such a party
@@ -201,6 +291,38 @@ send** (`ChaCha20Poly1305::generate_nonce(&mut OsRng)`, `benten_crypto_suite::ae
 **Scope.** This is an honest disclosure of a known deterministic-encryption property, NOT a confidentiality break
 against the wire adversary the threat model targets. Cross-link `docs/THREAT-MODEL.md` §1 (Tier-1 network observer
 sees no plaintext) + Compromise #43 (envelope-metadata leakage) in `docs/SECURITY-POSTURE.md`.
+
+**Post-decrypt failure-variant scope (R15 F-10; low-materiality; distinct axis).** The confirmation-oracle axis
+above concerns a party GUESSING the plaintext. On the orthogonal *co-recipient error-classification* axis, note that
+all bands collapse to a **single confidentiality-boundary failure** before any structural detail is revealed: a
+party without the recipient secret cannot AEAD-open at all and gets exactly `AeadAuthenticationFailed` (no branch on
+inner structure). The finer post-decrypt variants (`MalformedInnerPayload` structural-decode vs
+`SenderOriginAuthFailed` wrong-signer) are reachable **only** by a party that has ALREADY AEAD-opened the inner
+payload (a legitimate co-recipient / CEK holder), so they leak nothing across the confidentiality boundary — they
+are diagnostic distinctions available only to a party already entitled to the plaintext, NOT a decryption oracle to
+an outside adversary. This is low-materiality and distinct from the §4.2 plaintext-guessing axis.
+
+**F-07 (R20) — the pre-decrypt `StanzaCountMismatch` check is secret-INDEPENDENT / non-oracular; narrow any absolute
+"before any decrypt" wording accordingly.** The `0x6520`/`0x6610` group open path fails closed with
+`StanzaCountMismatch` when `stanzas.len()` (the DELIVERED stanza count) does not equal the per-stanza-bound
+`stanza_count`, BEFORE any AEAD-open (`benten_drop::layer_c` — the truncation/censorship defense comment there).
+This check is a comparison of two PUBLIC, wire-visible integers (the delivered count vs the count bound in the
+relay-visible AAD) — it does NOT branch on any secret, key, or plaintext, and it is reachable by any party
+including the relay. So the "fail closed BEFORE any decrypt" wording is a truncation-detection statement, NOT an
+oracle: the pre-decrypt check leaks nothing that the plaintext AAD does not already expose, and a relay that also
+rewrites the per-stanza `stanza_count` makes the AEAD-open fail (counts are bound under the tag). Narrow any
+absolute reading of "before any decrypt" to "this is a public-integer structural check, secret-independent and
+non-oracular — it detects relay truncation, it is not a decryption oracle."
+
+**F-11 (R20) — the `0x6610` group AAD length-prefix framing (the "coarsening") is secret-independent / non-oracular.**
+The `0x6610` MembershipSet group per-stanza AAD binds its variable-length fields under u32-BE length prefixes
+(the `audience_set_commitment` is `BLAKE3(0x01 ‖ lp(did_0) ‖ lp(did_1) ‖ …)` over the canonical SORTED recipient-DID
+list, lp = u32-BE; §3.3). This length-prefix framing is a length-INJECTIVITY / domain-separation device over
+PUBLIC roster material (recipient DIDs + counts already relay-visible in the plaintext AAD), computed with no
+secret input — it neither derives from nor discloses any key or plaintext. It is secret-independent and
+non-oracular: it exists to make the AAD parse unambiguous (U3 length-injectivity), not to hide or reveal
+anything secret. Any wording implying the length-prefix width carries confidentiality significance should read
+"length-injectivity framing over public roster material — secret-independent, non-oracular."
 
 ---
 

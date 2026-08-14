@@ -20,7 +20,6 @@ pub mod eval;
 pub mod parser;
 
 use benten_core::Value;
-use std::collections::BTreeMap;
 
 /// Parsed TRANSFORM expression — the allowlist-only AST.
 ///
@@ -184,15 +183,4 @@ impl Expr {
             Expr::Lambda { body, .. } => body.uses_only_allowlisted_nodes(),
         }
     }
-}
-
-/// Diagnostic wrapper built from a [`BTreeMap`] payload; used by the
-/// evaluator's error-routing surface when a built-in call fails.
-#[must_use]
-pub fn make_map(pairs: Vec<(String, Value)>) -> Value {
-    let mut m = BTreeMap::new();
-    for (k, v) in pairs {
-        m.insert(k, v);
-    }
-    Value::Map(m)
 }

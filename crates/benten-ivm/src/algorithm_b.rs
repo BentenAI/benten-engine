@@ -200,6 +200,8 @@ pub struct CanonicalViews;
 /// downstream consumer pattern-matching against the snapshot sees the
 /// SAME values the 4 pre-collapse helpers returned for the same view-id.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// §11 SemVer-readiness (F-22 pre-tag): the canonical-view registry entry; additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct CanonicalViewEntry {
     /// The canonical view id (also the `CanonicalViewMeta.id` field).
     id: &'static str,
@@ -372,6 +374,8 @@ pub(crate) fn dispatch_for(view_id: &str) -> Strategy {
 /// type named in earlier planning notes was never minted — `AnchorPrefix`
 /// here IS the prefix-matching surface).
 #[derive(Debug, Clone, PartialEq, Eq)]
+// §11 SemVer-readiness (F-22 pre-tag): a future label-pattern variant lands additively; cross-crate consumers add a `_` wildcard arm. In-crate exhaustive matches (algorithm_b.rs) stay exhaustive.
+#[non_exhaustive]
 pub enum LabelPattern {
     /// Exact label equality. `LabelPattern::Exact("post")` matches Nodes
     /// whose first label is `"post"`.
@@ -432,6 +436,8 @@ impl LabelPattern {
 /// narrowing (`PropSubset`, `Computed`) lifts to enum form without
 /// breaking the call signature.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+// §11 SemVer-readiness (F-22 pre-tag): the kernel projection selector; additive future shape (`PropSubset`/`Computed`) lands without a SemVer break. Cross-crate callers use `Projection::all_props()`.
+#[non_exhaustive]
 pub struct Projection;
 
 impl Projection {
@@ -726,6 +732,8 @@ impl View for GenericKernel {
 /// "is" Strategy::B per `D-PHASE-3-28 RESOLVED`. The Strategy::A
 /// classification at [`CanonicalViews::dispatch`] is INTERNAL routing, not the
 /// engine-boundary strategy of the resulting view.
+// §11 SemVer-readiness (F-22 pre-tag): the generic-kernel view instance; additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct AlgorithmBView {
     /// Stable view id.
     view_id: String,
@@ -1374,23 +1382,12 @@ impl AlgorithmBView {
     }
 }
 
-/// Canonicalise a CID list into deterministic bytes — sort by `to_string`
-/// + join with `\n`. Used by [`AlgorithmBView::materialize`] for
-/// `Rows`/`Current` materialisation.
-#[allow(dead_code)]
-fn canonicalize_cids(cids: &[Cid]) -> Vec<u8> {
-    let mut sorted: Vec<String> = cids.iter().map(|c| c.to_string()).collect();
-    sorted.sort();
-    sorted.join("\n").into_bytes()
-}
-
 /// Canonicalise a CID set (BTreeSet, already sorted by `Cid`'s `Ord`
 /// impl) into deterministic bytes via `to_string` rendering joined with
 /// `\n` separators. Used by [`AlgorithmBView::materialize`] for the
 /// G23-0b walk_observable canary surface — the `BTreeSet` iteration
-/// order is `Ord` order over Cid bytes; we render via `to_string` to
-/// match the existing `canonicalize_cids` shape so consumer bytes are
-/// uniform across the two helpers.
+/// order is `Ord` order over Cid bytes; we render via `to_string` so
+/// consumer bytes are uniform.
 fn canonicalize_cids_set(cids: &BTreeSet<Cid>) -> Vec<u8> {
     let mut sorted: Vec<String> = cids.iter().map(|c| c.to_string()).collect();
     sorted.sort();

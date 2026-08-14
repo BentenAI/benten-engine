@@ -170,6 +170,16 @@ impl MstDiffMessage {
     /// Returns [`AtriumTransportError::HandshakeWireFormat`] if the
     /// bytes are not a valid `MstDiffMessage` CBOR envelope.
     pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, AtriumTransportError> {
+        // Fail-closed byte cap (Compromise #28 / META #629): reject an
+        // over-large single message BEFORE `serde` allocates the decode.
+        if bytes.len() > MAX_MST_MESSAGE_BYTES {
+            return Err(AtriumTransportError::HandshakeWireFormat {
+                reason: format!(
+                    "mst-diff message {} bytes exceeds cap {MAX_MST_MESSAGE_BYTES}",
+                    bytes.len()
+                ),
+            });
+        }
         serde_ipld_dagcbor::from_slice(bytes).map_err(|e| {
             AtriumTransportError::HandshakeWireFormat {
                 reason: format!("dag-cbor decode failed: {e}"),
@@ -207,6 +217,24 @@ pub struct MstDiffFrame {
 /// Current MST-diff wire-format version. Receivers reject mismatched
 /// versions at the wire layer.
 pub const MST_DIFF_WIRE_VERSION: u8 = 1;
+
+/// Fail-closed ceiling on the raw wire bytes accepted by
+/// [`MstDiffFrame::from_canonical_bytes`] (Compromise #28 / META #629
+/// DoS-sweep). Matches the 4-MiB transport `RECV_CAP` so the bound is
+/// intrinsic to the decode API, not only to the transport recv-loop.
+pub const MAX_MST_FRAME_BYTES: usize = 4 * 1024 * 1024;
+
+/// Fail-closed ceiling on the raw wire bytes accepted by
+/// [`MstDiffMessage::from_canonical_bytes`] (Compromise #28 / META #629). A
+/// single MST-diff message is far smaller than a full frame; 1 MiB bounds a
+/// hostile single-message blob while clearing any legitimate message.
+pub const MAX_MST_MESSAGE_BYTES: usize = 1024 * 1024;
+
+/// Fail-closed ceiling on the decoded [`MstDiffFrame::messages`] count
+/// (Compromise #28 / META #629). Even within the byte cap, a count-prefixed
+/// array of many tiny elements is an amplification vector; 4096 messages per
+/// frame is generous for a single diff round (large diffs split across frames).
+pub const MAX_MST_MESSAGES_PER_FRAME: usize = 4096;
 
 impl MstDiffFrame {
     /// Construct an empty diff frame for the given round.
@@ -246,6 +274,16 @@ impl MstDiffFrame {
     /// bytes are not a valid `MstDiffFrame` CBOR envelope or if the
     /// version field is not [`MST_DIFF_WIRE_VERSION`].
     pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, AtriumTransportError> {
+        // Fail-closed byte cap (Compromise #28 / META #629): reject an
+        // over-large frame BEFORE `serde` allocates the messages vector.
+        if bytes.len() > MAX_MST_FRAME_BYTES {
+            return Err(AtriumTransportError::HandshakeWireFormat {
+                reason: format!(
+                    "mst-diff frame {} bytes exceeds cap {MAX_MST_FRAME_BYTES}",
+                    bytes.len()
+                ),
+            });
+        }
         let frame: Self = serde_ipld_dagcbor::from_slice(bytes).map_err(|e| {
             AtriumTransportError::HandshakeWireFormat {
                 reason: format!("dag-cbor decode failed: {e}"),
@@ -256,6 +294,17 @@ impl MstDiffFrame {
                 reason: format!(
                     "unsupported mst-diff wire version: got {} expected {}",
                     frame.version, MST_DIFF_WIRE_VERSION
+                ),
+            });
+        }
+        // Fail-closed count ceiling (Compromise #28 / META #629): reject a
+        // frame whose (within-byte-cap) message array exceeds the per-frame
+        // element ceiling — a count-prefixed-array amplification guard.
+        if frame.messages.len() > MAX_MST_MESSAGES_PER_FRAME {
+            return Err(AtriumTransportError::HandshakeWireFormat {
+                reason: format!(
+                    "mst-diff frame carries {} messages, exceeds cap {MAX_MST_MESSAGES_PER_FRAME}",
+                    frame.messages.len()
                 ),
             });
         }

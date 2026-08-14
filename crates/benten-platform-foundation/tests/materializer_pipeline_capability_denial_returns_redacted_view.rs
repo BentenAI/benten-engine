@@ -36,15 +36,15 @@ fn materializer_pipeline_capability_denial_returns_redacted_view() {
 
     let mat = HtmlJsonMaterializer;
     let out = mat
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: cid,
-            walk_principal: unauth,
-            // Gate denies all.
-            cap_recheck: deny_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+        // Gate denies all (cap_recheck = deny_all).
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            cid,
+            unauth,
+            deny_all_cap_recheck(),
+            Vec::new(),
+        ))
         .expect("materializer returns Ok(redacted) NOT Err for cap-deny per ratification #7");
 
     let html = std::str::from_utf8(out.html_bytes()).unwrap();

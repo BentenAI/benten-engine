@@ -39,12 +39,23 @@ use benten_errors::ErrorCode;
 use crate::{InvariantConfig, InvariantViolation, OperationNode, PrimitiveKind, RegistrationError};
 
 /// Default per-call SANDBOX cumulative-output ceiling in bytes (16 MiB).
-/// SANDBOX nodes that omit `output_max_bytes` inherit this value at
-/// runtime; nodes that DECLARE `output_max_bytes` must keep it within
+/// Nodes that DECLARE `output_max_bytes` must keep it within
 /// `(0, DEFAULT_MAX_SANDBOX_OUTPUT_BYTES]`. The hard upper bound is set
 /// by [`InvariantConfig::max_sandbox_output_bytes`] and defaults to
-/// `DEFAULT_MAX_SANDBOX_OUTPUT_BYTES`; an engine.toml override (G7-A)
-/// can raise it for unusual workloads.
+/// `DEFAULT_MAX_SANDBOX_OUTPUT_BYTES`.
+///
+/// **Registration-time ceiling only — this is not the runtime budget.**
+/// The runtime `CountedSink` is sized from the `output_limit` node
+/// property (`SandboxConfig::output_bytes`, default 1 MiB), a different
+/// name, so a node that omits `output_max_bytes` does NOT inherit 16 MiB
+/// at runtime and a node that declares one does not get it. See
+/// [`InvariantConfig::max_sandbox_output_bytes`] and
+/// `docs/future/phase-4-backlog.md` §4.173 A.1. An earlier version of
+/// this comment claimed the runtime inheritance; it was a false record.
+///
+/// The `engine.toml` override referenced by the G7-A design is likewise
+/// not reachable: `EngineConfig::load_or_default` has no production
+/// caller (recorded in `docs/SANDBOX-LIMITS.md`).
 pub const DEFAULT_MAX_SANDBOX_OUTPUT_BYTES: u64 = 16 * 1024 * 1024;
 
 /// Registration-time check for SANDBOX `output_max_bytes` declarations.
@@ -57,7 +68,10 @@ pub const DEFAULT_MAX_SANDBOX_OUTPUT_BYTES: u64 = 16 * 1024 * 1024;
 ///   - The integer value MUST be `> 0` AND `<= max_ceiling`.
 ///
 /// A SANDBOX node WITHOUT an `output_max_bytes` property is registered
-/// cleanly; the runtime executor will use the engine-wide default.
+/// cleanly. Note that a node WITH one is not treated differently at
+/// runtime: this check gates the declaration, and the executor's budget
+/// comes from the separate `output_limit` property regardless. See the
+/// `DEFAULT_MAX_SANDBOX_OUTPUT_BYTES` doc above.
 ///
 /// # Errors
 ///

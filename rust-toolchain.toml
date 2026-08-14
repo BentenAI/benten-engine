@@ -8,4 +8,22 @@ profile = "default"
 # the bump path was 1.85 → 1.89 (redb 4.0.0) → 1.91 (wasmtime 43.0.1) →
 # 1.95 (Phase-2b wave-8e: `Duration::from_mins` / `from_hours` stabilization
 # clears the `clippy::duration_suboptimal_units` allow-directive backlog).
+#
+# READ THIS BEFORE ADDING AN MSRV JOB (F-060, R6 round #1 2026-07-27).
+# `channel = "stable"` above is a TOOLCHAIN FILE, and rustup ranks a toolchain
+# file ABOVE the default that `rustup default` sets. dtolnay/rust-toolchain's
+# `toolchain:` input sets the default. So this file SHADOWS it, and any job
+# that installs 1.95 and then runs a bare `cargo build` silently compiles on
+# floating stable. `msrv.yml`, four `ci.yml` legs, `determinism.yml`'s T5 and
+# both `admin-shell-e2e.yml` jobs all did exactly that — the MSRV gate had
+# never once tested MSRV, and the cross-toolchain canonical-CID stability
+# claim had never been exercised across two toolchains.
+#
+# The remedy, applied uniformly across the fleet, is `RUSTUP_TOOLCHAIN` in the
+# job `env:` — it outranks this file, and unlike `cargo +1.95` it is inherited
+# by cargo subcommands that re-exec cargo/rustc. `wasm-conformance.yml` and
+# `wasm-browser.yml` already used that idiom for the same reason. Each such job
+# now also asserts `cargo --version` reports the pinned toolchain, so a dropped
+# pin fails loudly instead of silently reverting to stable.
+#
 # Enforced by `.github/workflows/msrv.yml`.

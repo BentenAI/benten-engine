@@ -386,12 +386,12 @@ pub enum AuthorizationGrantError {
 /// under v3 binding-message construction (the domain-separation tag is
 /// the very first segment); this is the intended behavior at v1-beta
 /// freeze (no v2-signed grants outside test fixtures exist yet on the
-/// wire). The 6th segment is encoded as `len_u32_le || pubkey_bytes`
+/// wire). The 6th segment is encoded as `len_u32_be || pubkey_bytes`
 /// so `audience_pubkey: None` (legacy wave-3b envelope fixtures) and
 /// `audience_pubkey: Some(empty)` are unambiguously distinguished:
-/// `None` encodes as `0_u32_le` (zero-length payload); `Some(bytes)`
-/// encodes as `len_u32_le || bytes`.
-const BINDING_SIG_DOMAIN: &[u8] = b"benten/g-core-3b/authorization-grant/v4";
+/// `None` encodes as `0_u32_be` (zero-length payload); `Some(bytes)`
+/// encodes as `len_u32_be || bytes`.
+const BINDING_SIG_DOMAIN: &[u8] = b"benten/g-core-3b/authorization-grant/v5";
 
 impl AuthorizationGrant {
     /// Compute the canonical message the issuer signs / the validator
@@ -445,19 +445,24 @@ impl AuthorizationGrant {
     /// flips the message bytes and `verify_binding` returns
     /// `BindingMismatch`.
     ///
-    /// The scope segment is encoded as `len_u32_le || cbor_bytes` so
+    /// The scope segment is encoded as `len_u32_be || cbor_bytes` so
     /// that `scope: None` (no-scope grants, e.g. wave-3b envelope
     /// fixtures) and `scope: Some(empty)` are unambiguously
-    /// distinguished: `None` encodes as `0_u32_le` (zero-length
-    /// payload); `Some(scope)` encodes as `len_u32_le || cbor(scope)`.
+    /// distinguished: `None` encodes as `0_u32_be` (zero-length
+    /// payload); `Some(scope)` encodes as `len_u32_be || cbor(scope)`.
     /// The audience_pubkey segment uses the same length-prefix
-    /// discipline (`len_u32_le || pubkey_bytes`) for the same
+    /// discipline (`len_u32_be || pubkey_bytes`) for the same
     /// None-vs-Some(empty) disambiguation. The `issuer_verifying_key`
     /// segment is fixed-length Ed25519 (32 bytes — `[u8; 32]` typed
-    /// at construction) so no length-prefix discipline is necessary;
-    /// the BINDING_SIG_DOMAIN v3→v4 bump preserves domain-separation
-    /// for any pre-self-bind v3 fixtures (re-verify under v4
-    /// construction observably fails the BindingMismatch arm).
+    /// at construction) so no length-prefix discipline is necessary.
+    ///
+    /// **R6-final F-01 (M-19 BE migration):** the u32 length prefixes are
+    /// BIG-endian (network byte order), migrated from little-endian to
+    /// satisfy M-19 "no `to_le_bytes` on any wire/AAD/keying path." The
+    /// `BINDING_SIG_DOMAIN` v4→v5 bump domain-separates the encoding
+    /// change (a v4-signed grant re-verified under v5 construction
+    /// observably fails the `BindingMismatch` arm); no v4-signed grants
+    /// exist outside test fixtures at the v1-beta freeze.
     fn binding_message(
         ucan: &UcanEnvelope,
         key_material: &GrantKeyMaterial,
@@ -501,9 +506,12 @@ impl AuthorizationGrant {
         msg.extend_from_slice(&ucan_bytes);
         msg.extend_from_slice(&km_bytes);
         msg.extend_from_slice(audience.as_bytes());
-        msg.extend_from_slice(&scope_len.to_le_bytes());
+        // R6-final F-01: length prefixes are BIG-endian (M-19: BE network-byte-
+        // order on every wire/AAD/keying integer). Migrated from LE; the
+        // BINDING_SIG_DOMAIN v4→v5 bump domain-separates the encoding change.
+        msg.extend_from_slice(&scope_len.to_be_bytes());
         msg.extend_from_slice(&scope_bytes);
-        msg.extend_from_slice(&audience_pk_len.to_le_bytes());
+        msg.extend_from_slice(&audience_pk_len.to_be_bytes());
         msg.extend_from_slice(audience_pk_bytes);
         // R6 R2 batch-A Item 3 — 7th segment: issuer_verifying_key
         // (self-bind invariant). Fixed 32-byte Ed25519 vk; no length
@@ -537,6 +545,47 @@ impl AuthorizationGrant {
         audience: Cid,
     ) -> Result<Self, AuthorizationGrantError> {
         let signing_key = SigningKey::generate(&mut OsRng);
+        Self::issue_envelopes_signed_by(&signing_key, ucan, key_material, audience)
+    }
+
+    /// Test-only constructor (wave-3b envelope-shaped) — variant of
+    /// [`Self::issue_envelopes_for_test`] that signs the binding-message
+    /// with the caller-supplied issuer [`benten_id::keypair::Keypair`]
+    /// (rather than a freshly-generated ephemeral key), so the resulting
+    /// grant's `issuer_verifying_key` is the caller's public key.
+    ///
+    /// Fixtures that must bind the grant issuer to a KNOWN keypair use
+    /// this — e.g. the Drop-bundle fixture, whose F-INJ-2 envelope-issuer
+    /// anchor requires `bundle.issuer_verifying_key ==
+    /// auth_grant.issuer_verifying_key`. It preserves the wave-3b
+    /// shape (no scope, no audience_pubkey; controllable `key_material`).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AuthorizationGrantError::Serialization`] if CBOR
+    /// encoding of either half fails.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn issue_envelopes_for_test_with_issuer(
+        issuer_kp: &benten_id::keypair::Keypair,
+        ucan: UcanEnvelope,
+        key_material: GrantKeyMaterial,
+        audience: Cid,
+    ) -> Result<Self, AuthorizationGrantError> {
+        let signing_key = SigningKey::from_bytes(&issuer_kp.secret_bytes_unprotected());
+        Self::issue_envelopes_signed_by(&signing_key, ucan, key_material, audience)
+    }
+
+    /// Shared body for the two wave-3b `issue_envelopes_*` constructors.
+    /// Signs the 7-segment binding-message with `signing_key` and returns
+    /// a verifiable grant whose `issuer_verifying_key` is that key's
+    /// public half.
+    #[cfg(any(test, feature = "testing"))]
+    fn issue_envelopes_signed_by(
+        signing_key: &SigningKey,
+        ucan: UcanEnvelope,
+        key_material: GrantKeyMaterial,
+        audience: Cid,
+    ) -> Result<Self, AuthorizationGrantError> {
         let verifying_key = signing_key.verifying_key();
 
         // Wave-3b envelope shape has no scope and no audience_pubkey
@@ -949,5 +998,34 @@ impl AuthorizationGrant {
             audience_pubkey: self.audience_pubkey.clone(),
             scope: self.scope.clone(),
         }
+    }
+}
+
+#[cfg(test)]
+mod domain_tag_freeze_pin {
+    /// ABSOLUTE byte pin for the AuthorizationGrant binding-signature domain
+    /// tag (S-6).
+    ///
+    /// `BINDING_SIG_DOMAIN` is prefixed into the binding-signature preimage
+    /// (`binding_message`), so its bytes are covered by the signature but are
+    /// NOT themselves serialized onto the wire — sign/verify round-trips stay
+    /// self-consistent under a rename, and a v4→v5-style bump is exactly the
+    /// kind of deliberate change this pin exists to force into the open.
+    ///
+    /// Unlike the tags in `benten_crypto_suite::domain_registry`, this one is
+    /// NOT enrolled in `registered_domain_tags()`, so it has no mirror and no
+    /// cross-surface prefix-free coverage. See the enrollment question raised
+    /// in the S-6 spec.
+    ///
+    /// If this fails, the signature domain moved. Do NOT edit the literal.
+    #[test]
+    fn binding_sig_domain_matches_frozen_literal() {
+        assert_eq!(
+            super::BINDING_SIG_DOMAIN,
+            b"benten/g-core-3b/authorization-grant/v5",
+            "the frozen AuthorizationGrant binding-signature domain is exactly \
+             `benten/g-core-3b/authorization-grant/v5` (v5 = the R6-final F-01 BE \
+             length-prefix migration bump)"
+        );
     }
 }

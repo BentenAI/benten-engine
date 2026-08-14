@@ -200,6 +200,9 @@ impl Engine {
             benten_ivm::ViewResult::Cids(cids) => cids,
             benten_ivm::ViewResult::Current(Some(cid)) => vec![cid],
             benten_ivm::ViewResult::Current(None) | benten_ivm::ViewResult::Rules(_) => Vec::new(),
+            // `#[non_exhaustive]` (F-22) forward-compat guard: a future
+            // ViewResult shape yields no CIDs until this projection learns it.
+            _ => Vec::new(),
         };
         Ok(Some(gate.filter_rows(unfiltered)))
     }
@@ -383,12 +386,12 @@ impl Engine {
                     } else {
                         Some(label_hint.clone())
                     };
-                    let query = benten_ivm::ViewQuery {
-                        label: label_for_query,
-                        limit: None,
-                        offset: None,
-                        ..Default::default()
-                    };
+                    // `#[non_exhaustive]` (F-22): construct via default + field
+                    // mutation from outside `benten-ivm`.
+                    let mut query = benten_ivm::ViewQuery::default();
+                    query.label = label_for_query;
+                    query.limit = None;
+                    query.offset = None;
                     project_view_read_to_outcome(
                         self,
                         ivm.read_view_allow_stale(normalized, &query),
@@ -428,12 +431,12 @@ impl Engine {
             } else {
                 Some(label_hint.clone())
             };
-            let query = benten_ivm::ViewQuery {
-                label: label_for_query,
-                limit: None,
-                offset: None,
-                ..Default::default()
-            };
+            // `#[non_exhaustive]` (F-22): construct via default + field
+            // mutation from outside `benten-ivm`.
+            let mut query = benten_ivm::ViewQuery::default();
+            query.label = label_for_query;
+            query.limit = None;
+            query.offset = None;
             let view_result = if opts.allow_stale {
                 ivm.read_view_allow_stale(normalized, &query)
             } else {
@@ -1083,6 +1086,13 @@ fn project_view_read_to_outcome(
                 })
             }
         }
+        // `#[non_exhaustive]` (F-22) forward-compat guard: a future
+        // ViewResult shape projects to an empty list until this path learns
+        // its typed projection.
+        Some(Ok(_)) => Ok(Outcome {
+            list: Some(Vec::new()),
+            ..Outcome::default()
+        }),
         Some(Err(_)) => Ok(Outcome {
             list: Some(Vec::new()),
             ..Outcome::default()
@@ -1146,6 +1156,8 @@ fn project_view_read_to_outcome(
 /// the handle is the structural seam the #834 Surf-1 finding asks for
 /// (the JS-side mirror — `engine.views().<m>()` factory handle like
 /// `engine.atrium(..)` — is the RATIFIED Phase-4-Meta part-2).
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct EngineViewsHandle<'eng> {
     /// Engine borrow. Crate-private so external code MUST go through
     /// the public methods.

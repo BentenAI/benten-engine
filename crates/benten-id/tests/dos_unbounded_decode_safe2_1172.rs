@@ -16,8 +16,10 @@
 #![allow(clippy::unwrap_used)]
 
 use benten_id::UcanError;
+use benten_id::VcError;
 use benten_id::keypair::Keypair;
-use benten_id::ucan::{MAX_UCAN_PROOF_DEPTH, Ucan};
+use benten_id::ucan::{MAX_UCAN_ENVELOPE_BYTES, MAX_UCAN_PROOF_DEPTH, Ucan};
+use benten_id::vc::{MAX_VC_ENVELOPE_BYTES, TrustDomain, verify_bytes_in_trust_domain};
 
 /// Build a signed leaf UCAN, then wrap it in `depth` nested `prf`
 /// layers (each parent carries the prior token as its single proof).
@@ -180,4 +182,56 @@ fn ucan_error_display_passes_clean_dids_through_unmodified() {
         rendered.matches(clean).count() == 2,
         "both clean DID occurrences must render verbatim: {rendered:?}"
     );
+}
+
+// --- Compromise #28 / META #629 DoS-sweep: total-byte envelope caps ---
+
+#[test]
+fn ucan_from_canonical_bytes_bounded_rejects_oversized_envelope_before_decode() {
+    // A within-depth but over-large blob must be rejected FAST with the
+    // typed EnvelopeTooLarge BEFORE serde allocates the decoded Ucan.
+    // would-FAIL-on-revert: without the byte cap this O(N) blob decodes
+    // (or attempts to) — an allocation DoS on the ucan_validate_chain op
+    // + durable UCAN backend read path. The over-cap slice is bytes that
+    // never reach serde, so this is fast and allocates nothing large.
+    let oversized = vec![0u8; MAX_UCAN_ENVELOPE_BYTES + 1];
+    let result = Ucan::from_canonical_bytes_bounded(&oversized, MAX_UCAN_PROOF_DEPTH);
+    match result {
+        Err(UcanError::EnvelopeTooLarge { got, max }) => {
+            assert_eq!(got, MAX_UCAN_ENVELOPE_BYTES + 1, "reports observed length");
+            assert_eq!(max, MAX_UCAN_ENVELOPE_BYTES, "reports configured ceiling");
+        }
+        other => panic!("expected EnvelopeTooLarge, got {other:?}"),
+    }
+    // At-cap is NOT rejected by the size gate (it falls through to the
+    // depth pre-walk / decode, which rejects it as malformed CBOR — the
+    // size gate is a ceiling, not an exact-length check).
+    let at_cap = vec![0u8; MAX_UCAN_ENVELOPE_BYTES];
+    let at_cap_result = Ucan::from_canonical_bytes_bounded(&at_cap, MAX_UCAN_PROOF_DEPTH);
+    assert!(
+        !matches!(at_cap_result, Err(UcanError::EnvelopeTooLarge { .. })),
+        "at-cap input must not trip the EnvelopeTooLarge gate: {at_cap_result:?}"
+    );
+}
+
+#[test]
+fn vc_verify_bytes_rejects_oversized_envelope_before_decode() {
+    // A VC envelope over the byte ceiling must be rejected FAST with the
+    // typed EnvelopeTooLarge BEFORE serde allocates the Credential.
+    // would-FAIL-on-revert: without the byte cap this O(N) blob drives
+    // an allocation on the VC-verify path.
+    let trust_domain = TrustDomain::empty();
+    let oversized = vec![0u8; MAX_VC_ENVELOPE_BYTES + 1];
+    // `now` is irrelevant here by construction: the byte cap must fire BEFORE
+    // any decode, so no `expirationDate` exists to compare against yet. If a
+    // future refactor moved the cap after the decode, this call would start
+    // depending on the clock — which is itself a signal worth keeping visible.
+    let result = verify_bytes_in_trust_domain(&oversized, &trust_domain, 1_000_000_000);
+    match result {
+        Err(VcError::EnvelopeTooLarge { got, max }) => {
+            assert_eq!(got, MAX_VC_ENVELOPE_BYTES + 1, "reports observed length");
+            assert_eq!(max, MAX_VC_ENVELOPE_BYTES, "reports configured ceiling");
+        }
+        other => panic!("expected EnvelopeTooLarge, got {other:?}"),
+    }
 }

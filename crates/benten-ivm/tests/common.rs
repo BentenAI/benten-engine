@@ -227,12 +227,11 @@ impl MaterializedView {
     }
 
     pub fn read_with(&self, opts: ReadOptions) -> Result<Vec<Cid>, ViewError> {
-        let q = ViewQuery {
-            label: None,
-            limit: None,
-            offset: None,
-            ..Default::default()
-        };
+        // `#[non_exhaustive]` (F-22): default + field mutation.
+        let mut q = ViewQuery::default();
+        q.label = None;
+        q.limit = None;
+        q.offset = None;
         if opts.allow_stale {
             // Allow-stale path — return last-known-good. The inner kernel's
             // `read_allow_stale` may return either the pre-trip snapshot or
@@ -268,6 +267,8 @@ impl MaterializedView {
             ViewResult::Cids(cids) => cids,
             ViewResult::Current(Some(c)) => vec![c],
             ViewResult::Current(None) | ViewResult::Rules(_) => Vec::new(),
+            // `#[non_exhaustive]` (F-22) forward-compat guard.
+            _ => Vec::new(),
         })
     }
 
@@ -280,6 +281,8 @@ impl MaterializedView {
             ViewResult::Cids(cids) => cids,
             ViewResult::Current(Some(c)) => vec![c],
             ViewResult::Current(None) | ViewResult::Rules(_) => Vec::new(),
+            // `#[non_exhaustive]` (F-22) forward-compat guard.
+            _ => Vec::new(),
         })
     }
 
@@ -320,12 +323,11 @@ impl MaterializedView {
     }
 
     fn refresh_last_known_good(&mut self) {
-        let q = ViewQuery {
-            label: None,
-            limit: None,
-            offset: None,
-            ..Default::default()
-        };
+        // `#[non_exhaustive]` (F-22): default + field mutation.
+        let mut q = ViewQuery::default();
+        q.label = None;
+        q.limit = None;
+        q.offset = None;
         if let Ok(rows) = self.inner_read_allow_stale(&q)
             && !rows.is_empty()
         {
@@ -348,12 +350,11 @@ impl MaterializedView {
     /// Materialised row set, sorted by `Cid` Ord. Used by `structured_diff`
     /// to produce a row-by-row diff message.
     pub fn materialised(&self) -> Vec<Cid> {
-        let q = ViewQuery {
-            label: None,
-            limit: None,
-            offset: None,
-            ..Default::default()
-        };
+        // `#[non_exhaustive]` (F-22): default + field mutation.
+        let mut q = ViewQuery::default();
+        q.label = None;
+        q.limit = None;
+        q.offset = None;
         let mut cids = self.inner_read_allow_stale(&q).unwrap_or_default();
         cids.sort();
         cids
@@ -487,12 +488,11 @@ pub fn build_incremental_view(view_def: &ViewDef, writes: &[Write]) -> Materiali
         last_writes.push(w.clone());
         // Capture the last-known-good snapshot pre-trip — once stale, the
         // inner kernel may drain state, so we cache here.
-        let q = ViewQuery {
-            label: None,
-            limit: None,
-            offset: None,
-            ..Default::default()
-        };
+        // `#[non_exhaustive]` (F-22): default + field mutation.
+        let mut q = ViewQuery::default();
+        q.label = None;
+        q.limit = None;
+        q.offset = None;
         let stale = match &inner {
             Inner::Algorithm(a) => a.is_stale(),
             Inner::ContentListing(c) => c.is_stale(),
@@ -555,12 +555,11 @@ pub fn try_build_incremental_view(
         }
         last_writes.push(w.clone());
 
-        let q = ViewQuery {
-            label: None,
-            limit: None,
-            offset: None,
-            ..Default::default()
-        };
+        // `#[non_exhaustive]` (F-22): default + field mutation.
+        let mut q = ViewQuery::default();
+        q.label = None;
+        q.limit = None;
+        q.offset = None;
         let stale = match &inner {
             Inner::Algorithm(a) => a.is_stale(),
             Inner::ContentListing(c) => c.is_stale(),

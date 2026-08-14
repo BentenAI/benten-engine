@@ -40,6 +40,8 @@ const VIEW_ID: &str = "capability_grants";
 
 /// View 1 — capability grants indexed by entity.
 #[derive(Debug)]
+// §11 SemVer-readiness (F-22 pre-tag): a hand-written view instance; additive future fields land without a SemVer break (fields already private).
+#[non_exhaustive]
 pub struct CapabilityGrantsView {
     /// entity CID → set of grant CIDs.
     by_entity: BTreeMap<Cid, BTreeSet<Cid>>,

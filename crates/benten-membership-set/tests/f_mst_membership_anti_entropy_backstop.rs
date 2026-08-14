@@ -61,7 +61,7 @@ use benten_sync::mst_proto::{MessageKind, MstDiffMessage, MstDiffSession};
 /// API boundary, so a round-bound assertion proves nothing against the real
 /// driver). The MAX_ROUNDS typed-error surface is exercised below.
 #[test]
-fn f_mst_1_membership_event_set_converges_log_n() {
+fn f_mst_1_membership_event_set_converges_via_real_mst_backstop() {
     let event_count = 4096usize;
     let mut peer_a = Mst::new();
     let mut peer_b = Mst::new();
@@ -185,11 +185,20 @@ fn f_mst_2_cid_mismatch_substitution_rejected() {
 ///    before every data message — would-FAIL-if-no-op'd (a FIFO drainer that
 ///    ignored the kind would emit a data message first under a data-first
 ///    arrival).
-/// 2. **HLC-value-keyed dominance (#52 symmetric negative control):** a kick at
-///    HLC=T dominates a stale write at HLC<T; a STALE revocation (HLC ≤ the
-///    write) does NOT dominate. This value-keyed total-order rule takes NO
-///    arrival-order parameter — the negative control is the load-bearing
-///    falsifier (an always-`Revoked` / HLC-ignoring impl FAILS it).
+/// 2. **HLC-value-keyed dominance (ordering model; #52 symmetric negative
+///    control):** a kick at HLC=T dominates a stale write at HLC<T; a STALE
+///    revocation (HLC ≤ the write) does NOT dominate. This value-keyed
+///    total-order rule takes NO arrival-order parameter — the negative control
+///    is the load-bearing falsifier (an always-`Revoked` / HLC-ignoring impl
+///    FAILS it). **HONESTY NOTE (F-12):** this arm pins the drain/ordering
+///    property — that a revocation is not *outranked* by a stale write. It is
+///    NOT the confidentiality mechanism of Compromise #52. The REAL #52
+///    mechanism is **fork-on-kick**: a kick FORKS the set and rotates `K_Set`
+///    (the removed member's key no longer opens post-fork stanzas), per
+///    `docs/SECURITY-POSTURE.md` Compromise #52 + the Inv-21 fork tie-break
+///    (`benten_membership_set::set::crdt::fork_a_wins`). This ordering arm and
+///    the fork-on-kick key-rotation are DISTINCT properties; this arm does not
+///    claim to enforce the key-rotation half.
 #[test]
 fn f_mst_3_revocation_ordered_ahead_of_stale_write() {
     // ── (1) Drain-priority against the REAL MstDiffSession, arrival permuted ──
@@ -239,6 +248,9 @@ fn f_mst_3_revocation_ordered_ahead_of_stale_write() {
     // A revocation at HLC=T dominates any write at HLC<T from the revoked party;
     // a revocation whose HLC does NOT strictly exceed the write's is itself the
     // stale one and loses. This is value-keyed HLC totality, NOT arrival order.
+    // (F-12: this is the ORDERING model — the revocation is not outranked by a
+    // stale write. The #52 CONFIDENTIALITY mechanism is fork-on-kick key
+    // rotation, a distinct property this arm does not model.)
     fn apply_in_revocation_priority_order(revocation_hlc: u64, stale_write_hlc: u64) -> Effect {
         if revocation_hlc > stale_write_hlc {
             Effect::Revoked

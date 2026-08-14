@@ -17,6 +17,14 @@ name: Bundle Size (browser, ≤600KB gzipped)
 # release-cadence wasm-browser.yml gate, not this per-PR informational
 # workflow.
 #
+# DO NOT ADD THIS JOB TO THE REQUIRED SET (CE-02, R6 round #1 2026-07-27).
+# `.github/branch-protection.yml` listed it as required while the body below
+# ends in `exit 0` — a gate that cannot fail. It has been moved to that file's
+# `pending_promotion` block with the blocker recorded. When the R5
+# G10-A-browser implementation lands and this job can actually fail, move the
+# entry back into `required_status_checks.contexts` in the SAME commit that
+# makes it real.
+#
 # This is a SCAFFOLD. R5 implementation (G10-A-browser) fills in the
 # actual job steps:
 #   - install Rust + wasm32-unknown-unknown target

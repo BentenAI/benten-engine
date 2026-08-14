@@ -12,13 +12,14 @@
 //!
 //! # `SubsetRef` refused at v1-beta (Inv-20 clause-k/l / §4.2)
 //!
-//! [`MemberRef::SubsetRef`](crate::member::MemberRef) is reserved-and-REFUSED at
-//! v1-beta — a typed-reject at codepoint `0x6620`
-//! ([`crate::codepoints::MEMBERSHIP_SET_RESERVED_0X6620`]). The default
-//! federation model is **Model-B** (independent-`K_Set`-per-set); Model-A is
-//! opt-in post-v1-beta additive (NOT selectable at v1-beta).
-
-use crate::codepoints::MEMBERSHIP_SET_RESERVED_0X6620;
+//! The reserved `SubsetRef` federation member-ref (tag 3 — NO variant minted at
+//! v1-beta; [`MemberRef`](crate::member::MemberRef) ships only `UserDid` /
+//! `DeviceDid` / `LocalDevice`) is reserved-and-REFUSED at v1-beta: a
+//! typed-reject at codepoint `0x6620`
+//! ([`crate::codepoints::MEMBERSHIP_SET_RESERVED_0X6620`]), enforced by the
+//! standalone `admit_subset_ref_at_v1_beta` (never a `MemberRef` enum arm). The
+//! default federation model is **Model-B** (independent-`K_Set`-per-set);
+//! Model-A is opt-in post-v1-beta additive (NOT selectable at v1-beta).
 
 /// `MEMBERSHIP_RECURSION_MAX_DEPTH = 4` (Inv-20 clause-k). Accept a `hop_path`
 /// of length ≤ 4; reject 5.
@@ -107,18 +108,39 @@ impl KSetAcquisitionPath {
     }
 
     /// Canonical V2 + big-endian serialization (M-20 — no LE/V1 vector). Layout:
-    /// `format_version(u8=2) || hop_count(u8) || target_set_id || each hop ||
-    /// acquisition_proof_cid`. The set-id / CID byte sequences are emitted
-    /// as-authored (content-addressed bytes); the counts are V2 + BE.
+    /// `format_version(u8=2) || hop_count(u8) || u32-BE-len(target_set_id) ||
+    /// target_set_id || (u32-BE-len(hop) || hop)* || u32-BE-len(cid) || cid`.
+    /// The counts are V2 + BE; every VARIABLE-length field carries a `u32`-BE
+    /// length prefix so the encoding is **injective** (mirrors the `be_u32_len`
+    /// length-prefix precedent in `benten-engine`'s `remote_permission.rs` +
+    /// the Row D-13 `derive_step` length-prefix discipline).
+    ///
+    /// **0x6620 is RESERVED + encode-only at v1-beta** (the `SubsetRef`
+    /// federation shape is reserved-and-REFUSED / typed-rejected —
+    /// [`admit_subset_ref_at_v1_beta`] — with ZERO live decoder and zero
+    /// non-test callers of this encoder), so tightening the encoding to
+    /// injective now does NOT change any live wire format. When a future
+    /// additive wave wires the `0x6620` decoder it MUST parse these
+    /// length prefixes.
     #[must_use]
     pub fn to_wire_v2_be(&self) -> Vec<u8> {
+        // u32-BE length prefix for a variable-length field (lengths are bounded
+        // far below u32::MAX on every federation wire path).
+        #[allow(clippy::cast_possible_truncation)]
+        fn lp(n: usize) -> [u8; 4] {
+            (n as u32).to_be_bytes()
+        }
+
         let mut out = Vec::new();
         out.push(ENVELOPE_FORMAT_VERSION_V2); // V2 from the first commit
         out.push(u8::try_from(self.hop_path.len()).expect("hop_path ≤ 4 fits u8"));
+        out.extend_from_slice(&lp(self.target_set_id.len()));
         out.extend_from_slice(&self.target_set_id);
         for hop in &self.hop_path {
+            out.extend_from_slice(&lp(hop.len()));
             out.extend_from_slice(hop);
         }
+        out.extend_from_slice(&lp(self.acquisition_proof_cid.len()));
         out.extend_from_slice(&self.acquisition_proof_cid);
         out
     }
@@ -156,7 +178,11 @@ impl FederationError {
 }
 
 /// The federation model toggle (Inv-20 clause-l).
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future federation-model variant
+/// lands additively, never a downstream `match` break.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[non_exhaustive]
 pub enum FederationModel {
     /// DEFAULT — independent `K_Set` per set.
     ModelB,
@@ -173,20 +199,6 @@ pub fn admit_subset_ref_at_v1_beta() -> Result<(), FederationError> {
     Err(FederationError::FederationReserved)
 }
 
-/// Dispatch a MembershipSet codepoint at v1-beta. The federation `0x6620`
-/// codepoint typed-rejects; every other codepoint passes (targeted rejection).
-///
-/// # Errors
-///
-/// Returns [`FederationError::FederationReserved`] iff `cp ==
-/// MEMBERSHIP_SET_RESERVED_0X6620` (`0x6620`).
-pub fn dispatch_codepoint_at_v1_beta(cp: u16) -> Result<(), FederationError> {
-    if cp == MEMBERSHIP_SET_RESERVED_0X6620 {
-        return Err(FederationError::FederationReserved);
-    }
-    Ok(())
-}
-
 /// Select a federation model at v1-beta — only Model-B is selectable.
 ///
 /// # Errors
@@ -196,5 +208,9 @@ pub fn select_model_at_v1_beta(m: FederationModel) -> Result<FederationModel, Fe
     match m {
         FederationModel::ModelB => Ok(FederationModel::ModelB),
         FederationModel::ModelA => Err(FederationError::ModelAUnavailable),
+        // NOTE: no `_` arm. `FederationModel` is `#[non_exhaustive]` for
+        // downstream SemVer-readiness, but within the defining crate this match
+        // stays exhaustive — a future model variant HALT-AND-SURFACEs here,
+        // forcing an explicit selectable/typed-reject decision.
     }
 }

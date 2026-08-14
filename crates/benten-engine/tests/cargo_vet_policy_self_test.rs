@@ -105,8 +105,8 @@ fn cargo_vet_workflow_non_vacuity_self_test_passes() {
 }
 
 /// `cargo_vet_exemption_budget_within_ratified_cap` —
-/// sec-r1-5 onboarding policy (cap raised 5 → 18, pending Ben
-/// ratification, for the libcrux-ml-kem adoption; see FLAG below).
+/// sec-r1-5 onboarding policy (cap raised 5 → 18 for the libcrux-ml-kem
+/// adoption — Ben-RATIFIED; the ratified cap is 18).
 ///
 /// Counts entries in `supply-chain/exemptions.toml` and asserts the
 /// total is ≤ the ratified budget cap. The Phase-3 G20-A3 onboarding
@@ -124,11 +124,9 @@ fn cargo_vet_workflow_non_vacuity_self_test_passes() {
 /// name is cap-neutral so a future cap change does not require a rename
 /// (the value lives in `EXEMPTION_BUDGET_CAP`).
 ///
-/// ⚠️ FLAG-FOR-BEN: the 5 → 18 cap raise is a security-policy change
-/// tied to the libcrux substrate adoption; **pending Ben
-/// ratification**. Open follow-up: upgrade the libcrux family to certified
-/// `audits.toml` entries once `cargo vet` is installed in CI (then drop
-/// the cap back toward 5).
+/// Open follow-up: upgrade the libcrux family to certified `audits.toml`
+/// entries once `cargo vet` is installed in CI (the budget-free path),
+/// then drop the cap back toward 5.
 #[test]
 fn cargo_vet_exemption_budget_within_ratified_cap() {
     const EXEMPTION_BUDGET_CAP: usize = 18;
@@ -160,8 +158,8 @@ fn cargo_vet_exemption_budget_within_ratified_cap() {
         count <= EXEMPTION_BUDGET_CAP,
         "supply-chain/exemptions.toml carries {count} exemptions; the \
          exemption-budget cap is {EXEMPTION_BUDGET_CAP} (raised 5 → 18 for \
-         the libcrux-ml-kem adoption, pending Ben ratification; see \
-         FLAG-FOR-BEN). Quarterly review must upgrade unaudited exemptions \
-         to certified `audits.toml` entries before adding new ones."
+         the libcrux-ml-kem adoption — Ben-RATIFIED). Quarterly review must \
+         upgrade unaudited exemptions to certified `audits.toml` entries \
+         before adding new ones."
     );
 }

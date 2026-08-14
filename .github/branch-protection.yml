@@ -139,8 +139,12 @@ protection:
   #   wasm-checks.yml:
   #     - "T8 benten-napi wasm32-unknown-unknown"
   #     - "benten-sync refuses to compile for wasm32-unknown-unknown"
-  #       The latter is the 3-rung baked-in #17 defense rung 1
-  #       (compile-time refusal of sync code in browser bundle).
+  #     - "benten-membership-set refuses to compile for wasm32-unknown-unknown"
+  #       The latter two are the AT-BUILD-TIME rung (rung 3) of the baked-in #17
+  #       defense — rung 1 is the lib.rs `compile_error!`, rung 2 the manifest.
+  #       Each runs a structural arm plus a dependency-satisfied probe arm that
+  #       enables getrandom's js/wasm_js features, which is what a thin-client
+  #       bundler would do; the probe arm is the one a deleted gate falsifies.
   #
   #   wasm-runtime.yml:
   #     - "wasm32-wasip1 build (benten-core, benten-graph)"
@@ -162,6 +166,11 @@ protection:
   #
   # CodeQL (`codeql.yml`) is NOT required per ci-decisions-2026-04-22.md §4
   # — informational only via Code-scanning alerts.
+  #
+  # A job whose assertions are `echo` + `::warning::` placeholders, or whose
+  # body is a bare `exit 0`, is NOT required — it cannot fail, so requiring it
+  # buys ceremony and costs a runner slot. Those live in `pending_promotion`
+  # at the bottom of this file with the blocker that keeps each one out.
   #
   # Path-filtered workflows (`arch-1-dep-break.yml`,
   # `inv-11-system-zone-drift.yml`, `host-error-wire-safety.yml`,
@@ -194,22 +203,17 @@ protection:
       - "cargo-audit (belt-and-suspenders)"
       - "Cargo.lock integrity"
       # === Phase-2b/3 additions ===
-      # bundle-size.yml
-      - "browser bundle size — RED-PHASE STUB"
       # cross-process-graph.yml
       - "benten-graph cross-process CID roundtrip"
-      # cross-browser-determinism.yml
-      - "determinism / chromium"
-      - "determinism / firefox"
-      - "determinism / webkit"
-      - "cid_pin equivalence across three browsers (compare reduce)"
       # wasm-conformance.yml
       - "SANDBOX adversarial fixture suite — wasm32-wasip1"
+      - "Crypto-suite PQ-hybrid round-trip — wasm32-wasip1"
       # wasm-browser.yml
       - "bundle + size cap + headless smoke"
       # wasm-checks.yml
       - "T8 benten-napi wasm32-unknown-unknown"
       - "benten-sync refuses to compile for wasm32-unknown-unknown"
+      - "benten-membership-set refuses to compile for wasm32-unknown-unknown"
       # wasm-runtime.yml
       - "wasm32-wasip1 build (benten-core, benten-graph)"
       - "canonical CID — native vs wasm32-wasip1 invariant"
@@ -226,6 +230,30 @@ protection:
       # ts-public-api.yml (R6-FP-D L17-MINOR-1 FREEZE-FLIP 2026-05-24;
       # V1-FROZEN-INTERFACE item 10 + §"Verification mechanism" backstop #2)
       - "TS API drift detector (required-failing per G-CORE-9 FREEZE)"
+      # frozen-bytes.yml (F-001: LIVE-required since 2026-07-26 but absent
+      # from this spec until R6 round #1 — the declarative record was behind
+      # live state, which is the drift direction the spec-check exists to
+      # catch and could not, being warn-only.)
+      - "frozen-bytes corpus (v1-beta wire freeze)"
+      # bench.yml (#12 / C3: SECURITY-POSTURE.md closes Compromise #12 on
+      # "the benchmark CI workflow was promoted from informational to
+      # required." It never was — the word "(required)" lived only in the job
+      # display strings. Both PR-trigger tiers are real gates that can fail,
+      # so promote rather than retense. The nightly tier is schedule-only and
+      # can never be a required context; bench.yml's header is corrected to
+      # say so.)
+      - "bench compile gate (required)"
+      - "bench CRUD fast-path APFS timing (required)"
+      # napi-in-process-pins.yml (F-032: 14 napi security pins, including the
+      # one SECURITY-POSTURE.md cites as the Compromise #21 closure, executed
+      # in zero CI lanes.)
+      - "benten-napi in-process pins (rlib mode)"
+      # branch-protection-spec-check.yml (F-015: the spec-drift detector was
+      # itself unrequired and could not fail. The self-consistency job needs
+      # no PAT, so it is required unconditionally; the live-diff job stays
+      # advisory until a PAT is configured.)
+      - "branch-protection spec self-consistency"
+      - "branch-protection spec self-consistency self-test"
 
   # ---- Pull-request review requirements ----
   #
@@ -290,3 +318,61 @@ protection:
   # skip required checks. Phase-3+ may add a release-bot bypass if
   # release-plz lands.
   block_creations: false
+
+# =============================================================================
+# pending_promotion — ambition that is NOT enforceable today
+# =============================================================================
+#
+# NOT part of the branch-protection API payload: the apply runbook extracts
+# `.protection`, so this key is inert for the PUT. It exists because C5 found
+# four contexts sitting in the required set whose job bodies are `echo` +
+# `::warning:: harness fixture not yet wired`. Promoting those would have
+# manufactured the exact shape the falsification sweep was built to find: a
+# green required check that asserts nothing.
+#
+# The fix is not to delete the ambition. It is to say plainly which gates are
+# real today and which are owed, and to make the difference machine-checked —
+# `.github/scripts/validate-branch-protection-spec.py` fails if an entry here
+# also appears in the required set, if it carries no `blocker:`, or if its
+# context matches no job in `.github/workflows/`.
+pending_promotion:
+  - context: "browser bundle size — RED-PHASE STUB"
+    workflow: bundle-size.yml
+    blocker: >-
+      CE-02. The job body is a placeholder that ends in `exit 0` and the
+      workflow header states INFORMATIONAL ONLY. It cannot fail, so as a
+      required gate it would assert nothing while implying a bundle-size
+      guard exists. The real 600KB cap is enforced by wasm-browser.yml's
+      "bundle + size cap + headless smoke", which IS required.
+    unblocks: R5 G10-A-browser implementation (plan §3.1 + wasm-r1-7).
+
+  - context: "determinism / chromium"
+    workflow: cross-browser-determinism.yml
+    blocker: >-
+      C5. Every assertion cell in the determinism-matrix job is
+      `echo` + `::warning:: harness fixture not yet wired (G18-A-followup)`.
+      The job can only fail on Playwright install, never on a determinism
+      difference — requiring it would certify browser-launch success as
+      cross-browser byte-determinism.
+    unblocks: G18-A-followup harness fixture wiring.
+
+  - context: "determinism / firefox"
+    workflow: cross-browser-determinism.yml
+    blocker: >-
+      C5. Same echo-stub body as the chromium leg.
+    unblocks: G18-A-followup harness fixture wiring.
+
+  - context: "determinism / webkit"
+    workflow: cross-browser-determinism.yml
+    blocker: >-
+      C5. Same echo-stub body as the chromium leg.
+    unblocks: G18-A-followup harness fixture wiring.
+
+  - context: "cid_pin equivalence across three browsers (compare reduce)"
+    workflow: cross-browser-determinism.yml
+    blocker: >-
+      C5. The reduce step echoes a `::warning::` instead of comparing the
+      per-browser CIDs; the artifacts it claims to reduce are not uploaded by
+      the matrix above. Its `assert-needs-succeeded` step is real, so the job
+      does propagate upstream failure — but upstream is itself stub cells.
+    unblocks: G18-A-followup harness fixture wiring.

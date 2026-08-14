@@ -62,14 +62,14 @@ fn materializer_pipeline_walks_emitted_subgraph_and_fires_cap_policy_at_each_pri
 
     let mat = HtmlJsonMaterializer;
     let out = mat
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: cid,
-            walk_principal: alice,
-            cap_recheck: recorder,
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            cid,
+            alice,
+            recorder,
+            Vec::new(),
+        ))
         .unwrap();
 
     // OBSERVABLE CONSEQUENCE: the per-row gate is invoked exactly once

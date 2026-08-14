@@ -60,6 +60,7 @@ pub struct DriftNotification {
 impl DriftNotification {
     /// Whether this notification represents an install-record drift
     /// warning for `plugin_did` (test observable).
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn is_install_record_drift_warning(&self, plugin_did: &Did) -> bool {
         self.plugin_did == *plugin_did
@@ -189,6 +190,7 @@ impl ManifestStore {
     ///
     /// `E_PLUGIN_MANIFEST_INVALID` on encode failure (programmer
     /// error in the test fixture).
+    #[cfg(any(test, feature = "testing"))]
     pub fn simulate_byte_mutation_attack(
         &mut self,
         plugin_did: Did,

@@ -656,11 +656,16 @@ export interface ViewDef {
  *
  * `codepoint` selects the dispatch arm:
  * - `0x0001` (`HYBRID_ED25519_MLDSA65`, v1-beta DEFAULT) — `ed25519` +
- *   `mlDsa65` + `commitment` MUST all be present (NF-4
- *   concatenated/committing/strip-resistant; both halves required to
- *   verify).
+ *   `mlDsa65` MUST both be present. The construction is the byte-faithful
+ *   IETF LAMPS composite `id-MLDSA65-Ed25519-SHA512`: both halves sign the
+ *   SAME message representative `M'` (the ML-DSA half with
+ *   `mldsa_ctx = Label`), the wire is the raw concat
+ *   `mldsaSig || tradSig` (ML-DSA FIRST) with **NO commitment trailer**,
+ *   and BOTH halves must verify or the verify fails closed.
+ *   Strip-resistance rests on the shared-`M'` / `mldsa_ctx=Label` binding
+ *   + both-halves-required — NOT on a commitment.
  * - `0x0002` (`CLASSICAL_ED25519`, non-default downgrade) — `ed25519`
- *   MUST be present; `mlDsa65` + `commitment` MUST be absent.
+ *   MUST be present; `mlDsa65` MUST be absent.
  *
  * **No silent fallback on unknown codepoints** — the napi/Rust dispatch
  * surfaces typed `E_CRYPTO_UNSUPPORTED_ALGORITHM` per the CLAUDE.md #5
@@ -692,14 +697,6 @@ export interface ManifestSignature {
    * chars); the JS surface does NOT bound this length.
    */
   mlDsa65?: string;
-  /**
-   * NF-4 commitment binding both halves + message — base64 (32 B raw
-   * = SHA3-256 output, ~44 base64 chars). Present iff `codepoint=0x0001`.
-   * The committing construction is what makes the hybrid
-   * strip-resistant: neither half can be stripped, truncated, or
-   * cross-message-substituted without the verify failing closed.
-   */
-  commitment?: string;
 }
 
 /**
@@ -830,6 +827,7 @@ export interface RandomHostFnOverride {
  *   - `fuel`             = `1_000_000` (D24 + dx-r1-2b-5)
  *   - `wallclockMs`      = `30_000` (D24)
  *   - `outputLimitBytes` = `1_048_576` (D15 trap-loudly default)
+ *   - `memoryLimitBytes` = `67_108_864` (64 MiB; tighten-only)
  *
  * Pin source: `packages/engine/test/sandbox.test.ts`.
  */
@@ -844,6 +842,15 @@ export interface SandboxArgsByName {
   wallclockMs?: number;
   /** Per-call output bound in bytes (default `1_048_576`). */
   outputLimitBytes?: number;
+  /**
+   * Per-call linear-memory bound in bytes (default `67_108_864` = 64 MiB).
+   *
+   * **Tighten-only.** A value at or below the 64 MiB engine ceiling
+   * applies; a value ABOVE it is ignored and logged, because memory is
+   * the one axis whose exhaustion can OOM-kill the host process shared
+   * by every other handler. See `docs/SANDBOX-LIMITS.md` §2.
+   */
+  memoryLimitBytes?: number;
   /**
    * MUST NOT co-occur with `module`-by-name. The discriminated-union
    * type system rejects setting `caps` on this variant; flagged by the
@@ -878,6 +885,15 @@ export interface SandboxArgsByCaps {
   wallclockMs?: number;
   /** Per-call output bound in bytes (default `1_048_576`). */
   outputLimitBytes?: number;
+  /**
+   * Per-call linear-memory bound in bytes (default `67_108_864` = 64 MiB).
+   *
+   * **Tighten-only.** A value at or below the 64 MiB engine ceiling
+   * applies; a value ABOVE it is ignored and logged, because memory is
+   * the one axis whose exhaustion can OOM-kill the host process shared
+   * by every other handler. See `docs/SANDBOX-LIMITS.md` §2.
+   */
+  memoryLimitBytes?: number;
 }
 
 /**

@@ -15,6 +15,24 @@
 //! bytes to the crypto-suite). Tampering the signed `tier` field mutates the
 //! canonical bytes, so the original signature no longer verifies (tamper-
 //! evidence: the config cannot drift post-sign).
+//!
+//! ## INTEGRITY here, AUTHORITY at the engine layer (R6-tail F-67)
+//!
+//! What [`GovernanceConfig::new_signed`] delivers is **integrity /
+//! tamper-evidence ONLY**: it mints a FRESH ephemeral hybrid keypair inside the
+//! constructor and retains that keypair's verifying key alongside the
+//! signature, so [`GovernanceConfig::signature_verifies`] is structurally
+//! always true for an untampered value — it proves the `(tier, content_label)`
+//! bytes have not drifted since signing, and nothing more.
+//!
+//! It does **NOT** bind AUTHORITY. No user-DID, set-identity key, or other
+//! external trust anchor signs here, so a verifying `GovernanceConfig` is NOT
+//! evidence that anyone was ENTITLED to set that tier — do not read "signed
+//! Node" as an authorization check. The InstallRecord precedent named above is
+//! cited for the top-level-signed-Node SHAPE (governance decoupled from the
+//! sealed policy), not for its user-DID authority binding. The LIVE governance
+//! authority is engine + capability-policy driven (see the crate-root
+//! register-then-enforce disclosure in `lib.rs`).
 
 use benten_crypto_suite::sig::PublicKey;
 use benten_crypto_suite::{HybridSignature, SignatureSuite, SuiteConfig};
@@ -23,7 +41,11 @@ use benten_crypto_suite::{HybridSignature, SignatureSuite, SuiteConfig};
 /// ([`GovernanceConfig::content_label`]) — NOT sub-codepoints, NOT sealed-policy
 /// fields. The three tiers correspond to Flat / Moderated / Polycentric
 /// governance shapes.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future governance-tier variant
+/// lands additively, never a downstream `match` break.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum GovernanceTier {
     /// Flat governance — every admin is co-equal.
     Flat,
@@ -43,6 +65,12 @@ impl GovernanceTier {
             GovernanceTier::Flat => 0,
             GovernanceTier::Moderated => 1,
             GovernanceTier::Polycentric => 2,
+            // NOTE: no `_` arm. `GovernanceTier` is `#[non_exhaustive]` for
+            // downstream SemVer-readiness, but this tag byte enters the SIGNED
+            // canonical Node bytes, so within the defining crate the match stays
+            // exhaustive: a future tier is a HALT-AND-SURFACE compile error here,
+            // forcing it to mint its own distinct signed tag rather than
+            // silently colliding an existing tier's signed content (§15.c).
         }
     }
 }
@@ -53,9 +81,9 @@ impl GovernanceTier {
 /// the Garden/Grove labelling as Node CONTENT. NEVER a field inside the sealed
 /// [`MembershipSetPolicy`]. The verifying key + the signed inputs are retained
 /// so [`GovernanceConfig::signature_verifies`] and
-/// [`GovernanceConfig::signature_verifies_after_tier_tamper`] can re-verify the
-/// detached signature against the canonical bytes (and against a tampered
-/// variant of them).
+/// `signature_verifies_after_tier_tamper` (a `#[cfg(any(test, feature =
+/// "testing"))]` tamper-evidence helper) can re-verify the detached signature
+/// against the canonical bytes (and against a tampered variant of them).
 #[derive(Clone)]
 pub struct GovernanceConfig {
     /// The governance tier (a signed field).
@@ -78,6 +106,15 @@ impl GovernanceConfig {
     ///
     /// The signature is a REAL hybrid Ed25519⊕ML-DSA-65 signature (routed
     /// through the crypto-suite — never forked).
+    ///
+    /// **INTEGRITY, not AUTHORITY (R6-tail F-67).** The keypair is minted
+    /// FRESH inside this constructor and its verifying key is stored on the
+    /// returned value, so [`GovernanceConfig::signature_verifies`] is
+    /// structurally always true for an untampered config. The property this
+    /// delivers is tamper-evidence over `(tier, content_label)` — NOT a binding
+    /// to any user-DID / set-identity authority. Callers MUST NOT treat a
+    /// verifying `GovernanceConfig` as authorization to have set that tier; the
+    /// LIVE governance authority is engine + capability-policy driven.
     #[must_use]
     pub fn new_signed(tier: GovernanceTier, content_label: &str) -> Self {
         let suite = SignatureSuite::from_config(SuiteConfig::v1_default());
@@ -109,6 +146,10 @@ impl GovernanceConfig {
     /// canonical bytes (the `tier` byte flipped). Returns `false` because the
     /// signature was computed over the untampered bytes — tamper-evidence: a
     /// signed governance config cannot drift post-sign.
+    ///
+    /// **R6-final F-04: test-modelling helper — gated off the frozen public
+    /// surface** (zero production callers; consumed only by the `f_gov_1` pin).
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn signature_verifies_after_tier_tamper(&self) -> bool {
         let suite = SignatureSuite::from_config(SuiteConfig::v1_default());

@@ -120,13 +120,6 @@ impl HandlerVersionChain {
     pub fn versions(&self) -> &[Cid] {
         &self.versions
     }
-
-    /// Returns whether the chain contains the given version CID
-    /// (linear scan; chains are operator-bounded).
-    #[must_use]
-    pub fn fetch_version(&self, cid: &Cid) -> Option<Cid> {
-        self.versions.iter().find(|c| *c == cid).copied()
-    }
 }
 
 /// Construct the canonical [`Node`] for one entry in a handler's

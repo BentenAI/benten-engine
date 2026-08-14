@@ -17,6 +17,8 @@ impl core::clone::Clone for benten_membership_set::aad::GroupAadInputs
 pub fn benten_membership_set::aad::GroupAadInputs::clone(&self) -> benten_membership_set::aad::GroupAadInputs
 impl core::fmt::Debug for benten_membership_set::aad::GroupAadInputs
 pub fn benten_membership_set::aad::GroupAadInputs::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::ops::drop::Drop for benten_membership_set::aad::GroupAadInputs
+pub fn benten_membership_set::aad::GroupAadInputs::drop(&mut self)
 impl core::marker::Freeze for benten_membership_set::aad::GroupAadInputs
 impl core::marker::Send for benten_membership_set::aad::GroupAadInputs
 impl core::marker::Sync for benten_membership_set::aad::GroupAadInputs
@@ -30,10 +32,9 @@ pub const benten_membership_set::aad::SETID_COMMITMENT_LABEL: &[u8]
 pub fn benten_membership_set::aad::assemble_group_aad(&benten_membership_set::aad::GroupAadInputs) -> alloc::vec::Vec<u8>
 pub fn benten_membership_set::aad::audience_set_commitment(&[alloc::string::String]) -> [u8; 32]
 pub fn benten_membership_set::aad::canonical_members_table_bytes(&alloc::collections::btree::map::BTreeMap<benten_membership_set::member::Did, benten_membership_set::member::MemberEntry>) -> alloc::vec::Vec<u8>
-pub fn benten_membership_set::aad::default_group_codepoint() -> u16
 pub fn benten_membership_set::aad::membership_set_id_commitment(&[u8; 32], &[u8]) -> [u8; 32]
 pub mod benten_membership_set::audit
-pub enum benten_membership_set::audit::AdminOp
+#[non_exhaustive] pub enum benten_membership_set::audit::AdminOp
 pub benten_membership_set::audit::AdminOp::AdmitMember
 pub benten_membership_set::audit::AdminOp::GovernanceChange
 pub benten_membership_set::audit::AdminOp::KickMember
@@ -55,7 +56,7 @@ impl core::marker::Unpin for benten_membership_set::audit::AdminOp
 impl core::marker::UnsafeUnpin for benten_membership_set::audit::AdminOp
 impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AdminOp
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AdminOp
-pub enum benten_membership_set::audit::AuditAccessGradation
+#[non_exhaustive] pub enum benten_membership_set::audit::AuditAccessGradation
 pub benten_membership_set::audit::AuditAccessGradation::AdminOnly
 pub benten_membership_set::audit::AuditAccessGradation::Anonymized
 pub benten_membership_set::audit::AuditAccessGradation::MemberOnly
@@ -105,7 +106,7 @@ impl core::marker::Unpin for benten_membership_set::audit::AuditChainError
 impl core::marker::UnsafeUnpin for benten_membership_set::audit::AuditChainError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AuditChainError
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AuditChainError
-pub enum benten_membership_set::audit::AuditReadDecision
+#[non_exhaustive] pub enum benten_membership_set::audit::AuditReadDecision
 pub benten_membership_set::audit::AuditReadDecision::Admit
 pub benten_membership_set::audit::AuditReadDecision::Deny
 impl core::clone::Clone for benten_membership_set::audit::AuditReadDecision
@@ -124,7 +125,7 @@ impl core::marker::Unpin for benten_membership_set::audit::AuditReadDecision
 impl core::marker::UnsafeUnpin for benten_membership_set::audit::AuditReadDecision
 impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AuditReadDecision
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AuditReadDecision
-pub enum benten_membership_set::audit::RequesterRole
+#[non_exhaustive] pub enum benten_membership_set::audit::RequesterRole
 pub benten_membership_set::audit::RequesterRole::Admin
 pub benten_membership_set::audit::RequesterRole::Member
 pub benten_membership_set::audit::RequesterRole::NonMember
@@ -150,7 +151,6 @@ pub fn benten_membership_set::audit::AuditChain::append_op(&mut self, &[u8; 32],
 pub fn benten_membership_set::audit::AuditChain::new(&[u8; 32]) -> Self
 pub fn benten_membership_set::audit::AuditChain::replay_identical_op_emitted_phantom_event(&mut self, &[u8; 32], benten_membership_set::audit::AdminOp) -> bool
 pub fn benten_membership_set::audit::AuditChain::seq(&self) -> u64
-pub fn benten_membership_set::audit::AuditChain::verify_with_tampered_node_at(&self, u64) -> core::result::Result<(), benten_membership_set::audit::AuditChainError>
 impl core::clone::Clone for benten_membership_set::audit::AuditChain
 pub fn benten_membership_set::audit::AuditChain::clone(&self) -> benten_membership_set::audit::AuditChain
 impl core::fmt::Debug for benten_membership_set::audit::AuditChain
@@ -162,27 +162,6 @@ impl core::marker::Unpin for benten_membership_set::audit::AuditChain
 impl core::marker::UnsafeUnpin for benten_membership_set::audit::AuditChain
 impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AuditChain
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AuditChain
-pub struct benten_membership_set::audit::AuditEmitResult
-pub benten_membership_set::audit::AuditEmitResult::actor_cid: core::option::Option<[u8; 32]>
-pub benten_membership_set::audit::AuditEmitResult::capability_grant_cid: core::option::Option<[u8; 32]>
-pub benten_membership_set::audit::AuditEmitResult::chain_advanced: bool
-pub benten_membership_set::audit::AuditEmitResult::handler_cid: core::option::Option<[u8; 32]>
-impl core::clone::Clone for benten_membership_set::audit::AuditEmitResult
-pub fn benten_membership_set::audit::AuditEmitResult::clone(&self) -> benten_membership_set::audit::AuditEmitResult
-impl core::cmp::Eq for benten_membership_set::audit::AuditEmitResult
-impl core::cmp::PartialEq for benten_membership_set::audit::AuditEmitResult
-pub fn benten_membership_set::audit::AuditEmitResult::eq(&self, &benten_membership_set::audit::AuditEmitResult) -> bool
-impl core::fmt::Debug for benten_membership_set::audit::AuditEmitResult
-pub fn benten_membership_set::audit::AuditEmitResult::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Copy for benten_membership_set::audit::AuditEmitResult
-impl core::marker::StructuralPartialEq for benten_membership_set::audit::AuditEmitResult
-impl core::marker::Freeze for benten_membership_set::audit::AuditEmitResult
-impl core::marker::Send for benten_membership_set::audit::AuditEmitResult
-impl core::marker::Sync for benten_membership_set::audit::AuditEmitResult
-impl core::marker::Unpin for benten_membership_set::audit::AuditEmitResult
-impl core::marker::UnsafeUnpin for benten_membership_set::audit::AuditEmitResult
-impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AuditEmitResult
-impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AuditEmitResult
 pub struct benten_membership_set::audit::AuditQueryComposition
 pub benten_membership_set::audit::AuditQueryComposition::gating_scope: alloc::string::String
 pub benten_membership_set::audit::AuditQueryComposition::is_a_new_primitive_kind_variant: bool
@@ -199,10 +178,6 @@ impl core::marker::UnsafeUnpin for benten_membership_set::audit::AuditQueryCompo
 impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::audit::AuditQueryComposition
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::audit::AuditQueryComposition
 pub fn benten_membership_set::audit::audit_log_query_composition(&[u8; 32]) -> benten_membership_set::audit::AuditQueryComposition
-pub fn benten_membership_set::audit::emit_audit_event_via_bare_put(&[u8; 32], &[u8; 32], benten_membership_set::audit::AdminOp) -> benten_membership_set::audit::AuditEmitResult
-pub fn benten_membership_set::audit::emit_audit_event_via_engine(&[u8; 32], &[u8; 32], &[u8; 32], benten_membership_set::audit::AdminOp) -> benten_membership_set::audit::AuditEmitResult
-pub fn benten_membership_set::audit::parse_audit_scope_added_new_top_level_scope_arm(&str) -> bool
-pub fn benten_membership_set::audit::restricted_audit_scope_contains(&str, &str) -> bool
 pub mod benten_membership_set::codepoints
 pub const benten_membership_set::codepoints::MEMBERSHIP_SET_BAND_HI: u16
 pub const benten_membership_set::codepoints::MEMBERSHIP_SET_BAND_LO: u16
@@ -215,7 +190,6 @@ pub benten_membership_set::error::MembershipSetError::AdminCardinality
 pub benten_membership_set::error::MembershipSetError::AuthorityMissingPubkey
 pub benten_membership_set::error::MembershipSetError::MemberCardinality
 pub benten_membership_set::error::MembershipSetError::MemberRefKindMismatch
-pub benten_membership_set::error::MembershipSetError::ReserveTypedReject
 pub benten_membership_set::error::MembershipSetError::RoleStaleAtVerify
 pub benten_membership_set::error::MembershipSetError::WireCostCeilingExceeded
 impl benten_membership_set::error::MembershipSetError
@@ -287,7 +261,7 @@ impl core::marker::Unpin for benten_membership_set::federation::FederationError
 impl core::marker::UnsafeUnpin for benten_membership_set::federation::FederationError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::federation::FederationError
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::federation::FederationError
-pub enum benten_membership_set::federation::FederationModel
+#[non_exhaustive] pub enum benten_membership_set::federation::FederationModel
 pub benten_membership_set::federation::FederationModel::ModelA
 pub benten_membership_set::federation::FederationModel::ModelB
 impl core::clone::Clone for benten_membership_set::federation::FederationModel
@@ -331,11 +305,10 @@ impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::federation:
 pub const benten_membership_set::federation::ENVELOPE_FORMAT_VERSION_V2: u8
 pub const benten_membership_set::federation::MEMBERSHIP_RECURSION_MAX_DEPTH: usize
 pub fn benten_membership_set::federation::admit_subset_ref_at_v1_beta() -> core::result::Result<(), benten_membership_set::federation::FederationError>
-pub fn benten_membership_set::federation::dispatch_codepoint_at_v1_beta(u16) -> core::result::Result<(), benten_membership_set::federation::FederationError>
 pub fn benten_membership_set::federation::select_model_at_v1_beta(benten_membership_set::federation::FederationModel) -> core::result::Result<benten_membership_set::federation::FederationModel, benten_membership_set::federation::FederationError>
 pub type benten_membership_set::federation::FederationSetId = alloc::vec::Vec<u8>
 pub mod benten_membership_set::governance
-pub enum benten_membership_set::governance::GovernanceTier
+#[non_exhaustive] pub enum benten_membership_set::governance::GovernanceTier
 pub benten_membership_set::governance::GovernanceTier::Flat
 pub benten_membership_set::governance::GovernanceTier::Moderated
 pub benten_membership_set::governance::GovernanceTier::Polycentric
@@ -361,7 +334,6 @@ pub benten_membership_set::governance::GovernanceConfig::tier: benten_membership
 impl benten_membership_set::governance::GovernanceConfig
 pub fn benten_membership_set::governance::GovernanceConfig::new_signed(benten_membership_set::governance::GovernanceTier, &str) -> Self
 pub fn benten_membership_set::governance::GovernanceConfig::signature_verifies(&self) -> bool
-pub fn benten_membership_set::governance::GovernanceConfig::signature_verifies_after_tier_tamper(&self) -> bool
 impl core::clone::Clone for benten_membership_set::governance::GovernanceConfig
 pub fn benten_membership_set::governance::GovernanceConfig::clone(&self) -> benten_membership_set::governance::GovernanceConfig
 impl core::marker::Freeze for benten_membership_set::governance::GovernanceConfig
@@ -773,7 +745,6 @@ impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::member::Sig
 pub fn benten_membership_set::member::derive_member_nature(&str, bool) -> benten_membership_set::member::MemberNature
 pub fn benten_membership_set::member::is_ai_operated(&str) -> bool
 pub mod benten_membership_set::privacy
-pub fn benten_membership_set::privacy::admin_can_correlate_members(&[u8]) -> bool
 pub fn benten_membership_set::privacy::network_observer_can_link_stanzas(&[u8], &[u8]) -> bool
 pub mod benten_membership_set::role
 #[repr(u8)] pub enum benten_membership_set::role::RoleId
@@ -813,12 +784,7 @@ impl core::marker::UnsafeUnpin for benten_membership_set::role::RoleId
 impl core::panic::unwind_safe::RefUnwindSafe for benten_membership_set::role::RoleId
 impl core::panic::unwind_safe::UnwindSafe for benten_membership_set::role::RoleId
 pub fn benten_membership_set::role::ability_template(benten_membership_set::role::RoleId) -> alloc::collections::btree::set::BTreeSet<&'static str>
-pub fn benten_membership_set::role::admin_exclusive_abilities() -> alloc::collections::btree::set::BTreeSet<&'static str>
 pub fn benten_membership_set::role::derive_member_content_key(benten_membership_set::role::RoleId, &[u8]) -> core::option::Option<alloc::vec::Vec<u8>>
-pub mod benten_membership_set::scaffold
-pub const benten_membership_set::scaffold::CRATE_NAME: &str
-pub const benten_membership_set::scaffold::MEMBERSHIP_SET_BAND_HI: u16
-pub const benten_membership_set::scaffold::MEMBERSHIP_SET_BAND_LO: u16
 pub mod benten_membership_set::set
 pub mod benten_membership_set::set::crdt
 pub fn benten_membership_set::set::crdt::admitted_at_hlc_lww_keeps_a(benten_core::hlc::BentenHlc, benten_core::hlc::BentenHlc) -> bool
@@ -977,7 +943,6 @@ pub benten_membership_set::MembershipSetError::AdminCardinality
 pub benten_membership_set::MembershipSetError::AuthorityMissingPubkey
 pub benten_membership_set::MembershipSetError::MemberCardinality
 pub benten_membership_set::MembershipSetError::MemberRefKindMismatch
-pub benten_membership_set::MembershipSetError::ReserveTypedReject
 pub benten_membership_set::MembershipSetError::RoleStaleAtVerify
 pub benten_membership_set::MembershipSetError::WireCostCeilingExceeded
 impl benten_membership_set::error::MembershipSetError

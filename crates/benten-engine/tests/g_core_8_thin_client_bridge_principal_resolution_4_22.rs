@@ -14,7 +14,7 @@
 //! the principal is whatever the session was established as.
 //!
 //! At SYNCED HEAD `ed03729a`, the G24-F SHIPPED `DidKeyedSession`
-//! surface (`crates/benten-engine/src/thin_client.rs:279`) resolves a
+//! surface (`crates/benten-engine/src/thin_client.rs:280`) resolves a
 //! `SessionToken` → `principal_did` from the server-side session
 //! record (the in-band client-asserted principal is structurally
 //! impossible — `resolve` takes only `token + presented_origin`, never

@@ -69,12 +69,12 @@ fn algorithm_b_canonical_view_fast_path(c: &mut Criterion) {
     // Strategy::B baseline — direct AlgorithmBView::for_id construction.
     group.bench_function("Strategy_B_baseline", |b| {
         b.iter(|| {
-            let definition = ViewDefinition {
-                view_id: "content_listing".to_string(),
-                input_pattern_label: Some("post".to_string()),
-                output_label: "system:IVMView".to_string(),
-                strategy: Strategy::B,
-            };
+            let definition = ViewDefinition::new(
+                "content_listing".to_string(),
+                Some("post".to_string()),
+                "system:IVMView".to_string(),
+                Strategy::B,
+            );
             let mut view = AlgorithmBView::for_id("content_listing", definition).unwrap();
             for e in &events {
                 view.update(e).unwrap();

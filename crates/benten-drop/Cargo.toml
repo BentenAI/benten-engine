@@ -17,6 +17,53 @@ workspace = true
 # longer rationale.
 bench = false
 
+# GAP-KDB Shape-B (W2) — the benten-drop Layer-C RED-PHASE pins import the
+# `benten_drop::kdb_seal_testing` (+ `benten_id::kdb_testing`) fixtures, which
+# live behind the `testing` feature. Marked `required-features` so a feature-less
+# `cargo test --workspace` SKIPS them (compile-skip) rather than failing on the
+# `use benten_drop::kdb_seal_testing` import. CI runs the workspace with
+# `--features …benten-drop/testing…`, so they compile + run there (ignored pins
+# skip; the live golden / framing pins run green). un-ignore the RED pins at R5.
+[[test]]
+name = "kdb_drop1_7_gapkdb_seal_flagship"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop2_sole_constructor"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop3_anti_downgrade_grep"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop4_c9_roster_replacement"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop5_c8_generation_precedence"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop6_seal_roundtrip"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop8_sender_origin_auth"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop9_group_commitment_golden"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop10_empty_roster"
+required-features = ["testing"]
+
+[[test]]
+name = "kdb_drop11_audience_aad_golden"
+required-features = ["testing"]
+
 # G-CORE-3f Drop-bundle deps — leans on the substrate cascade:
 #   - benten-crypto-suite (3a CANARY) — AeadKeyMaterial + AeadEnvelope + cipher dispatch
 #   - benten-graph (3d) — EncryptedNode + per-Node AEAD wrap (the storage-layer
@@ -32,6 +79,21 @@ bench = false
 # V1-FROZEN-INTERFACE.md §1. Chains through to sibling crates whose
 # `_for_test` items this crate's fixtures (build_5_recipe_bundle_*) +
 # tamper / consume helpers transitively call.
+#
+# PER-PACKAGE TESTING CONTRACT (R6-R1c F-15 — the finding's documented
+# alternative). `cargo test -p benten-drop` and `cargo check -p benten-drop
+# --all-targets` REQUIRE `--features testing`. This is a WORKSPACE-WIDE
+# de-facto contract (not specific to the 27-gate wave, and not a clean-skip
+# gap that `[[test]] required-features` can close): (1) many integration
+# targets consume the F1.b `testing`-gated `*_for_test` fixtures, and (2) the
+# crate's OWN lib `#[cfg(test)]` unit tests in `src/bundle.rs` call
+# CROSS-CRATE `testing`-gated fixtures (`benten_caps::…::synthetic_for_test`
+# / `GrantKeyMaterial::from_bytes_for_test` / `AuthorizationGrant::
+# issue_envelopes_for_test_with_issuer`) — which `required-features` cannot
+# supply to the lib's own test build (that build pulls the deps WITHOUT their
+# `testing` feature). CI runs the full workspace `/testing` set on EVERY lane,
+# so there is no coverage gap. (Sibling crates — benten-graph / benten-eval /
+# benten-crypto-suite — share this same per-package `/testing` contract.)
 [features]
 default = []
 testing = [
@@ -78,6 +140,20 @@ thiserror = { workspace = true }
 # call site). `default-features = false` — the core hashing API suffices.
 blake3 = { workspace = true }
 
+# R11 MC-1: OS CSPRNG for the fresh random `0x6520` group content-encryption-
+# key (`OsRng.fill_bytes`). The workspace `rand_core` (0.6, `getrandom` + `std`)
+# is the same CSPRNG `benten-crypto-suite` seeds its keygen from — the group
+# CEK is now sampled fresh per message rather than derived from public wire
+# inputs (Sealed-Sender confidentiality fix).
+rand_core = { workspace = true }
+
+# R19 secret-hygiene: zeroize-on-drop for the transient `GroupAadInputs.k_set`
+# group-key copy (layer_c). The prior "benten-drop carries no zeroize
+# dependency" note in layer_c.rs named exactly this as the deferred future
+# hygiene sweep; R19 adopts it. Wire/serialization behavior is unchanged —
+# drop-behavior + Debug redaction only.
+zeroize = { workspace = true }
+
 # Cryptographic surface for the envelope-level signature (the defense-
 # in-depth outer layer per Spike G). Goes through `benten-id` for the
 # `Keypair`/`PublicKey` API (which itself routes to ed25519-dalek via
@@ -100,13 +176,6 @@ blake3 = { workspace = true }
 # roster. Mirrors the workspace pin; `default-features = false` (the core
 # `blake3::hash` API needs no default features).
 blake3 = { workspace = true }
-
-# F-full Layer-C DUAL-CID (O-3): the `f_lc_dual_cid` family exercises the
-# `benten-sync::two_cid_store` DUAL-CID extension (DualCidStore + reseal +
-# blind_set_cid + the O-7 wire-surface enumeration + generation staleness).
-# No cycle — benten-sync depends on benten-{id,core,errors}, none of which
-# pull benten-drop (verified vs the workspace dependency edges).
-benten-sync = { path = "../benten-sync" }
 
 # F-02 OPTION-(b) TEST-ONLY cross-check: the `f_02_group_aad_11field_and_f_01_truncation`
 # test asserts benten-drop's LOCAL 11-field AAD assembler

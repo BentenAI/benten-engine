@@ -66,11 +66,9 @@ fn invariant_7_output_traps_loudly_via_counted_sink() {
     )
     .unwrap();
     let registry = ManifestRegistry::new();
-    let cfg = SandboxConfig {
-        output_bytes: 500_000,
-        fuel: 100_000_000,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.output_bytes = 500_000;
+    cfg.fuel = 100_000_000;
     let attribution = dummy_attribution();
     let err = execute(
         &bytes,
@@ -133,10 +131,8 @@ fn invariant_7_output_no_silent_truncation_default() {
     )
     .unwrap();
     let registry = ManifestRegistry::new();
-    let cfg = SandboxConfig {
-        output_bytes: 1024,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.output_bytes = 1024;
     let attribution = dummy_attribution();
     let err = execute(
         &bytes,

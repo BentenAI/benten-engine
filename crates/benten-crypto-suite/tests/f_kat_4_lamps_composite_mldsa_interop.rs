@@ -18,11 +18,19 @@
 //!
 //! Benten's LAMPS Composite ML-DSA signatures (`id-MLDSA65-Ed25519-SHA512`,
 //! `0x0001`) MUST interop with other ecosystems' implementations of the SAME
-//! LAMPS composite. Pins (against deterministic synthesized witnesses — the
-//! `tf4 load_fips_204_kat_vector_for_test` precedent — until the real
-//! BouncyCastle/OpenSSL/OpenPGP fixtures land at R5):
-//!   1. INBOUND ×3: Benten's verifier accepts a `id-MLDSA65-Ed25519-SHA512`
-//!      signature produced by each of {BouncyCastle, OpenSSL-3.5, OpenPGP-PQC};
+//! LAMPS composite. Pins (the real byte-exact IETF LAMPS WG KAT vector is now
+//! embedded in-tree and driven through the LIVE verifier — see the "REAL
+//! INBOUND FIXTURE" section below; the earlier synthesized-witness scaffold
+//! against the `tf4 load_fips_204_kat_vector_for_test` precedent has been
+//! superseded):
+//!   1. INBOUND (honest split): Benten's LIVE verifier accepts the ONE REAL
+//!      `id-MLDSA65-Ed25519-SHA512` spec vector — the IETF LAMPS WG spec-KAT
+//!      (`f0627ab3…`), driven through the production verifier. The
+//!      {BouncyCastle, OpenSSL-3.5, OpenPGP-PQC} ecosystem fixtures are
+//!      deterministically SYNTHESIZED shape/OID-binding fixtures
+//!      (`VERIFY_WIRED = false`) — NOT driven through the crypto path.
+//!      Live-binary cross-ecosystem interop against those three is the
+//!      C-GM-AUDIT deliverable (F-12; `docs/V1-FROZEN-INTERFACE.md` item 14);
 //!   2. OUTBOUND shape: a Benten-produced sig carries the LAMPS composite shape
 //!      (Ed25519 half ‖ ML-DSA-65 half) bound to the OID `1.3.6.1.5.5.7.6.48`;
 //!   3. NEGATIVE: a signature presented under a MISMATCHED OID is rejected (the
@@ -107,8 +115,10 @@
 
 #![allow(dead_code)]
 
-/// SELF-CONTAINED stub-shim (R5 deletes + wires LIVE LAMPS verify + real
-/// BouncyCastle/OpenSSL/OpenPGP fixtures).
+/// SELF-CONTAINED stub-shim. RETAINED only for the OID-string + ecosystem-enum
+/// model that the OID-mismatch regression-guard drives; the LIVE LAMPS verify +
+/// real byte-exact IETF LAMPS WG fixture are already wired above (see
+/// [`real_lamps_vector`] / [`benten_accepts_cross_ecosystem_lamps_signatures`]).
 mod f_kat_4_stub {
     /// The frozen LAMPS Composite ML-DSA codepoint + OID (R0 §2.1 C-4).
     pub const SIG_HYBRID_ED25519_MLDSA65: u16 = 0x0001;
@@ -152,10 +162,11 @@ mod f_kat_4_stub {
         }
     }
 
-    /// Benten's verifier over a LAMPS composite sig. RED-PHASE: returns `false`
-    /// for any external ecosystem (the composite verify is not yet wired) so the
-    /// inbound pins FAIL. R5: real LAMPS verify accepts a valid composite whose
-    /// OID matches + both halves verify.
+    /// Benten's verifier over a LAMPS composite sig, in this stub model. With
+    /// `enforce = false` it returns `false` (the stub-shim path); the LIVE LAMPS
+    /// verify is already wired above and accepts a valid composite whose OID
+    /// matches + both halves verify (see
+    /// [`benten_accepts_cross_ecosystem_lamps_signatures`]).
     pub fn benten_verify(sig: &LampsCompositeSig, enforce: bool) -> bool {
         if !enforce {
             // RED-PHASE: not wired → reject external sigs.
@@ -1146,12 +1157,13 @@ fn benten_lamps_signature_outbound_shape() {
 /// **F4-036 (REGRESSION-GUARD, not a red-phase pin):** unlike pins (a)/(b)
 /// which fire red against the unwired stub, this arm drives the WIRED verify
 /// model (`enforce = true`) deliberately, so it asserts an ALREADY-CORRECT
-/// fact — the OID-binding rejection that R5's real verifier must preserve. It
+/// fact — the OID-binding rejection that the LIVE real verifier preserves. It
 /// is correctly classified as a regression-guard (it guards against a future
 /// verifier that drops the OID check), NOT a would-FAIL-vs-stub red-phase pin.
 ///
 /// would-FAIL-on-regression: a verifier that ignores the OID would accept the
-/// wrong-OID sig. R5 preserves: even the real verifier rejects a mismatched OID.
+/// wrong-OID sig. The LIVE real verifier preserves this: even it rejects a
+/// mismatched OID.
 #[test]
 fn mismatched_oid_is_rejected() {
     let mut sig = external_fixture(Ecosystem::BouncyCastle);

@@ -158,10 +158,17 @@ jobs:
 
   crypto-suite-wasm-roundtrip:
     # F-full R6 R1 finding F-06 (Ben-ratified: add the gate). The
-    # PQ-hybrid crypto round-trip (tf3a) is one of the three first-class
-    # deployment shapes per CLAUDE.md baked-in #17 (thin compute / wasm32
-    # BrowserBackend); the encryption layer MUST work end-to-end through
-    # the wasm32 target. Before this job the `sandbox-wasm-conformance`
+    # PQ-hybrid crypto round-trip (tf3a) exercises the encryption layer on
+    # a wasm target. SCOPE (R10-council F-04 correction): this job runs on
+    # **wasm32-wasip1** (via wasmtime), which proves the crypto layer is
+    # wasm-CLEAN (no `std`-only `getrandom`/`Instant::now`/thread-local
+    # deps). It does NOT run on **wasm32-unknown-unknown** — the target
+    # BrowserBackend (the thin-compute deployment shape per CLAUDE.md
+    # baked-in #17) actually ships on. wasm32-wasip1 wasm-cleanliness is a
+    # strong necessary condition for BrowserBackend but is NOT the same
+    # target; a dedicated wasm32-unknown-unknown crypto round-trip
+    # drift-gate is a NAMED CI follow-up (V1-WIRE-FORMAT-INVENTORY.md CI
+    # follow-up row, R10 F-04). Before this job the `sandbox-wasm-conformance`
     # job above covered wasm32-wasip1 SANDBOX only (Phase-2b scope) and
     # did NOT exercise the encryption layer — this job closes that gap so
     # the V1-WIRE-FORMAT-INVENTORY.md item 4 wasm32 round-trip claim is

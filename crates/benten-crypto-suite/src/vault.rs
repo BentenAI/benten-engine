@@ -1,13 +1,30 @@
 //! Layer-A vault — the at-rest `K_principal` + user-DID-signing-key store
 //! (G-CORE-3 #1301; F-full Layer-A).
 //!
-//! # On-disk format (FROZEN; R0.5 §3.1)
+//! # On-disk format (R11 MC-6 frame extension — salt + Argon2id params in-header)
 //!
-//! `${BENTEN_DATA_DIR}/vault.cbor` — a DAG-CBOR-encoded
-//! [`EncryptedEnvelope`](crate::envelope::EncryptedEnvelope) at the vault
-//! band codepoint [`VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT`] (`0x6100`). The
-//! sealed payload is the canonical DAG-CBOR [`VaultPayload`]
-//! `{ k_principal:[u8;32], user_did_signing_key, user_did_creation_time:u64 }`.
+//! `${BENTEN_DATA_DIR}/vault.cbor` — a **hand-rolled magic-prefixed AEAD
+//! frame** (NOT a DAG-CBOR-encoded [`EncryptedEnvelope`](crate::envelope::EncryptedEnvelope))
+//! built by [`serialize_vault`]:
+//! `magic 0xae | format-version V2 | codepoint(BE u16) | salt(16 B) |
+//!  m_cost(u32 BE) | t_cost(u32 BE) | p_cost(u32 BE) | nonce_len(u8) | nonce | ct`
+//! at the vault band codepoint [`VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT`]
+//! (`0x6100`). The AEAD-sealed inner payload IS canonical DAG-CBOR — the
+//! [`VaultPayload`] `{ k_principal:[u8;32], user_did_signing_key,
+//! user_did_creation_time:u64 }` — but the outer on-disk frame is the fixed
+//! binary layout above, not a CBOR-envelope wrapper.
+//!
+//! **R11 MC-6 (frame extension; pre-freeze).** The frame now persists the
+//! 16-byte Argon2id salt + the `{m_cost, t_cost, p_cost}` params in the header
+//! (they are NON-secret — the standard PBKDF-header shape). This is the
+//! load-bearing self-containment property: [`open_vault`] takes the frame bytes
+//! + the password ALONE and re-derives the DAK from the header salt+params — no
+//! external salt/param source is needed to open a `vault.cbor` across a restart.
+//! (Before MC-6 the salt+params lived only in an in-RAM struct that was never
+//! persisted, so the frame bytes alone could not re-derive the DAK.) There is
+//! no surviving V1/V2 vault golden vector (F-VA-1), so redefining the V2 frame
+//! carries no migration burden. `format-version V2` is retained as the vault
+//! frame version.
 //!
 //! # XChaCha20-Poly1305 24-byte nonce (m-4)
 //!
@@ -24,7 +41,10 @@
 //!   info = "benten-dak-v1" )`. The Argon2id params + the HKDF
 //! domain-separation info-tag are part of the frozen derivation: a param /
 //! info-tag drift changes the DAK and breaks every existing vault. The
-//! info-tag is the codepoint slot for a future Argon2id-v2 param set.
+//! info-tag is NOT a version slot (D-94): a mismatch surfaces as `AeadFailed`,
+//! which F-VA-3 collapses into the same typed rejection as a wrong password, so
+//! rotating it would read as "wrong password". The honest version axes are the
+//! `format_version` byte and the vault-band codepoint (0x6102..0x61FF free).
 //!
 //! # Memory hygiene (F-VA-4; Compromise #36/#39)
 //!
@@ -43,7 +63,7 @@ use hkdf::Hkdf;
 use secrecy::{ExposeSecret, SecretBox};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::structural_kdf::StructuralKdfKey;
 
@@ -59,7 +79,8 @@ pub const SYMMETRIC_AEAD_12B_CODEPOINT: u16 = 0x6101;
 /// XChaCha20-Poly1305 nonce width (m-4) — the frozen vault nonce length.
 pub const VAULT_XNONCE_LEN: usize = 24;
 
-/// The frozen DAK HKDF info-tag (codepoint slot for a future Argon2id-v2
+/// The frozen DAK HKDF info-tag (domain separation only — NOT a version slot;
+/// see the module doc. Was described as a slot for a future Argon2id-v2
 /// param set per R0.5 §3.1). A registered cross-surface domain-separation tag
 /// mirrored in [`crate::domain_registry::DAK_HKDF_INFO_TAG`]; the intra-crate
 /// `vault_domain_tags_match_central_registry` test pins byte-equality.
@@ -74,7 +95,11 @@ pub const DAK_HKDF_INFO_TAG: &[u8] = b"benten-dak-v1";
 /// Canonical home is HERE.
 pub const VAULT_AAD_DOMAIN: &[u8] = b"benten-vault:";
 
-/// RFC-9106 / OWASP Argon2id params (R0.5 §2.2 tactical pick).
+/// OWASP Cheat Sheet Argon2id params (m=19456 KiB, t=2, p=1).
+/// NOT one of RFC 9106 §4's two RECOMMENDED sets (`t=1,p=4,m=2 GiB` and
+/// `t=3,p=4,m=64 MiB`) — this is 3.4x below the weaker of the two. RFC 9106
+/// makes no post-quantum claim either way; per the 2026-07-26 PQ research the
+/// binding constraint is password entropy, not the cost parameters. (R0.5 §2.2 tactical pick).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Argon2idParams {
     /// Memory cost (KiB).
@@ -91,6 +116,52 @@ pub const OWASP_DEFAULT: Argon2idParams = Argon2idParams {
     t_cost: 2,
     p_cost: 1,
 };
+
+// --- Fail-closed ceilings on the frame-supplied Argon2id cost params
+// (Compromise #28 / META #629 DoS-sweep). ---
+//
+// `parse_vault_frame` reads `m_cost`/`t_cost`/`p_cost` VERBATIM from an
+// attacker-controlled `vault.cbor` HEADER (the untrusted-host /
+// peers-hold-ciphertext / remote-permission threat surface), and those
+// params flow into `derive_dak` → `Params::new` → `Argon2id::hash_password_into`,
+// which allocates `m_cost` KiB and runs `t_cost` passes BEFORE the AEAD/password
+// gate can ever fail. Without a ceiling a single hostile blob dictates the
+// victim's KDF memory/CPU budget (memory-exhaustion / CPU-pinning DoS). These
+// caps sit COMFORTABLY above `OWASP_DEFAULT` (19456 / 2 / 1) so every valid
+// vault frame (which is always sealed under `OWASP_DEFAULT`) decodes byte-
+// identically — the guard rejects only already-invalid oversized headers.
+//
+// `VAULT_ARGON2_MAX_M_COST` = 65_536 KiB (64 MiB) — ~3.4× the OWASP default,
+// enough headroom for a legitimately-hardened future param set while still
+// bounding a hostile header to a fixed, small allocation.
+/// Fail-closed ceiling on the frame-supplied Argon2id memory cost (KiB).
+pub const VAULT_ARGON2_MAX_M_COST: u32 = 65_536;
+/// Fail-closed ceiling on the frame-supplied Argon2id time cost (passes).
+pub const VAULT_ARGON2_MAX_T_COST: u32 = 10;
+/// Fail-closed ceiling on the frame-supplied Argon2id parallelism.
+pub const VAULT_ARGON2_MAX_P_COST: u32 = 4;
+
+// --- Fail-closed FLOORS on the frame-supplied Argon2id cost params
+// (R6-R1-refix F-02: the META #629 sweep added the ceilings above but not the
+// floor). `parse_vault_frame` previously validated the UPPER bound ONLY, so a
+// sub-RFC-9106 header (`t_cost = 0`, `p_cost = 0`, or `m_cost < 8 * p_cost`)
+// PASSED the guard and reached `derive_dak` → `Params::new(...).expect(...)`,
+// which REJECTS those params → **panic** = a reachable crash-DoS from an
+// attacker-controlled `vault.cbor` header on the FROZEN forever-decode path.
+// These floors mirror the `argon2` crate's own RFC-9106 minimums so
+// `parse_vault_frame` fails closed with a typed `Argon2ParamsOutOfBounds`
+// BEFORE `derive_dak` runs (keeping `derive_dak`'s infallible signature — its
+// `.expect()` precondition now always holds). `OWASP_DEFAULT` (19456 / 2 / 1)
+// clears every floor, so valid frames still decode byte-identically.
+// (Private — no new frozen public surface; the behavior is pinned by
+// `f_va_*` regression tests, not by exporting the consts.)
+/// Fail-closed floor on the frame-supplied Argon2id memory cost (KiB); also
+/// enforces the `m_cost >= 8 * p_cost` RFC-9106 relation below.
+const VAULT_ARGON2_MIN_M_COST: u32 = 8;
+/// Fail-closed floor on the frame-supplied Argon2id time cost (passes).
+const VAULT_ARGON2_MIN_T_COST: u32 = 1;
+/// Fail-closed floor on the frame-supplied Argon2id parallelism.
+const VAULT_ARGON2_MIN_P_COST: u32 = 1;
 
 /// The Device-Authentication Key — a zeroize-on-drop 32-byte secret.
 ///
@@ -175,7 +246,16 @@ pub fn derive_dak(
 ///
 /// The canonical DAG-CBOR map-key order (length-first, then bytewise) for
 /// these three keys coincides with this declaration order (11 < 20 < 22).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// Secret-hygiene (D-74/75/76): `k_principal` (at-rest content-encryption root
+/// key) + `user_did_signing_key` (hybrid Ed25519⊕ML-DSA-65 signing key) are
+/// SECRET. `Debug` is a MANUAL impl that renders both as `<redacted>` (the
+/// former `#[derive(Debug)]` dumped the raw bytes and cascaded through
+/// [`DecodedVault`]'s derived `Debug`), and both are zeroized on drop.
+/// `Serialize`/`Deserialize` are the INTENTIONAL on-disk DAG-CBOR format and
+/// are UNCHANGED — redacted-Debug + zeroize are non-wire additions only (the
+/// frozen field order + `serde_bytes` byte-string encoding are untouched).
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VaultPayload {
     /// The principal's at-rest content-encryption root key.
     ///
@@ -216,6 +296,31 @@ impl VaultPayload {
     }
 }
 
+/// Debug-redacting: the SECRET `k_principal` + `user_did_signing_key` MUST NOT
+/// leak into logs / panics / tracing (this also protects the cascade through
+/// [`DecodedVault`]'s derived `Debug`, which holds a `VaultPayload`). Only the
+/// non-secret `user_did_creation_time` renders normally.
+impl core::fmt::Debug for VaultPayload {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("VaultPayload")
+            .field("k_principal", &"<redacted>")
+            .field("user_did_signing_key", &"<redacted>")
+            .field("user_did_creation_time", &self.user_did_creation_time)
+            .finish()
+    }
+}
+
+/// Zeroize-on-drop: wipe the SECRET `k_principal` + `user_did_signing_key` on
+/// drop so the recovered at-rest root key + user-DID signing key do not linger
+/// in freed heap / coredump. `user_did_creation_time` is non-secret. Field
+/// types + the frozen serialization are unchanged (drop-behavior only).
+impl Drop for VaultPayload {
+    fn drop(&mut self) {
+        self.k_principal.zeroize();
+        self.user_did_signing_key.zeroize();
+    }
+}
+
 /// A decoded vault envelope — the on-disk
 /// [`EncryptedEnvelope`](crate::envelope::EncryptedEnvelope) after AEAD-open.
 /// Carries the wire codepoint + the nonce bytes used so the format-freeze
@@ -224,26 +329,95 @@ impl VaultPayload {
 pub struct DecodedVault {
     /// The vault wire codepoint (`0x6100` XNonce).
     pub codepoint: u16,
+    /// The 16-byte Argon2id salt read FROM the frame header (R11 MC-6).
+    pub salt: [u8; 16],
+    /// The Argon2id params read FROM the frame header (R11 MC-6).
+    pub params: Argon2idParams,
     /// The XChaCha20-Poly1305 24-byte nonce.
     pub nonce: Vec<u8>,
     /// The decoded canonical payload.
     pub payload: VaultPayload,
 }
 
-/// Serialize a vault on-disk envelope for a fixed payload under a fixed DAK.
+/// The fixed vault frame header length up to (but excluding) the `nonce_len`
+/// byte: `magic(1) | V2(1) | codepoint(2) | salt(16) | m_cost(4) | t_cost(4) |
+/// p_cost(4)` = 32 bytes (R11 MC-6).
+const VAULT_HEADER_LEN: usize = 1 + 1 + 2 + 16 + 4 + 4 + 4;
+
+/// Serialize a vault on-disk envelope for a fixed payload under a fixed DAK,
+/// persisting the Argon2id `salt` + `params` in the frame header (R11 MC-6).
 ///
 /// The envelope is XChaCha20-Poly1305-sealed (24-byte nonce) at the vault
 /// codepoint `0x6100`, over the canonical DAG-CBOR payload. Deterministic
 /// only in the sense the format is fixed; the nonce is random per seal.
 ///
+/// The `salt` + `params` MUST be the SAME salt+params the `dak` was derived
+/// under ([`derive_dak`]) — they are written into the frame header so a later
+/// [`open_vault`] can re-derive the DAK from the frame bytes + the password
+/// ALONE (the MC-6 self-containment property). They are NON-secret.
+///
+/// # Caller contract (salt origination)
+///
+/// `salt` MUST be freshly generated from an OS CSPRNG (`OsRng` / `getrandom`),
+/// unique per vault, at vault-*creation* time. This function threads the
+/// caller-supplied salt into the self-contained header (R11 MC-6); it does NOT
+/// originate it. The production vault-creation wiring that seeds the salt from
+/// OS entropy is deferred with the device-auth surface (see
+/// `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-69); until then the only
+/// callers are tests passing fixed-constant salts.
+///
 /// # Errors
 ///
 /// Returns [`VaultError`] on an internal AEAD error.
-pub fn serialize_vault(payload: &VaultPayload, dak: &[u8; 32]) -> Result<Vec<u8>, VaultError> {
+pub fn serialize_vault(
+    payload: &VaultPayload,
+    salt: &[u8; 16],
+    params: Argon2idParams,
+    dak: &[u8; 32],
+) -> Result<Vec<u8>, VaultError> {
     use chacha20poly1305::aead::{Aead, AeadCore, KeyInit, OsRng};
     use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 
-    let pt = payload.to_canonical_cbor();
+    // SEAL/OPEN SYMMETRY (D-95). `parse_vault_frame` enforces both floors and
+    // ceilings; without the same check here the two ends disagree, in two
+    // directions that are both silent:
+    //
+    //   * seal ABOVE the ceiling — e.g. RFC 9106 §4's own RECOMMENDED
+    //     `m = 2 GiB`, which `derive_dak`/`Params::new` accept happily —
+    //     produces a well-formed, correctly-sealed vault that `open_vault`
+    //     then rejects with `Argon2ParamsOutOfBounds`. That is SILENT KEY LOSS
+    //     at provisioning time: the user has a vault nothing can ever open.
+    //   * seal AT the floor (`m = 8`) produces a perfectly openable vault at
+    //     roughly 1,650x less work than `OWASP_DEFAULT`.
+    //
+    // Mirroring the check converts both into a typed error at the moment of
+    // the mistake. The bounds themselves are unchanged, so `m = 8` stays legal
+    // on BOTH ends and the constant-time `f_va_3` fixture is unaffected — the
+    // floor is a decoder/panic-guard bound (it mirrors `Params::new`'s own RFC
+    // minimums), NOT a security floor. The security floor belongs to the
+    // provisioning path, which must originate parameters at or above
+    // `OWASP_DEFAULT` (see `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-69).
+    let below_floor = params.m_cost < VAULT_ARGON2_MIN_M_COST
+        || params.t_cost < VAULT_ARGON2_MIN_T_COST
+        || params.p_cost < VAULT_ARGON2_MIN_P_COST
+        || params.m_cost < params.p_cost.saturating_mul(8);
+    if params.m_cost > VAULT_ARGON2_MAX_M_COST
+        || params.t_cost > VAULT_ARGON2_MAX_T_COST
+        || params.p_cost > VAULT_ARGON2_MAX_P_COST
+        || below_floor
+    {
+        return Err(VaultError::Argon2ParamsOutOfBounds {
+            m_cost: params.m_cost,
+            t_cost: params.t_cost,
+            p_cost: params.p_cost,
+        });
+    }
+
+    // R6-reround: the transient plaintext buffer holds the full VaultPayload
+    // canonical bytes (incl. the SECRET `k_principal` + `user_did_signing_key`)
+    // before AEAD-seal. Wrap in `Zeroizing` so the copy is wiped on drop /
+    // unwind, not left lingering on the freed heap (Compromise #66 residual).
+    let pt = Zeroizing::new(payload.to_canonical_cbor());
     let key = Key::from_slice(dak);
     let cipher = XChaCha20Poly1305::new(key);
     let nonce_bytes = XChaCha20Poly1305::generate_nonce(&mut OsRng);
@@ -253,21 +427,143 @@ pub fn serialize_vault(payload: &VaultPayload, dak: &[u8; 32]) -> Result<Vec<u8>
         .encrypt(
             nonce,
             chacha20poly1305::aead::Payload {
-                msg: &pt,
+                msg: pt.as_slice(),
                 aad: &aad,
             },
         )
         .map_err(|_| VaultError::AeadFailed)?;
 
-    // On-disk layout: magic 0xae | V2 | codepoint BE | nonce_len | nonce | ct.
-    let mut out = Vec::with_capacity(5 + nonce_bytes.len() + ct.len());
+    // On-disk layout (R11 MC-6): magic 0xae | V2 | codepoint BE | salt(16) |
+    // m_cost BE | t_cost BE | p_cost BE | nonce_len | nonce | ct.
+    //
+    // The header salt+params are intentionally NOT covered by the AEAD AAD
+    // (`vault_aad()` binds only domain + codepoint): they are self-authenticating
+    // THROUGH the key derivation — tampering the in-header salt/params yields a
+    // different DAK, so the AEAD tag then fails (fail-closed `AeadFailed`), never
+    // a silently-weakened key. This is the standard, safe PBKDF-header posture
+    // (age / gpg / LUKS): an attacker can DoS their own tampered copy but cannot
+    // force a weak-param key onto a victim.
+    let mut out = Vec::with_capacity(VAULT_HEADER_LEN + 1 + nonce_bytes.len() + ct.len());
     out.push(crate::envelope::ENVELOPE_MAGIC);
     out.push(crate::envelope::ENVELOPE_FORMAT_VERSION_V2);
     out.extend_from_slice(&VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT.to_be_bytes());
+    out.extend_from_slice(salt);
+    out.extend_from_slice(&params.m_cost.to_be_bytes());
+    out.extend_from_slice(&params.t_cost.to_be_bytes());
+    out.extend_from_slice(&params.p_cost.to_be_bytes());
     out.push(u8::try_from(nonce_bytes.len()).unwrap_or(u8::MAX));
     out.extend_from_slice(&nonce_bytes);
     out.extend_from_slice(&ct);
     Ok(out)
+}
+
+/// The parsed vault frame header + the borrowed nonce/ct slices (R11 MC-6).
+struct VaultFrame<'a> {
+    salt: [u8; 16],
+    params: Argon2idParams,
+    nonce: &'a [u8],
+    ct: &'a [u8],
+}
+
+/// Parse the vault frame header (R11 MC-6): validate the magic / version /
+/// codepoint / nonce-width and return the [`VaultFrame`]. The salt+params are
+/// read FROM the frame — the MC-6 self-containment property.
+///
+/// # Errors
+///
+/// Returns [`VaultError`] on a malformed / wrong-width / unknown-codepoint
+/// frame.
+fn parse_vault_frame(bytes: &[u8]) -> Result<VaultFrame<'_>, VaultError> {
+    // Need the fixed header + the 1-byte nonce_len.
+    if bytes.len() < VAULT_HEADER_LEN + 1 {
+        return Err(VaultError::MalformedCbor);
+    }
+    if bytes[0] != crate::envelope::ENVELOPE_MAGIC {
+        return Err(VaultError::MalformedCbor);
+    }
+    if bytes[1] != crate::envelope::ENVELOPE_FORMAT_VERSION_V2 {
+        return Err(VaultError::MalformedCbor);
+    }
+    let codepoint = u16::from_be_bytes([bytes[2], bytes[3]]);
+    if codepoint != VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT {
+        return Err(VaultError::UnknownCodepoint);
+    }
+    let mut salt = [0u8; 16];
+    salt.copy_from_slice(&bytes[4..20]);
+    let m_cost = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
+    let t_cost = u32::from_be_bytes([bytes[24], bytes[25], bytes[26], bytes[27]]);
+    let p_cost = u32::from_be_bytes([bytes[28], bytes[29], bytes[30], bytes[31]]);
+    // Fail-closed: reject a header whose Argon2id cost params are outside the
+    // safe band BEFORE they can drive `derive_dak` (Compromise #28 / META
+    // #629). This single choke point covers both the self-contained
+    // `open_vault` and the DAK-supplied `decode_vault` entry points, and fires
+    // ahead of the AEAD/password gate so a hostile blob can neither dictate the
+    // victim's KDF cost (CEILINGS) nor drive an out-of-RFC-9106 param set into
+    // `derive_dak`'s `Params::new(...).expect(...)` — a reachable PANIC-DoS
+    // (FLOORS, R6-R1-refix F-02). All valid frames use `OWASP_DEFAULT`
+    // (19456 / 2 / 1), which clears every ceiling AND every floor.
+    let below_floor = m_cost < VAULT_ARGON2_MIN_M_COST
+        || t_cost < VAULT_ARGON2_MIN_T_COST
+        || p_cost < VAULT_ARGON2_MIN_P_COST
+        // RFC-9106 §3.1 / `argon2::Params::new`: memory cost must be at least
+        // 8× the parallelism (else `Params::new` errors → `derive_dak` panics).
+        || m_cost < p_cost.saturating_mul(8);
+    if m_cost > VAULT_ARGON2_MAX_M_COST
+        || t_cost > VAULT_ARGON2_MAX_T_COST
+        || p_cost > VAULT_ARGON2_MAX_P_COST
+        || below_floor
+    {
+        return Err(VaultError::Argon2ParamsOutOfBounds {
+            m_cost,
+            t_cost,
+            p_cost,
+        });
+    }
+    let params = Argon2idParams {
+        m_cost,
+        t_cost,
+        p_cost,
+    };
+    let nonce_len = bytes[VAULT_HEADER_LEN] as usize;
+    // U2 strict-decode: the XNonce codepoint discriminates the nonce width.
+    if nonce_len != VAULT_XNONCE_LEN {
+        return Err(VaultError::NonceWidthMismatch);
+    }
+    let nonce_start = VAULT_HEADER_LEN + 1;
+    if bytes.len() < nonce_start + nonce_len {
+        return Err(VaultError::MalformedCbor);
+    }
+    let nonce = &bytes[nonce_start..nonce_start + nonce_len];
+    let ct = &bytes[nonce_start + nonce_len..];
+    Ok(VaultFrame {
+        salt,
+        params,
+        nonce,
+        ct,
+    })
+}
+
+/// Open a vault from the frame bytes + password ALONE (R11 MC-6).
+///
+/// This is the self-contained open path: the Argon2id salt + params are read
+/// FROM the frame header, the DAK is re-derived via [`derive_dak`] under
+/// `info_tag`, and the AEAD is opened. No external salt/param source is needed
+/// — `vault.cbor` bytes + password suffice to decrypt across a restart.
+///
+/// # Errors
+///
+/// Returns [`VaultError`] on a malformed / wrong-width / unknown-codepoint /
+/// wrong-password (AEAD-failure) input. All failure causes collapse to a typed
+/// error with no salt/params/tag side-channel beyond the frame-shape checks.
+pub fn open_vault(
+    bytes: &[u8],
+    password: &[u8],
+    info_tag: &[u8],
+) -> Result<DecodedVault, VaultError> {
+    let frame = parse_vault_frame(bytes)?;
+    // Re-derive the DAK from the FRAME salt+params (self-contained; MC-6).
+    let dak = derive_dak(password, &frame.salt, frame.params, info_tag);
+    decode_vault(bytes, dak.expose())
 }
 
 /// Decode + AEAD-open a vault envelope under a DAK. Enforces the XNonce
@@ -281,44 +577,35 @@ pub fn decode_vault(bytes: &[u8], dak: &[u8; 32]) -> Result<DecodedVault, VaultE
     use chacha20poly1305::aead::{Aead, KeyInit};
     use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 
-    if bytes.len() < 5 {
-        return Err(VaultError::MalformedCbor);
-    }
-    if bytes[0] != crate::envelope::ENVELOPE_MAGIC {
-        return Err(VaultError::MalformedCbor);
-    }
-    if bytes[1] != crate::envelope::ENVELOPE_FORMAT_VERSION_V2 {
-        return Err(VaultError::MalformedCbor);
-    }
-    let codepoint = u16::from_be_bytes([bytes[2], bytes[3]]);
-    if codepoint != VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT {
-        return Err(VaultError::UnknownCodepoint);
-    }
-    let nonce_len = bytes[4] as usize;
-    // U2 strict-decode: the XNonce codepoint discriminates the nonce width.
-    if nonce_len != VAULT_XNONCE_LEN {
-        return Err(VaultError::NonceWidthMismatch);
-    }
-    if bytes.len() < 5 + nonce_len {
-        return Err(VaultError::MalformedCbor);
-    }
-    let nonce_bytes = &bytes[5..5 + nonce_len];
-    let ct = &bytes[5 + nonce_len..];
+    // Parse + validate the frame header (R11 MC-6: reads salt+params too).
+    let frame = parse_vault_frame(bytes)?;
 
     let key = Key::from_slice(dak);
     let cipher = XChaCha20Poly1305::new(key);
-    let nonce = XNonce::from_slice(nonce_bytes);
+    let nonce = XNonce::from_slice(frame.nonce);
     let aad = vault_aad();
-    let pt = cipher
-        .decrypt(
-            nonce,
-            chacha20poly1305::aead::Payload { msg: ct, aad: &aad },
-        )
-        .map_err(|_| VaultError::AeadFailed)?;
+    // R6-reround: the decrypted plaintext buffer holds the full VaultPayload
+    // canonical bytes (incl. the SECRET `k_principal` + `user_did_signing_key`)
+    // BEFORE it is parsed into the zeroize-on-drop `VaultPayload`. Wrap the
+    // transient buffer in `Zeroizing` so it is wiped on drop / unwind rather
+    // than lingering on the freed heap (Compromise #66 residual).
+    let pt = Zeroizing::new(
+        cipher
+            .decrypt(
+                nonce,
+                chacha20poly1305::aead::Payload {
+                    msg: frame.ct,
+                    aad: &aad,
+                },
+            )
+            .map_err(|_| VaultError::AeadFailed)?,
+    );
     let payload = VaultPayload::from_canonical_cbor(&pt)?;
     Ok(DecodedVault {
-        codepoint,
-        nonce: nonce_bytes.to_vec(),
+        codepoint: VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT,
+        salt: frame.salt,
+        params: frame.params,
+        nonce: frame.nonce.to_vec(),
         payload,
     })
 }
@@ -424,18 +711,41 @@ impl core::fmt::Debug for UnlockedKeyMaterial {
     }
 }
 
+impl Drop for UnlockedKeyMaterial {
+    /// R11 MC-13: zeroize `user_did_signing_key` on drop for symmetry with
+    /// `K_principal` (which is wiped by its `SecretBox`). The signing key is a
+    /// long-lived at-rest secret (the user-DID hybrid signing key hydrated from
+    /// the vault); wiping it on drop closes the same coredump/freed-heap window
+    /// `K_principal` already closes (Compromise #36/#39). `k_principal`'s own
+    /// `SecretBox` handles its zeroize independently.
+    fn drop(&mut self) {
+        self.user_did_signing_key.zeroize();
+    }
+}
+
 /// A minimal lock-state engine modelling the production vault gate (F-VA-5).
 /// Pre-unlock crypto ops are typed-rejected with [`VaultError::EngineLocked`].
+///
+/// **R6-final F-02: test/lock-state harness — gated off the frozen public
+/// surface.** `encrypt_node` is a repeating-key XOR *stand-in* (it demonstrates
+/// the lock-state contract, NOT a real cipher — the production path routes the
+/// structural-KDF + AEAD). It has zero production callers and is consumed only
+/// by the `f_va_5` lock-state pin, so it is gated behind
+/// `#[cfg(any(test, feature = "testing"))]` rather than frozen into the v1
+/// public API where a naive consumer could mistake the XOR output for a seal.
+#[cfg(any(test, feature = "testing"))]
 pub struct VaultEngine {
     unlocked: Option<UnlockedKeyMaterial>,
 }
 
+#[cfg(any(test, feature = "testing"))]
 impl Default for VaultEngine {
     fn default() -> Self {
         Self::new_locked()
     }
 }
 
+#[cfg(any(test, feature = "testing"))]
 impl VaultEngine {
     /// A fresh locked engine (no hydrated handle).
     #[must_use]
@@ -451,9 +761,14 @@ impl VaultEngine {
         ));
     }
 
-    /// A lock-gated production crypto op. Pre-unlock returns
-    /// [`VaultError::EngineLocked`] (fail-CLOSED; never a silent plaintext
-    /// pass-through). Post-unlock seals the plaintext under K_principal.
+    /// A lock-gated op that exercises the lock-state contract. Pre-unlock
+    /// returns [`VaultError::EngineLocked`] (fail-CLOSED; never a silent
+    /// plaintext pass-through). Post-unlock it applies a **repeating-key XOR
+    /// stand-in** over `K_principal` — NOT a real seal (no nonce, no MAC,
+    /// keystream reuse). This method exists ONLY to prove the lock-state gate;
+    /// it is `#[cfg(any(test, feature = "testing"))]` and MUST NOT be used to
+    /// produce real ciphertext. The production seal routes the structural-KDF +
+    /// AEAD via `cipher_suite` — never this fn.
     ///
     /// # Errors
     ///
@@ -461,11 +776,11 @@ impl VaultEngine {
     pub fn encrypt_node(&self, plaintext: &[u8]) -> Result<Vec<u8>, VaultError> {
         match &self.unlocked {
             Some(km) => {
-                // A real keyed transform (XOR keystream stand-in over
-                // K_principal; the observable consequence is ciphertext ≠
-                // plaintext + a non-empty keyed output). The production path
-                // routes the structural-KDF + AEAD; this gate's contract is
-                // the lock-state, not the cipher.
+                // Repeating-key XOR STAND-IN over K_principal (NOT a cipher):
+                // the observable consequence is ciphertext ≠ plaintext + a
+                // non-empty keyed output. The production path routes the
+                // structural-KDF + AEAD; this gate's contract is the
+                // lock-state, not the cipher.
                 let k = km.expose_k_principal();
                 let out: Vec<u8> = plaintext
                     .iter()
@@ -494,6 +809,15 @@ pub enum VaultError {
     EngineLocked,
 
     /// The DAK derivation failed (wrong password).
+    ///
+    /// **Intentionally never constructed (F-VA-3).** The wrong-password path
+    /// deliberately surfaces the GENERIC decrypt-failure error
+    /// (`UnlockError::VaultDecryptFailed`), NOT this distinct variant, so that
+    /// "salt off" / "params off" / "tag off" / "wrong password" all land on ONE
+    /// typed error with no error-variant side-channel (the F-VA-3
+    /// single-typed-rejection / constant-time property). Constructing this
+    /// variant would re-introduce the wrong-password oracle F-VA-3 forbids; it is
+    /// retained as a named-but-unused code for API documentation only.
     #[error("wrong password — DAK does not open the vault")]
     WrongPassword,
 
@@ -511,6 +835,27 @@ pub enum VaultError {
     #[error("malformed vault CBOR")]
     MalformedCbor,
 
+    /// The frame-supplied Argon2id cost params exceed the fail-closed
+    /// ceilings ([`VAULT_ARGON2_MAX_M_COST`] / [`VAULT_ARGON2_MAX_T_COST`] /
+    /// [`VAULT_ARGON2_MAX_P_COST`]). Rejected BEFORE `derive_dak` runs so an
+    /// attacker-supplied `vault.cbor` header cannot dictate the victim's KDF
+    /// memory/CPU budget (Compromise #28 / META #629 DoS-sweep).
+    #[error(
+        "vault Argon2id params out of bounds (m_cost={m_cost} t_cost={t_cost} p_cost={p_cost}; \
+         max m={} t={} p={})",
+        VAULT_ARGON2_MAX_M_COST,
+        VAULT_ARGON2_MAX_T_COST,
+        VAULT_ARGON2_MAX_P_COST
+    )]
+    Argon2ParamsOutOfBounds {
+        /// The offending memory cost (KiB).
+        m_cost: u32,
+        /// The offending time cost (passes).
+        t_cost: u32,
+        /// The offending parallelism.
+        p_cost: u32,
+    },
+
     /// The AEAD seal/open failed.
     #[error("vault AEAD seal/open failed")]
     AeadFailed,
@@ -526,11 +871,13 @@ mod tests {
         // so CodeQL's `rust/hard-coded-cryptographic-value` query does not
         // flag this inline `#[cfg(test)]` fixture — `paths-ignore` in
         // `.github/codeql/codeql-config.yml` excludes `tests/` files but
-        // cannot see inline test modules inside a `src/` file, and the
-        // referenced production items (`derive_dak`, `VaultEngine`, …) stay
-        // `pub(crate)` to preserve the G-CORE-9 frozen surface (moving the
-        // module to `tests/` would require widening visibility). The values
-        // only need to be deterministic across the two `derive_dak` calls;
+        // cannot see inline test modules inside a `src/` file. The referenced
+        // production items (`derive_dak`, `VaultEngine`, …) are `pub` — part of
+        // the G-CORE-9 frozen public surface (see
+        // `docs/public-api/benten-crypto-suite.txt`), which is exactly why this
+        // determinism check lives in an inline `#[cfg(test)]` module (it exercises
+        // the frozen `pub` API in place; no visibility widening is involved). The
+        // values only need to be deterministic across the two `derive_dak` calls;
         // every production DAK input is operator-supplied / CSPRNG-salted.
         let pw: Vec<u8> = (0u8..29)
             .map(|i| i.wrapping_mul(7).wrapping_add(3))
@@ -562,12 +909,328 @@ mod tests {
             user_did_signing_key: vec![0x22u8; 64],
             user_did_creation_time: 0x0000_0000_6543_2100,
         };
+        let salt = [0x77u8; 16];
         let dak = [0x33u8; 32];
-        let bytes = serialize_vault(&payload, &dak).unwrap();
+        let bytes = serialize_vault(&payload, &salt, OWASP_DEFAULT, &dak).unwrap();
         let decoded = decode_vault(&bytes, &dak).unwrap();
         assert_eq!(decoded.nonce.len(), VAULT_XNONCE_LEN);
         assert_eq!(decoded.codepoint, VAULT_SYMMETRIC_AEAD_XNONCE_CODEPOINT);
+        assert_eq!(decoded.salt, salt, "salt round-trips from the frame header");
+        assert_eq!(
+            decoded.params, OWASP_DEFAULT,
+            "params round-trip from the frame header"
+        );
         assert_eq!(decoded.payload, payload);
+    }
+
+    /// Compromise #28 / META #629 DoS-sweep — a `vault.cbor` HEADER whose
+    /// attacker-controlled Argon2id `m_cost` exceeds [`VAULT_ARGON2_MAX_M_COST`]
+    /// is rejected FAST with a typed [`VaultError::Argon2ParamsOutOfBounds`],
+    /// BEFORE `derive_dak` allocates `m_cost` KiB. would-FAIL-on-revert: without
+    /// the `parse_vault_frame` ceiling, `open_vault` on this frame would drive a
+    /// ~4 GiB Argon2id allocation (`m_cost = 0x0040_0000` KiB) — an unbounded
+    /// memory-exhaustion DoS dictated by the hostile blob. The test exercises
+    /// `decode_vault` (which calls `parse_vault_frame` first) so it rejects at
+    /// the header-parse gate WITHOUT ever running the KDF or AEAD.
+    #[test]
+    fn oversized_argon2_params_reject_fast_before_kdf() {
+        // Build a valid frame under OWASP_DEFAULT, then corrupt only the
+        // m_cost field in the header to an oversized value.
+        let payload = VaultPayload {
+            k_principal: [0x11u8; 32],
+            user_did_signing_key: vec![0x22u8; 64],
+            user_did_creation_time: 0,
+        };
+        let salt = [0x77u8; 16];
+        let dak = [0x33u8; 32];
+        let mut bytes = serialize_vault(&payload, &salt, OWASP_DEFAULT, &dak).unwrap();
+        // Header layout: magic(1) version(1) codepoint(2) salt(16)
+        // m_cost@[20..24] t_cost@[24..28] p_cost@[28..32] (big-endian).
+        let hostile_m_cost: u32 = 0x0040_0000; // 4 GiB in KiB — well over the 64 MiB ceiling
+        bytes[20..24].copy_from_slice(&hostile_m_cost.to_be_bytes());
+        let err = decode_vault(&bytes, &dak).unwrap_err();
+        match err {
+            VaultError::Argon2ParamsOutOfBounds { m_cost, .. } => {
+                assert_eq!(m_cost, hostile_m_cost, "reports the offending m_cost");
+            }
+            other => panic!("expected Argon2ParamsOutOfBounds, got {other:?}"),
+        }
+        // And the self-contained open path (which re-derives the DAK) rejects
+        // at the SAME gate before ever calling derive_dak.
+        let err2 = open_vault(&bytes, b"pw", DAK_HKDF_INFO_TAG).unwrap_err();
+        assert!(matches!(err2, VaultError::Argon2ParamsOutOfBounds { .. }));
+    }
+
+    /// R6-R1-refix F-02 — the FLOOR half of the same DoS choke-point. A
+    /// `vault.cbor` HEADER whose attacker-controlled Argon2id params fall
+    /// BELOW the RFC-9106 minimums (`t_cost = 0`, `p_cost = 0`, or
+    /// `m_cost < 8 * p_cost`) is rejected FAST with a typed
+    /// [`VaultError::Argon2ParamsOutOfBounds`] at the header-parse gate.
+    /// would-FAIL-on-revert: without the floor, `parse_vault_frame` waves such
+    /// a header through (it exceeds no ceiling) into `derive_dak` →
+    /// `Params::new(...).expect(...)`, which REJECTS the sub-minimum params and
+    /// **panics** — a reachable crash-DoS on the frozen forever-decode path.
+    /// Reverting the floor turns each sub-case below into a panic inside
+    /// `decode_vault` (a test failure), proving the pin is non-vacuous.
+    #[test]
+    fn sub_minimum_argon2_params_reject_fast_not_panic() {
+        let payload = VaultPayload {
+            k_principal: [0x11u8; 32],
+            user_did_signing_key: vec![0x22u8; 64],
+            user_did_creation_time: 0,
+        };
+        let salt = [0x77u8; 16];
+        let dak = [0x33u8; 32];
+        let base = serialize_vault(&payload, &salt, OWASP_DEFAULT, &dak).unwrap();
+        // Header (big-endian): m_cost@[20..24] t_cost@[24..28] p_cost@[28..32].
+
+        // Sub-case A: t_cost = 0 (below the MIN_T_COST floor).
+        let mut a = base.clone();
+        a[24..28].copy_from_slice(&0u32.to_be_bytes());
+        assert!(
+            matches!(
+                decode_vault(&a, &dak),
+                Err(VaultError::Argon2ParamsOutOfBounds { t_cost: 0, .. })
+            ),
+            "t_cost=0 must reject at the parse gate, not panic in derive_dak"
+        );
+
+        // Sub-case B: p_cost = 0 (below the MIN_P_COST floor).
+        let mut b = base.clone();
+        b[28..32].copy_from_slice(&0u32.to_be_bytes());
+        assert!(
+            matches!(
+                decode_vault(&b, &dak),
+                Err(VaultError::Argon2ParamsOutOfBounds { p_cost: 0, .. })
+            ),
+            "p_cost=0 must reject at the parse gate"
+        );
+
+        // Sub-case C: m_cost < 8 * p_cost (RFC-9106 relation): m=8, p=4 → 8 < 32.
+        let mut c = base.clone();
+        c[20..24].copy_from_slice(&8u32.to_be_bytes());
+        c[28..32].copy_from_slice(&4u32.to_be_bytes());
+        assert!(
+            matches!(
+                decode_vault(&c, &dak),
+                Err(VaultError::Argon2ParamsOutOfBounds { .. })
+            ),
+            "m_cost < 8*p_cost must reject at the parse gate"
+        );
+
+        // The self-contained open path rejects at the SAME gate before derive_dak.
+        let mut o = base;
+        o[24..28].copy_from_slice(&0u32.to_be_bytes());
+        assert!(matches!(
+            open_vault(&o, b"pw", DAK_HKDF_INFO_TAG),
+            Err(VaultError::Argon2ParamsOutOfBounds { .. })
+        ));
+    }
+
+    /// FS-11 / F-072 — the SEAL-side half of the D-95 seal/open symmetry guard.
+    ///
+    /// The two negative tests above (and every other vault negative in the
+    /// corpus) seal with IN-BOUNDS `OWASP_DEFAULT` params and then corrupt
+    /// header bytes, so they route through `parse_vault_frame` and NEVER reach
+    /// the seal-side check. That made `serialize_vault`'s `below_floor` binding
+    /// and its `if` (this file, the block immediately before the `Zeroizing`
+    /// plaintext buffer) DELETABLE with the whole crate green. This test drives
+    /// the SEAL path with out-of-bounds params directly.
+    ///
+    /// MUTATION THAT MUST MAKE THIS FAIL: delete the `let below_floor = ...`
+    /// binding and the `if params.m_cost > VAULT_ARGON2_MAX_M_COST || ... {
+    /// return Err(...) }` block from `serialize_vault`. `serialize_vault` does
+    /// not call `derive_dak` (the DAK is supplied by the caller), so with the
+    /// guard gone it seals happily and returns `Ok(bytes)` for every sub-case
+    /// below — each `unwrap_err()` then panics.
+    ///
+    /// A narrower one-line form of the same mutation: replace `|| below_floor`
+    /// in that `if` with `|| false`, which turns the four floor sub-cases (B, C,
+    /// D, E) green while leaving the ceilings intact.
+    ///
+    /// Why this matters beyond tidiness — both directions are silent:
+    ///   * ABOVE the ceiling produces a well-formed vault that `open_vault`
+    ///     then permanently rejects: SILENT KEY LOSS at provisioning time.
+    ///   * BELOW the floor produces a perfectly openable vault at a fraction of
+    ///     the intended work factor.
+    #[test]
+    // Six table cases + the isolated RFC-9106 relation case. Splitting them
+    // into separate `#[test]` fns would lose the shared positive control that
+    // keeps the guard from passing for the wrong reason.
+    #[allow(clippy::too_many_lines)]
+    fn out_of_bounds_argon2_params_reject_at_the_seal_path() {
+        let payload = VaultPayload {
+            k_principal: [0x11u8; 32],
+            user_did_signing_key: vec![0x22u8; 64],
+            user_did_creation_time: 0,
+        };
+        let salt = [0x77u8; 16];
+        let dak = [0x33u8; 32];
+
+        // Positive control: the in-bounds default MUST still seal. Without this
+        // the test could pass for the wrong reason (e.g. a guard that rejects
+        // everything).
+        assert!(
+            serialize_vault(&payload, &salt, OWASP_DEFAULT, &dak).is_ok(),
+            "positive control: OWASP_DEFAULT MUST seal"
+        );
+
+        // Each case names the ONE bound it violates; every other field is held
+        // in-bounds so the sub-case isolates that arm of the guard.
+        let cases: [(&str, Argon2idParams); 6] = [
+            // --- CEILINGS ---
+            (
+                "m_cost above VAULT_ARGON2_MAX_M_COST",
+                Argon2idParams {
+                    m_cost: VAULT_ARGON2_MAX_M_COST + 1,
+                    t_cost: 2,
+                    p_cost: 1,
+                },
+            ),
+            (
+                "t_cost above VAULT_ARGON2_MAX_T_COST",
+                Argon2idParams {
+                    m_cost: OWASP_DEFAULT.m_cost,
+                    t_cost: VAULT_ARGON2_MAX_T_COST + 1,
+                    p_cost: 1,
+                },
+            ),
+            (
+                "p_cost above VAULT_ARGON2_MAX_P_COST",
+                Argon2idParams {
+                    m_cost: OWASP_DEFAULT.m_cost,
+                    t_cost: 2,
+                    p_cost: VAULT_ARGON2_MAX_P_COST + 1,
+                },
+            ),
+            // --- FLOORS ---
+            (
+                // NOTE: with p_cost >= 1 the m_cost floor cannot be isolated —
+                // any m_cost < 8 also violates the `m_cost < p_cost * 8`
+                // relation, and driving p_cost to 0 to separate them trips the
+                // p_cost floor instead. This case therefore fires the m-floor
+                // AND the relation together, deliberately.
+                "m_cost below VAULT_ARGON2_MIN_M_COST",
+                Argon2idParams {
+                    m_cost: VAULT_ARGON2_MIN_M_COST - 1,
+                    t_cost: 2,
+                    p_cost: 1,
+                },
+            ),
+            (
+                "t_cost below VAULT_ARGON2_MIN_T_COST",
+                Argon2idParams {
+                    m_cost: OWASP_DEFAULT.m_cost,
+                    t_cost: VAULT_ARGON2_MIN_T_COST - 1,
+                    p_cost: 1,
+                },
+            ),
+            (
+                "p_cost below VAULT_ARGON2_MIN_P_COST",
+                Argon2idParams {
+                    m_cost: OWASP_DEFAULT.m_cost,
+                    t_cost: 2,
+                    p_cost: VAULT_ARGON2_MIN_P_COST - 1,
+                },
+            ),
+        ];
+
+        for (label, params) in cases {
+            let outcome = serialize_vault(&payload, &salt, params, &dak);
+            match outcome {
+                Err(VaultError::Argon2ParamsOutOfBounds {
+                    m_cost,
+                    t_cost,
+                    p_cost,
+                }) => {
+                    // The typed error reports the offending params verbatim, so
+                    // a caller can surface which knob was wrong.
+                    assert_eq!(
+                        (m_cost, t_cost, p_cost),
+                        (params.m_cost, params.t_cost, params.p_cost),
+                        "{label}: the typed error MUST report the offending params verbatim"
+                    );
+                }
+                Err(other) => panic!(
+                    "{label}: seal MUST reject with Argon2ParamsOutOfBounds; got Err({other:?})"
+                ),
+                Ok(_) => panic!(
+                    "{label}: serialize_vault SEALED out-of-bounds params. The seal-side \
+                     bounds guard in serialize_vault has been removed or neutered — \
+                     parse_vault_frame's mirror check does NOT cover the seal path \
+                     (FS-11 / F-072)."
+                ),
+            }
+        }
+
+        // The RELATION arm, isolated: m_cost >= MIN_M_COST, t_cost and p_cost
+        // both in-bounds, yet m_cost < p_cost * 8. This is the only sub-case
+        // that exercises the `m_cost < p_cost.saturating_mul(8)` term on its
+        // own, and it is the arm a naive "check each field against its own
+        // min/max" rewrite would silently drop.
+        let relation_violating = Argon2idParams {
+            m_cost: 31, // >= MIN_M_COST (8), but < p_cost * 8 == 32
+            t_cost: 2,
+            p_cost: 4, // == VAULT_ARGON2_MAX_P_COST, so no ceiling fires
+        };
+        assert!(
+            relation_violating.m_cost >= VAULT_ARGON2_MIN_M_COST
+                && relation_violating.t_cost >= VAULT_ARGON2_MIN_T_COST
+                && relation_violating.p_cost >= VAULT_ARGON2_MIN_P_COST
+                && relation_violating.m_cost <= VAULT_ARGON2_MAX_M_COST
+                && relation_violating.t_cost <= VAULT_ARGON2_MAX_T_COST
+                && relation_violating.p_cost <= VAULT_ARGON2_MAX_P_COST,
+            "fixture precondition: every per-field bound is satisfied, so ONLY the \
+             m_cost < p_cost*8 relation can reject this"
+        );
+        assert!(
+            matches!(
+                serialize_vault(&payload, &salt, relation_violating, &dak),
+                Err(VaultError::Argon2ParamsOutOfBounds { .. })
+            ),
+            "seal MUST reject m_cost < p_cost*8 (RFC 9106 relation) even though every \
+             per-field bound is satisfied (FS-11 / F-072)"
+        );
+    }
+
+    /// R11 MC-6 — the self-containment property: `vault.cbor` bytes + password
+    /// ALONE re-derive the DAK (salt+params from the frame header) and decrypt.
+    /// NO external salt is needed. would-FAIL-on-revert: if the frame did not
+    /// persist salt+params, `open_vault` could not re-derive the DAK from the
+    /// bytes alone.
+    #[test]
+    fn open_vault_from_bytes_and_password_alone() {
+        let payload = VaultPayload {
+            k_principal: [0xA1u8; 32],
+            user_did_signing_key: vec![0xB2u8; 64],
+            user_did_creation_time: 7,
+        };
+        // Build inputs at runtime (CodeQL hard-coded-crypto hygiene).
+        let password: Vec<u8> = (0u8..24)
+            .map(|i| i.wrapping_mul(5).wrapping_add(1))
+            .collect();
+        let salt: [u8; 16] = core::array::from_fn(|i| (i as u8).wrapping_mul(3) ^ 0x2C);
+        let params = OWASP_DEFAULT;
+
+        // Seal: derive the DAK from (password, salt, params) and serialize the
+        // frame WITH salt+params in the header.
+        let dak = derive_dak(&password, &salt, params, DAK_HKDF_INFO_TAG);
+        let bytes = serialize_vault(&payload, &salt, params, dak.expose()).unwrap();
+
+        // Open with ONLY the frame bytes + the password (drop the in-RAM salt).
+        let decoded = open_vault(&bytes, &password, DAK_HKDF_INFO_TAG)
+            .expect("vault.cbor bytes + password alone MUST decrypt");
+        assert_eq!(decoded.payload, payload);
+        assert_eq!(decoded.salt, salt);
+        assert_eq!(decoded.params, params);
+
+        // A wrong password fails closed (single typed rejection).
+        let mut wrong = password.clone();
+        wrong[0] ^= 0xFF;
+        assert!(matches!(
+            open_vault(&bytes, &wrong, DAK_HKDF_INFO_TAG),
+            Err(VaultError::AeadFailed)
+        ));
     }
 
     #[test]
@@ -606,9 +1269,33 @@ mod tests {
 
     #[test]
     fn debug_does_not_leak_key() {
-        let km = UnlockedKeyMaterial::new([0xDEu8; 32], vec![0x11u8; 64]);
+        // R6-tail F-41 sweep: distinct-byte fixture (an all-same-byte foil is
+        // weak — a single coincidental decimal decides the assertion), and the
+        // scan is the CONTIGUOUS decimal SEQUENCE a derived Debug would emit,
+        // matching the `LEAK_DECIMAL` convention in
+        // `crates/benten-engine/tests/f_secret_hygiene_roster.rs`.
+        let mut k = [0u8; 32];
+        k[..8].copy_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xD0]);
+        let km = UnlockedKeyMaterial::new(k, vec![0x11u8; 64]);
         let rendered = format!("{km:?}");
-        assert!(!rendered.contains("222")); // 0xDE decimal
+        const LEAK_DECIMAL: &str = "222, 173, 190, 239, 202, 254, 186, 208";
+        assert!(
+            !rendered.contains(LEAK_DECIMAL),
+            "UnlockedKeyMaterial Debug MUST NOT render the K_principal bytes \
+             (Compromise #36); a derived Debug leaks them as `{LEAK_DECIMAL}`; \
+             rendered=`{rendered}`"
+        );
+        // Positive guards: BOTH secret fields are replaced wholesale.
+        assert!(
+            rendered.contains("k_principal: \"SecretBox<[u8; 32]>\""),
+            "k_principal MUST be replaced wholesale by the SecretBox \
+             placeholder; rendered=`{rendered}`"
+        );
+        assert!(
+            rendered.contains("user_did_signing_key: \"<redacted>\""),
+            "user_did_signing_key MUST be replaced wholesale by the redaction \
+             marker; rendered=`{rendered}`"
+        );
     }
 
     /// Drift defense: the vault at-rest domain tags are registered
@@ -628,6 +1315,16 @@ mod tests {
             DAK_HKDF_INFO_TAG,
             reg::DAK_HKDF_INFO_TAG,
             "DAK_HKDF_INFO_TAG drifted from the central domain_registry mirror"
+        );
+        // R6-final F-07: ABSOLUTE freeze pin (symmetric to the
+        // `DAK_HKDF_INFO_TAG` absolute pin in `f_va_2_argon2id_dak_derivation`).
+        // The mirror-equality asserts above move together under a coordinated
+        // rename of BOTH mirrors, leaving every round-trip / mirror test green
+        // while silently stranding every previously-sealed v1-beta vault (the
+        // AAD input changes). Pin the exact frozen bytes so a rename fails loud.
+        assert_eq!(
+            VAULT_AAD_DOMAIN, b"benten-vault:",
+            "the frozen vault AEAD AAD domain is exactly `benten-vault:`"
         );
     }
 }

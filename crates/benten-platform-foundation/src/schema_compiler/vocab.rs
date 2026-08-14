@@ -11,6 +11,8 @@ use super::SchemaCompileError;
 /// The 8 vocabulary labels (D-4F-NEW-TYPED-FIELD-NODE-VOCAB ratified
 /// 2026-05-11 post-R1-triage).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+// §11 SemVer-readiness (F-22 pre-tag): a future schema-vocabulary label lands additively; cross-crate consumers add a `_` wildcard arm.
+#[non_exhaustive]
 pub enum VocabLabel {
     /// Root container of a schema-subgraph; one per schema.
     SchemaRoot,
@@ -89,6 +91,8 @@ pub const VOCAB_LABEL_NAMES: &[&str] = &[
 /// See `docs/SCHEMA-DRIVEN-RENDERING.md §2.2` for the parent-child
 /// recursion shape.)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+// §11 SemVer-readiness (F-22 pre-tag): a future schema-vocabulary edge lands additively; cross-crate consumers add a `_` wildcard arm.
+#[non_exhaustive]
 pub enum VocabEdge {
     /// Element type of a FieldList / FieldMap.
     ItemType,
@@ -154,6 +158,8 @@ pub const VOCAB_EDGE_NAMES: &[&str] = &[
 /// maps to a `benten_core::Value` variant (or to an int/bytes shape with
 /// a flag for the typed-as-X scalars `bytes-cid` / `timestamp-hlc`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+// §11 SemVer-readiness (F-22 pre-tag): a future scalar kind lands additively; cross-crate consumers add a `_` wildcard arm.
+#[non_exhaustive]
 pub enum Scalar {
     /// UTF-8 string. Maps to `Value::Text`.
     Text,

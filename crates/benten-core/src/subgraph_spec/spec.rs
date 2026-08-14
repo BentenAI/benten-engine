@@ -49,17 +49,6 @@ impl StructuralPath {
         }
     }
 
-    /// Construct a path from an ordered slice of edge labels.
-    pub fn from_labels<I, S>(labels: I) -> Self
-    where
-        I: IntoIterator<Item = S>,
-        S: Into<String>,
-    {
-        Self {
-            edge_labels: labels.into_iter().map(Into::into).collect(),
-        }
-    }
-
     /// Public reflection on the path-as-data principle (D-4M-R4): the
     /// recipient consumes the ordered edge-label sequence directly to
     /// re-derive `K(N)` per §1.A.FROZEN item 15(f) — the path encoding is

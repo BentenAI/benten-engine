@@ -21,7 +21,7 @@ use benten_crypto_suite::conformance::endianness::{
 };
 use benten_crypto_suite::envelope::{
     BindingContext, ENVELOPE_FORMAT_VERSION_V1, ENVELOPE_FORMAT_VERSION_V2, ENVELOPE_MAGIC,
-    EncryptedEnvelope, MAX_NONCE_LEN,
+    EncryptedEnvelope, EnvelopeError, MAX_NONCE_LEN,
 };
 use sha3::{Digest, Sha3_256};
 
@@ -47,8 +47,10 @@ const DRAFT_CONNOLLY_X_WING_KAT: [u8; 32] = [
 
 /// The legacy in-tree HKDF-SHA256 combiner output for the SAME inputs — the
 /// `assert_ne!` "construction changed" reference. Computed via the real
-/// upstream `hkdf` crate (the shape the corpus base shipped at
-/// `cipher_suite.rs:404`).
+/// upstream `hkdf` crate — the shape `cipher_suite.rs` shipped at the corpus
+/// base. **No line cite is given: that combiner no longer exists in production
+/// code at HEAD** (the only HEAD occurrence is `legacy_hkdf_combine`
+/// directly below, a deliberate reference fixture), so any HEAD line number would be wrong.
 fn legacy_hkdf_combine(ss_mlkem: &[u8], ss_x: &[u8], ek_x: &[u8], pub_x: &[u8]) -> [u8; 32] {
     use hkdf::Hkdf;
     use sha2::Sha256;
@@ -98,7 +100,7 @@ fn x_wing_label_is_appended_suffix_not_prepended() {
     assert_eq!(
         XWING_LABEL,
         benten_crypto_suite::cipher_suite::X_WING_LABEL,
-        "XWingLabel must be the 6 bytes 0x5c2e2f2f5e5c per draft-connolly-cfrg-xwing-kem-10 §6"
+        "XWingLabel must be the 6 bytes 0x5c2e2f2f5e5c per draft-connolly-cfrg-xwing-kem-10 §5.3"
     );
 
     let pre = x_wing_combiner_preimage(&SS_MLKEM, &SS_X25519, &CT_X25519, &PK_X25519);
@@ -265,9 +267,29 @@ fn single_v1_to_v2_bump_and_v1_typed_rejected() {
         b.push(0);
         b
     };
+    // R6-final F-61: assert the TYPED variant, not merely `is_err()`. A truncated
+    // or bad-magic frame is ALSO `is_err()`, so the bare rejection check proved
+    // only "something failed" — it could not distinguish a correct
+    // version-byte reject from an unrelated one, and a regression that rejected
+    // V1 for the WRONG reason would have passed. Assert
+    // `UnsupportedVersion { got }` and that `got` is the V1 byte, so the pin
+    // proves the decoder read the FORMAT-VERSION byte specifically.
+    let v1_err = EncryptedEnvelope::from_wire_bytes(&v1_bytes)
+        .expect_err("a V1-framed byte stream must be typed-rejected post-V2-freeze");
     assert!(
-        EncryptedEnvelope::from_wire_bytes(&v1_bytes).is_err(),
-        "a V1-framed byte stream must be typed-rejected post-V2-freeze"
+        matches!(v1_err, EnvelopeError::UnsupportedVersion { .. }),
+        "a V1-framed byte stream must be rejected with the TYPED \
+         `EnvelopeError::UnsupportedVersion` (never a silent accept, and never a \
+         different error class that would mask a version-check regression); got \
+         {v1_err:?}"
+    );
+    let EnvelopeError::UnsupportedVersion { got } = v1_err else {
+        unreachable!("variant asserted immediately above")
+    };
+    assert_eq!(
+        got, ENVELOPE_FORMAT_VERSION_V1,
+        "the rejected version byte MUST be the V1 byte actually framed — proves the \
+         decoder read the format-version byte, not an adjacent field"
     );
 }
 

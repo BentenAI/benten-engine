@@ -115,10 +115,140 @@ All are **informational-only unmaintained advisories** (no exploit class). The c
 
 `quick-xml` is transitive via **both** `tauri 2.11 → plist 1.9` **and** `iroh 1.0.0-rc.0 → netwatch → netdev → plist`. `plist` uses it **only** to parse **local OS-generated property lists** (macOS `Info.plist` / network-interface enumeration) — never remote or untrusted-user XML — so the malicious-XML input both advisories require is not reachable on any Benten attack surface. **Not bumpable in isolation:** `plist 1.9.0` pins `quick-xml ^0.39.2`, so `quick-xml ≥0.41.0` requires upstream `plist`/`tauri`/`iroh` releases (verified `cargo update -p quick-xml --precise 0.41.0` fails on the plist requirement 2026-07-02). Ignored in `deny.toml [advisories].ignore` **and** `supply-chain.yml` cargo-audit `--ignore` (§3.5g item 4 dual-config mirror). **v1-assessment-window action: drop BOTH ignores** the moment the tauri/iroh dep-bump cycle pulls `plist` onto `quick-xml ≥0.41.0`. (Cross-ref: iroh-version-bump cycle at `phase-3-backlog.md §9`.)
 
+**wasmtime store-confusion + loro `im` cluster (added 2026-08-11, Phase-4-Meta-Core R6 — the fix-wave re-gate on `ceb027ba`).** Four further advisories fired when the freeze branch was re-gated. They split into two categories and neither is informational-unmaintained-only:
+
+| Advisory | Crate | Severity | Why suppressed | Upstream closure |
+|---|---|---|---|---|
+| RUSTSEC-2026-0222 | wasmtime 43.0.2 (stores mix up type indices **between engines**) | LOW (`AV:L/AC:H/PR:H/UI:R`) | **structurally unreachable** — one process-wide engine | bump to ≥46.0.2 (no fix exists in 43.x) |
+| RUSTSEC-2026-0247 | bitmaps | informational unmaintained | transitive, no direct dep | upstream loro release dropping `im` |
+| RUSTSEC-2026-0248 | im | informational unmaintained | transitive, no direct dep | upstream loro release dropping `im` |
+| RUSTSEC-2026-0251 | sized-chunks | informational unmaintained | transitive, no direct dep | upstream loro release dropping `im` |
+
+**RUSTSEC-2026-0222 is the one that matters, and it is suppressed on reachability rather than severity or cost.** The advisory's precondition is *two or more live `Engine` instances* whose `Store`s can be confused. `benten-eval` holds a single process-wide `OnceLock<Engine>` (`sandbox::instance::SHARED_ENGINE`) and has **exactly one `Engine::new` call site in the crate**, so the precondition cannot arise. That premise is **enforced, not asserted** — `crates/benten-eval/tests/exactly_one_wasmtime_engine_per_process.rs` fails CI (naming file and line, and pointing back at the `deny.toml` entry) if a second construction site ever appears, so the suppression cannot silently outlive its own justification. **Patched ranges are `>=24.0.12/<25`, `>=36.0.13/<37`, `>=46.0.2/<47`, `>=47.0.3` — there is NO fix in the pinned 43.x line**, so remediation is a 3-major bump of the SANDBOX runtime. That is a real behavioural change to the wasm engine and belongs in a window where the conformance lanes can absorb a regression, not on the interface-freeze branch. **Surfaced to Ben 2026-08-11.**
+
+The `im` cluster is one transitive group via `loro 1.12 → loro-internal → im → {bitmaps, sized-chunks}`; Benten has no direct dependency on any of the three and cannot bump them independently.
+
+**Two more surfaced on the `cargo-audit` belt-and-suspenders lane, which denies the `unsound` class that cargo-deny only warns on — and they resolved in opposite directions, which is the point:**
+
+| Advisory | Crate | Disposition |
+|---|---|---|
+| RUSTSEC-2026-0253 | lru 0.18.0 (use-after-free on a panicking `Drop` during `pop()`) | **FIXED** — `cargo update -p lru` → 0.18.2, the patched release. Transitive via `iroh-relay 1.0.0-rc.0`. A patch that exists gets taken. |
+| RUSTSEC-2023-0126 | im (aliasing violation in `OrdSet` insertion) | **suppressed, audit-lane only** — no fix exists |
+
+**RUSTSEC-2023-0126 deserves stating plainly, because "unsound" undersells it.** Inserting into an `im::OrdSet` can violate Rust's aliasing rules — Miri reports a stacked-borrows violation in `sized_chunks::Chunk::force_copy()` where a shared borrow is invalidated by a unique borrow before the read through it completes. That is **undefined behaviour reachable from safe code**, filed under `memory-corruption`. `patched = []`, and `bodil/im-rs` was archived by its owner on 2026-05-03, so there is nothing to bump to. It reaches us only through loro's internal persistent collections; Benten has no direct `im` usage and never constructs an `OrdSet`. **Verified 2026-08-11: bumping `loro-internal` 1.12.0 → 1.13.9 does NOT drop `im`** — so the routine upstream-bump closure path does not apply here, and closure requires loro to replace `im` outright. The bump was reverted rather than taken, since it moves the CRDT layer without closing anything.
+
+The `im` ignore lives in `supply-chain.yml` **only**, with a comment in `deny.toml` explaining the asymmetry: an id cargo-deny never detects would generate a permanent `advisory-not-detected` warning and train us to skim past those. The §3.5g item-4 mirror is satisfied by documentation rather than a literal duplicate — deliberately, and both files say so.
+
+All four ignored in `deny.toml [advisories].ignore` **and** `supply-chain.yml` cargo-audit `--ignore` (§3.5g item 4 dual-config mirror). **Action: drop the wasmtime ignore when the runtime bump lands** (the guard test then becomes optional, not obsolete); **drop the `im` trio** when a loro release removes `im`.
+
+**A fifth landed 2026-08-12 — RUSTSEC-2026-0255, `sized-chunks` panic-safety, and it is the SECOND `unsound` in this cluster.** Several methods (`Chunk::clear` / `drop_left` / `drop_right`, `InlineArray::clear`, `RingBuffer::clear` / `drop_left` / `drop_right`) drop elements *before* updating the length metadata, so an element whose `Drop` panics skips the update and leaves already-dropped elements recorded as live — use-after-free / double-free, **reachable from safe Rust** via `catch_unwind` with a panicking element `Drop`. Affects `<=0.7.0`; **no patched version exists.** Same transitive path (`sized-chunks 0.6.5` ← `im 15.1.0` ← `loro-internal 1.12` ← `loro` ← `benten-sync`); Benten constructs none of the affected containers, and the trigger additionally needs an element type whose `Drop` panics — loro's internal types, not ours. Suppressed audit-lane-only for the same tool-asymmetry reason as `-0126`.
+
+> **⚠️ SURFACED FOR BEN — the count now says something the individual rows do not.** This archived
+> crate family is at **five advisories reached through one dependency**: two `unsound`
+> (memory-corruption class — `-0126`, `-0255`) and three `unmaintained` (`-0247`, `-0248`,
+> `-0251`). **None has a fix and none can get one** — `bodil/im-rs` was archived by its owner
+> 2026-05-03. Each individual suppression is correct on reachability, and I would write each one
+> again. What has changed is that *"wait for loro to drop `im`"* is now carrying five items with
+> **no upstream clock**, and the 2026-08-11 check confirmed the routine bump path is closed
+> (`loro-internal` 1.13.9 still pulls `im`). This is a rule-14 shape forming: a growing set of
+> ledger rows whose stated closure condition is an event nobody has committed to. It does **not**
+> block the tag — reachability is genuinely absent today. The question for Ben is whether Composing
+> should carry an explicit item to either (a) press/track loro's `im` removal upstream, or (b)
+> evaluate the CRDT dependency itself, rather than letting the row count grow silently. Recorded
+> rather than decided, per surface-arch-decisions-under-auth.
+
+### ⚠️ wasmtime — the real finding is not the advisory (full assessment 2026-08-13)
+
+Ben retracted the freeze-proximity premise, so the held bump was re-derived from scratch. The
+investigation found something larger than RUSTSEC-2026-0222.
+
+**FINDING 1 — wasmtime's INTERNAL module paths are in our frozen public API.** VERIFIED at
+`875c3deb`: `docs/public-api/benten-eval.txt` carries **eight** wasmtime lines across four distinct
+leaks — `shared_engine() -> &'static wasmtime::engine::Engine`, `module_for_bytes() ->
+Arc<wasmtime::runtime::module::Module>` (erroring with
+**`wasmtime_internal_core::error::error::Error`**), `impl wasmtime::runtime::limits::ResourceLimiter
+for SandboxResourceLimiter` with two methods returning `wasmtime_internal_core::error::Result<bool>`,
+and `map_call_error()` taking that internal error type by value. `benten-eval` has no
+`publish = false` and the baseline is a required-failing gate. **The freeze would not merely record
+which wasmtime we use — it would make a third party's internal module path part of our permanent
+adopter contract.**
+
+**MEASURED: sealing is free.** `git grep` over `crates/ bindings/ tools/ packages/` finds **zero
+real out-of-crate Rust callers** of any of the four. The two hits outside `benten-eval` are prose in
+doc comments (`benten-engine/src/engine.rs`, a test module header). The precedent exists — the
+`_for_test` sweep cfg-gated 70+ items and `CapabilityPolicy` was hard-sealed the same way.
+
+**★ The gate cannot catch this.** The verifier re-derived the 46 baseline and found every frozen
+path still present, with `ResourceLimiter` byte-identical. **The required drift check would most
+likely stay GREEN through a semver-breaking public-dependency change.** A green result here is the
+dangerous outcome, not the reassuring one — this decision cannot be delegated to CI.
+
+**FINDING 2 — 43.x is EOL, and the advisory is a symptom rather than the problem.** VERIFIED against
+crates.io: 43.0.2 shipped **2026-04-30**; the **2026-07-31** coordinated security release shipped
+**46.0.2 and 47.0.3 — and nothing for 43, 44 or 45.** We are not a few versions behind; we are on a
+line that receives no security fixes. Every future wasmtime advisory lands on us permanently.
+
+**FINDING 3 — the pin's own rationale defeats itself.** `Cargo.toml` says 43 was chosen over 44 to
+avoid an MSRV move 1.91 → 1.92, and the same comment block records wave-8e raising the floor to
+**1.95** anyway for `Duration::from_mins`. We paid the exact cost we were avoiding, for an unrelated
+reason, and never revisited the decision it invalidated. **MSRV is now a non-issue in the other
+direction:** wasmtime 46 and 47 both declare **1.94.0**, below our floor.
+
+**FINDING 4 — the accepted-module surface is unpinned.** `shared_engine()` sets exactly three knobs
+(`consume_fuel`, `epoch_interruption`, `max_wasm_stack`); a repo-wide grep for any `wasm_*` proposal
+toggle or NaN canonicalisation returns **zero**. So *which wasm modules our sandbox accepts* is
+whatever upstream's defaults happen to be, and it drifts on every bump — 47 turns GC and
+exception-handling on by default. Four `cfg.wasm_*(false)` lines make that set **our** decision,
+change no public signature, and dissolve the 46-vs-47 question. Not gate-detectable; it is the
+behavioural contract most deserving of an explicit pin before we freeze it.
+
+**Cost of the bump itself is small.** Across 44/45/46 the changelogs show **no removal, rename or
+signature change** on anything we use. Our entire call surface is 3 `use` lines, 7 types, 4 `Config`
+setters, 17 method calls — no WASI, no component model, no async API, no typed funcs. All 8 `Trap`
+variants we match still exist at 46.0.2, the enum is `#[non_exhaustive]`, and our match has a
+catch-all. *Not measured:* compile time, binary size, fuel-cost drift.
+
+**DECISION FOR BEN — three separable calls, in dependency order:**
+1. **Seal wasmtime out of `benten-eval`'s public surface.** ORCH strongly recommends yes. It is the
+   only genuinely pre-tag-or-never item, it is a narrowing with zero callers, and leaving it freezes
+   a third party's internal path into our contract forever.
+2. **Pin the accepted-wasm-feature set explicitly** (Finding 4). Recommended; no signature change.
+3. **Then the version bump, on its own schedule** — 46 vs 47 vs an LTS line. Once (1) lands this is
+   no longer freeze-visible, so it can take the time it needs. It is *not* optional forever, because
+   of Finding 2.
+
+**Corrected in the same pass (rules 14 + 15):** the `deny.toml` "UNREACHABLE" scope overclaim (we
+publicly export the Engine *and* an `Arc<Module>` it compiled — exactly the material the advisory
+says to keep apart, so the honest scope is "unreachable in first-party code"); the "no patch exists
+in the pinned line" understatement; the retracted freeze-proximity rationale; and the self-defeating
+MSRV note in `Cargo.toml`.
+
+**CodeQL false-positive posture — a FALSE-RECORD corrected 2026-08-13.** Two `critical`
+`rust/hard-coded-cryptographic-value` alerts fired on PR #1382 against Argon2id salt fixtures inside
+the `#[cfg(test)] mod tests` block of `crates/benten-crypto-suite/src/vault.rs`. Both are genuine
+false positives (production requires a fresh OS-CSPRNG salt per the `serialize_vault` contract) and
+both are **dismissed with reason** — the only mechanism available, since this repo's
+`github/codeql-action` setup does not honour inline `// codeql[...]` suppression comments.
+
+The finding worth keeping is not the two alerts. `.github/codeql/codeql-config.yml` opened with
+*"test code is excluded repo-wide from CodeQL"*, and that claim was **false**: the mechanism is
+`paths-ignore`, which is path-based, while Rust's dominant unit-test idiom puts tests **inside** the
+source file. **MEASURED at `97f689e2`: 142 source files under `crates/*/src/` and `bindings/*/src/`
+carry an inline `#[cfg(test)]` module, and exactly ONE is matched by any pattern in that file.** The
+config predicted these false positives would not recur "campaign-wide"; they recurred by exactly the
+route its own mechanism cannot cover. Header corrected in place with the measurement.
+
+**Explicitly NOT fixed by a `query-filters` exclusion of the rule.** That would also suppress a real
+hard-coded salt or key on a production path — the exact thing the query exists to catch. A dismissed
+alert is a decision with a written reason attached; a query-filter is the same decision with the
+reason thrown away. Recurring dismissals are the accepted cost, and the alternative worth
+considering in Composing is narrowing the *query* rather than the *paths*.
+
 ### §3.4 Phase 4-Meta inherited carries from Phase 3
 
 - wasmtime Component-Model re-evaluation (Phase-3 D-PHASE-3-6 + D-PHASE-3-16 + r1-wsa-12)
 - Engine impl-block generic-cascade lift (Phase-3 §1.2-followup)
+- **Workspace-wide feature-less per-package test ergonomics (R6-1c GAP F-15; pre-existing, NOT a 27-gate-wave regression).** Feature-less `cargo test -p <crate> --no-run` fails to compile for benten-drop / benten-graph / benten-eval / benten-crypto-suite (and siblings) because auto-discovered integration tests — and, more fundamentally, some crates' own `#[cfg(test)]` lib unit tests (e.g. `benten-drop/src/bundle.rs`) — reference `testing`-feature-gated fixtures, including CROSS-CRATE ones (`benten_caps::…::synthetic_for_test`, `GrantKeyMaterial::from_bytes_for_test`). `[[test]] required-features` structurally CANNOT gate a lib's own `#[cfg(test)]` unit tests, so a clean feature-less per-package build would require source-gating those lib unit tests — which touches the FROZEN `testing`-gated surface and is therefore out of scope pre-tag (CI is unaffected: every lane runs the full `/testing` feature set, so this is a local-DX nicety, not a correctness gap). Each affected `Cargo.toml` now documents "per-package testing requires `--features testing`." **Composing/v1-assessment action:** decide whether to do the workspace-wide `cfg`-refactor (move cross-crate test fixtures behind a consistently-propagated feature, or a dedicated `dev-only` shim crate) so `cargo test -p <crate>` works flag-free — additive, post-freeze-safe.
 - Light-client mode-(b) range-query proof (ds-r4r2-3)
 - Light-client mode-(c) signed checkpoint (ds-r4r2-3)
 - Handler-call-graph cycle detection at handler-registration time (`phase-3-backlog §15.2`)
@@ -236,11 +366,25 @@ Full enumeration + cross-references at GH issue #1308. (Section numbered §3.9 p
 
 ### §3.11 crypto-suite naming — `WrappedKey::ek_mlkem` misnomer rename (F-full R6 R1 finding F-20; FROZEN-FIELD — defer to freeze-lens + Ben)
 
-The `WrappedKey` field `ek_mlkem` at `crates/benten-crypto-suite/src/cipher_suite.rs:628` is a **misnomer**: `ek` conventionally denotes an encapsulation key (public key), but this field carries the ML-KEM-768 **ciphertext** (`ct`, the KEM encapsulation output), per the doc-comment at `cipher_suite.rs:626` ("ML-KEM-768 ciphertext (the \"ek_mlkem\" half)") and the decapsulate call at `:395` (`mlkem::decapsulate(mlkem_dk_bytes, wrapped.ek_mlkem.as_slice())`). The accurate name is `ct_mlkem` (or `mlkem_ct`).
+The `WrappedKey` field `ek_mlkem` at `crates/benten-crypto-suite/src/cipher_suite.rs::WrappedKey` (struct declared at `:1157`; the field itself at `:1165`) is a **misnomer**: `ek` conventionally denotes an encapsulation key (public key), but this field carries the ML-KEM-768 **ciphertext** (`ct`, the KEM encapsulation output), per the field doc-comment at `cipher_suite.rs:1163` ("ML-KEM-768 ciphertext (the \"ek_mlkem\" half)") and the decapsulate call at `cipher_suite.rs:574` (`mlkem::decapsulate(mlkem_dk_bytes, wrapped.ek_mlkem.as_slice())`). The accurate name is `ct_mlkem` (or `mlkem_ct`).
 
 **Why deferred (NOT fix-now):** `WrappedKey` is a **frozen wire-format-adjacent type** — the field name is part of the public `benten-crypto-suite` API surface (pinned by `docs/public-api/benten-crypto-suite.txt` + the cargo-public-api drift gate) and the serialized envelope shape. A rename is a public-API change that touches a FROZEN field, so it is gated on the **freeze-lens review + Ben sign-off** at the v1-beta interface-freeze decision-point (the same gate as the BUILD-BACKLOG Row 7 name-collision renames). Per CLAUDE.md #5 no-shims, the rename is a hard cut when taken, not an alias.
 
-**Acceptance criteria (freeze-lens + Ben):** rename `WrappedKey::ek_mlkem` → `ct_mlkem` (the byte layout is unchanged — only the Rust identifier); regenerate `docs/public-api/benten-crypto-suite.txt`; sweep the ~6 in-crate references (`cipher_suite.rs:315/342/395/628/644`, `swap_matrix.rs:576/1631`). Surfaced at R6 R1; FLAGGED for freeze-lens + Ben (frozen-field touch).
+**Acceptance criteria (freeze-lens + Ben):** rename `WrappedKey::ek_mlkem` → `ct_mlkem` (the byte layout is unchanged — only the Rust identifier); regenerate `docs/public-api/benten-crypto-suite.txt`; sweep the **9 in-crate `ek_mlkem` occurrences, re-derived against HEAD** — `cipher_suite.rs:485` / `:518` / `:574` / `:1163` (field doc) / `:1165` (field decl) / `:1177` / `:1181`, and `swap_matrix.rs:579` / `:1746`. (The site list previously recorded here — `cipher_suite.rs:318/342/395/628/644` + `swap_matrix.rs:576/1631` — was stale: none of those lines holds an `ek_mlkem` reference at HEAD. Re-derive with `grep -n ek_mlkem crates/benten-crypto-suite/src/*.rs` at execution time rather than trusting the pinned numbers.) Surfaced at R6 R1; FLAGGED for freeze-lens + Ben (frozen-field touch).
+
+### §3.12 `INTERNALS.md` per-file LOC counts drift silently — residual sub-10% tail + no drift gate (R6 tail fold-in, 2026-07-26)
+
+Every `crates/*/INTERNALS.md` pins an exact per-file LOC count in prose (`### \`did.rs\` (861 LOC)`, `- **\`policy.rs\`** (595 LOC) — …`). Nothing verifies them, so they decay on every commit that touches a source file.
+
+**Audited at HEAD (R6 tail fold-in).** Of ~160 such claims, **51 had drifted by more than 10%** — worst cases `manifest_envelope_recheck.rs` 144→495 (243%), `manifest_store.rs` 249→490 (96%), `did_rotation.rs` (tests) 113→207 (83%), `vault.rs` 633→1121 (77%), `value.rs` 261→439 (68%). Two had drifted DOWN (`module_ecosystem.rs` 310→132; `tests/device_attestation.rs` 569→365), which is the more misleading direction because a shrinking file reads as an unchanged one. **All 51 were corrected in that same pass** by re-deriving from `wc -l`.
+
+**What is NOT closed (this row).** (a) The residual **sub-10% tail** — roughly 60 further claims are off by 1–9% (e.g. `sig.rs` 751 vs 815, `codepoint.rs` 409 vs 441). These were deliberately left: they are orientation figures, correcting them churns the doc without changing what a reader concludes, and they re-drift on the next commit. (b) There is **no gate** — nothing re-fires when the next commit moves a file, so the >10% tail simply regrows.
+
+**Acceptance criteria.** Pick ONE of two durable shapes rather than re-running the manual sweep:
+1. **Drop the precision** — replace exact counts with a coarse band (`~500 LOC`, or `small / medium / large`), which is all the orientation value these figures actually carry; or
+2. **Gate it** — add an `INTERNALS.md` LOC-drift lane to the existing `cite-drift-detector` (it already parses these docs for path cites) that re-derives each `(N LOC)` against `wc -l` and fails above a chosen tolerance, resolving `src/` vs `tests/` vs `benches/` by the enclosing section heading.
+
+Note for whoever takes this: a naive `crates/*/src/<file>` resolution is WRONG — the "Tests inventory" sections name `tests/<file>.rs` with the same basename, and resolving those against `src/` produces false drift (this bit the R6 tail fold-in pass on `crates/benten-id/INTERNALS.md` before section-aware resolution was added). Prefer (1); (2) only if the exact counts are judged worth keeping.
 
 ---
 
@@ -417,7 +561,7 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination for
 - **mr-3 CLOSED at G24-A** — end-to-end LOAD-BEARING dual-gate composition test at `crates/benten-platform-foundation/tests/admin_ui_v0_materializer_reactive_update_propagates_through_engine_on_change_as_with_cursor.rs` (`admin_ui_v0_render_dual_gate_deny_from_materialization_layer_wins_end_to_end`). Adapter `tests/common/admin_ui_v0_engine_adapter.rs` bridges `MaterializerEngine` to a real `benten_engine::Engine`. The mat-layer + delivery-layer dual-gate end-to-end pin asserts deny-from-either-layer-wins.
 - **mr-4 CLOSED at G24-A** — `#[doc(hidden)] SchemaSubgraphSpec::for_test_from_handcoded_subgraph` constructor lands at `crates/benten-platform-foundation/src/schema_compiler/spec.rs`; integration test at `crates/benten-platform-foundation/tests/materializer_defense_in_depth_rejects_banned_sandbox_host_fn_for_handcoded_spec.rs` exercises 3 banned host-fn variants + positive control. All 4 sub-tests pass.
 - **mr-5 CLOSED at G24-A** — NEW substantive propagation pin at `crates/benten-platform-foundation/tests/admin_ui_v0_materializer_reactive_update_propagates_through_engine_on_change_as_with_cursor.rs` (4 sub-tests: routes-through-adapter / propagates-engine-update / dual-gate-deny / invocation-count-observability). The mr-3 dual-gate arm + mr-8 invocation-count arm both share this pin file.
-- **mr-6 RE-VERIFIED at G24-A** — `InMemoryMaterializerEngine` retains `#[doc(hidden)]` (confirmed at `crates/benten-platform-foundation/src/materializer.rs:1030-1031`); the G24-A integration adapter at `admin_ui_v0_engine_adapter.rs` wires a different shape (production `Engine` → `MaterializerEngine` trait) so the test-only `InMemoryMaterializerEngine` is NOT elevated to stable API.
+- **mr-6 RE-VERIFIED at G24-A** — `InMemoryMaterializerEngine` retains `#[doc(hidden)]` (confirmed at `crates/benten-platform-foundation/src/materializer.rs:1528-1530`); the G24-A integration adapter at `admin_ui_v0_engine_adapter.rs` wires a different shape (production `Engine` → `MaterializerEngine` trait) so the test-only `InMemoryMaterializerEngine` is NOT elevated to stable API.
 - **mr-7 RE-VERIFIED at G24-A** — rustdoc on `MaterializerWalkInputs` (line ~285-300) names `(spec_cid, content_cid)` as the view-identity pair; G24-A consumer wiring at `admin_ui_v0_render_propagates_engine_side_node_update_through_adapter` renders two distinct (same spec, different content_cid) pairs in one test fn — multi-instance shape exercised.
 - **mr-8 RE-VERIFIED at G24-A** — the invocation-count-observability semantic is explicit at `materializer.rs:923-943`; the G24-A pin `admin_ui_v0_render_dual_gate_invocation_count_observability` asserts ≥ spec.primitive_count invocations per walk.
 
@@ -470,7 +614,7 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW: this entry IS the named destination. Cl
 
 ### §4.16 G24-B workflow editor substantive replay arm via real engine round-trip [CLOSED at R4b-FP-2]
 
-**Origin:** G24-B mini-review MAJOR finding `g24b-mr-1`. The existing `replay_produces_identical_content_hash` canary (`crates/benten-platform-foundation/src/admin_ui_v0/workflow_editor.rs:613`) is a degenerate same-struct double-hash: both sides call `blake3(canonical_subgraph_bytes(&sg_save))` on the same in-memory Subgraph; no encode → store → load → decode cycle is exercised. Same shape on the TS side (`packages/admin-ui-v0/tests/workflow_editor_creates_workflow_and_replays_through_evaluator.test.ts` uses in-memory Map + FNV-1a hash). Plan §3 G24-B row explicitly requires "PRODUCTION substantive arm (workflow CREATED is persisted to redb + readable via Engine::read_node + replays with same CID), NOT shape-only."
+**Origin:** G24-B mini-review MAJOR finding `g24b-mr-1`. The existing `replay_produces_identical_content_hash` canary (since renamed to `replay_produces_identical_content_hash_encoding_only`, `crates/benten-platform-foundation/src/admin_ui_v0/workflow_editor.rs:692`) is a degenerate same-struct double-hash: both sides call `blake3(canonical_subgraph_bytes(&sg_save))` on the same in-memory Subgraph; no encode → store → load → decode cycle is exercised. Same shape on the TS side (`packages/admin-ui-v0/tests/workflow_editor_creates_workflow_and_replays_through_evaluator.test.ts` uses in-memory Map + FNV-1a hash). Plan §3 G24-B row explicitly requires "PRODUCTION substantive arm (workflow CREATED is persisted to redb + readable via Engine::read_node + replays with same CID), NOT shape-only."
 
 **Scope:** new integration pin file `crates/benten-engine/tests/admin_ui_v0_workflow_editor_substantive_replay_via_harness.rs` (~80 LOC) using the G24-B-FP-1-graduated `AdminUiV0TestHarness::new()`:
 1. PRODUCTION-ARM: drive `compile_draft_within_manifest_envelope` → persist to redb via real `Engine::create_node` (or similar public surface) under admin-UI plugin-DID principal via `Engine::call_as`.
@@ -566,7 +710,7 @@ R4b-FP-1 Seam 2 shipped `PluginManifest::validate_with_clock` + threaded through
 
 ### §4.21 `install_plugin` Steps 9/10/11 partial-failure rollback semantics (Phase-4-Meta)
 
-R4b-FP-1 Seam 1 shipped the 11-step `plugin_lifecycle::install_plugin` pipeline. Steps 8 (DID mint + persist), 9 (cap cascade mint), 10 (private-ns provision), and 11 (library insert + active ref) each early-return on `Err` via `?`, which can leave partial state behind in the engine adapter's production cascade (e.g. plugin-DID persisted at Step 8 with no library entry if Step 9 fails). The `InMemoryInstallCascade` test default has all infallible paths so the no-partial-state invariant is structurally enforced for the v1 test suite, but the engine adapter that wires the real grant store + plugin-DID store at Phase-4-Meta MUST define rollback shape: either (a) transactional install (all-or-nothing across Steps 8-11), or (b) post-install reconciliation pass that detects + cleans up partial-state residue (`plugin_did` in store with no library entry → revoke + drop). Cite: `crates/benten-platform-foundation/src/plugin_lifecycle.rs:701-790` Steps 8-11; mini-review `.addl/phase-4-foundation/r4b-fp-1-mini-review.json` finding `r4b-fp-1-mr-2`. ~150-300 LOC + transactional test pins.
+R4b-FP-1 Seam 1 shipped the 11-step `plugin_lifecycle::install_plugin` pipeline. Steps 8 (DID mint + persist), 9 (cap cascade mint), 10 (private-ns provision), and 11 (library insert + active ref) each early-return on `Err` via `?`, which can leave partial state behind in the engine adapter's production cascade (e.g. plugin-DID persisted at Step 8 with no library entry if Step 9 fails). The `InMemoryInstallCascade` test default has all infallible paths so the no-partial-state invariant is structurally enforced for the v1 test suite, but the engine adapter that wires the real grant store + plugin-DID store at Phase-4-Meta MUST define rollback shape: either (a) transactional install (all-or-nothing across Steps 8-11), or (b) post-install reconciliation pass that detects + cleans up partial-state residue (`plugin_did` in store with no library entry → revoke + drop). Cite: `crates/benten-platform-foundation/src/plugin_lifecycle.rs::install_plugin` Steps 8-11; mini-review `.addl/phase-4-foundation/r4b-fp-1-mini-review.json` finding `r4b-fp-1-mr-2`. ~150-300 LOC + transactional test pins.
 
 ### §4.22 `admin_ui_v0` thin-client bridge surface (Phase-4-Meta)
 
@@ -592,7 +736,7 @@ Estimated scope: ~500-800 LOC (bridge module + composed-engine harness extension
 
 ### §4.23 `admin_ui_v0` user-DID root-chain write-boundary validator (Phase-4-Meta)
 
-Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-1 + sdr-r6-r1 cluster — G24-B-FP family). G24-B / G24-B-FP shipped the workflow editor surface; the **synchronous write-boundary chain validator** that verifies every WRITE traces back to a user-DID root grant (CLAUDE.md #18 Layer 1 user-as-root invariant, runtime-enforced) is NOT YET WIRED. The grant chain is structurally present (cap minted under `audience=plugin_did` from `user_did` at install-time), but the WRITE primitive's evaluator dispatch does not currently re-verify the chain ends at a user-DID at admission time.
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-1 + sdr-r6-r1 cluster — G24-B-FP family). **SEAM CLOSED (Row D-1; R14 F-11 retense):** the WriteBoundaryChainValidator **seam** IS now wired — the `Engine::admit_write_chain` helper consults the always-mounted validator at **14** WRITE entry points (structurally-always-on; Row D-1 CLOSED at R6 R1 FP-F4 §S1, sharpened at R6 R2 FP-B to include `apply_atrium_merge` per-row). At v1-beta the mounted validator is the `NoopWriteBoundaryChainValidator` (returns `NotApplicable` → admit). What remains for THIS wave is installing a **PRODUCTION** validator that fires the per-WRITE user-DID root-chain check (CLAUDE.md #18 Layer 1 user-as-root invariant, runtime-enforced) — the **G-COMP-1 consumption** per `docs/V1-FROZEN-INTERFACE-DEFERRED.md` **Row D-1 (FORENSIC)**. The grant chain is structurally present (cap minted under `audience=plugin_did` from `user_did` at install-time); the production validator makes the always-on seam re-verify the chain ends at a user-DID at admission time.
 
 **Stranded write-boundary-chain-validator pin destinations** (each test's ignore message MUST cite §4.23):
 
@@ -649,7 +793,17 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-1 — pr
 
 Estimated scope: ~50-100 LOC.
 
-### §4.29 phase-3-backlog §7.3.D stale-rationale sweep at pre-tag (Phase-4-Foundation pre-tag)
+### §4.29 phase-3-backlog §7.3.D stale-rationale sweep at pre-tag (Phase-4-Foundation pre-tag) — ⚠️ SUPERSEDED by §4.169
+
+> **SUPERSEDED 2026-07-29 (R6 round #1, F-073).** This row's own destination shipped:
+> Phase-4-Foundation closed at `phase-4-foundation-close` on 2026-05-14 with neither this
+> sweep nor the G26-A wave it defers to having fired — the second consecutive phase in
+> which this cluster's named destination shipped without discharging it. The 84 surviving
+> `phase-3-backlog §7.3.D` ignore arms are re-homed at **§4.169**, which carries the full
+> per-file inventory and a required-lane ratchet. **Do not add new cites to this row** —
+> `stale_ignore_destination_ratchet.rs` fails the build if §4.29 appears in a
+> `Destination:` clause. The `set_property_for_test` rename in the acceptance criteria
+> below is NOT superseded and still needs doing; it moves to §4.169's scope.
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6 R1 test-coverage-auditor tc-3 — ~30+ tests cite phase-3-backlog §7.3.D 'next Phase-3-close orchestrator-direct fix-pass batch per Wave-E rationale-only sweep'). Phase 3 SHIPPED at tag `phase-3-close` without the cited fix-pass batch firing; the cluster needs sweep-by-batch at the Phase-4-Foundation pre-tag wave. For each cited test: if production surface IS at HEAD, un-ignore + author body; otherwise retarget the cite to v1-assessment-window or this row. Belongs at the pre-tag sweep coupled with the cite-drift G26-A wave.
 
@@ -880,6 +1034,55 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (R6-R4 br-r6-r4-1 MINOR + R6-R5 br-r6-r5
 **Acceptance criteria (R6-FP-5 sharpening + tag-time decision).** Path (a) FIX: ~50-150 LOC test-harness rewrite: drop `--native-binary` from `Command::new("tauri-driver")` args; pass binary path via `fantoccini::Capabilities` with `tauri:options.application` key; verify the new shape against an actual tauri-driver subprocess on Linux + WebKitGTK. Path (b) EXPLICITLY-ACCEPT-AT-TAG: phase-4-foundation-close tag ships with webview-e2e ubuntu RED known-bug-non-required (matches the §4.46 / §4.47 DISAGREE-WITH-EXPLANATION precedent); the production integrator binary at `tools/benten-admin-shell/src/lib.rs` is UNAFFECTED — the bug is purely in E2E test subprocess invocation. **Decision deferred to phase-4-foundation-close pre-tag review.**
 
 **Not v1-gate-blocker** because: (a) admin-shell-e2e.yml documented non-required for merge; (b) production code path unaffected (Tauri integrator binary works correctly when launched directly); (c) test infrastructure issue, not platform-shippable defect.
+
+> **⚠️ ESCALATION 2026-08-12 — the deferral's destination has already shipped, and this row is now
+> overdue at its SECOND tag.** The acceptance criteria above say *"Decision deferred to
+> **phase-4-foundation-close** pre-tag review."* That tag shipped 2026-05-14. No decision was
+> recorded, neither path was taken, and the lane is still red on `phase-4-meta-core/r9-base`
+> today with the identical error — verified this session: `Error: unused arguments left:
+> ["--native-binary", …]` then `tauri-driver did not bind port 4444 within 10s`. A deferral whose
+> named destination passes without receiving the entry is exactly the clause-(b) failure
+> HARD-RULE-12 forbids; the destination existed, it just was not honoured.
+>
+> **This is also the canonical "a gate that has never once passed is a defect in the gate" case.**
+> The row itself states the test *cannot* pass as shipped. It has therefore been red across two
+> phase-close arcs, and its red carries **zero information** — nobody can tell from it whether the
+> admin shell works. That is the same shape as the napi-pins lane that hid a second defect for four
+> runs behind a grep that could never match.
+>
+> **Disposition: path (a), DO-NOW, not another deferral.** Cost is not a defer trigger, and the
+> two stated blockers have both weakened: the flag set is now *known* (`--port / --native-port /
+> --native-host / --native-driver`, and the launch path goes through `fantoccini::Capabilities`
+> with `tauri:options.application`), and validation no longer needs a local Linux box because the
+> lane itself is the Linux runner — an iteration is a push. A second, cheaper sub-fix is owed
+> regardless of path: **`cargo install tauri-driver --locked` at `admin-shell-e2e.yml` is
+> unpinned**, so the harness silently re-targets whatever version publishes next; pin it, so the
+> next CLI change is a deliberate bump rather than a new mystery red. Routed to **W-MINOR**.
+>
+> If Ben prefers path (b) instead, it must be recorded as an explicit accepted-red **with the lane
+> disabled or renamed to say so** — an always-red required-looking lane is worse than an absent
+> one, and leaving it silently red is not path (b), it is the absence of a decision.
+
+> **✅ PATH (a) LANDED 2026-08-13 — Ben ratified DO-NOW.** Three changes:
+> **(1)** `--native-binary` dropped; `tauri-driver` now receives only `--port`. **(2)** The
+> application under test is named where tauri-driver actually looks for it — the WebDriver session
+> capability **`tauri:options.application`**, passed through `fantoccini::ClientBuilder::capabilities`
+> so it lands in the `alwaysMatch` block. **(3)** `cargo install tauri-driver` is **pinned** to
+> `--version '^2'`; it was unpinned, so every run silently re-targeted the newest publish — the
+> drift class that delivers a contract change as a mystery red instead of a deliberate bump. A
+> `tauri-driver --help` step now records the accepted flag set into the same run that would fail,
+> so the next contract change carries its own evidence.
+>
+> Compiles clean under `--features tauri`. **Validation is the lane itself** — the test
+> self-skips on macOS (upstream WKWebView has no embedded-webview WebDriver binding), so a local
+> run proves nothing and the Linux runner is the only real verifier. That was named as a blocker in
+> the original acceptance criteria; it was never actually one, since the lane *is* the Linux runner
+> and an iteration is a push.
+>
+> **The rustdoc on `admin_shell_binary_path` now states plainly that the flag never existed**, so
+> the next reader does not re-derive it. Worth keeping as the standing example: the failure
+> presented as *"did not bind port 4444"* because the rejected flag killed the process before it
+> listened, and that surface symptom is what got diagnosed — twice — as a startup race.
 
 ### §4.50 `Engine::*` `_for_test` suffix in production-consumed APIs cleanup (Phase-4-Meta)
 
@@ -1185,14 +1388,14 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW + standing principle **P-II** (cross-cra
 
 **Landed in the D1 #1172 lane (benten-id-local, this PR):** the depth-bounded untrusted-decode entry point `benten_id::ucan::Ucan::from_canonical_bytes_bounded(bytes, max_depth)` + `MAX_UCAN_PROOF_DEPTH` const + `UcanError::ProofChainTooDeep { depth, max }` typed variant + a non-recursive CBOR-nesting pre-walk that rejects an over-deep `prf` chain at the byte boundary BEFORE `serde`'s recursive `Deserialize` runs (closure-pinned in `crates/benten-id/tests/dos_unbounded_decode_safe2_1172.rs`).
 
-**Still owed (the P-II workspace sweep — NOT this disjoint lane):** the two untrusted-input call sites #549 enumerated must migrate from the bare `serde_ipld_dagcbor::from_slice::<Ucan>` to `Ucan::from_canonical_bytes_bounded(bytes, MAX_UCAN_PROOF_DEPTH)`:
+**LANDED (R18 C1 — the two untrusted-input call sites #549 are now migrated):** both sites moved from the bare `serde_ipld_dagcbor::from_slice::<Ucan>` to `Ucan::from_canonical_bytes_bounded(bytes, MAX_UCAN_PROOF_DEPTH)`:
 
-1. `crates/benten-engine/src/typed_call_dispatch.rs` — the typed-CALL `ucan_validate_chain` op (`bytes` is a graph `Value::Bytes` payload, caller-controlled).
-2. `crates/benten-caps/src/backends/ucan.rs` — the durable UCAN backend read path (`value` is a redb-stored blob; adversarial input can land via any cap-grant path that doesn't pre-validate depth).
+1. `crates/benten-engine/src/typed_call_dispatch.rs` — the typed-CALL `ucan_validate_chain` op (`bytes` is a graph `Value::Bytes` payload, caller-controlled). ✅ MIGRATED at R18 C1; the over-deep case maps onto `EvalError::TypedCallDispatchError` with a "proof chain too deep" reason. Closure-pinned by `ucan_validate_chain_rejects_over_deep_proof_chain_with_typed_error` (`crates/benten-engine/tests/typed_call_engine_dispatch.rs`).
+2. `crates/benten-caps/src/backends/ucan.rs` — the durable UCAN backend read path (`value` is a redb-stored blob; adversarial input can land via any cap-grant path that doesn't pre-validate depth). ✅ MIGRATED at R18 C1; `iter_installed_proofs` decodes through the bounded entry point (an over-deep stored proof is skipped with a `tracing::warn!`, same non-fatal contract as a corrupt entry, rather than stack-overflowing).
 
-Both crates are COLLAPSE-spine-owned (benten-engine + benten-caps); editing them from the disjoint benten-id lane would break Strategy-C consolidation (FULL-EXECUTION-PLAN §6.2 disjoint-crate rule). The migration is mechanical (swap one decode call + map the new `ProofChainTooDeep` variant onto the existing decode-failure error surface at each site) and rides the next orchestrator-serialized workspace sweep that frees those crates. The DoS surface is NOT closed until both call sites adopt the bounded entry point — the benten-id-local API existing is necessary but not sufficient.
+**Residual owed:** verify via a workspace grep that `serde_ipld_dagcbor::from_slice::<Ucan>` has zero remaining production callers (at R18 the two enumerated sites are the only ones; a standing grep-guard would prevent regression). The DoS surface for these two sites is CLOSED at R18 C1.
 
-**Acceptance criteria.** Both call sites use `Ucan::from_canonical_bytes_bounded`; a closure-pin at each site asserts an over-deep blob is rejected (not aborted) with the depth-bound error mapped to that site's typed failure; `serde_ipld_dagcbor::from_slice::<Ucan>` has zero remaining production callers (verify via workspace grep). Bundled into the P-II post-COLLAPSE workspace sweep alongside the other META #629 cross-crate slices.
+**DROP-BUNDLE-SIZECAP-UNENFORCED (R18; sibling META #629 size-gate item, 2 lines):** the Drop-bundle ingest cap `benten_drop::DROP_BUNDLE_MAX_SIZE_BYTES` (4 KiB, `crates/benten-drop/src/bundle.rs:32`) is **advisory-not-enforced** at v1-beta — asserted only in the `tf3f_*` offline-consume tests, not enforced before decode on a live path. Add a 2-line `len <= DROP_BUNDLE_MAX_SIZE_BYTES` engine-boundary size-gate at the first Composing send/receive path that exposes Drop ingest to untrusted input (a pre-decode `if bytes.len() > DROP_BUNDLE_MAX_SIZE_BYTES { return Err(...) }`). Tracked in full at `docs/V1-FROZEN-INTERFACE-DEFERRED.md` **Row D-80** (F-16, complements Row D-67's `parse_cbor_bytes` decode-cap); named here so it rides the META #629 DoS-bounding pass. Destination: Phase-4-Meta-Composing engine-wiring boundary (with Row D-67 / Row D-80).
 ### §4.81 benten-ivm View-trait + Subscriber Phase-5+ plugin-shape cluster (Phase-4-Meta — refinement-audit Fwd-2, umbrellas #1219 + #1220 slice; RATIFIED 2026-05-17)
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Fwd-2; umbrella **#1219** sub-issues #1082/#1091/#1092 + umbrella **#1220** sub-issue #1087; RATIFIED `RATIFIED-decisions-2026-05-17.md` "#1082 / #1091 / #1092, #989 → Phase-4-Meta-named (plugin-ecosystem shape; already Phase-4-Meta scope; zero v1 consumer cost)"; META #669 CLAUDE.md #18 Layers 2+3 paper-only; META #1094 v1-API-stabilization decision cluster). The cited sub-issues stay OPEN as Phase-4-Meta tracking rows; the umbrellas (#1219/#1220) are Refs-only against the benten-ivm crate-drain PR (orchestrator adjudicates Closes via mini-review). Reproduce-verified at HEAD `9b0f327f`: each is a genuine v1-SemVer/arch fork with zero v1 consumer cost today (no Phase-5 plugin views exist at v1):
@@ -1226,7 +1429,7 @@ R1-FP work items that emerged from R1 critic round (production-vs-plan gaps). Th
 
 ### §5.1 UCAN audience binding at `UcanGroundedPolicy::permits_typed_proof_for`
 
-`crates/benten-caps/src/ucan_grounded.rs:191-216` currently calls `validate_chain_at` without audience binding. Add audience-binding wiring per cap-r1-1. ~100-200 LOC + tests. Closes load-bearing BLOCKER for the four-identity-concepts model.
+`crates/benten-caps/src/ucan_grounded.rs:376-377` currently calls `validate_chain_at` without audience binding. Add audience-binding wiring per cap-r1-1. ~100-200 LOC + tests. Closes load-bearing BLOCKER for the four-identity-concepts model.
 
 ### §5.2 `actor_cid` consulted on reads at `GrantBackedPolicy::check_read`
 
@@ -1420,7 +1623,7 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (W20-P5). **#1094** (v1-API-stabilizatio
 
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Qual-1 #683, umbrella **#1154**; sibling of §4.84 + the benten-eval §4.76 cluster). The ST-CAPS crate-drain (#1154 commit) fully drained the self-contained items (#816 dead-enum delete; #803 scope-derivation extraction; #674 `wallclock_refresh_ceiling_for` zero-consumer delete) and marked the cross-crate-cascade renames P-II (#661 / #793). The residual is a **production-wiring-gated** cleanup that cannot drain in the disjoint single-crate lane without removing currently-live test/bench surfaces:
 
-`testing::WallclockProbe` (Qual-1 #683) is a 2-method struct over a `Duration` whose `force_refresh()` returns a hardcoded `1`; it is consumed live by `benches/wallclock_toctou_refresh.rs` + `tests/wallclock_refresh_typed_error_fires.rs`. Per the Qual-1 report's own disposition, this surface (together with the `evaluator_delegation` accessors + the `with_now_for_test` seam) only retires when the **production `WriteContext::now` threading + wallclock-refresh-ceiling consumer wire-up** lands (registered at `docs/future/phase-3-backlog.md §2.3 (i)+(ii)`; co-routed with §10.1 Compromise #1 TOCTOU window bound). Deleting the probe now would strand the bench + integration test with no production replacement.
+`testing::WallclockProbe` (Qual-1 #683) is a 2-method struct over a `Duration` whose `force_refresh()` returns a hardcoded `1`; it is consumed live by `benches/wallclock_toctou_refresh.rs` + `tests/wallclock_refresh_typed_error_fires.rs`. Per the Qual-1 report's own disposition, this surface (together with the `evaluator_delegation` accessors + the `with_now_secs` seam) only retires when the **production `CapWriteContext::now` threading + wallclock-refresh-ceiling consumer wire-up** lands (registered at `docs/future/phase-3-backlog.md §2.3 (i)+(ii)`; co-routed with §10.1 Compromise #1 TOCTOU window bound). Deleting the probe now would strand the bench + integration test with no production replacement.
 
 **Acceptance criteria (Phase-4-Meta).** When the §2.3 (i)+(ii) production wire-up lands: replace `WallclockProbe::force_refresh`'s hardcoded `1` with the real refresh-event surface (or delete `testing::WallclockProbe` outright + migrate the bench/integration-test to the real seam); retire `evaluator_delegation::iterate_batch_boundary_for` only if the engine's `primitive_host` consumer is simultaneously re-pointed at the trait method (cross-crate, P-II-coordinated). One cohesive "retire Phase-2a test-readability conveniences" change folded into the §4.84 / §2.3 wire-up wave. ~60-120 LOC at Phase-4-Meta.
 
@@ -1497,6 +1700,8 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Fwd-1, W20 P1;
 Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Fwd-2, W20 P1; consolidates bundle #1178 + couples to §4.26 RotationLog rehydration + §4.43 Class-B β `read_node_as` v1-API-stabilization + §3.2 Kith deferral). **Member issues:** #1056 (F-FWD-2-02 `SelfRevocation` attestation surface paper-only — Phase-4-Foundation MVP rotation mechanism named in §3.2 but no typed surface at this crate), #1060 (F-FWD-2-03 plugin-DID library-subgraph projection paper-only — `Vec<PluginDidHandle>` vs `benten_core::Subgraph` decision deferred), #1063 (F-FWD-2-04 Class-B β `read_node_as` boundary verified preserved at HEAD; v1-API-stabilization parallel audit — DISAGREE audit-trail), #1066 (F-FWD-2-05 §4.26 RotationLog-rehydration needs Phase-4-Meta wave-target + durable-substrate decision + LOC sharpening), #1069 (F-FWD-2-06 `RotationLog::is_superseded` bool semantics Phase-5+ Kith trajectory question — DISAGREE audit-trail), #1071 (F-FWD-2-07 `testing` Cargo feature lacks v1-stabilization SemVer annotation + `handle_with_did_for_test` lacks `#[doc(hidden)]`), #1073 (F-FWD-2-08 `Did(String)` newtype hardcodes did:key in `Did::resolve` — Phase-5+ DID-method extensibility hook for Kith; preserve at v1, document — DISAGREE), #1076 (F-FWD-2-09 `UcanClaims::aud` String not typed `Did` — Phase-5+ ecosystem-compat hook; preserve at v1, document — DISAGREE), #1078 (F-FWD-2-10 `Acceptor::nonce_store` in-RAM durable-lift seam unnamed — restart-boundary replay bounded by freshness-window), #1178 (the Fwd-2 bundle umbrella itself).
 
 **Acceptance criteria (Phase-4-Meta).** This row IS the named destination consolidating bundle #1178. Phase-4-Meta identity-recovery wave: land the `SelfRevocation` typed surface (#1056, couples §3.2 Kith MVP); decide + implement the plugin-DID library-subgraph projection (#1060, couples CLAUDE.md #18); sharpen §4.26 with a wave-target + durable-substrate + LOC + HLC-strict-monotonic-at-rehydration note (#1066) + name the `nonce_store` durable seam (#1078); add `#[doc(hidden)]` + SemVer annotation on the `testing` feature surface at v1-pre-tag (#1071, couples §4.94 #862). The DISAGREE-WITH-EXPLANATION items (#1063/#1069/#1073/#1076) are preserved as audit-trail decisions — document the extensibility/preservation rationale at v1-tag, no code change. ~200-350 LOC across the Phase-4-Meta identity-recovery + v1-API-stabilization waves.
+
+**GAP-KDB Shape-B supersession of #1073 (Phase-4-Meta-Core, 2026-07 — design R1 §4 FREEZE-item 10).** The #1073 DISAGREE clause — "`Did(String)` hardcodes did:key in `Did::resolve`; preserve did:key-only at v1, defer the DID-method extensibility hook to Phase-5+ Kith" — is now **SUPERSEDED / RETIRED** by Ben's Shape-B ratification: the content-addressed `did:benten` method now exists in resolve at v1-beta (`Did::resolve_signing` / `Did::resolve_kem` are method-aware — a `did:benten` strips its trailing key-set CID before the signing decode and recovers-and-verifies the committed KEM key; `did:key` bytes stay byte-identical for zero classical/authority-world migration). So the "preserve did:key-only in `Did::resolve`" preservation clause NO LONGER HOLDS — the DID-method extensibility hook #1073 named for Phase-5+ Kith landed EARLY at Phase-4-Meta-Core to close GAP-KDB (recipient KEM key committed by its audience DID; Inv-23). The sibling #1076 (`UcanClaims::aud` String-not-typed-`Did`) is UNTOUCHED by this supersession — only the did:key-only-`Did::resolve` clause is retired.
 
 ### §4.97 benten-id Part-B trust-model encryption-leg deferral (Phase-4-Meta / v1-assessment-window — refinement-audit #1233, W20 close-as-named)
 
@@ -1617,9 +1822,9 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Fwd-1 lens; si
 
 ### §4.145 benten-caps Safe-4 + Hyg + Qual-2 cleanup cluster (Phase-4-Meta — refinement-audit Safe-4/Hyg-1/2/3/4/Qual-2; #683/#674 cross-ref §4.85)
 
-Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Safe-4/Hyg/Qual lenses). Cleanup + snapshot-consistency + naming, none deployed defects. Members: **#641** (`validate_chain_at`+`validate_chain_with_durable_revocations` issue N+1 separate KV gets without snapshot — concurrent revoke races visible inside a single validate call; Phase-4-Meta because the snapshot-read seam couples the §4.143 #993 trust-hook redesign), **#300** (`WriteContext::with_authority` unused — only `benten_graph::WriteContext::with_authority` consumed), **#303** (`manifest_scope::manifest_delegates_anything` dead — only its own self-test consumes it), **#358** (bench `wallclock_toctou_refresh.rs` stale R3 "returns todo!()" narrative — probe real at HEAD), **#458** (grant_backed.rs:329 references phantom test file that does not exist at HEAD), **#480** (device_dispatch.rs module-doc claims "(c) stays #[ignore]'d" but (c) relocated to benten-engine + GREEN at HEAD), **#793** (`UcanGroundedPolicy::with_now_for_test` is the PRODUCTION now-injection seam despite `_for_test` suffix — naming actively misleads; cross-crate-cascade rename P-II per §4.85). Note **#661** (`AsAttenuationScope` 4-impl overhead), **#668** (`GrantReaderChain` 3-constructor split + dead `with_config`), **#683/#674** are P-II/production-wiring-gated and are already home at **§4.85** (#683/#674) + P-II rename queue (#661/#793) — cross-referenced, NOT re-homed here; the net-new carries here are #641 + the Hyg-1/2/3/4 dead-code/stale-cite cleanups (#300/#303/#358/#458/#480).
+Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Safe-4/Hyg/Qual lenses). Cleanup + snapshot-consistency + naming, none deployed defects. Members: **#641** (`validate_chain_at`+`validate_chain_with_durable_revocations` issue N+1 separate KV gets without snapshot — concurrent revoke races visible inside a single validate call; Phase-4-Meta because the snapshot-read seam couples the §4.143 #993 trust-hook redesign), **#300** (`WriteContext::with_authority` unused — only `benten_graph::WriteContext::with_authority` consumed), **#303** (`manifest_scope::manifest_delegates_anything` dead — only its own self-test consumes it), **#358** (bench `wallclock_toctou_refresh.rs` stale R3 "returns todo!()" narrative — probe real at HEAD), **#458** (grant_backed.rs:329 references phantom test file that does not exist at HEAD), **#480** (device_dispatch.rs module-doc claims "(c) stays #[ignore]'d" but (c) relocated to benten-engine + GREEN at HEAD), **#793** (~~`UcanGroundedPolicy::with_now_for_test` is the PRODUCTION now-injection seam despite `_for_test` suffix — naming actively misleads; cross-crate-cascade rename P-II per §4.85~~ — **CLOSED**: the rename SHIPPED; the symbol is `UcanGroundedPolicy::with_now_secs` at `crates/benten-caps/src/ucan_grounded.rs::with_now_secs`, and `with_now_for_test` has zero occurrences in `crates/`). Note **#661** (`AsAttenuationScope` 4-impl overhead), **#668** (`GrantReaderChain` 3-constructor split + dead `with_config`), **#683/#674** are P-II/production-wiring-gated and are already home at **§4.85** (#683/#674) + P-II rename queue (#661/#793) — cross-referenced, NOT re-homed here; the net-new carries here are #641 + the Hyg-1/2/3/4 dead-code/stale-cite cleanups (#300/#303/#358/#458/#480).
 
-**Acceptance criteria (Phase-4-Meta cleanup wave).** Delete dead `with_authority`/`manifest_delegates_anything` (#300/#303); fix stale-cite/phantom-file/relocated-test narratives (#358/#458/#480); add snapshot-consistent revocation reads to `validate_chain_at`/`validate_chain_with_durable_revocations` co-routed with the §4.143 #993 trust-hook seam redesign (#641 — the snapshot seam is the architectural coupling, not mechanical); #793 `with_now_for_test` rename rides the §4.85 P-II cross-crate rename queue (single named destination — not re-homed). ~80-160 LOC at Phase-4-Meta.
+**Acceptance criteria (Phase-4-Meta cleanup wave).** Delete dead `with_authority`/`manifest_delegates_anything` (#300/#303); fix stale-cite/phantom-file/relocated-test narratives (#358/#458/#480); add snapshot-consistent revocation reads to `validate_chain_at`/`validate_chain_with_durable_revocations` co-routed with the §4.143 #993 trust-hook seam redesign (#641 — the snapshot seam is the architectural coupling, not mechanical); #793 `with_now_for_test` → `with_now_secs` rename is **CLOSED** (shipped; no longer queued on §4.85 P-II). ~80-160 LOC at Phase-4-Meta.
 
 ### §4.146 benten-caps Part B trust-model encryption leg — content-encryption key model (Phase-4-Meta / v1-assessment-window — refinement-audit S6, DECISION-RECORD trust-model-reframe §5)
 
@@ -1709,6 +1914,535 @@ Per HARD RULE rule-12 BELONGS-NAMED-NOW (refinement-audit-2026-05 Safe-1 #523/#5
 - **Perf-tail (Fwd-1, NOT in §4.76's enumerated set):** #1046 `Eval-C-3 LATEST_CURSOR_HORIZON.fetch_add` happens BEFORE the dispatch loop (bump wasted for any future subscriber registering before next publish); #1047 `Eval-C-4` wasmtime Engine `async_support` enabled with zero async host-fns (forward-architectural-shape; META #746 — couples §4.65 wasmtime fork); #1048 `Eval-D-3` STREAM `run_stream_persist` spawns OS thread per call (~100µs spawn = 33-50% of §14.6 mixed-handler target; pub surface external callers may bind — couples §4.43 v1-API-stabilization).
 
 **Acceptance criteria (Phase-4-Meta).** #580/#584 dispositioned at Phase-4-Meta open by the orchestrator (#580 bundles with the §4.80 P-II `from_canonical_bytes_bounded` workspace sweep as the benten-eval typed-CALL call site); #622 consolidated to the single public Inv-4 helper; #523/#524/#528 error-loss/panic surfaces get typed-error or observability treatment (#524 fail-closed-vs-typed decision surfaced); #656/#657 concurrency primitives aligned to the `Condvar`/split-borrow patterns; #1046/#1047/#1048 perf-tail folded into the §4.76/§4.65 Phase-4-Meta perf+wasmtime windows. ~200-400 LOC at Phase-4-Meta. The #580/#584 security-adjacent arms are surfaced to the orchestrator, NOT decided in this doc-only lane.
+
+---
+
+### §4.168 F-073 stale-ignore residuals — the seven arms that CANNOT be un-ignored (the live §4.29 successor)
+
+**This row exists because §4.29 has now missed TWO named destinations.** §4.29 is titled
+"…stale-rationale sweep at pre-tag (**Phase-4-Foundation pre-tag**)"; Phase-4-Foundation
+SHIPPED at tag `phase-4-foundation-close` on 2026-05-14 without that sweep firing, exactly
+as Phase 3 had shipped without the §7.3.D batch it in turn cited. Retargeting the F-073
+residuals at §4.29 would have reproduced the defect one hop over, so this row is minted as
+its live successor. Per HARD RULE rule-12 clause-(b) the destination must EXIST at the
+moment the cite is written — that is what this row is for.
+
+**Provenance.** R6 round #1 finding **F-073**: 25 `#[ignore]` arms across 15 files cite a
+destination that shipped two phases ago. 16 of them (Family A, `§4.29` / Phase-4-Foundation
+pre-tag) were 100 % `unimplemented!()` placeholders and were **DELETED** at R6 round #1
+after real green coverage was located for each stated obligation. 4 of the 9 Family-B arms
+(`G26-A`/`G26-B wave-10`) were verified true-at-HEAD or made true and **UN-IGNORED** in the
+same commit. The seven residuals below are the remainder: each was verified FALSE at
+`7bb1a9fa`, and closing each is real out-of-partition work, not a test edit.
+
+**The seven residuals.**
+
+1. **`plugin-manifest-validation.yml` does not exist** — no such workflow, and
+   `.github/branch-protection.yml` names no such context. Manifest BYTES are not unguarded
+   (`plugin_manifest_full_round_trip` + `f_inj_1_install_record_signing_payload_injective`
+   are both on the required frozen-bytes corpus); what is missing is the PR-time
+   schema-check workflow. Pin:
+   `crates/benten-engine/tests/plugin_manifest_validation_workflow_required_on_pr.rs`.
+2. **`admin-ui-v0-build.yml` does not exist** — `admin-shell-e2e.yml` exists and may be the
+   intended successor surface. **Resolve which before authoring.** Pin:
+   `crates/benten-engine/tests/admin_ui_v0_build_workflow_required_on_pr.rs`.
+3. **The branch-protection umbrella over (1) + (2)** needs RE-SCOPING, not just
+   un-ignoring: its third leg (materializer determinism) was CLOSED DIFFERENTLY at R6
+   round #1 — registered on the required frozen-bytes corpus rather than minted as its own
+   workflow context. Pin:
+   `crates/benten-engine/tests/branch_protection_spec_lists_new_phase_4_foundation_required_contexts.rs`.
+4. **`docs/SECURITY-POSTURE.md` has no §13.11 and no `#199`** (zero occurrences of each,
+   verified). Three of the pin's five arms DO pass; only the two section-number / PR-number
+   arms are stale. Closing this is a doc-cite retarget at the closure narrative's current
+   home. Pin:
+   `crates/benten-engine/tests/security_posture_phase_4_foundation_section_13_11_closed.rs`.
+5. **The `ucan-grant` Atrium example does not exist**, and the pin's walk is
+   un-authorable as specified for two further independent reasons (it treats
+   `packages/engine/examples/atrium-*` as DIRECTORIES joined with `handler.ts`, but they are
+   FILES; and `did-resolution.ts` lacks the `atrium-` prefix the loop filters on). The
+   12-primitive commitment itself IS covered by green unignored siblings. Closing this needs
+   EXAMPLE AUTHORING. Pin: `crates/benten-engine/tests/atriums_no_new_primitives.rs` (the
+   one arm; the file's other two are out of scope).
+6. **`ChangeEvent::synthesize_for_test(...)` was never minted** — the only occurrences in
+   the tree are the commented pseudo-code in the pin itself. Not redundant: the six green
+   siblings all exercise `CapRecheckFn` directly, none exercises the
+   `CapRecheckFn` → `DeliveryCapRecheck` translation-layer decision parity (the
+   25th-p/c-drift shape). Needs the test-only constructor first. Pin:
+   `crates/benten-engine/tests/cap_recheck_helper_no_refactor_on_g14d_or_g17a1_landing.rs`
+   (the one arm; the file's other seven are green and unignored).
+7. **`exit_criterion_7` slot 6 is MIS-SPECIFIED** — all six named pin files exist and five
+   carry the `PrimitiveKind`/`Strategy` substance marker the umbrella's own pseudo-code
+   specifies, but
+   `crates/benten-renderer-tauri/tests/three_rung_baked_in_17_defense_extension_pin.rs`
+   contains no `PrimitiveKind`: it is a wasm32 bundle-content / baked-in-#17
+   deployment-shape pin. Authoring verbatim REDs; relaxing the marker to `Renderer` would go
+   GREEN while asserting something the umbrella does not claim (pim-18 SHAPE-not-SUBSTANCE).
+   Pin:
+   `crates/benten-engine/tests/exit_criterion_7_aggregates_6_distributed_primitive_pins.rs`.
+
+**Acceptance criteria.** (a) Residuals 1-3 close together or not at all — 3 is the umbrella
+over 1 and 2, re-scoped to two legs. (b) Residual 4 is a two-line doc-cite retarget and
+should NOT wait on the others. (c) Residual 5 closes by authoring the missing
+`ucan-grant` example AND re-specifying the walk against files-not-directories; **do not**
+loosen the four-category requirement to make it pass. (d) Residual 6 closes by minting
+`ChangeEvent::synthesize_for_test` behind the existing test-only cfg gate. (e) Residual 7
+closes by naming a REAL renderer-tauri 12-primitive pin for slot 6, **or** by dropping to
+five slots with a written reason — never by loosening the marker (that is the exact
+SHAPE-not-SUBSTANCE failure pim-18 §3.6f exists to stop).
+
+**A destination that ships without firing is the defect, not the schedule.** If this row's
+own phase closes with these still open, mint the successor rather than re-pointing at this
+one. Estimated scope: ~300-500 LOC (two CI workflows + one example + one test-only
+constructor + two re-scopings).
+
+---
+
+### §4.169 The 84 `phase-3-backlog §7.3.D` ignore arms — inventoried, ratcheted, NOT closed
+
+**This row is the live receiving destination for every `#[ignore]` arm in the tree
+whose reason cites `phase-3-backlog §7.3.D`.** It is the sibling of §4.168: §4.168
+receives the F-073 *direct* residuals (arms that cited `Phase-4-Foundation pre-tag` /
+`G26-A` / `G26-B wave-10`), this row receives the larger *indirect* cluster that
+§4.29 was supposed to sweep.
+
+**Why it exists.** §4.29 is titled "…stale-rationale sweep at pre-tag
+(**Phase-4-Foundation pre-tag**)" and its own closing instruction was to sweep this
+cluster "coupled with the cite-drift G26-A wave". Phase-4-Foundation SHIPPED at
+`phase-4-foundation-close` on 2026-05-14 with neither the sweep nor the G26-A wave
+firing — the second consecutive phase in which this cluster's named destination
+shipped without discharging it (Phase 3 was the first). §4.29 is therefore marked
+SUPERSEDED and these 84 arms are re-homed here. Per HARD RULE rule-12 clause-(b) the
+destination must EXIST and RECEIVE the entry: the full inventory is enumerated below
+rather than summarised, precisely so this row cannot become a tally mark.
+
+**Enforcement.** `crates/benten-engine/tests/stale_ignore_destination_ratchet.rs`
+(registered on the required `frozen-bytes corpus (v1-beta wire freeze)` lane) holds
+three ratchets: no arm may name the superseded §4.29 in a `Destination:` clause; any
+arm citing a shipped destination must name a live receiving row; and **this
+inventory may shrink but may never grow past 84**. A fourth arm pins the ceiling in
+this heading against the constant in the test, so the row and the code cannot drift.
+
+**Honest status: this row does NOT claim the work is done.** It stops the bleed and
+makes the debt countable. Every arm below is still `#[ignore]`d.
+
+**Measured disposition at r9-base `df0c8287`** (all 13 assertion-bearing arms were
+actually executed with `--run-ignored all`; none was dispositioned on inspection):
+
+- **71 arms are inert placeholders** — 67 `unimplemented!()`/`todo!()` bodies plus 4
+  bare `panic!()` shells. They cannot be un-ignored; there is nothing to run. They
+  are NOT deleted here: unlike the 16 Family-A arms deleted at R6 round #1, green
+  replacement coverage has not been located for each stated obligation, and deleting
+  an obligation whose coverage is unverified is worse than carrying it.
+- **13 arms carry real assertions and ALL 13 FAIL when un-ignored.** Verified by
+  scoped `cargo nextest run --run-ignored all`. Root causes, all confirmed by
+  reading the production surface:
+  - **4 IVM rebuild-equivalence arms** (`view1` / `view2` / `view3` / `view5`
+    `*_rebuild_matches_incremental_state`) — `View::rebuild()` is implemented as
+    *clear state + restore budget* (`crates/benten-ivm/src/views/capability_grants.rs:283`,
+    `.../version_current.rs:268`), which is exactly what its doc comment says it
+    does. There is no event-log replay seam, so a rebuilt view is empty while the
+    incremental one holds an event. The arms pin a contract the seam does not yet
+    provide. **This is a missing seam, not an IVM correctness defect** —
+    `rebuild()` is honest about its Phase-1 scope.
+  - **2 TOCTOU arms** (`benten-caps/tests/toctou_iteration.rs`) — the shared helper
+    `benten_engine::testing::iterate_write_handler(_max)` returns
+    `SubgraphSpec::empty("iterate_write")` and discards its argument
+    (`crates/benten-engine/src/testing.rs:18`), so zero writes occur and the
+    100-write assertion sees 0. Test-scaffolding gap. (The helper is correctly
+    gated behind `#[cfg(any(test, feature = "test-helpers"))]`, so this is not a
+    production leak.)
+  - **3 `requires`-enforcement arms** (`benten-eval`) — fail with `NotFound` /
+    panic inside `crates/benten-engine/src/outcome.rs:311`; same unpopulated-handler
+    scaffolding root cause.
+  - **2 transport arms** (`benten-sync/tests/transport_loopback.rs`) — genuinely
+    blocked on external infrastructure (synthetic-NAT fixture + relay endpoint in
+    CI); the 4 non-ignored siblings in that file pass.
+  - **2 remaining** (`compromises_regression.rs`, `version_current.rs` integration)
+    — same unpopulated-subgraph scaffolding family.
+
+**Inventory (84 arms / 40 files), grouped by crate.**
+
+*`benten-caps` — 2*
+- `crates/benten-caps/tests/toctou_iteration.rs` (2)
+
+*`benten-engine` — 28*
+- `crates/benten-engine/tests/atriums_no_new_primitives.rs` (1)
+- `crates/benten-engine/tests/cap_recheck_in_flight.rs` (1)
+- `crates/benten-engine/tests/emit_broadcast_replicas.rs` (1)
+- `crates/benten-engine/tests/g21_t3_section_d_pins.rs` (1)
+- `crates/benten-engine/tests/hlc_attribution_frame.rs` (1)
+- `crates/benten-engine/tests/integration/compromises_regression.rs` (1)
+- `crates/benten-engine/tests/integration/version_current.rs` (2)
+- `crates/benten-engine/tests/inv_13_dispatch.rs` (2)
+- `crates/benten-engine/tests/manifest_temporal_binding.rs` (4)
+- `crates/benten-engine/tests/no_unauthorized_dyn_error.rs` (1)
+- `crates/benten-engine/tests/prop_no_state_leak.rs` (1)
+- `crates/benten-engine/tests/subscribe_cap_recheck.rs` (5)
+- `crates/benten-engine/tests/subscribe_cap_recheck_concurrency.rs` (1)
+- `crates/benten-engine/tests/subscribe_device_revoke.rs` (1)
+- `crates/benten-engine/tests/ucan_replay_audience.rs` (1)
+- `crates/benten-engine/tests/wait_resume_cross_process.rs` (3)
+- `crates/benten-engine/tests/wait_resume_policy.rs` (1)
+
+*`benten-eval` — 3*
+- `crates/benten-eval/tests/requires_enforcement.rs` (2)
+- `crates/benten-eval/tests/requires_property_call_time_check.rs` (1)
+
+*`benten-ivm` — 5*
+- `crates/benten-ivm/tests/algorithm_b_cross_replica.rs` (1)
+- `crates/benten-ivm/tests/view1_capability_grants.rs` (1)
+- `crates/benten-ivm/tests/view2_event_dispatch.rs` (1)
+- `crates/benten-ivm/tests/view3_content_listing.rs` (1)
+- `crates/benten-ivm/tests/view5_version_current.rs` (1)
+
+*`benten-sync` — 16*
+- `crates/benten-sync/tests/atrium_revoke_order.rs` (4)
+- `crates/benten-sync/tests/graph_encoded_state.rs` (3)
+- `crates/benten-sync/tests/host_atrium_publish_view_result_caps.rs` (5)
+- `crates/benten-sync/tests/rate_limit_consumption.rs` (1)
+- `crates/benten-sync/tests/transport_loopback.rs` (2)
+- `crates/benten-sync/tests/wire_envelope.rs` (1)
+
+*workspace-level test packages — 30*
+- `tests/integration/atrium_browser_thin_client.rs` (2)
+- `tests/integration/atrium_three_peer.rs` (1)
+- `tests/integration/atrium_two_process.rs` (1)
+- `tests/integration_browser_thin_client/atrium_browser_thin_client_g18_a_indexeddb.rs` (2)
+- `tests/phase_3_workspace/cargo_vet_policy_phase_3.rs` (6)
+- `tests/phase_3_workspace/doc_drift_security_posture.rs` (1)
+- `tests/phase_3_workspace/paper_prototype_revalidation.rs` (2)
+- `tests/phase_3_workspace/security_posture_compromises.rs` (10)
+- `tests/phase_3_workspace/thin_client_protocol.rs` (5)
+
+**Acceptance criteria.** (a) The two scaffolding root causes are the highest-leverage
+closures and unblock 5 arms between them: populate
+`benten_engine::testing::iterate_write_handler` so it actually emits `max` WRITE
+steps, and populate the `requires`-enforcement handlers. Neither is blocked on
+anything. (b) The 4 IVM arms close when — and only when — a rebuild-from-event-log
+seam exists; until then their ignore reason is accurate and should be left alone.
+(c) The 2 transport arms stay ignored until CI grows a relay/NAT fixture. (d) The 71
+inert placeholders must each either receive a body or be deleted **against located
+green replacement coverage**, one at a time — a bulk delete would repeat the
+false-closure shape this row exists to prevent. (e) **Do not lower the ratchet
+ceiling to make room.** The ceiling exists to stop growth; if an arm is genuinely
+new work it needs its own row, not a slot in this one.
+
+**If this row's phase closes with these still open, mint the successor rather than
+re-pointing at this one.** That instruction is the entire lesson of §4.29 and it is
+repeated here deliberately. Estimated scope: ~400-700 LOC.
+
+---
+
+### §4.170 Binding grammar — E3 completion (the post-tag build)
+
+**This row is the live receiving destination for the binding-grammar build.** Design of
+record: `docs/future/binding-grammar.md` (R0-INPUT — per `feedback_addl_pipeline_full_observance`
+the build runs its own R0→R1 pipeline with that document as input). Origin:
+`docs/future/engine-fit-and-gaps.md` §3.1 ("composition does not compose"); decision-log D-105.
+
+**What lands here, in order:**
+1. The general sigil resolver in the walk (`$input`, `$input.<field>` at v1), resolved at
+   property-read time under the boundedness carve (data properties bind; graph-shape/budget
+   properties — CALL `target`/`call_op`, ITERATE `max` — never do; preserves Inv-8 exactly).
+2. CALL passes its staged input instead of `Node::empty()` (`call.rs:127`) — the callee's
+   `$input` binds; handler composition carries data across its one joint.
+3. WAIT snapshots live bindings into `context_binding_snapshots` (`exec_state.rs:272`) — the
+   frozen slot reserved for exactly this, currently always written empty.
+4. **STREAM unification (MANDATORY):** `resolve_stream_source` (`engine_stream.rs:1075`)
+   retires into the general resolver. Two resolvers for one grammar is the GCS-16 dual-home
+   drift class in semantics rather than bytes.
+5. **crud harvest (OPTIONAL, last, canary-style):** re-express `subgraph_for_crud`'s
+   clone-and-patch as `properties: "$input"` on a stored template — deletes the per-call
+   specialization machinery and shrinks the documented arch-10 registered-vs-walked CID
+   divergence. crud is the most-exercised path in the engine; it moves only after the general
+   mechanism is proven.
+6. Further sigils (`$result`, `$item`, `$index`, `$results`, `$error`) additively, per
+   position, as ITERATE/error-path integration is designed. The `$` namespace is reserved
+   pre-tag (see the pre-tag items in `binding-grammar.md` §5, folded into the W-REC wave).
+
+**Not this row:** the four PRE-tag items (freeze-record disclosure, position-scoped `$`
+reservation + ErrorCode, the `InfiniteEmptyProducer` decision, the stale resolver comment) —
+those ride the pre-tag fix waves and must land before `phase-4-meta-core-close`.
+
+---
+
+### §4.171 IVM aggregation — the abelian fold kernel (the post-tag build)
+
+**This row is the live receiving destination for the IVM aggregation build.** Design of
+record: `docs/future/ivm-aggregation.md` (R0-INPUT — per `feedback_addl_pipeline_full_observance`
+the build runs its own R0→R1 pipeline with that document as input). Origin:
+`docs/future/engine-fit-and-gaps.md` §3.3; decision-log D-106.
+
+**What lands here, in order:**
+1. The fold kernel in benten-ivm under `Strategy::B` — Sum (i128 over `Value::Int`) + Count,
+   optionally grouped; per-view admitted-CID set; `Deleted` handled by subtraction from the
+   event-carried pre-image; commutative-only admission (order-sensitive folds refused typed).
+2. **Engine-side backfill-on-register** (label-index scan → synthesize into the view → attach
+   live with a `tx_id` watermark) + the typed not-backfilled refusal state. Without this a
+   balance view over an existing ledger returns 0, confidently.
+3. **The fail-closed error contract**: the fold marks itself stale before returning any error
+   (the subscriber's non-budget arm logs and leaves views Fresh — `subscriber.rs:307-313`).
+4. Declaration surface: additive `aggregate` field on `UserViewSpecBuilder` +
+   `ViewResult::Aggregates` + engine projection as synthetic `system:ivm:AggregateRow` Nodes
+   with `{group, value: Text(decimal-string), count, skipped}`; TS-side unknown-field
+   rejection in `validateUserViewSpec` (ships in the same change — an old package otherwise
+   silently strips the aggregate and registers a plain listing view) + retire the
+   `types.ts:1063-1065` `project?` FALSE-RECORD; ~3 ErrorCode mints with full mirrors.
+5. Typed-reject registration guards: version-chained input labels (CURRENT moves emit no
+   event); float folds; group keys that are not `Value::Text`; scale mismatch vs the
+   spec-pinned `(property, expected_scale)`.
+6. Later, additively, per demand: `on_change_batch` (tx-atomic application), `group_key`
+   query filter, per-epoch scale normalization; and the Z-set module (~200-400 LOC bespoke,
+   proptest-verified) behind `Strategy::Reserved` iff Min/Max-under-retraction or composed
+   incremental queries become real — never the `dbsp` crate (69-dep scheduler-owning runtime).
+
+**Not this row:** the pre-tag disclosure items (the "views return references, not computed
+values" freeze-record sentence; the `Reserved` rename window surfaced to Ben; the §4.43
+`ChangeEvent` posture citation; the ~30-LOC honesty tail incl. `deferred_to_phase: "Phase 3+"`
+and the stale #1084 cites) — those ride the pre-tag fix waves.
+
+---
+
+### §4.172 Bounded resources — single-owner admission (the post-tag build)
+
+**This row is the live receiving destination for the bounded-resource build.** Design of
+record: `docs/future/bounded-resources.md` (R0-INPUT; the build runs its own R0→R1 pipeline).
+Origin: `docs/future/engine-fit-and-gaps.md` §3.4; decision-log D-107 + D-108.
+
+**Design-space map for every other regime: `docs/future/bounded-resources-spectrum.md`** (D-108) —
+the whole "at most N" taxonomy, six mechanism families scored by trust model and winning regime.
+Three things from it that bind this row:
+
+1. **Write the guard as `count(rows attributed to me) < allowance(me)`, not `count(all) < C`.**
+   Identical under exclusivity, free today, and it *is* the escrow continuum — dealing 100% of C to
+   one peer makes escrow literally this design. Hardcoding `count(all) < C` is the single decision
+   that forks one mechanism into two. Make the allowance a **node CID indirection**, not an inline
+   integer, and **reserve the epoch/fencing integer** on the ownership record — epoch, not time, is
+   the reclaim primitive, and it needs no clock.
+2. **A per-property `mergeStrategy` slot is the one genuine now-or-never in the whole space.**
+   Property merge is locked to LWW at the sync layer; escrow needs a non-LWW rights ledger and
+   compensation needs a converging count, so freezing "properties are LWW, period" with no
+   annotation slot forecloses **both leaderless families** regardless of the bound declaration.
+   Single-owner is the one family that never touches the CRDT property layer, which is exactly why
+   the museum-regime record does not carry this. **Reserve the SLOT, never a strategy.**
+3. **Correct the ownership claim.** On the WRITE-primitive path `CapWriteContext.actor_cid` is
+   never populated (`primitive_host.rs:623-625`, ORCH-verified), so the policy sees a scope, not a
+   principal. Exclusivity rests on non-syncing local grants + operational discipline. Also state
+   zone-coupling in its **writer-partition** form and price it honestly — `n` zones × `n` anchors ×
+   fork-refusing version chains, not "free".
+
+**Also received here (pre-tag, small):** `AtriumHandle::register_peer_did` has **zero production
+callers** while its rustdoc states the G16-D handshake wires it in the present tense — so sync
+attribution falls back to synthetic `node-id:NNN` strings in production. Wire it or retense it;
+per rule 15 price the code fix first.
+
+**What lands here, in order:**
+1. The one new engine mechanism: an additive in-tx count read
+   (`Transaction::count_by_property`-shaped) + the graph-layer bound check sitting BELOW all
+   three write-entry families (`Engine::transaction` wrapper, direct `backend.transaction`
+   callers incl. `create_node`/`append_version`, the privileged `put_node_with_context`
+   family) + the `BoundExceeded { limit, current, available }` outcome arm. Placement
+   invariant: admission state is read inside the serialization domain of the commit that
+   writes it — the falsification arms in the record §2 are the acceptance tests.
+2. Bound declaration (`bound:decl`) + ownership record (`bound:ownership`, epoch-chained) +
+   override label/scope — data + existing capability machinery. **REQUIREMENT: each bound's
+   admission and override labels map to a dedicated sync zone** (the per-row merge recheck is
+   zone-granular; without this coupling the enforcement story has an oversell-shaped hole).
+3. `executionPolicy: owner` dispatch value; annotation home = system:-zone companion spec node
+   (outside handler content identity — decided in the record §5.1).
+4. Owner-side admission service (single-flight queue; `Transport::Http` wire framing —
+   declared-unbuilt at `thin_client.rs:607-615`; command handler → `call_as`).
+5. ErrorCode mints (~2: bound-exceeded with `{available, bound, owner_did}`;
+   owner-unreachable with `available` ABSENT — never a stale number presented as live) + full
+   mirrors.
+6. Handler UX front-end (BRANCH pre-check + `ON_REFUSED` edge) — permanently advisory, waits
+   on §4.170 (binding grammar) + §4.171 (the fold as reporting read).
+7. Hardening interlocks inherited: thread-keyed blocking TxGuard (same-thread nested → error,
+   cross-thread → queue); the pre-existing active-call frame cross-contamination under
+   concurrent walks (`engine.rs:873, 3887-3936`).
+8. Named rows: namespaced-bounds (per-DID partition story — namespaced writes skip
+   PROP_INDEX_TABLE today); counter-cache revisit-iff k ≫ 10³; **escrow revisit-iff
+   `C > 3·n·q_p99` AND measured multi-homed demand** (Bailis theorem recorded in the design —
+   escrow relocates coordination, nothing removes it).
+9. R1 verification items from the record §8: merge-recheck authority binding in relay
+   topologies; WAIT-suspension × buffered-ops interplay; quantity representation
+   (row-per-unit vs qty property); sync-ingress re-validation.
+
+**Not this row:** the pre-tag items — the freeze-record disclosure sentence (drafted in the
+record §5.2); the `WriteContext::enforce_system_zone` zero-caller false-record
+(wire/delete/retense before the tag — post-tag removal is a narrowing); both ride W-REC.
+
+---
+
+### §4.174 THE COMPOSITION-COMPLETENESS TRIO — sequencing (Ben-prioritised 2026-08-12)
+
+**This row does not receive work. It ORDERS three rows that do** — §4.170 (binding grammar),
+§4.171 (IVM aggregation), §4.172-adjacent addressing — and records why they are now the first
+Composing work rather than three items among many.
+
+**Why these three, together.** Two unrelated outside evaluations — a museum revenue system and an
+LLM inference runtime — arrived within days and hit the same three gaps. That convergence
+reframes them from adopter requests into **v1 completeness questions** (see
+`engine-fit-and-gaps.md` §1). And a fourth signal points at the same place: **SANDBOX-frequency**.
+SANDBOX was designed as the pressure valve and as the test of whether the twelve primitives cover
+enough. Reaching for it constantly is evidence — but of *these three gaps*, not of a missing
+thirteenth primitive. Handlers cannot name what they were given, cannot traverse an edge, and
+cannot fold a column, so authors escape to the one place arbitrary logic is possible. **Closing
+the trio should reduce SANDBOX dependence measurably, and that is a falsifiable prediction worth
+recording now so it can be checked later.**
+
+**Sequence, with the dependency that fixes it:**
+
+1. **BINDING (§4.170) first.** It unblocks the other two and one more besides. A handler that can
+   name its input is the precondition for a data-dependent `BRANCH` (`condition_value` is
+   normatively specified in `DSL-SPECIFICATION.md` with zero production writers), and it is the
+   precondition for **SANDBOX's missing data channel** — the guest is invoked with an empty
+   argument slice because the handler's own input is dropped at `run_inner`, so the wasm boundary
+   cannot be handed something the handler never received. SANDBOX's channel is not a separate
+   feature; it is this gap at the wasm boundary and likely falls out of the same work.
+2. **ADDRESSING second.** The traversal half of relative addressing — READ resolves a `cid` or a
+   `label` and cannot follow an edge. Ben's own framing is the sharper one: the graph-native
+   delivery of an input is an **edge to the input node**, and a handler cannot traverse it. See
+   `engine-fit-and-gaps.md` §3.1 for why the binding-grammar record covers only the anchor half,
+   and `SubgraphSpec` as the shape already ratified for sharing and withheld from execution.
+3. **AGGREGATION (§4.171) third.** Independent of the first two mechanically, but sequenced last
+   because it is the one with a complete design record and no pre-tag component. Note it is the
+   one an adopter is *most* exposed to today: the museum's entire money model is "balances are
+   IVM views over append-only entries," which the engine cannot compute.
+
+**Pre-tag exposure is small and already identified — the tag is NOT blocked by this priority:**
+
+| item | pre-tag obligation |
+|---|---|
+| binding | the position-scoped `$` reservation (narrowing, no post-tag valve) + 3 disclosures — `binding-grammar.md` §5 |
+| addressing | ONE verification: is READ's accepted-property set frozen closed, or is a third addressing mode additive? — `engine-fit-and-gaps.md` §5 |
+| aggregation | **none** |
+
+**AMENDMENT 2026-08-12 — aggregation may not be an engine feature at all.** Ben proposed that a
+fold is a **subgraph triggered on change** that mints a new version of a canonical total-node,
+rather than a kernel inside `benten-ivm`. SUBSCRIBE delivery is post-commit and asynchronous, which
+dodges all three structural blockers §4.171's design rests on, and a version-chained balance is
+*more* auditable — which the motivating adopter (statutory audit obligations) values more than a
+number in a view. CLAUDE.md's app-layer-before-engine-extension rule puts the burden on the ENGINE
+feature to prove the pattern insufficient, and **we never attempted that proof**. So step 3 becomes
+**"build the pattern, then decide"**, with the four named failure conditions in
+`ivm-aggregation.md` §10 as the test. The sequencing is unchanged — both shapes need binding first.
+
+**BLOB TIER (§3.2b-ii) — direction recorded 2026-08-12, build deferred:**
+- **`iroh-blobs` is the named likely crate** for the bulk transport: flow control, resumption,
+  range requests, verified streaming, and it aligns with `IROH_BLOCK_SIZE` which the AEAD layer
+  already pins. **It is NOT currently a dependency** — it appears only in *prose* inside Cargo.toml
+  descriptions in three manifests, which ORCH misread as a dependency entry.
+- **Do not add the dependency yet.** It lands a new tree onto a freeze branch mid-convergence where
+  `cargo-deny` and `cargo-audit` are required checks and four advisories fired this week, and
+  §3.2b-ii has no design and no consumer. Wire it in Composing **with** the extent surface, which
+  is the thing that actually needs it.
+- **`V1-FROZEN-INTERFACE.md` §4.62 is a FALSE-RECORD and rides W-REC (#47).** It freezes
+  `BlobBackend` naming `put_blob`/`get_blob`/`has_blob` at `blob_backend_trait.rs`. The real trait
+  is `get`/`put`/`is_persistent`/`delete`/`list_cids` in `blob_backend.rs`. **None of those three
+  methods exists and neither does that file.** Fix the RECORD, not the code — `put_blob`/`get_blob`
+  are stale names for methods that exist under different spellings.
+- **EXCEPT `has_blob`, which is a genuine gap.** ORCH-verified: there is **no existence check on the
+  trait at all**, so "do I already hold this blob?" requires fetching it. For partial model fetch —
+  "which of these ~1,000 CIDs do I have?" — that is exactly the wrong shape. Additive; belongs with
+  the tier.
+- **Node granularity for bulk: per-tensor, chunked to a uniform 8–16 MB ceiling** (~900–1,000 nodes
+  for a 14 GB model). Supersedes the expert-granular recommendation, which was right for an MoE
+  model and the model that needs distribution is dense. See `gpu-compute.md` §6.
+
+**What this row does NOT decide:** whether any of the three moves into Core. Ben's standing
+position is that Core and Composing are both pre-v1, so placement follows what makes engineering
+sense rather than urgency. Recorded as Composing-first with the two pre-tag reservations above.
+
+---
+
+### §4.173 Numeric-limit configurability — the accepted-then-ignored knobs and the unbuilt operator surface
+
+**This row is the live receiving destination for everything §3.7 of
+`docs/future/engine-fit-and-gaps.md` verified and did not fix.** Origin: that section, whose
+per-knob verdict table is the evidence and is not repeated here. The disclosure half (rewriting
+`ENGINE-SPEC` §4.1 + the multi-tenancy qualifier) is done separately and is **not** this row.
+
+**Context in one line:** `ENGINE-SPEC` asserted *"All numeric limits are configurable per capability
+grant"*; nothing derives a numeric bound from a grant, and only one limit (SANDBOX wallclock) has any
+operator surface at all.
+
+**A. The two accepted-then-ignored knobs — code fixes, rule 15, and neither is a narrowing.**
+
+1. **`output_max_bytes` is validated at registration and never read at runtime.**
+   `invariants/sandbox_output.rs` reads the node property and rejects declarations above the 16 MiB
+   ceiling. The runtime budget comes from a *differently named* property — `output_limit` — feeding
+   `SandboxConfig::output_bytes`, default 1 MiB. A handler declaring `output_max_bytes: 4_000_000`
+   passes registration and silently runs under 1 MiB. **The `InvariantConfig::max_sandbox_output_bytes`
+   rustdoc claims the runtime `CountedSink` enforces the per-node value; it does not** — a
+   FALSE-RECORD in a rustdoc. Fix: make the runtime read the property registration validates (or
+   typed-reject the inert one). Accepting a second spelling is additive; silently ignoring a declared
+   budget is the defect.
+2. **`SandboxConfig::max_wasm_stack` is reported but not enforced.** The enforced value is
+   hardcoded on the process-wide `OnceLock<wasmtime::Engine>` in `sandbox/instance.rs`; the field is
+   consumed only to populate the `SandboxError::StackOverflow` error payload. Setting it changes the
+   error text, not the limit. **Do not "fix" this by making it per-call** — `max_wasm_stack` is a
+   `wasmtime::Config` setting fixed for an `Engine`'s life, so per-call variation costs the module
+   cache the singleton exists to hold. The correct fix is to stop the two from being able to diverge:
+   source the payload from the same constant the `Config` uses, so the reported number cannot lie.
+
+**B. The operator surface that does not exist.** *Partly closed in the same wave that opened this
+row:* `EngineBuilder::invariant_config` and `EngineBuilder::iteration_budget` give a deployment the
+Inv-2/3/5/6 + sandbox-nest + sandbox-output bounds and the Inv-8 step budget at construction time.
+That is the right home for structural bounds — an operator should not be able to relax a structural
+invariant from a text file — so what remains here is the genuinely *operational* tail, plus the
+knobs the builder does not reach.
+
+**`engine.toml` is worse off than "carries only one section" — it is not loaded at all.**
+`EngineConfig::load_or_default` has **no production caller**: outside its own module the type appears
+only as a re-export in `benten-engine`'s `lib.rs`, and `Engine::open` → `EngineBuilder::new().open(path)`
+never invokes it. The parser, the `ENGINE_TOML_WALLCLOCK_MAX_HARD_CAP` 1-hour cap, the `tracing::warn!`
+on widening and the typed `E_ENGINE_CONFIG_INVALID` are all real, tested code reachable only from
+tests. So dropping an `engine.toml` next to a deployment changes nothing, silently. Two false records
+ride on this and are **fixed as disclosure in this same wave** (`docs/SANDBOX-LIMITS.md` gained a
+known-gap callout, `ENGINE-SPEC` §4.1(a) was corrected): the `E_ENGINE_CONFIG_INVALID` catalog entry
+describes a code that cannot fire on a production path, and the `E_SANDBOX_WALLCLOCK_EXCEEDED` /
+`E_SANDBOX_WALLCLOCK_INVALID` fix-hints instruct operators to relax an `engine.toml` ceiling — an
+action with no effect. **The wiring itself is the open item**: one call in the builder's `open` path,
+plus deciding precedence against `EngineBuilder` methods (a). Until it lands, the honest statement is
+that the engine has **no functioning operator-facing configuration surface at all**.
+
+Still a recompile after the builder work: evaluator stack depth 64 (now *derived* from Inv-2
+`max_depth` rather than independently settable) and the wasm guest stack (structurally — see A.2).
+SANDBOX memory left this list in the same wave: 64 MiB is now a ceiling, tightenable per-handler via
+the `memory_limit` property. Extending `engine.toml` is purely additive (new optional keys, absent ⇒
+built-in default) and therefore has no tag deadline — but *wiring the loader at all* is a live gap,
+not an extension. **Two constraints inherited from the existing `[sandbox]` design, which got this right
+and should not be re-litigated per-knob:** every relaxation needs its own hard cap with a typed
+load-time failure (the `ENGINE_TOML_WALLCLOCK_MAX_HARD_CAP` shape), and relaxing past a built-in
+security bound warns at startup. A config loader that lets an operator set `max_nodes = u32::MAX`
+silently is worse than no loader.
+
+**C. `GrantReaderConfig::max_chain_depth`** (default 64) — written only by a test, against a harness
+its own rustdoc calls a "test harness". Either wire it to a real reader or retense the rustdoc; per
+rule 15 price the code fix first. Small, and it sits in the capability subsystem, which is precisely
+where a reader who believed the "per capability grant" sentence would have gone looking.
+
+**D. Do NOT build "limits per capability grant" as stated.** Recorded so a future reader does not
+treat the corrected sentence as a spec. Grants are cap-string sets (`CapBundle` = `{caps,
+description, signature}`); making them carry numeric budgets is a wire-format change to a signed
+artifact plus an attenuation semantics question (does a delegated grant's budget subtract from its
+parent's, or shadow it?) that nobody has answered. It is a design problem, not a wiring problem, and
+it is **out of scope** until someone wants it for a named use case. The per-tenant-budget use case
+from the museum evaluation is served by §4.172's allowance indirection, which is a different and
+better-understood mechanism.
+
+**E. `docs/ENGINE-SPEC.md` is default-untracked — surfaced for Ben, not decided.** It is gitignored
+("internal-audience in current form"), so it is absent from every worktree and fresh clone. Three
+costs: reviewers in worktrees cannot see claims made about it and may infer they do not exist;
+corrections cannot ride tracked-file patches; CI can never gate its accuracy. The repo has re-tracked
+four docs for exactly this reason (`SECURITY-POSTURE`, `INVARIANT-COVERAGE`, `HOST-FUNCTIONS`,
+`DSL-SPECIFICATION`), each because a HARD-RULE clause-(b) destination must exist in fresh clones —
+and this row is now a fifth instance of the same pattern, since §3.7 cites the untracked file as its
+evidence. **But re-tracking publishes ~49 KB of internal-audience prose, which is a publication
+decision and Ben's call, not an orchestration one.** Options: re-track as-is (precedent exists,
+content unchanged, visibility restored); rewrite-then-track (slower, cleaner); leave untracked and
+accept that this class of claim is permanently un-gatable. No default is assumed here.
 
 ---
 

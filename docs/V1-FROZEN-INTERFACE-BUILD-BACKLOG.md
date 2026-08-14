@@ -474,13 +474,13 @@ INTERNALS.md update).
 ## Row 7 — Name-collision rename (RestrictedSpec + KeyMaterial)
 
 **Target files/symbols:**
-- `crates/benten-core/src/subgraph_spec/spec.rs:126` — rename
+- `crates/benten-core/src/subgraph_spec/spec.rs:115` — rename
   `pub enum RestrictedSpec` → `pub enum SubgraphSpecRestriction`.
 - `crates/benten-caps/src/restricted_spec.rs:103` — rename
   `pub struct RestrictedSpec` → `pub struct RestrictedScope`.
-- `crates/benten-crypto-suite/src/aead.rs:85` — rename
+- `crates/benten-crypto-suite/src/aead.rs:91` — rename
   `pub struct KeyMaterial` → `pub struct AeadKeyMaterial`.
-- `crates/benten-caps/src/authorization_grant.rs:166` — rename
+- `crates/benten-caps/src/authorization_grant.rs:178` — rename
   `pub struct KeyMaterial` → `pub struct GrantKeyMaterial`.
 
 **What to build:**
@@ -677,7 +677,7 @@ text).
 | Row | Item | Status |
 |---|---|---|
 | 1 | cargo-public-api baselines + napi cascade + test-site sweep | **PARTIALLY LANDED** (commit `fb7c212d`) — 14 baselines regenerated; CI workflow expanded 8→14 crates. Sub-tasks 1.a (napi cascade) + 1.b (test-site sweep) + 1.c (no-regression test pin) NAMED for the next follow-up sub-pass per HARD RULE 12 BELONGS-NAMED-NOW (visibility-tighten work; current baselines reflect HEAD surface which is the right freeze-time snapshot). |
-| 2 | #1204 TS parity gate | **LANDED** (commit `13322df4`) — workflow at `.github/workflows/ts-public-api.yml`; baseline at `packages/engine/etc/public-api.txt` (403 LOC; extract-from-.d.ts structural diff). api-extractor migration NAMED for v1-Composing. |
+| 2 | #1204 TS parity gate | **LANDED** (commit `13322df4`) — workflow at `.github/workflows/ts-public-api.yml`; baseline at `packages/engine/etc/public-api.txt` (1927 LOC; whole-.d.ts-text structural diff, comments stripped by the compiler — widened from opening-lines-only at the CI-integrity pass S-2 close; the prior 403-LOC cite was itself stale against the then-committed 417). api-extractor migration NAMED for v1-Composing. |
 | 3 | EncryptionClass enum mint | **LANDED** (commit `a9d2753c`) — `pub enum EncryptionClass { Public, Confidential }` at `crates/benten-core/src/encryption_class.rs:36` + codepoint table + typed-reject dispatch + 4 unit tests. Annotated `drift-detect-mirror: ignore` for `EncryptionClassError` (internal-only until v1-Composing §8-CC consumer wires up). |
 | 4 | Engine::walk_share_scope verify-or-build | **LANDED** (commit `7af94d06`) — `Engine::walk_share_scope` minted at `crates/benten-engine/src/engine_share_scope.rs:46` + new `ErrorCode::SubgraphSpecWalkFailed` (CATALOG_VARIANT_COUNT 191 → 192) + end-to-end test pin. |
 | 5 | MerkleRangeProofBackend verify-or-defer | **DEFERRED to G-COMP-1 per Option A** (commit `d2616800`) — verified trait does NOT exist at HEAD; deferral named in `docs/future/phase-4-backlog.md §4.64`. |

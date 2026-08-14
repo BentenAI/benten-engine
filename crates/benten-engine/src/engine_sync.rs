@@ -341,6 +341,37 @@ pub struct DeviceAttestationEnvelope {
     pub envelope_signature: Vec<u8>,
 }
 
+/// GAP-KDB Fork-A (ENG-1) — a device key that can produce its
+/// device-attestation-envelope signature under its OWN key shape.
+///
+/// A classical `did:key` device signs a 64-byte Ed25519 envelope
+/// signature; a `did:benten` device (design §4 — each device is its own
+/// `did:benten`) signs a LAMPS composite. Both are recovered + verified on
+/// the receive side by [`DeviceAttestationEnvelope::verify`], which
+/// resolves the device DID's signing key and dispatches the hybrid verify
+/// on its shape — so `new_signed` stays agnostic to which shape the device
+/// is.
+pub trait EnvelopeDeviceSigner {
+    /// Produce the envelope-signature wire bytes over `msg`.
+    fn sign_envelope(&self, msg: &[u8]) -> Vec<u8>;
+}
+
+impl EnvelopeDeviceSigner for benten_id::keypair::Keypair {
+    fn sign_envelope(&self, msg: &[u8]) -> Vec<u8> {
+        // Classical `did:key` device — a bare 64-byte Ed25519 signature.
+        self.sign(msg).to_bytes().to_vec()
+    }
+}
+
+impl EnvelopeDeviceSigner for benten_crypto_suite::sig::Keypair {
+    fn sign_envelope(&self, msg: &[u8]) -> Vec<u8> {
+        // `did:benten` device — the v1-beta default LAMPS composite.
+        benten_crypto_suite::sig::SignatureSuite::v1_default()
+            .sign(self, msg)
+            .to_wire_bytes()
+    }
+}
+
 impl DeviceAttestationEnvelope {
     /// Current wire-format version for the device-attestation envelope.
     /// V2 carries signed attestation + payload-hash + session-nonce +
@@ -364,6 +395,18 @@ impl DeviceAttestationEnvelope {
     /// V1 senders against V2 receivers fail at decode rather than
     /// silently round-tripping unsigned bytes.
     pub const MAX_WIRE_VERSION: u8 = 2;
+
+    /// Fail-closed ceiling on the raw wire bytes accepted by
+    /// [`DeviceAttestationEnvelope::from_canonical_bytes`] (Compromise #28
+    /// / META #629 DoS-sweep).
+    ///
+    /// The live caller is already bounded by the 4-MiB transport `RECV_CAP`
+    /// (`benten_sync::transport`), but its wire-decode siblings
+    /// (`HandshakeFrame` / `MstDiffFrame` / `PeerId`) got intrinsic byte
+    /// caps in this sweep — "the bound is a property of the decode API, not
+    /// one caller". This matching 4-MiB cap keeps the freeze from baking in
+    /// an inconsistent posture across the wire-decode surface.
+    pub const MAX_ENVELOPE_BYTES: usize = 4 * 1024 * 1024;
 
     /// Construct a legacy `attestation = None` envelope (no signed
     /// attestation; receiver falls back to its own `device_cid`).
@@ -422,10 +465,10 @@ impl DeviceAttestationEnvelope {
     /// Returns [`AtriumError::InvalidState`] if DAG-CBOR encoding of
     /// the signature input fails (impossible under valid fixed-shape
     /// inputs; result-shape preserves explicit-failure semantics).
-    pub fn new_signed(
+    pub fn new_signed<K: EnvelopeDeviceSigner>(
         attestation: benten_id::device_attestation::DeviceAttestation,
         loro_payload: &[u8],
-        device_keypair: &benten_id::keypair::Keypair,
+        device_keypair: &K,
     ) -> AtriumResult<Self> {
         let payload_hash: [u8; 32] = *blake3::hash(loro_payload).as_bytes();
         let mut session_nonce = [0u8; 32];
@@ -446,8 +489,14 @@ impl DeviceAttestationEnvelope {
             envelope_signature: Vec::new(),
         };
         let sig_input = env.signature_input_bytes()?;
-        let sig = device_keypair.sign(&sig_input);
-        env.envelope_signature = sig.to_bytes().to_vec();
+        // GAP-KDB Fork-A (ENG-1): the envelope signature is produced by the
+        // device's OWN key shape — a classical `did:key` device signs a
+        // 64-byte Ed25519 envelope signature; a `did:benten` device (design
+        // §4 — each device is its own did:benten with its own KEM key) signs
+        // a LAMPS composite. `verify` resolves the device DID's signing key
+        // (`resolve_signing`) and dispatches on its shape, so the envelope
+        // verify is the full hybrid for a composite device.
+        env.envelope_signature = device_keypair.sign_envelope(&sig_input);
         Ok(env)
     }
 
@@ -503,6 +552,20 @@ impl DeviceAttestationEnvelope {
     /// this build understands (`version > MAX_WIRE_VERSION`). Per
     /// crypto-minor-5 fix-pass, version validation is mandatory.
     pub fn from_canonical_bytes(bytes: &[u8]) -> AtriumResult<Self> {
+        // Fail-closed byte cap (Compromise #28 / META #629 DoS-sweep): reject
+        // an over-large envelope blob BEFORE `serde` allocates. Intrinsic to
+        // the decode API (pattern symmetry with the HandshakeFrame /
+        // MstDiffFrame / PeerId sibling caps), even though the live caller is
+        // already RECV_CAP-bounded.
+        if bytes.len() > Self::MAX_ENVELOPE_BYTES {
+            return Err(AtriumError::InvalidState {
+                reason: format!(
+                    "DeviceAttestationEnvelope {} bytes exceeds cap {} (MAX_ENVELOPE_BYTES)",
+                    bytes.len(),
+                    Self::MAX_ENVELOPE_BYTES
+                ),
+            });
+        }
         let env: Self =
             serde_ipld_dagcbor::from_slice(bytes).map_err(|e| AtriumError::InvalidState {
                 reason: format!("DeviceAttestationEnvelope decode failed: {e}"),
@@ -574,36 +637,35 @@ impl DeviceAttestationEnvelope {
         let Some(attestation) = self.attestation.as_ref() else {
             return Ok(None);
         };
-        // (1) Envelope signature against device-DID's resolved pubkey.
+        // (1) Envelope signature against the device-DID's resolved signing
+        // key — GAP-KDB Fork-A (ENG-1): `resolve_signing` recovers the
+        // classical key for a `did:key` device and the composite for a
+        // `did:benten` device, and the single benten-id
+        // `verify_authority_signature` helper dispatches the verify on that
+        // shape. A `did:benten` device envelope whose composite signature
+        // carries only the Ed25519 half is a silent PQ-strip that MUST
+        // surface DeviceAttestationForged.
         let device_did =
             benten_id::did::Did::from_string_for_test_fixture(attestation.device_did.clone());
-        let device_pk = device_did
-            .resolve()
-            .map_err(|e| AtriumError::DeviceAttestationForged {
-                reason: format!("device DID resolution failed: {e:?}"),
-            })?;
+        let device_signing_pk =
+            device_did
+                .resolve_signing()
+                .map_err(|e| AtriumError::DeviceAttestationForged {
+                    reason: format!("device DID resolution failed: {e:?}"),
+                })?;
         let sig_input =
             self.signature_input_bytes()
                 .map_err(|e| AtriumError::DeviceAttestationForged {
                     reason: format!("envelope signature-input encode failed: {e}"),
                 })?;
-        let sig_bytes: [u8; 64] = self.envelope_signature.as_slice().try_into().map_err(|_| {
-            AtriumError::DeviceAttestationForged {
-                reason: format!(
-                    "envelope signature has wrong length: got {}, expected 64",
-                    self.envelope_signature.len()
-                ),
-            }
-        })?;
-        let sig = benten_crypto_suite::primitives::ed25519_dalek::Signature::from_bytes(&sig_bytes);
-        benten_crypto_suite::primitives::ed25519_dalek::Verifier::verify(
-            device_pk.as_verifying_key(),
+        benten_id::authority_verify::verify_authority_signature(
+            &device_signing_pk,
             &sig_input,
-            &sig,
+            &self.envelope_signature,
         )
         .map_err(|_| AtriumError::DeviceAttestationForged {
-            reason: "envelope signature does not verify against device DID's pubkey \
-                         (DID forgery / wrong-key signing)"
+            reason: "envelope signature does not verify against device DID's signing key \
+                     (DID forgery / wrong-key signing / silent PQ-strip)"
                 .into(),
         })?;
         // (2) Embedded-attestation → user-root signature verify.
@@ -617,19 +679,25 @@ impl DeviceAttestationEnvelope {
         //     intentionally NOT re-homed here.
         let parent_did =
             benten_id::did::Did::from_string_for_test_fixture(attestation.parent_did.clone());
-        let parent_pk = parent_did
-            .resolve()
+        // GAP-KDB Fork-A: resolve the parent's signing key via
+        // `resolve_signing` so a `did:benten` parent's composite-signed
+        // attestation is hybrid-verified (the shared `verify_signature_with`
+        // dispatches on the resolved key shape).
+        let parent_signing_pk =
+            parent_did
+                .resolve_signing()
+                .map_err(|_| AtriumError::DeviceAttestationForged {
+                    reason:
+                        "attestation parent_did resolution failed (forged / unknown-method parent)"
+                            .into(),
+                })?;
+        attestation
+            .verify_signature_with(&parent_signing_pk)
             .map_err(|_| AtriumError::DeviceAttestationForged {
-                reason: "attestation parent_did resolution failed (forged / non-did:key parent)"
-                    .into(),
-            })?;
-        attestation.verify_signature_with(&parent_pk).map_err(|_| {
-            AtriumError::DeviceAttestationForged {
                 reason: "embedded attestation signature does not verify against parent_did's \
                          pubkey (user-root delegation-link forgery)"
                     .into(),
-            }
-        })?;
+            })?;
         // (3) Freshness gate (J5 anti-replay re-home, impl-design
         //     §1.1a): `now - issued_at <= window`. The per-handle
         //     ephemeral nonce-store collapsed under COLLAPSE; durable

@@ -16,7 +16,7 @@ proptest! {
         // arbitrary byte input. Defends against parser DoS + memory-
         // corruption via untrusted VC bytes.
         let trust_domain = TrustDomain::empty();
-        let _ = verify_bytes_in_trust_domain(&input, &trust_domain);
+        let _ = verify_bytes_in_trust_domain(&input, &trust_domain, 1_000_000_000);
         // No assertion — survival of the proptest is the assertion.
     }
 }

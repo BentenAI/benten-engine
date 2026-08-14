@@ -63,11 +63,9 @@ fn invariant_7_end_to_end_with_streaming_sandbox_output() {
     )
     .unwrap();
     let registry = ManifestRegistry::new();
-    let cfg = SandboxConfig {
-        output_bytes: 1024,
-        fuel: 100_000_000,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.output_bytes = 1024;
+    cfg.fuel = 100_000_000;
     let zero = Cid::from_blake3_digest([0u8; 32]);
     let attribution = AttributionFrame {
         actor_cid: zero,

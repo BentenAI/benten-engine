@@ -328,6 +328,25 @@ fn from_canonical_bytes_rejects_malformed_input() {
     );
 }
 
+/// R11-fix symmetry pin (Compromise #28 / META #629 DoS-sweep): an
+/// over-`MAX_ENVELOPE_BYTES` blob rejects at `from_canonical_bytes` BEFORE
+/// `serde` allocates. Mirrors the intrinsic byte caps the sweep added to the
+/// wire-decode siblings (HandshakeFrame / MstDiffFrame / PeerId). Would-FAIL
+/// -on-revert: without the cap the oversized input flows into `serde`.
+#[test]
+fn from_canonical_bytes_rejects_over_cap_input() {
+    // A blob one byte over the intrinsic cap. Its leading byte doesn't matter
+    // — the cap fires before any CBOR parsing.
+    let oversized = vec![0u8; DeviceAttestationEnvelope::MAX_ENVELOPE_BYTES + 1];
+    let result = DeviceAttestationEnvelope::from_canonical_bytes(&oversized);
+    let err = result.expect_err("over-cap envelope blob MUST reject at decode");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("MAX_ENVELOPE_BYTES") || msg.contains("exceeds cap"),
+        "over-cap rejection MUST cite the byte cap; got: {msg}"
+    );
+}
+
 /// §13.8 wire-version-constant pin: `WIRE_VERSION` + `MAX_WIRE_VERSION`
 /// values are part of the public on-wire contract. A change to either
 /// is a wire-format break and MUST land alongside a backward-compat

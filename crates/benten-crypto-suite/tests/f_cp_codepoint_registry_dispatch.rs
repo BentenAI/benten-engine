@@ -32,16 +32,16 @@
 //! 0x6620`, Layer-D `0x6310..0x632F`, lifecycle `0x6700..0x67FF`, MLS/FS
 //! `0x6380..0x63CF`, experimental/escape `0xFE00../0xFFFF`.
 //!
-//! # RED-PHASE STATUS (pim-12 §3.6e) + SELF-CONTAINED STUB-SHIM
+//! # SHIPPED STATUS (R17 retense; formerly RED-PHASE pim-12 §3.6e)
 //!
-//! The tests that pin ALREADY-LIVE codepoints (`0x0001/0x0002/0x647a/
-//! 0x6400/0x647b/0x647c`) use the REAL `benten_crypto_suite::codepoint`
-//! types directly (no stub needed — the symbols exist). The tests that
-//! pin NEW codepoints use a SELF-CONTAINED `f_cp_stub` module. R5 MUST:
-//!   1. DELETE the `f_cp_stub` module,
-//!   2. INSERT the real new-codepoint symbols (minted on `CipherSuiteCodepoint`
-//!      / a new `RecipientCodepoint` / `MembershipSetCodepoint` / `CodepointLifecycle`),
-//!   3. UN-IGNORE + verify green.
+//! Every arm is a live `#[test]` (NO `#[ignore]`). The tests that pin
+//! ALREADY-LIVE codepoints (`0x0001/0x0002/0x647a/0x6400/0x647b/0x647c`) use
+//! the REAL `benten_crypto_suite::codepoint` types directly. The `f_cp_stub`
+//! module (retained by name) is now a THIN RE-EXPORT shim over the LIVE
+//! `benten_crypto_suite::registry` + `CodepointLifecycle` symbols (all minted
+//! + in-tree at HEAD) — it re-exports real registry consts, NOT stand-in
+//! stubs. The prior RED-PHASE staging (a self-contained stub, un-ignored once
+//! the new codepoints landed) is fully discharged.
 
 #![allow(dead_code)]
 
@@ -123,6 +123,53 @@ fn codepoint_integers_wire_locked_live_arms() {
         0x647c,
         "cipher pure-PQ swap-matrix arm wire-locked at 0x647c"
     );
+
+    // SSOT round-trip strengthening (R17 F-08): the const↔raw mapping is the
+    // single source of truth. For each cipher band value, `from_raw(v).raw()`
+    // MUST equal `v` AND `from_raw(v)` MUST equal the named const — proving the
+    // integer, the named symbol, and the `raw()`/`from_raw()` bijection all
+    // agree (a drift in any one of the three fails HERE, directly). ADDED arms;
+    // the existing `const.raw()` locks above are unchanged.
+    assert_eq!(
+        CipherSuiteCodepoint::from_raw(0x647a).raw(),
+        0x647a,
+        "0x647a round-trips through from_raw().raw()"
+    );
+    assert_eq!(
+        CipherSuiteCodepoint::from_raw(0x647a),
+        CipherSuiteCodepoint::HYBRID_X25519_MLKEM768,
+        "from_raw(0x647a) is the HYBRID_X25519_MLKEM768 const (SSOT bijection)"
+    );
+    assert_eq!(
+        CipherSuiteCodepoint::from_raw(0x6400).raw(),
+        0x6400,
+        "0x6400 round-trips through from_raw().raw()"
+    );
+    assert_eq!(
+        CipherSuiteCodepoint::from_raw(0x6400),
+        CipherSuiteCodepoint::CLASSICAL_X25519,
+        "from_raw(0x6400) is the CLASSICAL_X25519 const (SSOT bijection)"
+    );
+    assert_eq!(
+        CipherSuiteCodepoint::from_raw(0x647b).raw(),
+        0x647b,
+        "0x647b round-trips through from_raw().raw()"
+    );
+    assert_eq!(
+        CipherSuiteCodepoint::from_raw(0x647b),
+        CipherSuiteCodepoint::HYBRID_MLKEM768_HQC,
+        "from_raw(0x647b) is the HYBRID_MLKEM768_HQC const (SSOT bijection)"
+    );
+    assert_eq!(
+        CipherSuiteCodepoint::from_raw(0x647c).raw(),
+        0x647c,
+        "0x647c round-trips through from_raw().raw()"
+    );
+    assert_eq!(
+        CipherSuiteCodepoint::from_raw(0x647c),
+        CipherSuiteCodepoint::PURE_PQ_MLKEM768_ONLY,
+        "from_raw(0x647c) is the PURE_PQ_MLKEM768_ONLY const (SSOT bijection)"
+    );
 }
 
 /// **F-CP-1 (cont.)** — §4.0 NEW codepoint integers wire-locked, with the
@@ -165,6 +212,58 @@ fn new_codepoint_integers_wire_locked() {
         "Layer-C group multi-stanza (the blinded 8-field set's codepoint) is 0x6520 (R0.7 §3.3/§4.0; \
          locked here so a single-const drift fails THIS registry test directly, not only via the \
          cross-file f_lc_hpke golden)"
+    );
+    // Layer-D band bases — the TWO codepoints that are DUPLICATED across crates
+    // (the wire producers live in `benten_engine::layer_d::{device_link,
+    // remote_permission}`; these registry copies are the SSOT allocation map).
+    // Neither registry copy carried a value-lock: the only registry-side
+    // reference was the self-satisfying presence loop below (the consts are put
+    // INTO `registered_envelope_codepoints()` by `registry.rs`, so `present(cp)`
+    // passes for ANY value), and `f_disc_2_codepoint_ssot_cross_crate_const_
+    // equality` covers only the MembershipSet + Layer-C bands. Pin both literals
+    // HERE so a one-sided edit to the registry fails this test directly; the
+    // engine-side producers are literal-locked in their own crate
+    // (`f_ld_4_device_link_band_base_pinned` in
+    // `f_ld_4_multi_device_key_wrap_provisioning.rs` +
+    // `f_ld_2_out_of_band_codepoint_typed_rejects` in
+    // `f_ld_2_remote_permission_wire_freeze.rs`), so a one-sided edit to
+    // EITHER home now fails the build.
+    assert_eq!(
+        f_cp_stub::DEVICE_LINK_BAND_BASE,
+        0x6310,
+        "Layer-D DeviceLink band base wire-locked at 0x6310 (R0.7 §4.1 FREEZE); the \
+         registry copy MUST equal the `benten_engine::layer_d::device_link` producer"
+    );
+    assert_eq!(
+        f_cp_stub::REMOTE_PERMISSION_BAND_BASE,
+        0x6320,
+        "Layer-D RemotePermission band base wire-locked at 0x6320 (R0.7 §4.1 FREEZE); the \
+         registry copy MUST equal the `benten_engine::layer_d::remote_permission` producer"
+    );
+    // Experimental-range base + extended-codepoint escape — the F-CP-1 family
+    // doc claims to wire-lock "experimental/escape" but these two consts were
+    // imported (see the `f_cp_stub` shim) and never value-pinned (R21 F-04).
+    // Pin both canonical out-of-band values here.
+    assert_eq!(
+        f_cp_stub::EXPERIMENTAL_BASE,
+        0xFE00,
+        "experimental-range base wire-locked at 0xFE00 (deliberately out-of-band)"
+    );
+    assert_eq!(
+        f_cp_stub::EXTENDED_CODEPOINT_ESCAPE,
+        0xFFFF,
+        "extended-codepoint escape wire-locked at 0xFFFF (deliberately out-of-band)"
+    );
+    // not-in-BENTEN-range: both live OUTSIDE the suite-selector band
+    // 0x6100..=0x6FFF by design, so a future edit pulling either INTO the band
+    // (where it could collide an envelope-family value) fails HERE directly.
+    assert!(
+        !BENTEN_ENVELOPE_RANGE.contains(&f_cp_stub::EXPERIMENTAL_BASE),
+        "EXPERIMENTAL_BASE (0xFE00) must live OUTSIDE the Benten envelope band 0x6100..=0x6FFF"
+    );
+    assert!(
+        !BENTEN_ENVELOPE_RANGE.contains(&f_cp_stub::EXTENDED_CODEPOINT_ESCAPE),
+        "EXTENDED_CODEPOINT_ESCAPE (0xFFFF) must live OUTSIDE the Benten envelope band 0x6100..=0x6FFF"
     );
 }
 

@@ -474,6 +474,24 @@ impl UcanBlobsHandler {
         }
 
         // ARM 4 — revocation observance.
+        //
+        // **R6-R1 fold-in disclosure (Inv-15 payload-CID discipline).**
+        // This keys the revocation lookup on `grant_cid_for_test()`, which
+        // is a **sig-inclusive** CID (BLAKE3 over the grant's FULL
+        // canonical bytes, INCLUDING `binding_sig`). Keying a load-bearing
+        // revocation identifier off a sig-inclusive CID would violate
+        // Inv-15 ("sig-bundle CIDs are never load-bearing identifiers") — a
+        // malleated-but-still-verifying re-encoding of the same grant would
+        // yield a DIFFERENT CID and slip the revocation check. This is
+        // tolerated ONLY because it is dead scaffolding at v1-beta: the
+        // `revocations` store is populated exclusively via
+        // `record_revocation_for_test` (`#[cfg(any(test, feature="testing"))]`),
+        // so in a pure production build the set is always empty and this arm
+        // never fires (a G-CORE-3e placeholder). The production G-CORE-3e
+        // wire-up MUST re-key this off the semantic-tuple / payload-CID
+        // revocation surface (the benten-caps `ucan_payload_cid` / semantic
+        // revocation-tuple), never a sig-inclusive CID. Name-carried to
+        // Phase-4-Meta-Composing (V1-FROZEN-INTERFACE-DEFERRED.md Row D-89).
         let grant_cid = request.grant.grant_cid_for_test();
         if self
             .revocations

@@ -72,6 +72,9 @@ use crate::Cid;
 /// mode is part of the chain's contract; mid-life mode flips would
 /// confuse callers about which set of error variants to expect).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+// §11 SemVer-readiness (F-22 pre-tag): a future version-chain semantic
+// (e.g. a snapshot/anchor mode) lands additively without a SemVer break.
+#[non_exhaustive]
 pub enum Mode {
     /// Linear, fork-rejecting semantic. A second [`VersionDag::append`]
     /// against an already-extended prior head returns
@@ -244,6 +247,10 @@ pub trait VersionChain {
 /// assert_eq!(tips.len(), 2);
 /// ```
 #[derive(Debug, Clone)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without
+// a SemVer break. Fields are already private, so cross-crate literal
+// construction was never possible; the attribute is the freeze pin.
+#[non_exhaustive]
 pub struct VersionDag {
     mode: Mode,
     root: Cid,

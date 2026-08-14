@@ -69,7 +69,14 @@ pub struct RunResult {
 
 /// Budget cap for [`Evaluator::run`] — covers Invariant 8's Phase-1 stopgap
 /// ("cumulative iteration budget"). Defaults to 100 000 primitive
-/// evaluations; callers override via [`RunOptions::budget`].
+/// evaluations; callers override via [`RunOptions::budget`], and engine
+/// deployments via `benten_engine::EngineBuilder::iteration_budget`.
+///
+/// **Not the guard that binds at defaults.** [`Evaluator::max_stack_depth`]
+/// is `64` and counts the same steps, so it trips three orders of magnitude
+/// sooner. Through the engine, Inv-2 `max_depth` (also 64) caps the longest
+/// path from the other side. This constant is the operative bound only when
+/// a deployment lowers it explicitly or raises `max_depth` past it.
 pub const DEFAULT_ITERATION_BUDGET: u64 = 100_000;
 
 /// Options for [`Evaluator::run_with`] (v1-API-stabilization,
@@ -112,6 +119,12 @@ impl RunOptions {
     }
 
     /// Override the Inv-8 cumulative-step budget.
+    ///
+    /// Engine deployments reach this axis through
+    /// `benten_engine::EngineBuilder::iteration_budget`; before that method
+    /// existed the engine's only writer was the cfg-gated
+    /// `Engine::testing_set_iteration_budget`, so a default build could not
+    /// move the budget at all.
     #[must_use]
     pub fn budget(mut self, budget: u64) -> Self {
         self.budget = Some(budget);

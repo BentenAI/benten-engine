@@ -42,10 +42,10 @@
 # category as the pre-existing 156 entries below. Minting public catalog
 # codes for them pre-FREEZE would be the same scope-explosion the FREEZE
 # window must not absorb, so they join the SAME NAMED-DEFERRED post-FREEZE
-# §3.5g item 6 drain wave (PRE-FREEZE-BACKLOG row, above). The 9:
+# §3.5g item 6 drain wave (PRE-FREEZE-BACKLOG row, above). The 7 (GenError's
+# 2 were dropped R9 F-07 with the dead DUAL-CID surface):
 #   AuditChainError::TamperDetectedLinkageBroken,
 #   EnvelopeError::{BadMagic, HostileLengthPrefix, UnsupportedVersion},
-#   GenError::{StaleKPrincipalGeneration, StaleRecipientKeyGeneration},
 #   GroupError::WrongGroupCodepoint, LayerCError::UnsupportedCodepoint,
 #   TransportError::TransportReservedAtV1Beta.
 #
@@ -68,9 +68,18 @@
 
 AeadError::AeadAuthFailed
 AeadError::Authentication
+AeadError::ChunkCountExceedsInput
 AeadError::CiphertextTooShort
 AeadError::KeyMismatch
 AeadError::MalformedEnvelope
+# R9 GAP-1 (2026-07-02): RecipientPublic/Secret::from_bytes decode-time
+# typed-rejects — exactly the same crypto-suite-internal category as the
+# AeadError siblings here (AeadError is not ErrorCode/napi-mirrored by design;
+# no AeadError->ErrorCode mapping exists). Join the SAME post-FREEZE §3.5g
+# item-6 drain wave; encrypt-to-recipient napi surfacing is deferred to
+# Phase-4-Meta-Composing (V1-FROZEN-INTERFACE-DEFERRED Row D-64).
+AeadError::MalformedRecipientPublic
+AeadError::MalformedRecipientSecret
 AeadError::RecipientLacksKeysForSuite
 AeadError::TagMismatch
 AeadError::Unsupported
@@ -99,19 +108,42 @@ CrdtError::LoroInternal
 CrdtError::StampedValueCodec
 DeviceAttestationError::EnvelopeWidening
 DeviceAttestationError::IncompatibleWithRuntime
+DidError::BodyTooLong
 DidError::BodyTooShort
 DidError::HybridBodyTooShort
 DidError::HybridTrailingBytes
 DidError::InvalidHybridPublicKey
 DidError::InvalidPrefix
 DidError::UnknownMulticodec
+# # GAP-KDB Shape-B wave addition (2026-07) — 10 NEW DidError variants
+#
+# The GAP-KDB Shape-B recipient-binding closure (W0 canary) added 10
+# resolution/codec-path typed variants on the existing `DidError` enum for the
+# `did:benten` method + `Did::resolve_kem` / `Did::resolve_signing` fail-closed
+# rejects. These are EXACTLY the same category as the pre-existing baselined
+# `DidError::{BodyTooShort, HybridTrailingBytes, UnknownMulticodec}` above:
+# `DidError` has NO `code() -> ErrorCode` mapping (its `code()` returns a
+# `&'static str`) and does NOT itself cross the napi/wire/ErrorCode catalog
+# surface — it is a `Did::resolve_kem` / codec typed-reject error. Externally,
+# these surface at the Layer-C `RecipientBinding::resolve` seal boundary as the
+# SINGLE reserved catalog code `E_RECIPIENT_KEM_NOT_COMMITTED`
+# (`benten_errors::ErrorCode::RecipientKemNotCommitted`; ERROR-CATALOG.md), the
+# GAP-KDB throwable minted by the W4 docs-invariants wave. They join the SAME
+# NAMED-DEFERRED post-FREEZE §3.5g item 6 drain wave as the sibling `DidError`
+# variants (the whole `DidError` type is in the PRE-FREEZE-BACKLOG drain row).
+DidError::InvalidKeysetCid
+DidError::KeysetBelowPqFloor
+DidError::KeysetCommitmentMismatch
+DidError::KeysetDocMalformed
+DidError::KeysetDocNonCanonical
+DidError::KeysetDocTooLong
+DidError::KeysetDocUnsupportedVersion
+DidError::KeysetEmbeddedSigningMismatch
+DidError::MalformedKemMultikey
+DidError::NoKemCommitment
 DidRotationError::HlcNotStrictlyMonotonic
 DidRotationError::PreviousDidMismatch
 DidRotationError::VerbatimReplay
-DropBundleError::AuthorizationGrantFailed
-DropBundleError::CodecError
-DropBundleError::PerNodeAeadAuthenticationFailed
-DropBundleError::UnsupportedDropVersion
 EngineConfigError::Io
 EngineConfigError::Parse
 EngineError::Backend
@@ -139,8 +171,6 @@ FixtureError::WasmInvalid
 FixtureError::WasmRead
 FixtureError::WatParse
 FixtureError::WatRead
-GenError::StaleKPrincipalGeneration
-GenError::StaleRecipientKeyGeneration
 GraphError::NestedTransactionNotSupported
 GraphError::Redb
 GroupError::WrongGroupCodepoint
@@ -151,6 +181,13 @@ HandshakeError::ReplayWithinBoundedWindow
 HandshakeError::WireFormat
 IpcError::CapabilityNotInManifest
 IpcError::MethodNotInAllowlist
+# R12 F-11 (2026-07-03): the 0x6520 group-seal over-limit-roster typed-reject
+# (LayerCError::RecipientCountExceedsBandWidth). layer_c-internal typed error
+# of exactly the same category as the sibling LayerCError::* variants already
+# grandfathered here (LayerCError has no code() method + does not cross the
+# napi/wire/ErrorCode catalog surface; observable as a fail-closed seal Err).
+# Joins the SAME NAMED-DEFERRED post-FREEZE §3.5g item 6 drain wave.
+LayerCError::RecipientCountExceedsBandWidth
 LayerCError::UnsupportedCodepoint
 LightClientError::BandwidthBudgetExceeded
 LightClientError::Mst
@@ -282,7 +319,6 @@ GroupError::AeadAuthenticationFailed
 KeypairError::SeedImport
 KindDispatchError::ReserveTypedReject
 LayerCError::AeadAuthenticationFailed
-LayerCError::InnerSenderDidForged
 ManifestError::RuntimeRegistrationDeferred
 ManifestVerifyError::NoPathPresent
 ManifestVerifyError::RegistryInvalid
@@ -315,3 +351,15 @@ VaultError::NonceWidthMismatch
 VaultError::UnknownCodepoint
 VcError::BadSignature
 VcError::DecodeFailed
+
+# --- Compromise #28 / META #629 DoS-sweep bounded-decode rejects (2026-07-04).
+# These typed reject variants are sibling-consistent with the rest of their
+# already-baselined enums (VaultError has no benten_errors::ErrorCode mirror at
+# all; UcanError/VcError variants are all baselined — internal-to-benten-id
+# typed-error taxonomy that never crosses the benten_errors catalog boundary).
+# Per the freeze-window §3.5g exemption: struct-variant inline annotations get
+# moved off the line by rustfmt (scanner-invisible), so the baseline is the
+# sibling-consistent home for these new bounded-decode reject variants.
+VaultError::Argon2ParamsOutOfBounds
+UcanError::EnvelopeTooLarge
+VcError::EnvelopeTooLarge

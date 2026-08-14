@@ -29,7 +29,9 @@
 //!
 //! Drives the PRODUCTION property-merge (`admitted_at_hlc_lww`) +
 //! fork-tie-break (`fork_winner`) + skew-classifier (`accept_membership_write`)
-//! stand-ins; asserts OBSERVABLE winner / typed-rejection / clock-unchanged;
+//! stand-ins; asserts OBSERVABLE winner / typed-rejection / within-skew-accept
+//! (the skew classifier is a pure `(local_now, inbound, max_skew_ms) → Result`
+//! function with no mutable clock state; R11 MC-16 wording tighten);
 //! would-FAIL-if-no-op'd (a classifier that accepted the future stamp fails
 //! the skew arm; a tie-break keyed off `admitted_at_hlc` fails F-HLC-1 arm 2).
 //!
@@ -317,9 +319,16 @@ fn f_hlc_1_only_created_at_hlc_drives_fork_winner() {
 // ── F-HLC-2 arm ─────────────────────────────────────────────────────────
 
 /// F-HLC-2 — HLC-skew adversarial injection at the membership-write
-/// boundary. A future-HLC admit is rejected by the skew classifier with a
-/// typed error WITHOUT mutating local clock state. Clones
-/// `attack_hlc_skew_revocation_ordering.rs`.
+/// boundary. Precisely pins two properties (R11 MC-16 wording tighten):
+///   (1) a future-HLC (beyond `max_skew_ms`) membership write is REJECTED with
+///       the typed `MembershipWriteError::HlcSkewExceeded`; and
+///   (2) a within-tolerance write is ACCEPTED (the classifier is not a
+///       reject-everything no-op — would-FAIL-if-no-op'd in both directions).
+/// The skew classifier is a PURE function of `(local_now, inbound, max_skew_ms)`
+/// — it takes `local_now` by value and returns a `Result`, so there is no
+/// mutable local clock state for it to touch; the "no clock mutation" property
+/// is structural (no `&mut` clock parameter), NOT a separately-asserted arm.
+/// Clones `attack_hlc_skew_revocation_ordering.rs`.
 #[test]
 fn f_hlc_2_future_hlc_membership_write_rejected() {
     let local_now = Hlc {

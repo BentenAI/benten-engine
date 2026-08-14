@@ -8,7 +8,8 @@
 //! `[u8; 32]`, exactly like the in-tree [`crate::transport_trait`] boundary
 //! keeps the iroh connection layer behind an abstract `trait`. The pre-v1
 //! concrete iroh-gossip impl (post-canary) implements this trait; the
-//! channel-backed [`MockGossipTransport`] proves the surface is iroh-free.
+//! channel-backed `MockGossipTransport` (test/`testing`-gated) proves the
+//! surface is iroh-free.
 //!
 //! ## gossip = liveness ONLY (M-10)
 //!
@@ -69,12 +70,14 @@ pub trait GossipTransport {
 /// `iroh::`-concrete type, so if a future edit leaked one into the
 /// [`GossipTransport`] trait signature, this impl would stop compiling — the
 /// load-bearing NQ-D1 fence.
+#[cfg(any(test, feature = "testing"))]
 #[derive(Debug, Default)]
 pub struct MockGossipTransport {
     subscribed: std::collections::BTreeSet<[u8; 32]>,
     notified: std::collections::BTreeSet<[u8; 32]>,
 }
 
+#[cfg(any(test, feature = "testing"))]
 impl MockGossipTransport {
     /// Construct an empty mock transport.
     #[must_use]
@@ -83,6 +86,7 @@ impl MockGossipTransport {
     }
 }
 
+#[cfg(any(test, feature = "testing"))]
 impl GossipTransport for MockGossipTransport {
     fn subscribe(&mut self, topic: [u8; 32]) {
         self.subscribed.insert(topic);

@@ -31,9 +31,12 @@ fn workspace_root() -> PathBuf {
 }
 
 #[test]
-#[ignore = "phase-4-foundation R4-FP-3 RED-PHASE — G26-B wave-10 un-ignores. \
-    Pin source: r2-test-landscape.md §2.13 row 1 + meth-r1-9 + D-4F-4. admin-ui-v0-build.yml \
-    workflow exists + required-on-PR via branch-protection spec."]
+#[ignore = "F-073 destination-retarget: the cited `G26-B wave-10` destination shipped at \
+    `phase-4-foundation-close` (2026-05-14) WITHOUT this workflow. Verified FALSE at \
+    r9-base: no `.github/workflows/admin-ui-v0-build.yml` and no admin-ui-v0 context in \
+    branch-protection.yml. `admin-shell-e2e.yml` exists and may be the successor surface — \
+    resolve which before authoring. Destination: docs/future/phase-4-backlog.md §4.168 residual 2 \
+    (HARD RULE 12 clause-(b))."]
 fn admin_ui_v0_build_workflow_required_on_pr() {
     let root = workspace_root();
     let workflow = root.join(".github/workflows/admin-ui-v0-build.yml");

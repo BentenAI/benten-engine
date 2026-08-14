@@ -14,7 +14,9 @@
 //! Per Ben's D1 (2026-05-05), the call shape is:
 //!
 //! ```ignore
-//! let atrium = engine.open_atrium(AtriumConfig::for_test()).await?;
+//! // `AtriumConfig::default()` is the default-surface constructor (Loopback
+//! // mode); `AtriumConfig::for_test()` is `test-helpers`-gated.
+//! let atrium = engine.open_atrium(AtriumConfig::default()).await?;
 //! atrium.sync_subgraph("/zone/posts", remote_peer).await?;
 //! ```
 //!
@@ -56,11 +58,13 @@ pub use crate::engine_sync::{AtriumError, AtriumHandle};
 
 /// Configuration for [`crate::Engine::open_atrium`].
 ///
-/// G16-B canary scope: minimum-viable carrier. [`AtriumConfig::for_test`]
-/// constructs the loopback-mode config used by integration tests;
+/// G16-B canary scope: minimum-viable carrier. The `test-helpers`-gated
+/// `AtriumConfig::for_test` constructs the loopback-mode config used by tests;
 /// production wires arrive at G16-D wave-6b alongside the handshake
 /// protocol body.
 #[derive(Clone, Debug)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate construction uses the crate's constructor (field READS unaffected).
+#[non_exhaustive]
 pub struct AtriumConfig {
     /// The transport-binding mode. `Loopback` for in-process integration
     /// tests; `Production` for peer-to-peer connections via iroh's
@@ -74,7 +78,15 @@ impl AtriumConfig {
     /// Binds the iroh `Endpoint` in loopback-mode (no relay
     /// infrastructure) so two-peer round-trips work in CI without
     /// network access.
+    ///
+    /// Test-only. `#[cfg(any(test, feature = "test-helpers"))]`-gated OFF the
+    /// default-feature public surface (freeze-hygiene: a `Loopback`-only
+    /// config builder is not a production API). Named `for_test` (no
+    /// `_for_test` suffix) it previously evaded the
+    /// `for_test_symbols_are_feature_gated` audit; that audit is hardened this
+    /// same fix-pass to catch the bare/prefix `for_test` family.
     #[must_use]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn for_test() -> Self {
         Self {
             mode: AtriumMode::Loopback,
@@ -96,7 +108,12 @@ impl AtriumConfig {
 
 impl Default for AtriumConfig {
     fn default() -> Self {
-        Self::for_test()
+        // Loopback is the default binding mode (identical to the
+        // now-`test-helpers`-gated `for_test()`; inlined here so this
+        // production `Default` impl does not depend on a test-only fn).
+        Self {
+            mode: AtriumMode::Loopback,
+        }
     }
 }
 
@@ -125,6 +142,8 @@ pub enum AtriumMode {
 /// [`SyncStatus::is_healthy`] discriminators to route observability
 /// alerts.
 #[derive(Clone, Debug, Eq, PartialEq)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a SemVer break; cross-crate construction uses the crate's constructor (field READS unaffected).
+#[non_exhaustive]
 pub struct SyncStatus {
     /// The active transport-path kind (Direct / Relay / Loopback).
     pub transport_kind: TransportKind,

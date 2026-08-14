@@ -46,7 +46,10 @@
 //!     2. split wire into (mldsaSig, tradSig) — codepoint dispatches dims; NO hardcoded sizes.
 //!     3. fail-closed if either half is missing/stripped.
 //!     4. fail-closed if ML-DSA-65.verify_with_context(M', Label, mldsaSig) rejects.
-//!     5. fail-closed if Ed25519.verify(M', tradSig) rejects.
+//!     5. fail-closed if Ed25519.verify_strict(M', tradSig) rejects
+//!        (STRICT — a non-canonical / malleated `S` component is
+//!        rejected, so the composite signature is non-malleable; see
+//!        the `verify_strict` note on the classical arm below).
 //!     6. else Ok(()).
 //! ```
 //!
@@ -193,6 +196,13 @@ impl SuiteConfig {
 
 /// Hybrid keypair — carries the classical half (always) + the PQ half
 /// when the suite is hybrid (LIVE end-to-end).
+///
+/// Secret-hygiene (D-74/75/76): BOTH signing-key halves zeroize on drop.
+/// The `classical` half wipes via `ed25519-dalek`'s `zeroize` default
+/// feature; the `pq` half wipes via `ml-dsa`'s `ZeroizeOnDrop for
+/// SigningKey<P>`, enabled by the `ml-dsa = { features = [..., "zeroize"] }`
+/// entry in this crate's `Cargo.toml`. Deliberately NOT `#[derive(Debug)]`
+/// so the raw signing keys never reach a `Debug` sink.
 pub struct Keypair {
     classical: ed25519_dalek::SigningKey,
     pq: Option<MlDsaSigningKey<MlDsa65>>,
@@ -297,6 +307,40 @@ impl PublicKey {
         Ok(Self {
             classical,
             pq: Some(pq),
+        })
+    }
+
+    /// Reconstruct a **classical-only** (`pq = None`) public-key handle from a
+    /// raw 32-byte Ed25519 verifying key (GAP-KDB Shape-B FS-2 / identity-resolve
+    /// FS-2).
+    ///
+    /// This is the classical sibling of [`Self::from_lamps_composite_bytes`]:
+    /// it lets ONE codepoint-dispatched signing-key resolver
+    /// (`benten_id::did::Did::resolve_signing`) return a `sig::PublicKey` for
+    /// BOTH issuer shapes — a classical `did:key` (`0xed01 ‖ ed25519(32)`) →
+    /// this `pq = None` handle, and a hybrid / `did:benten` (`0x1211 ‖ mldsa …`)
+    /// → the `pq = Some` composite handle — without a second Ed25519-only
+    /// verify path (the silent-PQ-strip surface). The `pq = None` shape is
+    /// load-bearing: [`Self::is_hybrid`] returns `false` and
+    /// [`Self::to_lamps_composite_bytes`] fails closed, so a classical issuer
+    /// can never be mis-typed as hybrid (a silent PQ-UPGRADE) and vice-versa.
+    ///
+    /// Sizes flow from `ED25519_PUBLIC_LEN` (the upstream
+    /// `ed25519_dalek::PUBLIC_KEY_LENGTH`) — never hardcoded (CLAUDE.md
+    /// baked-in #5).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VerifyError::MalformedKey`] if the 32 bytes are not a valid
+    /// Ed25519 curve point (fail-closed — never a silent default).
+    pub fn from_classical_ed25519_bytes(
+        bytes: &[u8; ED25519_PUBLIC_LEN],
+    ) -> Result<Self, VerifyError> {
+        let classical = ed25519_dalek::VerifyingKey::from_bytes(bytes)
+            .map_err(|_| VerifyError::MalformedKey("Ed25519 public key bytes not a point"))?;
+        Ok(Self {
+            classical,
+            pq: None,
         })
     }
 }
@@ -660,9 +704,26 @@ impl SignatureSuite {
                 .try_into()
                 .map_err(|_| VerifyError::MalformedSignature("classical sig length"))?;
             let classical_sig = ed25519_dalek::Signature::from_bytes(&sig_bytes);
+            // STRICT verify (F-03 fix b): `verify_strict` rejects a
+            // non-canonical / malleated scalar `S` (S >= L) and small-
+            // order keys, so the same signed message cannot be re-encoded
+            // into a second byte-distinct-but-still-verifying signature.
+            // This is the chokepoint the **Fork-A authority path** routes
+            // through: the UCAN chain-walk (via `benten_id::authority_verify`),
+            // DID rotation, device-attestation, and VC verification — the
+            // callers of `benten_id::authority_verify::verify_authority_signature`.
+            // NOTE (R6-R1 fold-in, F-03 review): the Drop-bundle `envelope_sig`
+            // and the module-`manifest_signing` verifies do NOT route through
+            // here — they call classical Ed25519 `verify` directly.
+            // envelope_sig is INTEGRITY-only (authority is the issuer-anchored
+            // `auth_grant`, whose UCAN chain-walk DOES route through here);
+            // manifest signatures are structurally did:key-only 64-byte
+            // classical by format (no composite wire). Honest `ed25519_dalek`
+            // signatures are always canonical, so no legitimate signature is
+            // rejected.
             return pk
                 .classical
-                .verify(msg, &classical_sig)
+                .verify_strict(msg, &classical_sig)
                 .map_err(|_| VerifyError::ClassicalVerifyFailed);
         }
 
@@ -699,8 +760,11 @@ impl SignatureSuite {
             .try_into()
             .map_err(|_| VerifyError::MalformedSignature("classical sig length"))?;
         let classical_sig = ed25519_dalek::Signature::from_bytes(&classical_bytes);
+        // STRICT verify (F-03 fix b): reject a non-canonical / malleated
+        // `S` on the Ed25519 half of the LAMPS composite too, so neither
+        // half of a hybrid authority signature is malleable.
         pk.classical
-            .verify(&m_prime, &classical_sig)
+            .verify_strict(&m_prime, &classical_sig)
             .map_err(|_| VerifyError::ClassicalVerifyFailed)?;
 
         // Cryptographically verify the ML-DSA-65 (PQ) half over M' WITH

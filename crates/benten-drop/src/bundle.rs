@@ -55,13 +55,33 @@ pub enum DropBundleVersion {
     /// so the future-version-rejection pin can assert the typed
     /// `UnsupportedDropVersion` path.
     Synthetic(u16),
+    /// Catch-all for a genuine FUTURE on-the-wire version tag
+    /// (e.g. `{"tag":"V2"}`) that this reader does not know.
+    /// `#[serde(other)]` maps every unrecognized tag here, so the
+    /// version-check (`is_v1`) routes it to the
+    /// advertised typed [`DropBundleError::UnsupportedDropVersion`]
+    /// (F-DROP-VER-FWD / Row D-83) rather than surfacing a GENERIC serde
+    /// codec error. This is a DESERIALIZE-only catch-all — `#[serde(other)]`
+    /// variants are never serialized, so adding it leaves the `V1` +
+    /// `Synthetic` wire bytes byte-identical (verified: the freeze/golden
+    /// round-trips are unchanged).
+    #[serde(other)]
+    UnknownVersion,
 }
 
 impl DropBundleVersion {
+    /// Sentinel reported by [`DropBundleVersion::as_u16`] for the
+    /// [`DropBundleVersion::UnknownVersion`] catch-all. The real future
+    /// tag string is discarded by `#[serde(other)]`, so the numeric
+    /// `seen` field carries a documented "unreadable future version"
+    /// sentinel rather than a fabricated value.
+    const UNKNOWN_VERSION_SENTINEL: u16 = u16::MAX;
+
     fn as_u16(self) -> u16 {
         match self {
             Self::V1 => DROP_BUNDLE_VERSION_V1,
             Self::Synthetic(n) => n,
+            Self::UnknownVersion => Self::UNKNOWN_VERSION_SENTINEL,
         }
     }
 
@@ -156,11 +176,41 @@ pub enum DropBundleError {
     /// A per-Node signature (when present) did not verify against
     /// the carried verifying key. This is the secondary integrity
     /// layer — distinct from the AEAD-tag layer above.
+    ///
+    /// Reserved-but-unconstructed at v1-beta (register-then-enforce, Row
+    /// D-66): the `per_node_attestation` field is a frozen sized placeholder,
+    /// so nothing emits this variant yet. It lands when the deferred typed
+    /// per-Node-signature upgrade lands (Phase-4-Meta-Composing).
     #[error("per-Node signature invalid at content[{index}]: {detail}")]
     PerNodeSignatureInvalid {
         /// Index in the `content` array where the failure surfaced.
         index: usize,
         /// Human-readable verify-failure detail.
+        detail: String,
+    },
+
+    /// The bundle's `issuer_verifying_key` (the key the envelope-sig
+    /// verifies under — an attacker-controllable header field anchored
+    /// to nothing on its own) does NOT match the authoritative issuer of
+    /// the `AuthorizationGrant` the recipient trusts
+    /// (`auth_grant.issuer_verifying_key`, cryptographically self-bound
+    /// via the grant's 7-segment binding-message). Maps to
+    /// `E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH`. Fires on the recipient
+    /// trust path ([`DropBundle::consume_offline`]) AFTER the grant
+    /// binding verifies — closing the strip attack where an attacker
+    /// re-authors the header, mints a fresh keypair, re-signs the
+    /// envelope message, and overwrites `issuer_verifying_key` (a
+    /// signature-by-nobody). Verify-time only; no wire byte changes.
+    ///
+    /// The first-class `ErrorCode` mirror is
+    /// [`DropBundleError::code`] → `ErrorCode::DropBundleEnvelopeIssuerMismatch`
+    /// (`E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH`). The catalog surface itself is
+    /// reserved (boundary-lift at the G-CORE-9 v1-interface freeze, same as the
+    /// sibling drop codes); the live production typed arm is THIS variant.
+    #[error("envelope issuer mismatch (E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH): {detail}")]
+    EnvelopeIssuerMismatch {
+        /// Human-readable detail of the mismatch (the bundle
+        /// envelope-sig key is not the trusted grant's issuer).
         detail: String,
     },
 
@@ -178,6 +228,35 @@ impl From<EnvelopeSigError> for DropBundleError {
     fn from(e: EnvelopeSigError) -> Self {
         Self::EnvelopeSignatureInvalid {
             detail: format!("{e}"),
+        }
+    }
+}
+
+impl DropBundleError {
+    /// First-class stable [`benten_errors::ErrorCode`] mirror for this
+    /// typed failure (§3.5g item 6). Cross-language renderers surface the
+    /// wire-side stable code without losing the typed arm.
+    ///
+    /// The catalog surfaces for these codes are RESERVED at v1-beta (the
+    /// boundary-lift into the engine-wide outbound-Drop API lands at the
+    /// G-CORE-9 v1-interface freeze), so the codes carry a
+    /// `reachability: ignore` catalog annotation — they are referenced only
+    /// here, in this mapper arm, not constructed. The live production typed
+    /// arms are the `DropBundleError` variants themselves.
+    #[must_use]
+    pub fn code(&self) -> benten_errors::ErrorCode {
+        use benten_errors::ErrorCode;
+        match self {
+            Self::EnvelopeSignatureInvalid { .. } => ErrorCode::DropBundleEnvelopeSigInvalid,
+            Self::UnsupportedDropVersion { .. } => ErrorCode::DropBundleVersionUnsupported,
+            Self::UnsupportedDropMode { .. } => ErrorCode::DropBundleMode3InlineRejected,
+            Self::EnvelopeIssuerMismatch { .. } => ErrorCode::DropBundleEnvelopeIssuerMismatch,
+            // The AEAD-tag / per-Node-sig / grant-composition / codec arms map
+            // to their existing first-class codes.
+            Self::PerNodeAeadAuthenticationFailed { .. } => ErrorCode::AeadRebindingAttackDetected,
+            Self::PerNodeSignatureInvalid { .. } => ErrorCode::DropBundleEnvelopeSigInvalid,
+            Self::AuthorizationGrantFailed(_) => ErrorCode::AuthorizationGrantBindingSigInvalid,
+            Self::CodecError(_) => ErrorCode::Serialize,
         }
     }
 }
@@ -263,16 +342,19 @@ impl EncryptedContent {
 ///   spec this bundle is for; the body is carried for offline
 ///   consume so the recipient does not need a network lookup).
 /// - `per_node_attestation`: optional opaque bytes blob carried
-///   as a SIZE-RESERVED placeholder at G-CORE-3f (130-byte sized
-///   marker; the real per-Node-signature construction is reserved
-///   for G-CORE-9 when the freeze fixes its typed shape). Defense-
-///   in-depth at G-CORE-3f is genuinely 2 layers (envelope-sig +
-///   per-Node-AEAD-tag); the third layer (per-Node-sig validation)
-///   lands at G-CORE-9 against a real `Vec<Signature>` shape — the
-///   `DropBundleError::PerNodeSignatureInvalid` typed-reject defined
-///   here is reserved-but-unconstructed until that surface lands.
-///   The size-reservation pin keeps the ~12% Spike G ceiling visible
-///   so the future field doesn't surface as a wire-format surprise.
+///   as a SIZE-RESERVED placeholder (130-byte sized marker). At the
+///   G-CORE-9 v1-beta freeze this field is FROZEN as an inert,
+///   reserved-size opaque blob — the real per-Node-signature
+///   construction (a typed `Vec<Signature>` parallel to `content`)
+///   was DEFERRED past the freeze (Row D-66); the freeze did NOT
+///   upgrade the shape. Defense-in-depth on the shipped v1-beta path
+///   is genuinely 2 layers (envelope-sig + per-Node-AEAD-tag); the
+///   third layer (per-Node-sig validation) is the deferred addition,
+///   and the `DropBundleError::PerNodeSignatureInvalid` typed-reject
+///   defined here is reserved-but-unconstructed (register-then-enforce)
+///   at v1-beta. The size-reservation pin keeps the ~12% Spike G
+///   ceiling visible so the deferred per-Node-signature upgrade lands
+///   ADDITIVELY (no wire-format surprise) when it arrives.
 /// - `envelope_sig`: `Vec<u8>` — Ed25519 signature over the bundle
 ///   header (everything else above). Verified BEFORE any per-Node
 ///   decrypt is attempted.
@@ -299,9 +381,11 @@ pub struct DropBundle {
     pub restricted_spec: RestrictedScope,
     /// Per-Node attestation blob — non-empty when the bundle is
     /// built with per-Node-sig defense-in-depth ON; empty (or
-    /// shortened) for the envelope-only-for-test variant. The
-    /// production wire-up at G-CORE-9 freeze upgrades this to a
-    /// typed `Vec<Signature>` parallel to `content`.
+    /// shortened) for the envelope-only-for-test variant. FROZEN at the
+    /// G-CORE-9 v1-beta freeze as an inert, reserved-size opaque blob;
+    /// the typed `Vec<Signature>` (parallel to `content`) upgrade was
+    /// DEFERRED past the freeze (Row D-66), so this stays a `Vec<u8>`
+    /// size-reservation at v1-beta. The deferred upgrade lands additively.
     #[serde(with = "serde_bytes")]
     pub per_node_attestation: Vec<u8>,
     /// Ed25519 envelope signature bytes.
@@ -342,6 +426,19 @@ impl DropBundle {
     /// - [`DropBundleError::UnsupportedDropMode`] for Mode-3
     ///   inline-tiny bundles (deferred to post-v1).
     pub fn parse_cbor_bytes(bytes: &[u8]) -> Result<Self, DropBundleError> {
+        // R19 (Row D-80 / D-67): fail-closed bounded-decode guard. Reject
+        // over-cap input BEFORE the CBOR deserialize so an oversized/hostile
+        // blob is a typed reject, not an OOM. `DROP_BUNDLE_MAX_SIZE_BYTES`
+        // (4 KiB) is ~50% over the measured 5-Recipe bundle ceiling, so no
+        // legitimate bundle is rejected here.
+        if bytes.len() > DROP_BUNDLE_MAX_SIZE_BYTES {
+            return Err(DropBundleError::CodecError(format!(
+                "Drop bundle exceeds DROP_BUNDLE_MAX_SIZE_BYTES: got {} bytes, max {}",
+                bytes.len(),
+                DROP_BUNDLE_MAX_SIZE_BYTES
+            )));
+        }
+
         let bundle: Self = serde_ipld_dagcbor::from_slice(bytes)
             .map_err(|e| DropBundleError::CodecError(format!("{e}")))?;
 
@@ -381,7 +478,7 @@ impl DropBundle {
     // Offline-consume pipeline
     // -----------------------------------------------------------------
 
-    /// Consume the bundle offline. Three sequential layers:
+    /// Consume the bundle offline. Sequential layers:
     ///
     /// 1. **Envelope-sig verify** — the outer defense-in-depth layer.
     ///    Fails BEFORE any decrypt attempt (no wasted work; no
@@ -389,6 +486,15 @@ impl DropBundle {
     /// 2. **Grant binding verify** — the
     ///    [`AuthorizationGrant::verify_binding`] check (A-1/A-2/A-3
     ///    tamper detection per RATIFIED §R3).
+    /// 2b. **Envelope-issuer anchor** (F-INJ-2) — REQUIRE the bundle's
+    ///    `issuer_verifying_key` (which Layer 1 verified the envelope-sig
+    ///    under, but which is attacker-controllable and anchored to
+    ///    nothing on its own) to equal the authoritative issuer of the
+    ///    grant just verified in Layer 2 (`auth_grant.issuer_verifying_key`,
+    ///    self-bound via the grant's 7-segment binding-message). On
+    ///    mismatch: [`DropBundleError::EnvelopeIssuerMismatch`]. Closes the
+    ///    strip attack (fresh-key re-sign of a re-authored header — a
+    ///    signature-by-nobody). Verify-time only; no wire-shape change.
     /// 3. **Per-Node decrypt + AEAD authentication** — the inner
     ///    layer. Each [`EncryptedContent`] is decoded then decrypted
     ///    via `benten_graph::aead_wrap::decrypt`; AEAD authentication-
@@ -409,6 +515,29 @@ impl DropBundle {
         // Layer 2: grant binding-sig verify.
         let recipient_did_cid = derive_audience_cid_from_keypair(recipient_kp);
         self.auth_grant.verify_binding(recipient_did_cid)?;
+
+        // Layer 2b (F-INJ-2): anchor the envelope-sig to the trusted grant
+        // issuer. `verify_envelope_signature` (Layer 1) verifies the header
+        // under `self.issuer_verifying_key` — an attacker-controllable field
+        // anchored to NOTHING on its own: a strip attacker re-authors the
+        // header, mints a fresh keypair, re-signs `build_envelope_message`,
+        // and overwrites `issuer_verifying_key`, and Layer 1 passes (a
+        // signature-by-nobody). Now that Layer 2 has established the
+        // authoritative issuer — `auth_grant.issuer_verifying_key`, which is
+        // cryptographically self-bound via the grant's 7-segment
+        // binding-message (segment 7) and re-verified by `verify_binding` —
+        // REQUIRE the two to match. On mismatch the otherwise-hollow
+        // envelope-sig is not anchored to the grant the recipient trusts, so
+        // reject typed. This is a verify-time check only; no wire byte /
+        // CBOR field / golden vector changes.
+        if self.issuer_verifying_key != self.auth_grant.issuer_verifying_key {
+            return Err(DropBundleError::EnvelopeIssuerMismatch {
+                detail: "bundle envelope-sig verifying key does not match the \
+                         authoritative issuer of the trusted AuthorizationGrant \
+                         (auth_grant.issuer_verifying_key)"
+                    .to_string(),
+            });
+        }
 
         // Layer 3: per-Node decode + decrypt under the carried key.
         // R6 R2 fix-pass (Bundle R6-R2-FP-A L4 sibling): use the
@@ -471,6 +600,21 @@ impl DropBundle {
         let recipient_did_cid = derive_audience_cid_from_keypair(recipient_kp);
         if let Err(e) = self.auth_grant.verify_binding(recipient_did_cid) {
             return Err((DropBundleError::AuthorizationGrantFailed(e), 0));
+        }
+
+        // Layer 2b (F-INJ-2): anchor the envelope-sig to the trusted grant
+        // issuer (mirrors `consume_offline`). Fires before any decrypt, so
+        // the reached-decrypt-count is 0.
+        if self.issuer_verifying_key != self.auth_grant.issuer_verifying_key {
+            return Err((
+                DropBundleError::EnvelopeIssuerMismatch {
+                    detail: "bundle envelope-sig verifying key does not match the \
+                             authoritative issuer of the trusted AuthorizationGrant \
+                             (auth_grant.issuer_verifying_key)"
+                        .to_string(),
+                },
+                0,
+            ));
         }
 
         // Layer 3: per-Node decrypt.
@@ -682,6 +826,7 @@ impl DropBundle {
     /// fixture exists so the `tf3f_drop_bundle_decrypts_after_ucan_revocation_forever_valid`
     /// pin can demonstrate that the revocation record's existence
     /// does NOT prevent the offline decrypt (the R6 reality).
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn synthesize_revocation_for_embedded_ucan(
         _bundle: &Self,
@@ -701,12 +846,17 @@ impl DropBundle {
 // ---------------------------------------------------------------------------
 
 /// Opaque revocation-record sentinel — see
-/// [`DropBundle::synthesize_revocation_for_embedded_ucan`].
+/// `DropBundle::synthesize_revocation_for_embedded_ucan`.
+///
+/// `cfg(any(test, feature = "testing"))` because it exists solely to carry the
+/// sentinel that fixture returns; it is not part of the frozen v1-beta surface.
+#[cfg(any(test, feature = "testing"))]
 #[derive(Debug, Clone)]
 pub struct RevocationRecord {
     opaque: Vec<u8>,
 }
 
+#[cfg(any(test, feature = "testing"))]
 impl RevocationRecord {
     /// Number of opaque bytes carried (so the type isn't trivially
     /// optimizable away by clippy::dead_code).
@@ -806,14 +956,27 @@ fn build_5_recipe_bundle_impl(
     // benten-drop fixture needs the wave-3b shape because it must control
     // `key_material.bytes` (matching the AEAD key_bytes above for
     // consume_offline decryption) — Strategy-C wave-2 batch consolidation.
-    let auth_grant = AuthorizationGrant::issue_envelopes_for_test(ucan, key_material, audience)
-        .expect("synthetic grant issues for test");
+    // F-INJ-2: issue the grant with the SAME `issuer_kp` that signs the
+    // envelope below, so the honest fixture satisfies the consume_offline
+    // envelope-issuer anchor (`bundle.issuer_verifying_key ==
+    // auth_grant.issuer_verifying_key`). The prior `issue_envelopes_for_test`
+    // generated an ephemeral grant-issuer key, decoupling the two — which the
+    // anchor check (correctly) rejects.
+    let auth_grant = AuthorizationGrant::issue_envelopes_for_test_with_issuer(
+        issuer_kp,
+        ucan,
+        key_material,
+        audience,
+    )
+    .expect("synthetic grant issues for test");
 
     // G-CORE-3f: this is a SIZED PLACEHOLDER, not real per-Node
     // Ed25519 signatures. The placeholder reserves the wire-shape
-    // budget; G-CORE-9 v1-interface freeze upgrades it to typed
-    // `Vec<Signature>` parallel to `content`. See `per_node_attestation`
-    // field docstring + the
+    // budget; the G-CORE-9 v1-beta freeze FROZE it as this inert
+    // reserved-size blob — the typed `Vec<Signature>` (parallel to
+    // `content`) upgrade was DEFERRED past the freeze (Row D-66), so it
+    // remains a sized placeholder at v1-beta and the upgrade lands
+    // additively. See `per_node_attestation` field docstring + the
     // `tf3f_per_node_attestation_size_overhead_under_12_percent` pin.
     // For Spike G's overhead measurement the load-bearing property is
     // the size differential between with-attestation and envelope-only

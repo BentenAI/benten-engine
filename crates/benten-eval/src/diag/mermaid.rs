@@ -107,15 +107,15 @@ mod tests {
     use crate::{OperationNode, Subgraph};
 
     fn fixture() -> Subgraph {
-        Subgraph {
-            handler_id: "h".into(),
-            nodes: vec![
+        Subgraph::from_parts(
+            "h",
+            vec![
                 OperationNode::new("start", PrimitiveKind::Read),
                 OperationNode::new("done", PrimitiveKind::Respond),
             ],
-            edges: vec![("start".into(), "done".into(), "ok".into())],
-            deterministic: false,
-        }
+            vec![("start".into(), "done".into(), "ok".into())],
+            false,
+        )
     }
 
     #[test]

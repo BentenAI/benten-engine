@@ -67,10 +67,8 @@ proptest! {
         );
         let bytes = wat::parse_str(&module_wat).unwrap();
         let registry = ManifestRegistry::new();
-        let cfg = SandboxConfig {
-            fuel: budget,
-            ..SandboxConfig::default()
-        };
+        let mut cfg = SandboxConfig::default();
+        cfg.fuel = budget;
 
         let result = execute(
             &bytes,

@@ -169,11 +169,12 @@ crates/
                         # `UnsupportedAlgorithm` — NEVER a silent
                         # fallback (CLAUDE.md baked-in #5 +
                         # `RATIFIED-pq-default-reframe-2026-05-19.md`
-                        # §4 P2P-interop invariant). The live ML-DSA-65
-                        # primitive instantiation is deferred to the
-                        # coordinated workspace dep-bump wave alongside
-                        # G-CORE-3 #1301 (see the Cargo.toml record);
-                        # the hybrid arm typed-rejects until then. The
+                        # §4 P2P-interop invariant). The ML-DSA-65
+                        # primitive is LIVE-instantiated and byte-faithful
+                        # (both halves verify against the pinned IETF
+                        # LAMPS test vectors) as the shipped v1-beta
+                        # signature default — it is NOT deferred and the
+                        # hybrid arm does NOT typed-reject. The
                         # safety invariant is preserved: unaudited PQC
                         # is never the SOLE trust path; the classical
                         # half is the audited security floor.
@@ -358,7 +359,7 @@ All 12 primitives have live executors as of tag `phase-2b-close` (2026-05-03). T
 
 Phase-1 storage was forward-compatible with Phase-2 primitives: subgraphs containing WAIT / SANDBOX / SUBSCRIBE / STREAM Nodes passed structural validation under Phase 1 and round-tripped through storage, even though their executors were stubbed. That binary-compatibility property still holds — older serialised subgraphs continue to load — but the executor stubs are gone; every PrimitiveKind dispatch arm wires to a live runtime.
 
-## The 14 structural invariants
+## The 14 structural invariants (Inv-1..Inv-14)
 
 Validated at registration time or fired at runtime, depending on invariant:
 
@@ -377,7 +378,9 @@ Validated at registration time or fired at runtime, depending on invariant:
 13. **Immutability — registered subgraphs are not rewritable.** (Phase 2a 5-row firing matrix)
 14. **Causal attribution — every evaluation step carries a principal / handler / grant chain.** (Phase 2a threading)
 
-All 14 invariants are enforced as of `phase-2b-close`. Invariants 1–3, 5–6, 9–10, 12 landed in Phase 1; Invariants 8, 11, 13, 14 in Phase 2a; Invariants 4, 7 in Phase 2b alongside the SANDBOX runtime. See [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md) for per-invariant enforcer + test pins.
+All 14 structural invariants are enforced as of `phase-2b-close`. Invariants 1–3, 5–6, 9–10, 12 landed in Phase 1; Invariants 8, 11, 13, 14 in Phase 2a; Invariants 4, 7 in Phase 2b alongside the SANDBOX runtime. See [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md) for per-invariant enforcer + test pins.
+
+**The list above is the *structural* set only.** Phase-4-Meta-Core adds nine more, so the committed set at v1-beta spans **Inv-1..Inv-23**: Inv-15 (sig-bundle CIDs are never load-bearing identifiers), Inv-16 (envelope-layer unification — ONE codepoint-dispatched envelope across Layers A/B/C/D), Inv-17 (hybrid-cryptography-mandatory floor — no pure-PQ codepoint is LIVE or selectable), Inv-18 (codepoint-registry discipline + metadata-disclosure + `CodepointLifecycle` typed-state), Inv-19 (encryption-substrate keying-function CRDT-input discipline), Inv-20 (the MembershipSet 12-clause primitive invariant), Inv-21 (MembershipSet fork-tie-break HARD partition), Inv-22 (member-nature is derived, never stored), Inv-23 (a Layer-C seal's KEM key is committed by its audience DID). These are cryptographic / substrate invariants rather than graph-structural ones, and they are enforced outside `benten-eval` (in `benten-crypto-suite`, `benten-membership-set`, `benten-id` and `benten-drop`). Several carry honest carve-outs at v1-beta; the [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md) preamble is the authoritative enumeration, and it names: **Inv-15** (REGISTERED, enforcement-completion at G-CORE-PQ-WIRE-1); **Inv-19** and **Inv-21** (register-then-enforce — keying-glue / comparator AS-BUILT + property-pinned, zero production callers at HEAD); **Inv-22** (a forward per-consumer-derivation-consistency discipline the struct-fence backstops structurally); the **RBAC admin-op authorization-enforcement deferral**; and the **Inv-20 clause-level disclosure** (clauses c/i/j/k/l enforced at HEAD; clauses a/b/e/g/h golden-pinned-not-live). Per-invariant enforcement state, enforcing crate and test pins for all 23 are in [`INVARIANT-COVERAGE.md`](INVARIANT-COVERAGE.md).
 
 ## How a request flows
 
@@ -424,15 +427,15 @@ Content is serialized via `serde_ipld_dagcbor` — the IPLD subset of CBOR with 
 
 ## Incremental View Maintenance
 
-`benten-ivm` subscribes to ChangeEvents from the storage layer and keeps views current. Phase 1 shipped five hand-written views covering the hot paths: capability resolution, content listings, change-event fan-out, principal resolution, and view-staleness tallies. Phase 2b production-registered Algorithm B (dependency-tracked incremental maintenance) with per-view strategy selection (`Strategy::A` / `Strategy::B`) at `Engine::create_user_view`. Phase 3 generalised Algorithm B beyond the 5 canonical view IDs: `Algorithm::register(view_id, label_pattern, projection)` (and the budget-aware sibling `Algorithm::register_with_budget`) instantiates a generic single-loop kernel (`benten_ivm::algorithm_b::GenericKernel`) for non-canonical view IDs keyed on `(label_pattern, projection)`, with the `AnchorPrefix` selector lift shipping in `register_user_view`. The drift-detector proptest harness at `crates/benten-ivm/tests/algorithm_b_drift_detector.rs` runs incremental-vs-rebuild parity end-to-end (5 pins × 1 000 cases). The `ContentListingView` silent-fallback for user-defined Strategy::B views is RETIRED.
+`benten-ivm` subscribes to ChangeEvents from the storage layer and keeps views current. Phase 1 shipped five hand-written views covering the hot paths: capability resolution, content listings, change-event fan-out, principal resolution, and view-staleness tallies. Phase 2b production-registered Algorithm B (dependency-tracked incremental maintenance) with per-view strategy selection (`Strategy::A` / `Strategy::B`); `Engine::create_view` remains the legacy `Strategy::A` entry for the five hand-written canonical views. Phase 3 generalised Algorithm B beyond the 5 canonical view IDs: `Algorithm::register(view_id, label_pattern, projection)` (and the budget-aware sibling `Algorithm::register_with_budget`) instantiates a generic single-loop kernel (`benten_ivm::algorithm_b::GenericKernel`) for non-canonical view IDs keyed on `(label_pattern, projection)`, with the `AnchorPrefix` selector lift shipping in `register_user_view`. The drift-detector proptest harness at `crates/benten-ivm/tests/algorithm_b_drift_detector.rs` runs incremental-vs-rebuild parity end-to-end (5 pins × 1 000 cases). The `ContentListingView` silent-fallback for user-defined Strategy::B views is RETIRED.
 
 The evaluator does not know IVM exists. Views are materialized Nodes; reads hit them via the normal read path.
 
 ### Registering a user-defined view
 
 Callers extend IVM beyond the 5 canonical views by constructing a
-`UserViewSpec` and calling `Engine::register_user_view` (durable) or
-`Engine::create_user_view` (transient). The public surface:
+`UserViewSpec` and calling `Engine::register_user_view` (the sole
+`UserViewSpec` registrar). The public surface:
 
 - **`UserViewSpec::builder()`** — fluent builder requiring `id` +
   `input_pattern`; `strategy` defaults to `Strategy::B`.

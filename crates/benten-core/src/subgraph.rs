@@ -251,7 +251,26 @@ impl OperationNode {
 /// guarantee a footgun: the handle decoded on the other side would index
 /// into a freshly-built subgraph whose node order may differ.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+// §11 SemVer-readiness (F-22 pre-tag): the freeze pin. `NodeHandle` is a
+// newtype index; `#[non_exhaustive]` gates cross-crate tuple-literal
+// construction (`NodeHandle(x)`) so any future field lands additively. The
+// `.0` accessor and the `NodeHandle::new`/`index` helpers remain usable
+// cross-crate.
+#[non_exhaustive]
 pub struct NodeHandle(pub u32);
+
+impl NodeHandle {
+    /// Construct a `NodeHandle` from its builder-index value.
+    ///
+    /// This is the cross-crate construction entry point — `#[non_exhaustive]`
+    /// (F-22 pre-tag §11 SemVer-readiness) blocks the equivalent tuple-literal
+    /// `NodeHandle(x)` from outside `benten-core`. The `.0` accessor remains
+    /// public for reads.
+    #[must_use]
+    pub const fn new(index: u32) -> Self {
+        Self(index)
+    }
+}
 
 /// A subgraph (set of OperationNodes + directed edges between them).
 ///
@@ -300,6 +319,15 @@ pub struct NodeHandle(pub u32);
 /// contract is single-sourced. A caller that previously relied on `serde`
 /// will see a typed compile error pointing at the canonical entry points.
 #[derive(Debug, Clone, PartialEq)]
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a
+// SemVer break. `#[non_exhaustive]` gates cross-crate struct-literal
+// construction + exhaustive struct-patterns only; it does NOT affect
+// `canonical_subgraph_bytes` (the wire contract is a function of field
+// VALUES, not construction syntax) and does NOT block cross-crate field
+// READS (`sg.handler_id` etc.), so the benten-eval field-access ergonomics
+// documented above are preserved. Cross-crate construction goes through
+// `SubgraphBuilder` / `Subgraph::new`.
+#[non_exhaustive]
 pub struct Subgraph {
     /// Stable handler-registration identity.
     pub handler_id: String,
@@ -334,6 +362,30 @@ impl Subgraph {
     #[cfg(any(test, feature = "testing"))]
     pub fn empty_for_test(handler_id: impl Into<String>) -> Self {
         Self::new(handler_id)
+    }
+
+    /// Construct a `Subgraph` directly from its parts.
+    ///
+    /// This is the cross-crate construction entry point for callers that
+    /// already hold the finalized `(handler_id, nodes, edges, deterministic)`
+    /// tuple (e.g. `benten-eval`'s invariant-fixture + transient-projection
+    /// paths) — `#[non_exhaustive]` (F-22 pre-tag §11 SemVer-readiness) blocks
+    /// the equivalent struct-literal from outside `benten-core`. Field VALUES
+    /// are identical to the literal, so `canonical_subgraph_bytes` / `cid()`
+    /// are unchanged.
+    #[must_use]
+    pub fn from_parts(
+        handler_id: impl Into<String>,
+        nodes: Vec<OperationNode>,
+        edges: Vec<(String, String, String)>,
+        deterministic: bool,
+    ) -> Self {
+        Self {
+            handler_id: handler_id.into(),
+            nodes,
+            edges,
+            deterministic,
+        }
     }
 
     /// True when the builder declared this handler deterministic via
@@ -771,6 +823,11 @@ struct CanonViewOwned {
 /// `.build()` over `build_unvalidated_for_test` for new callsites that
 /// want the typed-error surface; `build_unvalidated_for_test` stays for
 /// the invariant edge-case tests that intentionally bypass it.
+// §11 SemVer-readiness (F-22 pre-tag): additive future fields land without a
+// SemVer break. Cross-crate construction goes through `SubgraphBuilder::new`
+// / `Subgraph::new`; `#[non_exhaustive]` gates cross-crate literal
+// construction + exhaustive struct-patterns only (field READS unaffected).
+#[non_exhaustive]
 pub struct SubgraphBuilder {
     /// Handler id for this subgraph (stamped onto the produced [`Subgraph`]).
     pub handler_id: String,

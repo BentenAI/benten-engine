@@ -35,8 +35,11 @@
 // X25519+ML-KEM-768 recipient keypair (Inv-16 — the same KEM-DEM the Layer-C
 // drops use); the seal/open route through `benten_crypto_suite::hpke`
 // (`wrap_key_to_recipient`/`unwrap_key_from_recipient`), NOT a symmetric XOR
-// stand-in. A substituted recipient pubkey (MITM post-fingerprint) yields a
-// wrong recipient secret on B's side and the HPKE unwrap fails closed.
+// stand-in. The §10.2-HIGH arm exercises RECIPIENT-CONFIDENTIALITY: a payload
+// sealed to B's real pubkey does not decrypt under any OTHER recipient secret
+// (the HPKE unwrap fails closed). It does NOT exercise the active
+// swap-before-seal MITM defense — that is fingerprint-dependent + DEFERRED
+// (Row D-30, R10 F-05); nothing binds `device_b_fingerprint` to the sealed pubkey.
 use benten_crypto_suite::cipher_suite::{CipherSuite, RecipientKeypair};
 use benten_crypto_suite::codepoint::CipherSuiteCodepoint;
 use benten_crypto_suite::domain_registry::PROVISIONING_DOMAIN;
@@ -122,12 +125,19 @@ fn f_ld_4_device_link_key_wrap_round_trips_to_device_b() {
     assert_eq!(recovered.k_principal, inner.k_principal);
 }
 
-/// F-LD-4 §10.2-HIGH: substitute B's keypair post-fingerprint → K_principal does
-/// NOT decrypt to the wrong device. A MITM that swaps the recipient keypair after
-/// A confirmed the fingerprint cannot exfiltrate K_principal (the HPKE unwrap
-/// fails closed under the attacker's recipient secret).
+/// F-LD-4 §10.2-HIGH — RECIPIENT-CONFIDENTIALITY (the property this ACTUALLY
+/// exercises). `K_principal` sealed to B's real pubkey does NOT decrypt under any
+/// OTHER recipient secret: a party holding a different (attacker's) secret fails
+/// the HPKE unwrap closed, so `K_principal` is not exfiltrated to the wrong device.
+///
+/// This is NOT the active swap-before-seal MITM-substitution defense: nothing
+/// binds the human-confirmed `device_b_fingerprint` to the pubkey A seals to, so
+/// this test does not (and cannot, at v1-beta) prevent A from sealing to a
+/// pubkey swapped BEFORE the seal. That fingerprint-binding enforcement is
+/// DEFERRED to G-COMP-1 (Row D-30, R10 F-05). What is proven here is that a
+/// mismatched recipient secret fails closed at OPEN time.
 #[test]
-fn f_ld_4_pubkey_substitution_post_fingerprint_rejects_k_principal_exfil() {
+fn f_ld_4_recipient_confidentiality_wrong_secret_rejects_k_principal_exfil() {
     let user_did = Keypair::generate();
     let device_b = fresh_device_keypair();
     let attacker = fresh_device_keypair();
@@ -182,21 +192,33 @@ fn f_ld_4_forged_offer_signature_rejects() {
     );
 }
 
-/// F-LD-4 replay old session-id → reject. A replayed `ProvisioningPayload`
-/// carrying a session-id B already consumed is refused (session-layer FS /
-/// replay defense via session-id binding).
+/// F-LD-4 session-id replay — **MODEL-ONLY pin (NOT a production-path
+/// exercise; R9-council F-06 correction).**
+///
+/// This pins the INTENDED reject shape of a consumed-session-id replay store
+/// using a test-local `HashSet`. It DELIBERATELY does NOT call
+/// `open_provisioning_payload` — the production `open_provisioning_payload`
+/// takes NO session-id-cache argument and cannot emit
+/// `DeviceLinkError::SessionIdReplayed` at v1-beta (the replay defense is a
+/// DEFERRED seam: `docs/V1-FROZEN-INTERFACE-DEFERRED.md` Row D-30 → G-COMP-1 /
+/// Phase-4-Meta-Composing). Naming makes the model-only nature explicit so this
+/// arm is never mistaken for a production-path pin (pim-18 SHAPE-not-SUBSTANCE).
+/// When Row D-30 wires the production replay store, this arm is replaced by a
+/// substantive pin that drives `open_provisioning_payload` with a real cache.
 #[test]
-fn f_ld_4_replayed_session_id_rejects() {
+fn f_ld_4_model_only_session_id_replay_pin() {
     use std::collections::HashSet;
     let mut consumed: HashSet<[u8; 32]> = HashSet::new();
     let session_id = [0x55; 32];
 
+    // Model-only: the intended reject shape of a consumed-session-id store.
     // First link consumes the session-id.
     assert!(consumed.insert(session_id), "first use MUST be admitted");
-    // Replay of the SAME session-id → rejected.
+    // Replay of the SAME session-id → rejected (model of the deferred store).
     assert!(
         !consumed.insert(session_id),
-        "replayed provisioning session-id MUST be rejected (already consumed)"
+        "replayed provisioning session-id MUST be rejected (already consumed) — \
+         MODEL of the DEFERRED Row D-30 store, not the production path"
     );
 }
 
@@ -310,5 +332,59 @@ fn f_ld_4_device_link_band_base_pinned() {
     assert!(
         dispatch_device_link_codepoint(0x6320).is_err(),
         "RemotePermission band is out of DeviceLink range"
+    );
+}
+
+/// R15 F-05 / F-08 — `ProvisioningInnerPayload`'s manual `Debug` MUST redact
+/// its secret key material (`k_principal` + `user_did_signing_key`) so a
+/// `{:?}` render / log line can never leak the wrapped key. Mirrors
+/// `benten_crypto_suite::…::f_va_4::secret_wrapper_debug_does_not_leak_key`.
+///
+/// would-FAIL-on-revert: if `ProvisioningInnerPayload` reverted to
+/// `#[derive(Debug)]`, the `{:?}` array form would render the secret bytes as
+/// decimal and the distinct-byte scan below would find them → the assert
+/// fires red.
+#[test]
+fn f_ld_4_provisioning_inner_debug_does_not_leak_secret_key_material() {
+    // Distinct-byte fixture for the secret fields (a robust foil): the leading
+    // bytes are non-constant multi-digit decimal values so the leak scan is
+    // unambiguous. 0xDE=222, 0xAD=173, 0xBE=190, 0xEF=239 render as decimal in
+    // the `{:?}` array form. A LEAKING (derived) Debug would render these as
+    // the CONSECUTIVE sequence `222, 173, 190, 239` in the array literal — the
+    // scan looks for that full sequence, which (unlike any single value) cannot
+    // collide with a non-secret field's decimal digits.
+    let mut k_principal = [0u8; 32];
+    let distinctive: [u8; 4] = [0xDE, 0xAD, 0xBE, 0xEF];
+    k_principal[..4].copy_from_slice(&distinctive);
+    let mut signing_key = [0u8; 32];
+    signing_key[..4].copy_from_slice(&distinctive);
+
+    let inner = ProvisioningInnerPayload {
+        k_principal,
+        user_did_signing_key: signing_key,
+        // Non-secret fields use benign constant bytes.
+        user_did_pubkey: [0x33; 32],
+        atrium_memberships: vec![[0x44; 32]],
+        provisioning_session_id: [0x55; 32],
+        granted_at_bucket: 1_900_000_800,
+    };
+    let rendered = format!("{inner:?}");
+
+    // A derived (leaking) Debug renders the secret [u8;32] as an array literal
+    // whose leading bytes are `222, 173, 190, 239, ...`; the redacting Debug
+    // renders the field as `"[REDACTED]"` instead.
+    let leaked = rendered.contains("222, 173, 190, 239");
+    assert!(
+        !leaked,
+        "ProvisioningInnerPayload Debug MUST redact k_principal + \
+         user_did_signing_key ([REDACTED]) — a coredump / log line MUST NOT \
+         contain the wrapped key material (R15 F-05/F-08). would-FAIL while a \
+         derived Debug leaks the raw [u8;32]; rendered=`{rendered}`"
+    );
+    // Positive: the redaction sentinel IS present (the manual Debug ran).
+    assert!(
+        rendered.contains("[REDACTED]"),
+        "expected the redacting Debug to emit `[REDACTED]` for secret fields; \
+         rendered=`{rendered}`"
     );
 }

@@ -32,6 +32,7 @@ pub benten_errors::ErrorCode::CidUnsupportedCodec
 pub benten_errors::ErrorCode::CidUnsupportedHash
 pub benten_errors::ErrorCode::DevServerStopped
 pub benten_errors::ErrorCode::DeviceAttestationForged
+pub benten_errors::ErrorCode::DropBundleEnvelopeIssuerMismatch
 pub benten_errors::ErrorCode::DropBundleEnvelopeSigInvalid
 pub benten_errors::ErrorCode::DropBundleMode3InlineRejected
 pub benten_errors::ErrorCode::DropBundleVersionUnsupported
@@ -111,6 +112,7 @@ pub benten_errors::ErrorCode::PluginPerDelegationDenied
 pub benten_errors::ErrorCode::PluginPrivateNamespaceDelegationForbidden
 pub benten_errors::ErrorCode::PrimitiveNotImplemented
 pub benten_errors::ErrorCode::ProductionRequiresCaps
+pub benten_errors::ErrorCode::RecipientKemNotCommitted
 pub benten_errors::ErrorCode::RecipientLacksKeysForSuite
 pub benten_errors::ErrorCode::RegistryDiscoveryTimeout
 pub benten_errors::ErrorCode::ReloadSubscriberUnsubscribed

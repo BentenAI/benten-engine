@@ -26,9 +26,10 @@
 //! password from this env-var (or the IPC channel) and never blocks on a TTY.
 
 use benten_crypto_suite::vault::{
-    Argon2idParams, DAK_HKDF_INFO_TAG, OWASP_DEFAULT, UnlockedKeyMaterial, VaultPayload,
-    decode_vault, derive_dak, serialize_vault,
+    DAK_HKDF_INFO_TAG, OWASP_DEFAULT, UnlockedKeyMaterial, VaultPayload, derive_dak, open_vault,
+    serialize_vault,
 };
+use zeroize::Zeroize as _;
 
 /// The frozen headless password env-var name (e2r §4.4 FREEZE).
 pub const BENTEN_VAULT_PASSWORD: &str = "BENTEN_VAULT_PASSWORD";
@@ -110,12 +111,11 @@ pub trait DeviceAuthBackend: sealed::Sealed {
 /// [`BENTEN_VAULT_PASSWORD`] (or the IPC channel).
 pub struct HeadlessDeviceAuth {
     /// The on-disk vault envelope bytes (XChaCha20-Poly1305-sealed under the
-    /// DAK derived from the correct password).
+    /// DAK derived from the correct password). R11 MC-6: the frame header
+    /// persists the Argon2id salt + params, so these bytes are self-contained —
+    /// the unlock path re-derives the DAK from the frame + password ALONE (no
+    /// separate salt/params struct fields; source-of-truth = the frame).
     vault_bytes: Vec<u8>,
-    /// The per-vault Argon2id salt.
-    salt: [u8; 16],
-    /// The Argon2id params the vault was sealed under.
-    params: Argon2idParams,
     /// What the headless source supplies ([`BENTEN_VAULT_PASSWORD`] / IPC).
     /// `None` models no headless password source.
     password_source: Option<Vec<u8>>,
@@ -128,10 +128,21 @@ impl HeadlessDeviceAuth {
     /// password source supplies `password_source`. The real Argon2id +
     /// XChaCha20-Poly1305 stack is used.
     ///
+    /// This constructor bakes a **constant sentinel** `user_did_signing_key`
+    /// (`[0x22; 64]`) into the sealed payload — it is a test/fixture builder,
+    /// NOT a production device-provisioning path (a real provisioning path
+    /// takes the caller's actual signing key and lands additively in
+    /// Phase-4-Meta-Composing). It is therefore `#[cfg(any(test, feature =
+    /// "test-helpers"))]`-gated OFF the default-feature public surface — the
+    /// same freeze-hygiene as `expose_unlocked_key` (a fixture-shaped
+    /// constructor that would freeze a sentinel key onto the v1 interface must
+    /// not sit on the production surface). Row D-55.
+    ///
     /// # Panics
     ///
     /// Panics only on an internal AEAD seal error (the OWASP params are valid).
     #[must_use]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn seal_and_build(
         k_principal: [u8; 32],
         password: &[u8],
@@ -145,12 +156,12 @@ impl HeadlessDeviceAuth {
             user_did_signing_key: vec![0x22u8; 64],
             user_did_creation_time: 0,
         };
-        let vault_bytes = serialize_vault(&payload, dak.expose())
+        // R11 MC-6: persist salt+params INTO the frame header so the on-disk
+        // bytes are self-contained (no separate salt/params struct fields).
+        let vault_bytes = serialize_vault(&payload, &salt, params, dak.expose())
             .expect("vault seal is infallible for OWASP params");
         Self {
             vault_bytes,
-            salt,
-            params,
             password_source: password_source.map(<[u8]>::to_vec),
             unlocked: false,
         }
@@ -166,19 +177,47 @@ impl HeadlessDeviceAuth {
         &self,
         password: &[u8],
     ) -> Result<UnlockedKeyMaterial, DeviceAuthError> {
-        // Stage 1 — KDF (ALWAYS runs; no input-dependent skip).
-        let dak = derive_dak(password, &self.salt, self.params, DAK_HKDF_INFO_TAG);
-        // Stage 2 — AEAD-open (ALWAYS attempted; the AEAD tag compare is
-        // constant-time inside `decode_vault`). Every failure cause (AEAD tag,
-        // malformed, wrong-width, …) collapses to the single typed rejection —
-        // no salt/params/tag error-variant side-channel.
-        match decode_vault(&self.vault_bytes, dak.expose()) {
-            Ok(decoded) => Ok(UnlockedKeyMaterial::new(
-                decoded.payload.k_principal,
-                decoded.payload.user_did_signing_key,
-            )),
+        // R11 MC-6: source the Argon2id salt+params FROM the frame header (no
+        // separate struct fields). `open_vault` reads salt+params from the
+        // bytes, runs the KDF (ALWAYS; no input-dependent skip), then AEAD-opens
+        // (constant-time tag compare). Every failure cause (AEAD tag, malformed,
+        // wrong-width, …) collapses to the single typed rejection — no
+        // salt/params/tag error-variant side-channel (F-VA-3).
+        match open_vault(&self.vault_bytes, password, DAK_HKDF_INFO_TAG) {
+            Ok(mut decoded) => {
+                // `VaultPayload` is zeroize-on-drop (D-74/75/76), so its secret
+                // fields cannot be moved out (E0509). Take ownership of the
+                // hybrid signing key via `mem::take` (leaves an empty Vec the
+                // dropped payload harmlessly re-zeroizes) and copy the
+                // `[u8; 32]` `k_principal`; both flow straight into the
+                // zeroizing `UnlockedKeyMaterial`. NOTE: `k_principal` is a
+                // `Copy` `[u8; 32]`, so the `let k_principal = ...` bind + the
+                // arg-pass each leave a transient un-zeroized stack copy (Copy
+                // types carry no Drop glue) — the same RAM-residency class
+                // Compromise #36 discloses OUT-OF-SCOPE. The residual copy left
+                // in `decoded.payload` is wiped by the payload's `Drop`.
+                let k_principal = decoded.payload.k_principal;
+                let user_did_signing_key =
+                    core::mem::take(&mut decoded.payload.user_did_signing_key);
+                Ok(UnlockedKeyMaterial::new(k_principal, user_did_signing_key))
+            }
             Err(_) => Err(DeviceAuthError::VaultDecryptFailed),
         }
+    }
+}
+
+/// R19 secret-hygiene: zeroize the sensitive `password_source` (the raw
+/// vault password) + the sealed `vault_bytes` on drop so freed-heap /
+/// coredump exposure does not leak them. `HeadlessDeviceAuth` derives no
+/// `Debug`, so there is no Debug leak to redact; this is drop-behavior only
+/// (no wire / serialization change). Every field access above is by-ref, so
+/// the manual `Drop` introduces no partial-move hazard.
+impl Drop for HeadlessDeviceAuth {
+    fn drop(&mut self) {
+        if let Some(pw) = self.password_source.as_mut() {
+            pw.zeroize();
+        }
+        self.vault_bytes.zeroize();
     }
 }
 
@@ -214,8 +253,19 @@ impl DeviceAuthBackend for HeadlessDeviceAuth {
 
 /// Expose the 32 bytes of `K_principal` from an [`UnlockedKey`] (greppable
 /// access; routes through the crypto-suite's sole `expose_k_principal`
-/// surface). Used by the F-LD-1 round-trip pins.
+/// surface). Used ONLY by the F-LD-1 round-trip pins.
+///
+/// D-74/75/76 secret-hygiene (R19 mini-review follow-up): this hands the raw
+/// `K_principal` back as a bare `[u8; 32]` copied OUT of the
+/// `secrecy::SecretBox` onto the caller's un-zeroized stack. It is test-
+/// support (no production callers — only the F-LD-1 pins) yet was on the
+/// FROZEN `benten-engine` public surface, so it is now
+/// `#[cfg(any(test, feature = "test-helpers"))]`-gated to leave the default-
+/// feature public-api baseline (a raw-`K_principal` accessor must not sit on
+/// the production surface). Production code must keep `K_principal` inside
+/// the `SecretBox` and never copy it onto the stack.
 #[must_use]
+#[cfg(any(test, feature = "test-helpers"))]
 pub fn expose_unlocked_key(key: &UnlockedKey) -> [u8; 32] {
     *key.expose_k_principal()
 }

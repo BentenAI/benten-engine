@@ -86,20 +86,33 @@
 //! `crates/benten-id/tests/graph_encoded.rs` (named destination per
 //! HARD RULE rule-12 disposition (b)).
 
-use benten_crypto_suite::primitives::ed25519_dalek::{Signature, Signer, Verifier};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Mutex;
 
 use crate::did::Did;
 use crate::errors::VcError;
-use crate::keypair::{Keypair, PublicKey};
+use crate::keypair::Keypair;
 
 /// W3C VC v1.1 `@context` literal — the primary VC context URL.
 pub const VC_CONTEXT_V1: &str = "https://www.w3.org/2018/credentials/v1";
 
 /// W3C VC v1.1 `type` literal — every VC carries this base type.
 pub const VC_TYPE_BASE: &str = "VerifiableCredential";
+
+/// Fail-closed total-byte ceiling on an untrusted-input `Credential`
+/// envelope (Compromise #28 / META #629 DoS-sweep).
+///
+/// [`verify_bytes_in_trust_domain`] decodes `bytes: &[u8]` (its untrusted
+/// entry parameter) straight into a `Credential` with no prior size cap. A
+/// `Credential` is non-recursive so this is an O(N) linear allocation rather
+/// than a `with_capacity(N)` blow-up, but an enormous blob is still an
+/// allocation DoS on any caller — the production VC-verify path
+/// (`benten_engine::typed_call_dispatch::vc_verify`) is the latent consumer.
+/// A well-formed VC is a few KiB; 16 KiB clears any realistic credential
+/// while bounding a hostile blob. Mirrors the
+/// `keypair.rs::SEED_ENVELOPE_MAX_BYTES` fail-closed pattern.
+pub const MAX_VC_ENVELOPE_BYTES: usize = 16 * 1024;
 
 /// Verifiable Credential — the W3C v1.1 core fields.
 ///
@@ -433,18 +446,19 @@ pub fn verify(vc: &Credential, expected_issuer: &Did) -> Result<(), VcError> {
     if vc.claims.issuer != expected_issuer.as_str() {
         return Err(VcError::BadSignature);
     }
-    let pk: PublicKey = expected_issuer
-        .resolve()
+    // GAP-KDB Fork-A (D-53): the VC-verify is the ONE codepoint-dispatched
+    // hybrid verify — the same silent-PQ-strip class as the UCAN
+    // chain-walk. The issuer signing key is resolved zero-I/O via
+    // `resolve_signing` (a `did:key` yields the classical `pq = None`
+    // handle; a `did:benten` issuer yields the composite), and its SHAPE
+    // selects the verify arm: a `did:benten`-issued VC whose `proof` carries
+    // only the Ed25519 half is a silent PQ-strip that MUST reject. No inline
+    // Ed25519-only `[u8; 64]` extraction here anymore (AUTH-7 net).
+    let signing_pk = expected_issuer
+        .resolve_signing()
         .map_err(|_| VcError::BadSignature)?;
-    let sig_bytes: [u8; 64] = vc
-        .proof
-        .as_slice()
-        .try_into()
-        .map_err(|_| VcError::BadSignature)?;
-    let sig = Signature::from_bytes(&sig_bytes);
     let bytes = vc.to_canonical_bytes();
-    pk.as_verifying_key()
-        .verify(&bytes, &sig)
+    crate::authority_verify::verify_authority_signature(&signing_pk, &bytes, &vc.proof)
         .map_err(|_| VcError::BadSignature)?;
     Ok(())
 }
@@ -468,13 +482,23 @@ pub fn verify_at(vc: &Credential, expected_issuer: &Did, now: u64) -> Result<(),
     verify(vc, expected_issuer)
 }
 
-/// Verify a VC against the issuer DID, consulting `registry` to
-/// reject revoked credentials. Returns [`VcError::Revoked`] if the
+/// Verify a VC against the issuer DID at `now`, consulting `registry`
+/// to reject revoked credentials. Returns [`VcError::Revoked`] if the
 /// `credentialStatus.id` is listed in the registry.
+///
+/// `now` is REQUIRED — see the module note on
+/// [`verify_in_trust_domain`] for why the composed entry points cannot
+/// skip the timed gate. Revocation and expiry are INDEPENDENT: a
+/// credential can be unexpired-and-revoked (the entire point of a
+/// revocation registry) or expired-and-never-revoked (natural end of
+/// life). Checking one has never implied the other, and a caller
+/// consulting a revocation registry while ignoring `expirationDate`
+/// has a bug essentially every time.
 pub fn verify_with_registry(
     vc: &Credential,
     expected_issuer: &Did,
     registry: &RevocationRegistry,
+    now: u64,
 ) -> Result<(), VcError> {
     if let Some(status) = &vc.claims.credential_status
         && registry.is_revoked(&status.id)
@@ -483,20 +507,60 @@ pub fn verify_with_registry(
             status_id: status.id.clone(),
         });
     }
-    verify(vc, expected_issuer)
+    verify_at(vc, expected_issuer, now)
 }
 
-/// Verify a VC under a [`TrustDomain`] allow-list. Rejects with
-/// [`VcError::IssuerNotTrusted`] if the issuer is not on the list,
-/// independent of signature validity.
-pub fn verify_in_trust_domain(vc: &Credential, trust_domain: &TrustDomain) -> Result<(), VcError> {
+/// Verify a VC under a [`TrustDomain`] allow-list at `now`. Rejects
+/// with [`VcError::IssuerNotTrusted`] if the issuer is not on the
+/// list, independent of signature validity.
+///
+/// # Why `now` is a required parameter
+///
+/// Pre-freeze audit (2026-08-12) found this family was a matrix with
+/// only the diagonal filled: three independent dimensions — clock
+/// (`expirationDate` + `issuanceDate`), trust-domain allow-list, and
+/// revocation registry — across five entry points, where every
+/// composed entry added exactly ONE dimension to the clock-free
+/// [`verify`] and **no entry point checked two**. There was therefore
+/// no way to verify a credential against a trust domain *and* a clock,
+/// which is precisely the pair an offline reciprocity gate needs.
+///
+/// The fix is a required parameter rather than a sixth function.
+/// Adding `verify_in_trust_domain_at` alongside the existing shape
+/// would leave six functions, still no revocation-plus-clock pair, and
+/// a combinatorial end state of eight. Requiring `now` makes the
+/// silent-skip **unrepresentable** instead of merely documented — the
+/// caller cannot forget the timed gate, because the compiler will not
+/// let them. [`verify`] remains clock-free as the honest signature-and
+/// -issuer primitive these compose; that is the one place skipping the
+/// clock is a deliberate choice rather than an omission.
+///
+/// This is a breaking signature change, taken deliberately before the
+/// v1-beta interface freeze because after the freeze it is permanent.
+/// The engine has no ambient clock by commitment (see
+/// `E_UCAN_CLOCK_NOT_INJECTED`), so `now` is injected here for the same
+/// reason it is injected everywhere else: a verifier that reads the
+/// wall clock itself cannot be tested against time, and cannot be
+/// audited for what it did at a past instant.
+///
+/// **Expiry is not revocation.** Expiry is determinable entirely
+/// offline from the credential plus a clock. Revocation requires
+/// consulting [`RevocationRegistry`] — see [`verify_with_registry`].
+/// At a genuinely offline gate revocation is unobservable, so a short
+/// `expirationDate` is the only offline-enforceable bound on a
+/// credential's life.
+pub fn verify_in_trust_domain(
+    vc: &Credential,
+    trust_domain: &TrustDomain,
+    now: u64,
+) -> Result<(), VcError> {
     if !trust_domain.contains(&vc.claims.issuer) {
         return Err(VcError::IssuerNotTrusted {
             issuer: vc.claims.issuer.clone(),
         });
     }
     let issuer = Did::from_string_for_test_fixture(vc.claims.issuer.clone());
-    verify(vc, &issuer)
+    verify_at(vc, &issuer, now)
 }
 
 /// Verify raw canonical bytes (untrusted-input path) under a
@@ -508,10 +572,19 @@ pub fn verify_in_trust_domain(vc: &Credential, trust_domain: &TrustDomain) -> Re
 pub fn verify_bytes_in_trust_domain(
     bytes: &[u8],
     trust_domain: &TrustDomain,
+    now: u64,
 ) -> Result<(), VcError> {
+    // Fail-closed total-byte cap (Compromise #28 / META #629): reject an
+    // over-large blob BEFORE `serde` allocates the decoded `Credential`.
+    if bytes.len() > MAX_VC_ENVELOPE_BYTES {
+        return Err(VcError::EnvelopeTooLarge {
+            got: bytes.len(),
+            max: MAX_VC_ENVELOPE_BYTES,
+        });
+    }
     let vc: Credential =
         serde_ipld_dagcbor::from_slice(bytes).map_err(|_| VcError::DecodeFailed)?;
-    verify_in_trust_domain(&vc, trust_domain)
+    verify_in_trust_domain(&vc, trust_domain, now)
 }
 
 #[cfg(test)]

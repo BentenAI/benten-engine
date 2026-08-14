@@ -45,6 +45,27 @@ use serde::{Deserialize, Serialize};
 
 use benten_core::Cid;
 
+/// Fail-closed ceiling on the raw bytes accepted by
+/// [`ModuleManifest::from_canonical_bytes`] (Compromise #28 / META #629
+/// DoS-sweep).
+///
+/// The local `rehydrate_installed_modules_from_zone` caller reads bytes from
+/// the trusted durable backend, but `from_canonical_bytes` is a `pub` decode
+/// API that also serves the install-a-shared-plugin path, where manifest bytes
+/// originate from a content-addressed subgraph shared across Atriums
+/// (attacker-authored). 256 KiB clears any realistic manifest (module list +
+/// migration steps) while bounding a hostile blob before `serde` allocates.
+pub const MAX_MODULE_MANIFEST_BYTES: usize = 256 * 1024;
+
+/// Fail-closed ceiling on the decoded [`ModuleManifest::modules`] count
+/// (Compromise #28 / META #629). A count-prefixed array amplification guard
+/// sitting alongside the byte cap.
+pub const MAX_MODULE_MANIFEST_MODULES: usize = 4096;
+
+/// Fail-closed ceiling on the decoded [`ModuleManifest::migrations`] count
+/// (Compromise #28 / META #629).
+pub const MAX_MODULE_MANIFEST_MIGRATIONS: usize = 4096;
+
 /// One module entry inside a [`ModuleManifest`].
 ///
 /// Mirrors the TypeScript `ModuleManifestEntry` in
@@ -243,7 +264,33 @@ impl ModuleManifest {
     /// Returns [`ManifestError::Decode`] on malformed bytes or
     /// type-shape mismatches.
     pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, ManifestError> {
-        serde_ipld_dagcbor::from_slice(bytes).map_err(|e| ManifestError::Decode(e.to_string()))
+        // Fail-closed byte cap (Compromise #28 / META #629): reject an
+        // over-large manifest blob BEFORE `serde` allocates. Covers every
+        // decode caller, including the attacker-authored shared-plugin path.
+        if bytes.len() > MAX_MODULE_MANIFEST_BYTES {
+            return Err(ManifestError::Decode(format!(
+                "manifest CBOR {} bytes exceeds cap {MAX_MODULE_MANIFEST_BYTES}",
+                bytes.len()
+            )));
+        }
+        let manifest: Self = serde_ipld_dagcbor::from_slice(bytes)
+            .map_err(|e| ManifestError::Decode(e.to_string()))?;
+        // Fail-closed count ceilings (Compromise #28 / META #629): reject a
+        // (within-byte-cap) manifest whose module / migration arrays exceed
+        // the per-manifest element ceilings.
+        if manifest.modules.len() > MAX_MODULE_MANIFEST_MODULES {
+            return Err(ManifestError::Decode(format!(
+                "manifest declares {} modules, exceeds cap {MAX_MODULE_MANIFEST_MODULES}",
+                manifest.modules.len()
+            )));
+        }
+        if manifest.migrations.len() > MAX_MODULE_MANIFEST_MIGRATIONS {
+            return Err(ManifestError::Decode(format!(
+                "manifest declares {} migrations, exceeds cap {MAX_MODULE_MANIFEST_MIGRATIONS}",
+                manifest.migrations.len()
+            )));
+        }
+        Ok(manifest)
     }
 
     /// Compute the canonical-bytes CID of this manifest.

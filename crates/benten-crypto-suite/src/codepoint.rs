@@ -136,7 +136,16 @@ impl SigCodepoint {
 /// decodes existing content — old-codepoints-supported-forever); a
 /// `Quarantined` or `Burned` codepoint MUST be typed-rejected — a burned
 /// codepoint is permanently un-dispatchable.
+///
+/// `#[non_exhaustive]` (§11 SemVer-readiness): a future lifecycle state (e.g. a
+/// `Sunset` / `Reserved` transition state) lands ADDITIVELY without a breaking
+/// SemVer bump on the frozen v1 API. This state enum is NOT wire-keying-ordinal
+/// (unlike the deliberately-exhaustive `MembershipSetKind` / `RoleId`, whose
+/// cardinality is wire-load-bearing), so the additive-growth SemVer-readiness
+/// shape is correct here — cross-crate consumers MUST fail-CLOSED on an
+/// unrecognized state (reject, never silently dispatch).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum CodepointLifecycle {
     /// Actively dispatched.
     Live,
@@ -152,6 +161,18 @@ pub enum CodepointLifecycle {
 impl CodepointLifecycle {
     /// Dispatch by lifecycle state. `Live`/`Deprecated` are `Ok`;
     /// `Quarantined`/`Burned` are typed-rejected.
+    ///
+    /// **Reserved-unconsulted at v1-beta (R17 F-19).** This gate is AS-BUILT +
+    /// pinned (`f_cp_codepoint_registry_dispatch::codepoint_lifecycle_burned_and_quarantined_reject`)
+    /// but has ZERO production callers at v1-beta: no codepoint is Quarantined
+    /// or Burned yet, so the live `SigCodepoint::resolve` /
+    /// `CipherSuiteCodepoint::resolve` dispatchers reject unknown/reserved
+    /// codepoints directly without consulting a lifecycle table. The
+    /// state-machine is the reserved seam for WHEN a codepoint must be
+    /// deprecated/quarantined/burned post-v1 (added via the crypto-agility
+    /// framework); its wiring into the resolve path is a Composing/post-v1
+    /// item. No behavior change at v1-beta — documented so the zero-caller
+    /// status is intentional, not an oversight.
     ///
     /// # Errors
     ///
@@ -217,7 +238,8 @@ impl HashCodepoint {
 ///
 /// `HYBRID_X25519_MLKEM768` at `0x647a` is the IETF HPKE-PQ WG-stream
 /// `MLKEM768-X25519` hybrid-KEM codepoint (IANA-requested; X-Wing-style
-/// vendored combiner over `ml-kem` + `x25519-dalek` + `sha3`).
+/// vendored combiner over `libcrux-ml-kem` (via `crate::mlkem`; RustCrypto
+/// `ml-kem` is the dev-only KAT witness) + `x25519-dalek` + `sha3`).
 /// **G-CORE-3a CANARY flips `0x647a` + `0x6400` (classical-X25519
 /// downgrade arm) to LIVE.** `0x647b` (NF-1 ML-KEM-768⊕HQC end-state)
 /// + `0x647c` (pure-PQ ML-KEM-768-only swap-matrix arm; reserved-named
@@ -225,19 +247,24 @@ impl HashCodepoint {
 /// dispatcher level — the pure-PQ arm is only constructible via
 /// [`crate::swap_matrix::SwapMatrix::try_pure_pq_sole_trust_path`]
 /// which gates on `AUDIT_LANDED_PURE_PQ_FLAG`)
-/// + `0x0000` (no-encryption) remain reserved-typed-reject via
-/// [`UnsupportedAlgorithm`] until G-CORE-3c's full swap-matrix wave —
-/// the additive-codepoint discipline + old-codepoints-supported-forever
-/// invariant hold across the partial-light step.
+/// remain reserved-typed-reject via [`UnsupportedAlgorithm`] until
+/// G-CORE-3c's full swap-matrix wave — the additive-codepoint discipline
+/// + old-codepoints-supported-forever invariant hold across the
+/// partial-light step. `0x0000` (no-encryption) is the swap-matrix
+/// no-encryption arm, selectable via the `sign_only` path, and is
+/// TYPED-REJECTED at the v1-beta default `CipherSuite::resolve()` **by
+/// design** (never a silent fallback) — it is not a resolvable default
+/// cipher suite.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CipherSuiteCodepoint(pub(crate) u16);
 
 impl CipherSuiteCodepoint {
     /// v1-beta DEFAULT for #1301: X25519⊕ML-KEM-768 hybrid KEM at
     /// codepoint `0x647a` + ChaCha20-Poly1305 bulk. **LIVE at G-CORE-3a
-    /// CANARY** (X-Wing-style combiner over `ml-kem` + `x25519-dalek`
-    /// + `sha3`; conformance test at G-CORE-3 #1301 — see plan §3
-    /// G-CORE-3 + RATIFIED §1 + §6).
+    /// CANARY** (X-Wing-style combiner over `libcrux-ml-kem` (via
+    /// `crate::mlkem`; RustCrypto `ml-kem` is the dev-only KAT witness) +
+    /// `x25519-dalek` + `sha3`; conformance test at G-CORE-3 #1301 — see
+    /// plan §3 G-CORE-3 + RATIFIED §1 + §6).
     pub const HYBRID_X25519_MLKEM768: Self = Self(0x647a);
 
     /// Non-PQ downgrade: X25519-only KEM + ChaCha20-Poly1305 bulk.
@@ -246,8 +273,12 @@ impl CipherSuiteCodepoint {
     /// (incl. `0x647b` + `0x0000`) lands at G-CORE-3c.
     pub const CLASSICAL_X25519: Self = Self(0x6400);
 
-    /// No-encryption (plaintext partition) downgrade. Reserved at
-    /// G-CORE-2 / live at G-CORE-3c.
+    /// No-encryption (plaintext partition) arm of the swap matrix,
+    /// selectable via the `sign_only` path. TYPED-REJECTED at the v1-beta
+    /// default [`CipherSuiteCodepoint::resolve`] **by design** — never a
+    /// silent fallback and not a resolvable default cipher suite; the
+    /// no-encryption arm is reachable only through the explicit
+    /// `sign_only` swap-matrix path.
     pub const NONE_PLAINTEXT: Self = Self(0x0000);
 
     /// NF-1 KEM PQ⊕PQ end-state: ML-KEM-768 ⊕ HQC. **Reserved-but-
@@ -334,7 +365,7 @@ impl CipherSuiteCodepoint {
 ///   (`CGKA_COMMIT_BASE == 0x63A0`; §4.0).
 /// - [`Self::ChainedStateTlv`] — the per-stanza `Option<ChainedStateTlv>`
 ///   codepoint-reserve sub-slot (GAP-6b), AAD-bound when present (see
-///   [`chained_state_tlv_aad_binding`]).
+///   `chained_state_tlv_aad_binding`, test/`testing`-gated).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ReservedCodepoint {
@@ -347,7 +378,11 @@ pub enum ReservedCodepoint {
     /// `RotatingGroupKeyChainedMode` reserve (CGKA-Commit FS-future bracket,
     /// `CGKA_COMMIT_BASE == 0x63A0`).
     RotatingGroupKeyChainedMode,
-    /// `ChainedStateTlv` per-stanza sub-slot reserve (GAP-6b; AAD-bound).
+    /// `ChainedStateTlv` per-stanza sub-slot reserve (GAP-6b; AAD-BINDABLE,
+    /// not enforced at v1-beta — the binding helper
+    /// `ReservedCodepoint::chained_state_tlv_aad_binding` is `testing`-gated
+    /// with zero production callers, and the sub-slot is never emitted because
+    /// `resolve()` always typed-rejects this reserve).
     ChainedStateTlv,
 }
 
@@ -382,13 +417,18 @@ impl ReservedCodepoint {
     }
 }
 
-/// GAP-6b — the per-stanza `Option<ChainedStateTlv>` sub-slot is AAD-BOUND
-/// when present, so a present-vs-absent flip is detectable at decrypt (not
-/// advisory). This helper appends the optional `ChainedStateTlv` codepoint
+/// GAP-6b — the per-stanza `Option<ChainedStateTlv>` sub-slot is AAD-BINDABLE
+/// when present. NOT enforced at v1-beta: this helper is `testing`-gated and
+/// has ZERO production callers, so no shipped path composes it into any AAD
+/// and no present-vs-absent flip is detectable at decrypt today. The
+/// construction is GOLDEN-PINNED (`f_nqa1_1_frozen_surface_additive_extensibility.rs`),
+/// which is vacuous rather than exploitable because the sub-slot is never
+/// emitted (`resolve()` always typed-rejects the reserve). This helper appends the optional `ChainedStateTlv` codepoint
 /// reserve into the AAD byte string (big-endian): a present sub-slot pushes
 /// `0x01 ‖ band_base_be`; an absent sub-slot pushes `0x00`. Binding it into
 /// the AAD means a relay that strips it fails AEAD-open (it cannot be silently
 /// removed).
+#[cfg(any(test, feature = "testing"))]
 #[must_use]
 pub fn chained_state_tlv_aad_binding(present: bool) -> Vec<u8> {
     let mut aad = Vec::new();

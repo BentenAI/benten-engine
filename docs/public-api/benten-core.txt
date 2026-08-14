@@ -252,7 +252,9 @@ impl core::marker::Unpin for benten_core::subgraph::PrimitiveKind
 impl core::marker::UnsafeUnpin for benten_core::subgraph::PrimitiveKind
 impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph::PrimitiveKind
 impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph::PrimitiveKind
-pub struct benten_core::subgraph::NodeHandle(pub u32)
+#[non_exhaustive] pub struct benten_core::subgraph::NodeHandle(pub u32)
+impl benten_core::subgraph::NodeHandle
+pub const fn benten_core::subgraph::NodeHandle::new(u32) -> Self
 impl core::clone::Clone for benten_core::subgraph::NodeHandle
 pub fn benten_core::subgraph::NodeHandle::clone(&self) -> benten_core::subgraph::NodeHandle
 impl core::cmp::Eq for benten_core::subgraph::NodeHandle
@@ -294,7 +296,7 @@ impl core::marker::Unpin for benten_core::subgraph::OperationNode
 impl core::marker::UnsafeUnpin for benten_core::subgraph::OperationNode
 impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph::OperationNode
 impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph::OperationNode
-pub struct benten_core::subgraph::Subgraph
+#[non_exhaustive] pub struct benten_core::subgraph::Subgraph
 pub benten_core::subgraph::Subgraph::deterministic: bool
 pub benten_core::subgraph::Subgraph::edges: alloc::vec::Vec<(alloc::string::String, alloc::string::String, alloc::string::String)>
 pub benten_core::subgraph::Subgraph::handler_id: alloc::string::String
@@ -306,6 +308,7 @@ pub fn benten_core::subgraph::Subgraph::cid_and_canonical_bytes(&self) -> core::
 pub fn benten_core::subgraph::Subgraph::edges(&self) -> &[(alloc::string::String, alloc::string::String, alloc::string::String)]
 pub fn benten_core::subgraph::Subgraph::first_op_mut(&mut self) -> core::option::Option<&mut benten_core::subgraph::OperationNode>
 pub fn benten_core::subgraph::Subgraph::from_canonical_bytes(&[u8]) -> core::result::Result<Self, benten_core::CoreError>
+pub fn benten_core::subgraph::Subgraph::from_parts(impl core::convert::Into<alloc::string::String>, alloc::vec::Vec<benten_core::subgraph::OperationNode>, alloc::vec::Vec<(alloc::string::String, alloc::string::String, alloc::string::String)>, bool) -> Self
 pub fn benten_core::subgraph::Subgraph::handle_of(&self, &str) -> core::option::Option<benten_core::subgraph::NodeHandle>
 pub fn benten_core::subgraph::Subgraph::handler_id(&self) -> &str
 pub fn benten_core::subgraph::Subgraph::is_declared_deterministic(&self) -> bool
@@ -335,7 +338,7 @@ impl core::marker::Unpin for benten_core::subgraph::Subgraph
 impl core::marker::UnsafeUnpin for benten_core::subgraph::Subgraph
 impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph::Subgraph
 impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph::Subgraph
-pub struct benten_core::subgraph::SubgraphBuilder
+#[non_exhaustive] pub struct benten_core::subgraph::SubgraphBuilder
 pub benten_core::subgraph::SubgraphBuilder::build_errors: alloc::vec::Vec<benten_core::CoreError>
 pub benten_core::subgraph::SubgraphBuilder::deterministic: bool
 pub benten_core::subgraph::SubgraphBuilder::edges: alloc::vec::Vec<(benten_core::subgraph::NodeHandle, benten_core::subgraph::NodeHandle, alloc::string::String)>
@@ -503,7 +506,6 @@ pub fn benten_core::subgraph_spec::spec::StructuralPath::as_strings(&self) -> &[
 pub fn benten_core::subgraph_spec::spec::StructuralPath::depth(&self) -> u32
 pub fn benten_core::subgraph_spec::spec::StructuralPath::edge_labels(&self) -> alloc::vec::Vec<&str>
 pub fn benten_core::subgraph_spec::spec::StructuralPath::extended(&self, impl core::convert::Into<alloc::string::String>) -> Self
-pub fn benten_core::subgraph_spec::spec::StructuralPath::from_labels<I, S>(I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = S>, S: core::convert::Into<alloc::string::String>
 pub fn benten_core::subgraph_spec::spec::StructuralPath::root() -> Self
 impl core::clone::Clone for benten_core::subgraph_spec::spec::StructuralPath
 pub fn benten_core::subgraph_spec::spec::StructuralPath::clone(&self) -> benten_core::subgraph_spec::spec::StructuralPath
@@ -664,7 +666,6 @@ pub fn benten_core::subgraph_spec::spec::StructuralPath::as_strings(&self) -> &[
 pub fn benten_core::subgraph_spec::spec::StructuralPath::depth(&self) -> u32
 pub fn benten_core::subgraph_spec::spec::StructuralPath::edge_labels(&self) -> alloc::vec::Vec<&str>
 pub fn benten_core::subgraph_spec::spec::StructuralPath::extended(&self, impl core::convert::Into<alloc::string::String>) -> Self
-pub fn benten_core::subgraph_spec::spec::StructuralPath::from_labels<I, S>(I) -> Self where I: core::iter::traits::collect::IntoIterator<Item = S>, S: core::convert::Into<alloc::string::String>
 pub fn benten_core::subgraph_spec::spec::StructuralPath::root() -> Self
 impl core::clone::Clone for benten_core::subgraph_spec::spec::StructuralPath
 pub fn benten_core::subgraph_spec::spec::StructuralPath::clone(&self) -> benten_core::subgraph_spec::spec::StructuralPath
@@ -716,7 +717,7 @@ pub fn benten_core::subgraph_spec::walker_as_subgraph() -> benten_core::subgraph
 pub mod benten_core::testing
 pub fn benten_core::testing::canonical_test_node() -> benten_core::Node
 pub mod benten_core::value
-pub enum benten_core::value::Value
+#[non_exhaustive] pub enum benten_core::value::Value
 pub benten_core::value::Value::Bool(bool)
 pub benten_core::value::Value::Bytes(alloc::vec::Vec<u8>)
 pub benten_core::value::Value::Float(f64)
@@ -750,7 +751,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for benten_core::value::Value
 impl core::panic::unwind_safe::UnwindSafe for benten_core::value::Value
 pub const benten_core::value::MAX_VALUE_DECODE_DEPTH: usize
 pub mod benten_core::version
-pub enum benten_core::version::VersionError
+#[non_exhaustive] pub enum benten_core::version::VersionError
 pub benten_core::version::VersionError::Branched
 pub benten_core::version::VersionError::Branched::attempted: benten_core::Cid
 pub benten_core::version::VersionError::Branched::seen: benten_core::Cid
@@ -770,7 +771,7 @@ impl core::marker::Unpin for benten_core::version::VersionError
 impl core::marker::UnsafeUnpin for benten_core::version::VersionError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_core::version::VersionError
 impl core::panic::unwind_safe::UnwindSafe for benten_core::version::VersionError
-pub struct benten_core::version::Anchor
+#[non_exhaustive] pub struct benten_core::version::Anchor
 pub benten_core::version::Anchor::head: benten_core::Cid
 impl benten_core::version::Anchor
 pub fn benten_core::version::Anchor::new(benten_core::Cid) -> Self
@@ -790,7 +791,7 @@ impl !core::panic::unwind_safe::UnwindSafe for benten_core::version::Anchor
 pub fn benten_core::version::append_version(&benten_core::version::Anchor, &benten_core::Cid, &benten_core::Cid) -> core::result::Result<(), benten_core::version::VersionError>
 pub fn benten_core::version::walk_versions(&benten_core::version::Anchor) -> alloc::vec::into_iter::IntoIter<benten_core::Cid>
 pub mod benten_core::version_chain
-pub enum benten_core::version_chain::VersionDagError
+#[non_exhaustive] pub enum benten_core::version_chain::VersionDagError
 pub benten_core::version_chain::VersionDagError::Cycle
 pub benten_core::version_chain::VersionDagError::Cycle::child: benten_core::Cid
 pub benten_core::version_chain::VersionDagError::Cycle::parent: benten_core::Cid
@@ -812,7 +813,7 @@ impl core::marker::Unpin for benten_core::version_chain::VersionDagError
 impl core::marker::UnsafeUnpin for benten_core::version_chain::VersionDagError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_core::version_chain::VersionDagError
 impl core::panic::unwind_safe::UnwindSafe for benten_core::version_chain::VersionDagError
-pub struct benten_core::version_chain::DagVersionChain
+#[non_exhaustive] pub struct benten_core::version_chain::DagVersionChain
 impl benten_core::version_chain::DagVersionChain
 pub fn benten_core::version_chain::DagVersionChain::add_version(&mut self, benten_core::Cid, benten_core::Cid) -> core::result::Result<(), benten_core::version_chain::VersionDagError>
 pub fn benten_core::version_chain::DagVersionChain::current(&self) -> core::option::Option<&benten_core::Cid>
@@ -835,7 +836,7 @@ impl core::marker::UnsafeUnpin for benten_core::version_chain::DagVersionChain
 impl core::panic::unwind_safe::RefUnwindSafe for benten_core::version_chain::DagVersionChain
 impl core::panic::unwind_safe::UnwindSafe for benten_core::version_chain::DagVersionChain
 pub mod benten_core::version_dag
-pub enum benten_core::version_dag::Mode
+#[non_exhaustive] pub enum benten_core::version_dag::Mode
 pub benten_core::version_dag::Mode::Dag
 pub benten_core::version_dag::Mode::Strict
 impl core::clone::Clone for benten_core::version_dag::Mode
@@ -881,7 +882,7 @@ impl core::marker::Unpin for benten_core::version_dag::VersionDagError
 impl core::marker::UnsafeUnpin for benten_core::version_dag::VersionDagError
 impl core::panic::unwind_safe::RefUnwindSafe for benten_core::version_dag::VersionDagError
 impl core::panic::unwind_safe::UnwindSafe for benten_core::version_dag::VersionDagError
-pub struct benten_core::version_dag::VersionDag
+#[non_exhaustive] pub struct benten_core::version_dag::VersionDag
 impl benten_core::version_dag::VersionDag
 pub fn benten_core::version_dag::VersionDag::append(&mut self, &benten_core::Cid, &benten_core::Cid) -> core::result::Result<(), benten_core::version_dag::VersionDagError>
 pub fn benten_core::version_dag::VersionDag::is_ancestor_of(&self, &benten_core::Cid, &benten_core::Cid) -> bool
@@ -1058,7 +1059,7 @@ impl core::marker::Unpin for benten_core::subgraph::PrimitiveKind
 impl core::marker::UnsafeUnpin for benten_core::subgraph::PrimitiveKind
 impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph::PrimitiveKind
 impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph::PrimitiveKind
-pub enum benten_core::Value
+#[non_exhaustive] pub enum benten_core::Value
 pub benten_core::Value::Bool(bool)
 pub benten_core::Value::Bytes(alloc::vec::Vec<u8>)
 pub benten_core::Value::Float(f64)
@@ -1295,7 +1296,9 @@ impl core::marker::Unpin for benten_core::Node
 impl core::marker::UnsafeUnpin for benten_core::Node
 impl core::panic::unwind_safe::RefUnwindSafe for benten_core::Node
 impl core::panic::unwind_safe::UnwindSafe for benten_core::Node
-pub struct benten_core::NodeHandle(pub u32)
+#[non_exhaustive] pub struct benten_core::NodeHandle(pub u32)
+impl benten_core::subgraph::NodeHandle
+pub const fn benten_core::subgraph::NodeHandle::new(u32) -> Self
 impl core::clone::Clone for benten_core::subgraph::NodeHandle
 pub fn benten_core::subgraph::NodeHandle::clone(&self) -> benten_core::subgraph::NodeHandle
 impl core::cmp::Eq for benten_core::subgraph::NodeHandle
@@ -1337,7 +1340,7 @@ impl core::marker::Unpin for benten_core::subgraph::OperationNode
 impl core::marker::UnsafeUnpin for benten_core::subgraph::OperationNode
 impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph::OperationNode
 impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph::OperationNode
-pub struct benten_core::Subgraph
+#[non_exhaustive] pub struct benten_core::Subgraph
 pub benten_core::Subgraph::deterministic: bool
 pub benten_core::Subgraph::edges: alloc::vec::Vec<(alloc::string::String, alloc::string::String, alloc::string::String)>
 pub benten_core::Subgraph::handler_id: alloc::string::String
@@ -1349,6 +1352,7 @@ pub fn benten_core::subgraph::Subgraph::cid_and_canonical_bytes(&self) -> core::
 pub fn benten_core::subgraph::Subgraph::edges(&self) -> &[(alloc::string::String, alloc::string::String, alloc::string::String)]
 pub fn benten_core::subgraph::Subgraph::first_op_mut(&mut self) -> core::option::Option<&mut benten_core::subgraph::OperationNode>
 pub fn benten_core::subgraph::Subgraph::from_canonical_bytes(&[u8]) -> core::result::Result<Self, benten_core::CoreError>
+pub fn benten_core::subgraph::Subgraph::from_parts(impl core::convert::Into<alloc::string::String>, alloc::vec::Vec<benten_core::subgraph::OperationNode>, alloc::vec::Vec<(alloc::string::String, alloc::string::String, alloc::string::String)>, bool) -> Self
 pub fn benten_core::subgraph::Subgraph::handle_of(&self, &str) -> core::option::Option<benten_core::subgraph::NodeHandle>
 pub fn benten_core::subgraph::Subgraph::handler_id(&self) -> &str
 pub fn benten_core::subgraph::Subgraph::is_declared_deterministic(&self) -> bool
@@ -1378,7 +1382,7 @@ impl core::marker::Unpin for benten_core::subgraph::Subgraph
 impl core::marker::UnsafeUnpin for benten_core::subgraph::Subgraph
 impl core::panic::unwind_safe::RefUnwindSafe for benten_core::subgraph::Subgraph
 impl core::panic::unwind_safe::UnwindSafe for benten_core::subgraph::Subgraph
-pub struct benten_core::SubgraphBuilder
+#[non_exhaustive] pub struct benten_core::SubgraphBuilder
 pub benten_core::SubgraphBuilder::build_errors: alloc::vec::Vec<benten_core::CoreError>
 pub benten_core::SubgraphBuilder::deterministic: bool
 pub benten_core::SubgraphBuilder::edges: alloc::vec::Vec<(benten_core::subgraph::NodeHandle, benten_core::subgraph::NodeHandle, alloc::string::String)>

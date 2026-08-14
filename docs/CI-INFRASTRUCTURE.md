@@ -75,6 +75,17 @@ image (rust default, node default, etc.).
 The CI workflow set at Phase-3 close covers:
 
 - **Build + test:** `ci.yml` (full nextest run + clippy + fmt),
+  `frozen-bytes.yml` (required-grade run of the v1-beta frozen-bytes corpus —
+  **Baseline reds:** see the STANDING PROHIBITION in `docs/V1-FROZEN-INTERFACE.md`
+  ("Verification mechanism") — a red baseline gate is a question, never a chore;
+  never regenerate a frozen baseline to clear a red without first establishing
+  that the SOURCE, not the toolchain, moved.
+
+  byte-pins, canonical-bytes goldens, crypto codepoints, KATs, the Inv-15..23
+  enforcement pins named by `docs/INVARIANT-COVERAGE.md` (Inv-19/21 guard no
+  wire bytes today under their documented register-then-enforce carve-out),
+  the S-3 const-VALUE and S-6 domain-tag pins, and the ErrorCode catalog
+  count; the corpus list lives at `.github/frozen-bytes-corpus.txt`),
   `coverage.yml` (cargo-llvm-cov), `msrv.yml` (MSRV gate),
   `wasm-conformance.yml` + `wasm-runtime.yml` (wasm32 target gates).
 - **Supply chain:** `cargo-vet.yml` (audit-policy), `cargo-public-api.yml`

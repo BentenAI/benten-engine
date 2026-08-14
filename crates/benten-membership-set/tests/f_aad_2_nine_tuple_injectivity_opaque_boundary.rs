@@ -554,12 +554,15 @@ fn f_aad_2_blinded_commitments_do_not_leak_raw_roster_or_set_id() {
     );
 }
 
-/// F-AAD-2 arm 1e (R4.5-MIGRATE) — the commitment constructions reuse the EXACT
-/// §3.9 gossip-topic primitives. `audience_set_commitment` is BLAKE3 over
-/// `0x01 || lp(did)…` of the SORTED list; `membership_set_id_commitment` is
-/// `blake3::keyed_hash(K_Set, label || set_id)` (the gossip-topic keyed-MAC
-/// stand-in). would-FAIL if the assembler used a different hash/MAC or a
-/// different domain-separation framing.
+/// F-AAD-2 arm 1e (R4.5-MIGRATE) — the commitment constructions reuse the same
+/// keyed-MAC PRIMITIVE as the §3.9 gossip-topic (`blake3::keyed_hash` /
+/// `blake3::hash`), with the §3.10-specific preimage. `audience_set_commitment`
+/// is BLAKE3 over `0x01 || lp(did)…` of the SORTED list;
+/// `membership_set_id_commitment` is `blake3::keyed_hash(K_Set, label || set_id)`
+/// — the LABELLED §3.10 preimage (DISTINCT from the §3.9 gossip-topic, which is
+/// UNLABELLED and appends `BE(generation)`; see `keying::gossip_topic`).
+/// would-FAIL if the assembler used a different hash/MAC or a different
+/// domain-separation framing.
 #[test]
 fn f_aad_2_commitments_reuse_gossip_topic_primitives() {
     let t = GroupAadInputs::fixture();
@@ -590,7 +593,8 @@ fn f_aad_2_commitments_reuse_gossip_topic_primitives() {
         membership_set_id_commitment(&t.k_set, &t.membership_set_id),
         mscid_expected,
         "membership_set_id_commitment MUST be keyed_hash(K_Set, \"benten:setid:v1\" || id) \
-         — the SAME §3.9 gossip-topic keyed-MAC primitive + truncation (BLAKE3 32-wide)"
+         — the SAME keyed-MAC PRIMITIVE as the §3.9 gossip-topic but the LABELLED \
+         §3.10 preimage + truncation (BLAKE3 32-wide)"
     );
 }
 

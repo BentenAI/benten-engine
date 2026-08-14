@@ -99,14 +99,14 @@ fn materializer_uses_read_node_as_only_never_read_node() {
 
     let mat = HtmlJsonMaterializer;
     let _ = mat
-        .materialize_with_gate(MaterializerWalkInputs {
-            engine: &engine,
-            spec: &spec,
-            content_cid: cid,
-            walk_principal: alice,
-            cap_recheck: allow_all_cap_recheck(),
-            declared_requires: Vec::new(),
-        })
+        .materialize_with_gate(MaterializerWalkInputs::new(
+            &engine,
+            &spec,
+            cid,
+            alice,
+            allow_all_cap_recheck(),
+            Vec::new(),
+        ))
         .unwrap();
 
     let count = engine.read_node_as_count.load(Ordering::SeqCst);

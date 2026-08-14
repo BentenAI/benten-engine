@@ -7,7 +7,7 @@
 //!
 //! Pin source: `.addl/phase-4-meta/f-full-r2-test-landscape.md` §1
 //! Group-12 **F-DISC-1**:
-//!   "for EACH Compromise #30..#64: (a) `SECURITY-POSTURE.md` row exists
+//!   "for EACH Compromise #30..#66: (a) `SECURITY-POSTURE.md` row exists
 //!    with correct `disposition_class` (ATO/SGD/CHD/OOS/MIT); (b) OOS/SGD
 //!    disclosure text present + not over-claimed; (c) the BR-2 re-point
 //!    triple (#31=LAMPS, #62=revocation-reach, #30=unaudited-PQ) at correct
@@ -103,11 +103,16 @@ use std::collections::BTreeSet;
 ///   MIT = Mitigated-Open
 const DISPOSITION_CLASSES: &[&str] = &["ATO", "SGD", "CHD", "OOS", "MIT"];
 
-/// The highest Compromise number in the **closed F-full range** per spec
-/// R0.5 §5.2 + §10.5 (NQ-T4 mint). #63 = Sealed-Sender abuse-control
-/// (BR-1); **#64 = best-effort-eventual cross-device nonce-rejection
-/// window (NQ-T4; SGD)** — the slot a Ben ruling specifically mandated.
-const F_FULL_TOP_COMPROMISE: u32 = 64;
+/// The highest Compromise number the closed presence-sweep covers per spec
+/// R0.5 §5.2 + §10.5 (NQ-T4 mint) + the R13 F-07 mint + the R14 GAP-1 mint.
+/// #63 = Sealed-Sender abuse-control (BR-1); **#64 = best-effort-eventual
+/// cross-device nonce-rejection window (NQ-T4; SGD)** — the slot a Ben ruling
+/// specifically mandated; **#65 = wave-3e per-Node AEAD
+/// publicly-derivable-`K_principal` confidentiality limit at v1-beta (R13 F-07;
+/// SGD)**; **#66 = `UnwrappedKey` `#[derive(Debug)]` renders key bytes + no
+/// `ZeroizeOnDrop` latent footgun (R14 GAP-1; SGD)** — minted so the
+/// secret-hygiene disclosure is auto-swept here.
+const F_FULL_TOP_COMPROMISE: u32 = 66;
 
 /// A parsed Compromise row: its number + the line text we found it on.
 #[derive(Debug, Clone)]
@@ -168,7 +173,16 @@ fn distinct_compromise_numbers(doc: &str) -> BTreeSet<u32> {
 fn row_window(lines: &[&str], n: u32, lookbehind: usize, lookahead: usize) -> String {
     let needle = format!("Compromise #{n}");
     for (i, l) in lines.iter().enumerate() {
-        if l.contains(&needle) {
+        // F-14 (R12): require a NON-DIGIT boundary after the matched number, so
+        // `Compromise #6` does NOT spuriously match inside `Compromise #60`.
+        // Scan every occurrence in the line (a bare `.contains` on the FIRST
+        // occurrence would still mis-anchor if `#60` preceded `#6`).
+        if l.match_indices(&needle).any(|(idx, _)| {
+            l[idx + needle.len()..]
+                .chars()
+                .next()
+                .is_none_or(|c| !c.is_ascii_digit())
+        }) {
             let lo = i.saturating_sub(lookbehind);
             let hi = (i + lookahead).min(lines.len());
             return lines[lo..hi].join(" ");
@@ -330,35 +344,41 @@ fn f_disc_1_disposition_class_match_is_word_boundary_not_substring_baseline() {
     }
 }
 
-/// PIN 0d (baseline) — R4.3-FIX (C-MAJOR-1-64): the closed F-full range
-/// top is #64, NOT #63. Guards against the range silently regressing back
-/// to #63 (which would drop the NQ-T4-mandated disclosure from the
-/// auto-include sweep). Would-FAIL if `F_FULL_TOP_COMPROMISE` is lowered.
+/// PIN 0d (baseline) — R4.3-FIX (C-MAJOR-1-64) + R13-F-07 + R14-GAP-1: the
+/// closed presence-sweep top is #66, NOT #65/#64/#63. Guards against the range
+/// silently regressing (which would drop the NQ-T4-mandated #64 disclosure OR
+/// the R13 F-07 #65 confidentiality-limit disclosure OR the R14 GAP-1 #66
+/// secret-hygiene disclosure from the auto-include sweep). Would-FAIL if
+/// `F_FULL_TOP_COMPROMISE` is lowered.
 #[test]
-fn f_disc_1_closed_range_top_is_64_not_63_baseline() {
+fn f_disc_1_closed_range_top_is_66_not_65_baseline() {
     assert_eq!(
-        F_FULL_TOP_COMPROMISE, 64,
-        "the closed F-full Compromise range MUST run #30..=#64. NQ-T4 \
-         (spec R0.5 §10.5; Ben 2026-06-02) mandated minting Compromise #64 \
-         — the best-effort-eventual cross-device nonce-rejection window. \
-         #63 = Sealed-Sender abuse-control (BR-1) is NOT the top. Lowering \
-         this back to 63 silently forecloses the one row a Ben ruling \
-         specifically mandated — exactly the catch-net regression \
-         C-MAJOR-1-64 closes."
+        F_FULL_TOP_COMPROMISE, 66,
+        "the closed Compromise presence-sweep range MUST run #30..=#66. \
+         NQ-T4 (spec R0.5 §10.5; Ben 2026-06-02) mandated minting Compromise \
+         #64 — the best-effort-eventual cross-device nonce-rejection window; \
+         R13 F-07 minted Compromise #65 — the wave-3e per-Node AEAD \
+         publicly-derivable-`K_principal` confidentiality limit at v1-beta; \
+         R14 GAP-1 minted Compromise #66 — the `UnwrappedKey` `#[derive(Debug)]` \
+         renders-key-bytes + no-`ZeroizeOnDrop` latent footgun. #63 = \
+         Sealed-Sender abuse-control (BR-1) is NOT the top. Lowering this \
+         silently forecloses a mandated disclosure — exactly the catch-net \
+         regression C-MAJOR-1-64 closes."
     );
 }
 
 // ===========================================================================
 // RED-PHASE ARMS (ignored until R5 doc-wave) — assert the F-full
-// end-state disclosure coherence over Compromise #30..#64.
+// end-state disclosure coherence over Compromise #30..#66.
 // ===========================================================================
 
-/// PIN 1 — every Compromise #30..#64 row EXISTS in the doc.
-/// Parametrized over the closed F-full range (the R5 end-state mints all
-/// of #32..#64); the sweep is driven by `distinct_compromise_numbers`
-/// so any NEW row beyond #64 is auto-swept by PIN 2.
+/// PIN 1 — every Compromise #30..#66 row EXISTS in the doc.
+/// Parametrized over the closed range (the R5 end-state mints all of
+/// #32..#64; R13 F-07 mints #65; R14 GAP-1 mints #66); the sweep is driven by
+/// `distinct_compromise_numbers` so any NEW row beyond #66 is auto-swept
+/// by PIN 2.
 #[test]
-fn f_disc_1_all_compromise_30_through_64_rows_present() {
+fn f_disc_1_all_compromise_30_through_66_rows_present() {
     let doc = security_posture_md();
     let numbers = distinct_compromise_numbers(&doc);
 

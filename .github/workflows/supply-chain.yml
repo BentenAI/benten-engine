@@ -104,7 +104,81 @@ jobs:
             --ignore RUSTSEC-2025-0100 \
             --ignore RUSTSEC-2026-0173 \
             --ignore RUSTSEC-2026-0194 \
-            --ignore RUSTSEC-2026-0195
+            --ignore RUSTSEC-2026-0195 \
+            --ignore RUSTSEC-2026-0222 \
+            --ignore RUSTSEC-2026-0247 \
+            --ignore RUSTSEC-2026-0248 \
+            --ignore RUSTSEC-2026-0251 \
+            --ignore RUSTSEC-2026-0255 \
+            --ignore RUSTSEC-2023-0126
+            # ---- AUDIT-ONLY (deliberately NOT in deny.toml) ----
+            # RUSTSEC-2023-0126 (`im` OrdSet aliasing violation) is `informational
+            # = "unsound"`. cargo-audit DENIES the unsound class; cargo-deny's
+            # version-2 default only WARNS on it. That asymmetry is the whole
+            # point of this belt-and-suspenders lane — the two tools have
+            # different policies and the stricter one is here. Listing this id in
+            # deny.toml would only produce a permanent `advisory-not-detected`
+            # warning, so the mirror is documented rather than literal; deny.toml
+            # carries a comment pointing back here (§3.5g item 4).
+            #
+            # SUBSTANCE, stated plainly because "unsound" undersells it: inserting
+            # into an `im::OrdSet` can violate Rust's aliasing rules — Miri reports
+            # a stacked-borrows violation in `sized_chunks::Chunk::force_copy()`.
+            # That is undefined behaviour reachable from safe code, category
+            # memory-corruption. `patched = []` and bodil/im-rs was archived
+            # 2026-05-03, so there is NO fix to take. It reaches us only through
+            # loro's internal persistent collections (loro 1.12 -> loro-internal ->
+            # im); Benten has no direct `im` usage and never constructs an OrdSet.
+            # VERIFIED 2026-08-11: bumping to loro-internal 1.13.9 does NOT drop
+            # `im`, so the upstream bump is not a closure path today — closure
+            # needs loro to replace `im` outright. Tracked at phase-4-backlog §3.6.
+            #
+            # RUSTSEC-2026-0253 (`lru` use-after-free on panic in `pop()`) is NOT
+            # listed: it was FIXED, not suppressed — `cargo update -p lru` took
+            # 0.18.0 -> 0.18.2 (the patched release). Transitive via
+            # iroh-relay 1.0.0-rc.0. A patch that exists gets taken.
+            # RUSTSEC-2026-0222 (wasmtime store/type-index confusion between
+            # engines, LOW): mirror of deny.toml. UNREACHABLE — benten-eval holds
+            # ONE process-wide OnceLock<Engine> and has exactly one Engine::new
+            # site; the advisory needs two engines. That premise is enforced by
+            # crates/benten-eval/tests/exactly_one_wasmtime_engine_per_process.rs,
+            # so this suppression cannot silently outlive its own justification.
+            # No patch exists in the pinned 43.x line (fixes: >=46.0.2, >=36.0.13);
+            # remediation is a 3-major runtime bump held off the freeze branch.
+            # RUSTSEC-2026-0247 + -0248 + -0251 (bitmaps / im / sized-chunks
+            # unmaintained, informational): one transitive cluster via
+            # loro 1.12 -> loro-internal -> im; no direct Benten dependency;
+            # closure requires an upstream loro release dropping `im`.
+            # All four: closure tracked at phase-4-backlog.md §3.6.
+            #
+            # RUSTSEC-2026-0255 (`sized-chunks` panic-safety, informational =
+            # "unsound") added 2026-08-12. AUDIT-ONLY for the same reason as
+            # RUSTSEC-2023-0126: cargo-audit DENIES the unsound class and
+            # cargo-deny only warns, so listing it in deny.toml would produce a
+            # permanent advisory-not-detected warning. SUBSTANCE: `Chunk::clear`
+            # / `drop_left` / `drop_right`, `InlineArray::clear` and
+            # `RingBuffer::clear` / `drop_left` / `drop_right` drop elements
+            # BEFORE updating the length metadata, so an element whose `Drop`
+            # panics skips the metadata update and leaves already-dropped
+            # elements recorded as live -- use-after-free / double-free,
+            # reachable from safe Rust via `catch_unwind` with a panicking
+            # element `Drop`. Affects <=0.7.0; NO patched version exists. Same
+            # transitive path as -0126/-0247/-0248/-0251 (sized-chunks 0.6.5 <-
+            # im 15.1.0 <- loro-internal 1.12 <- loro <- benten-sync); Benten
+            # has no direct sized-chunks or im usage and constructs none of the
+            # affected containers, and the trigger additionally requires an
+            # element type whose Drop panics -- loro's internal element types,
+            # not ours.
+            #
+            # ESCALATION, stated because the count now says something the
+            # individual entries do not: this archived crate family is up to
+            # FIVE advisories reached through one dependency (loro) -- two of
+            # them `unsound` (memory-corruption class, -0126 and -0255) and
+            # three `unmaintained`. None has a fix and none can get one:
+            # bodil/im-rs was archived 2026-05-03. Suppression remains correct
+            # per-advisory, but "wait for loro to drop `im`" is now carrying
+            # five items with no upstream clock. Surfaced for Ben at
+            # phase-4-backlog.md §3.6.
             # RUSTSEC-2026-0194 + RUSTSEC-2026-0195 (quick-xml DoS, HIGH 7.5):
             # mirror of deny.toml [advisories].ignore (§3.5g item 4 dual-config
             # mirror). quick-xml transitive via tauri 2.11 -> plist AND

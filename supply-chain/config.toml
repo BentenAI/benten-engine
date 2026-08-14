@@ -2,7 +2,9 @@
 # baseline.
 #
 # Per sec-r1-5 + Phase-3 R5 G20-A3 brief, cargo-vet onboarding policy:
-#   - exemption-budget        = 5 entries max at Phase-3-close
+#   - exemption-budget        = 18 entries max (Ben-RATIFIED cap; raised
+#                                5 → 18 on 2026-06-05 for the libcrux-ml-kem
+#                                adoption — was 5 at Phase-3-close)
 #   - criteria-set            = `safe-to-deploy` (default applied to all
 #                                non-crypto deps) + `crypto-reviewed`
 #                                (manual for benten-id deps)

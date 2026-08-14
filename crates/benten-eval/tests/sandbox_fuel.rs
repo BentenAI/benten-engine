@@ -34,11 +34,9 @@ fn sandbox_fuel_exhausts_routes_e_sandbox_fuel_exhausted() {
     let registry = ManifestRegistry::new();
     // Wallclock generous so fuel fires first (D21: WALLCLOCK > FUEL,
     // but we want fuel as the active limiter).
-    let cfg = SandboxConfig {
-        fuel: 10_000,
-        wallclock_ms: 60_000,
-        ..SandboxConfig::default()
-    };
+    let mut cfg = SandboxConfig::default();
+    cfg.fuel = 10_000;
+    cfg.wallclock_ms = 60_000;
     let attribution = dummy_attribution();
     let err = execute(
         &bytes,

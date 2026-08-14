@@ -324,9 +324,14 @@ impl WriteSpec {
     /// Exposed on the public builder so integration tests in sibling crates
     /// (`benten-engine/tests/integration/*`) can trip the `ON_ERROR` edge
     /// with `E_TX_ABORTED` without reaching into private internals.
-    /// Production code paths never set this; Phase-2 gates behind
-    /// `#[cfg(any(test, feature = "testing"))]` once the integration
-    /// layout stabilises (R-minor-04).
+    /// Production code paths never set this. **Gated behind
+    /// `#[cfg(any(test, feature = "test-helpers"))]`** (R10-council F-03) so the
+    /// test-only setter is NOT compiled into the production/default build — it
+    /// is present only under `cfg(test)` or the `test-helpers` feature (which the
+    /// integration-test binary already opts into via
+    /// `--features benten-engine/test-helpers`). Matches the crate's existing
+    /// test-helper gating discipline (e.g. `testing_*` on `Engine`).
+    #[cfg(any(test, feature = "test-helpers"))]
     #[must_use]
     pub fn test_inject_failure(mut self, inject: bool) -> Self {
         self.inject_failure = inject;

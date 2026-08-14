@@ -107,6 +107,29 @@ pub(crate) struct EngineInner {
     /// [`EngineBuilder::change_stream_capacity`] at engine-build time;
     /// defaults to [`CHANGE_STREAM_MAX_BUFFERED`].
     pub(crate) change_stream_capacity: usize,
+    /// Registration-time structural bounds (Inv-2/3/5/6 + the SANDBOX
+    /// nest-depth / cumulative-output ceilings). Populated from
+    /// [`crate::EngineBuilder::invariant_config`]; defaults to
+    /// [`benten_eval::InvariantConfig::default`].
+    ///
+    /// This is the ONLY production writer of a non-default
+    /// `InvariantConfig` — before it existed, `InvariantConfig` was a
+    /// public "configurable thresholds" type that no deployment could
+    /// actually configure through the `Engine`. The `max_depth` field
+    /// additionally DERIVES the runtime evaluator frame cap (see
+    /// `dispatch_call_with_mode_and_trace`) so the registration-time
+    /// bound and the runtime bound cannot drift apart.
+    pub(crate) invariant_config: benten_eval::InvariantConfig,
+    /// Inv-8 runtime cumulative-step budget applied to every
+    /// `Engine::call` / `Engine::trace` walk. Populated from
+    /// [`crate::EngineBuilder::iteration_budget`]; defaults to
+    /// [`benten_eval::evaluator::DEFAULT_ITERATION_BUDGET`].
+    ///
+    /// Distinct from `test_iteration_budget` below: that one is a
+    /// cfg-gated test hook, this one is the production knob. When both
+    /// are present the test override wins (it only exists in a build
+    /// that opted into the test feature).
+    pub(crate) iteration_budget: u64,
     /// Counter of ChangeEvents dropped because the buffer reached
     /// `change_stream_capacity` before a subscriber drained. Surfaced via
     /// `metrics_snapshot["benten.change_stream.dropped_events"]`.
@@ -398,7 +421,11 @@ pub(crate) struct SandboxNodeMetrics {
 }
 
 impl EngineInner {
-    pub(crate) fn with_change_stream_capacity(capacity: usize) -> Self {
+    pub(crate) fn with_limits(
+        capacity: usize,
+        invariant_config: benten_eval::InvariantConfig,
+        iteration_budget: u64,
+    ) -> Self {
         // Defensive: a capacity of 0 would reject every event. Clamp to 1 so
         // the bounded-drain invariant still holds and at least the most
         // recent event is visible to a late-attached probe.
@@ -408,6 +435,8 @@ impl EngineInner {
             specs: std::sync::Mutex::new(BTreeMap::new()),
             observed_events: std::sync::Mutex::new(Vec::new()),
             change_stream_capacity: capacity,
+            invariant_config,
+            iteration_budget,
             dropped_events: std::sync::atomic::AtomicU64::new(0),
             event_count: std::sync::atomic::AtomicU64::new(0),
             created_at_seq: std::sync::atomic::AtomicU64::new(0),
@@ -2522,13 +2551,37 @@ impl<B: GraphBackend> EngineGeneric<B> {
 
     /// Phase-3 G14-D wave-5a: register a SUBSCRIBE consumer with
     /// explicit [`crate::handler_router::HandlerRoute`] routing per
-    /// seq-major-8 LOAD-BEARING. `Named(handler_id)` routes change
-    /// events through the named handler subgraph; `DefaultFanOut`
-    /// uses the existing on_change broadcast.
+    /// seq-major-8 LOAD-BEARING.
     ///
-    /// Returns the engine-side [`crate::engine_subscribe::Subscription`]
-    /// handle for `Named(_)` routes; for `DefaultFanOut` callers are
-    /// expected to use the existing [`Self::on_change`] entry point.
+    /// **What this entry point does today — read this before designing
+    /// against it.** It VALIDATES the pattern and (for `Named`) that the
+    /// handler is registered, then RECORDS the routing decision into
+    /// [`crate::handler_router::HandlerRouteLog`]. It does **NOT** invoke
+    /// the named handler subgraph, and it returns `()` — there is no
+    /// subscription handle to hold, drop, or cancel. `DefaultFanOut`
+    /// likewise only records; the actual broadcast is [`Self::on_change`].
+    ///
+    /// This mirrors the same seam in [`Self::emit_with_handler`], whose
+    /// in-body comment has always stated the asymmetry: the **eval**-side
+    /// `benten_eval::primitives::emit::execute` `Named` arm DOES invoke the
+    /// subgraph via `host.call_handler`; the **engine**-surface dispatch was
+    /// wave-paired to G16-D (pim-4 §3.10) and is not wired here. Until it is,
+    /// engine-surface `Named` routing is observable only through the route
+    /// log — which is exactly what the wave-5a closed-claim test asserts.
+    ///
+    /// **Record correction (2026-08-12, pre-freeze).** The prior wording on
+    /// this function claimed it "routes change events through the named
+    /// handler subgraph" and "returns the engine-side
+    /// [`crate::engine_subscribe::Subscription`] handle for `Named(_)`
+    /// routes." Both were false, and the second was false in a way the
+    /// signature on this very line disproves: the return type is
+    /// `Result<(), EngineError>` and is recorded as such in the frozen
+    /// `docs/public-api/benten-engine.txt` baseline, so no handle can be
+    /// returned. The honest description existed all along in the sibling's
+    /// body comment; only the public rustdoc overstated. Corrected per
+    /// HARD-RULE-15 (doc→code for the disclosure, immediately) — wiring the
+    /// engine-surface subgraph dispatch is the code→doc half and remains a
+    /// build, tracked at `docs/future/phase-4-backlog.md` §4.174.
     ///
     /// # Errors
     /// Returns [`EngineError`] when the named handler isn't registered
@@ -3073,7 +3126,11 @@ impl Engine {
             });
         }
 
-        let cfg = InvariantConfig::default();
+        // Operator-configured structural bounds (`EngineBuilder::invariant_config`);
+        // `InvariantConfig::default()` when unset. Pre-2026-08-11 this site
+        // hardcoded the default, so the "configurable thresholds" type had no
+        // production writer.
+        let cfg = self.inner.invariant_config.clone();
         sg.validate(&cfg).map_err(|e| match e {
             benten_eval::EvalError::Invariant(kind) => {
                 EngineError::Invariant(Box::new(RegistrationError::new(kind)))
@@ -3340,7 +3397,11 @@ impl Engine {
             });
         }
 
-        let cfg = InvariantConfig::default();
+        // Operator-configured structural bounds (`EngineBuilder::invariant_config`);
+        // `InvariantConfig::default()` when unset. Pre-2026-08-11 this site
+        // hardcoded the default, so the "configurable thresholds" type had no
+        // production writer.
+        let cfg = self.inner.invariant_config.clone();
         sg.validate(&cfg).map_err(|e| match e {
             benten_eval::EvalError::Invariant(kind) => {
                 EngineError::Invariant(Box::new(RegistrationError::new(kind)))
@@ -3513,7 +3574,11 @@ impl Engine {
     {
         let stored_spec = spec.as_subgraph_spec();
         let sg = spec.into_eval_subgraph()?;
-        let cfg = InvariantConfig::default();
+        // Operator-configured structural bounds (`EngineBuilder::invariant_config`);
+        // `InvariantConfig::default()` when unset. Pre-2026-08-11 this site
+        // hardcoded the default, so the "configurable thresholds" type had no
+        // production writer.
+        let cfg = self.inner.invariant_config.clone();
         benten_eval::invariants::validate_subgraph(&sg, &cfg, true)
             .map_err(|reg| EngineError::Invariant(Box::new(reg)))?;
         // 5d-J workstream 3: same registration-time TRANSFORM parse as
@@ -3990,14 +4055,30 @@ impl Engine {
         // replaces the synthetic-step fabrication r6b-dx-C4 retired.
         let input_value = Value::Map(input.properties.clone());
         let mut evaluator = benten_eval::Evaluator::new();
-        // G12-A: read the test-only iteration-budget override (set by
-        // `Engine::testing_set_iteration_budget`); fall back to
-        // `benten_eval::DEFAULT_ITERATION_BUDGET` when unset. Lets the
-        // `budget_exhausted_runtime_trace_emission` integration test trip
-        // the Inv-8 cumulative-step guard within a small chained subgraph.
+        // DERIVE the runtime frame cap from the registration-time depth
+        // bound instead of leaving it at the `Evaluator::new()` literal 64.
+        //
+        // `Evaluator::step` pushes one frame per non-terminal step and pops
+        // only on a `"terminal"` edge, so `max_stack_depth` is operationally
+        // "how many nodes may be walked along one path" — the SAME quantity
+        // Inv-2 `max_depth` bounds at registration (`longest.len() >
+        // max_depth`). Both literals were 64, so they agreed by coincidence;
+        // the moment an operator raised `max_depth` a deeper-than-64 handler
+        // would have registered cleanly and then died at runtime with
+        // `EvalError::StackOverflow`. Deriving makes that mismatch
+        // unrepresentable. At the default config this is `64 == 64`, i.e.
+        // byte-identical behaviour to the pre-derive engine.
+        evaluator.max_stack_depth = self.inner.invariant_config.max_depth;
+        // Inv-8 runtime cumulative-step budget. Resolution order:
+        //   1. `Engine::testing_set_iteration_budget` (cfg-gated test hook)
+        //   2. `EngineBuilder::iteration_budget` (the production knob)
+        //   3. `benten_eval::evaluator::DEFAULT_ITERATION_BUDGET`
+        // (2) is stored on `EngineInner::iteration_budget` and already carries
+        // the default when the builder left it unset, so the `unwrap_or` here
+        // is the (1)-over-(2) precedence only.
         let iteration_budget = {
             let guard = self.inner.test_iteration_budget.lock_recover();
-            (*guard).unwrap_or(benten_eval::evaluator::DEFAULT_ITERATION_BUDGET)
+            (*guard).unwrap_or(self.inner.iteration_budget)
         };
         let (eval_result, raw_trace) = if trace_steps_out.is_some() {
             // G5-B-ii / Inv-14: construct the runtime AttributionFrame from

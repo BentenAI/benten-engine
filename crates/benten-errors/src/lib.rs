@@ -20,10 +20,15 @@
 //! (`scripts/drift-detect.ts`).
 //!
 //! Adding a variant requires:
-//! 1. Append a `match` arm in [`ErrorCode::as_str`], [`ErrorCode::as_static_str`],
-//!    and the [`core::str::FromStr`] impl.
-//! 2. Reserve the code in the catalog doc.
-//! 3. Update any `.code()` mapper in the owning crate that may produce it.
+//! 1. Append the identifier to `catalog_roster.rs.in` (the single roster
+//!    shared by the `catalog_roster_pin` unit-test module below and by
+//!    `tests/stable_shape.rs`). Skipping this step does not compile.
+//! 2. Append a `match` arm in [`ErrorCode::as_str`], [`ErrorCode::as_static_str`],
+//!    the [`core::str::FromStr`] impl, and [`ErrorCode::routed_edge_label`].
+//! 3. Bump both roster length pins (`catalog_roster_length_is_pinned` here and
+//!    `variant_count_is_pinned` in `tests/stable_shape.rs`).
+//! 4. Reserve the code in the catalog doc.
+//! 5. Update any `.code()` mapper in the owning crate that may produce it.
 //!
 //! The [`core::str::FromStr`] impl round-trips [`ErrorCode::as_str`] for every
 //! known variant and returns `Err(`[`ParseErrorCodeError`]`)` for unrecognized
@@ -424,9 +429,21 @@ pub enum ErrorCode {
     /// hybrid reserves the API as a typed-error no-op until Phase 8
     /// marketplace work lifts the deferral.
     SandboxManifestRegistrationDeferred,
-    /// SANDBOX module bytes failed wasmtime's structural validation
-    /// (malformed module, type mismatch, OOB section, etc.). Maps the
-    /// wasmtime trap classes that are NOT a budget exhaustion.
+    /// EITHER (a) SANDBOX module bytes failed wasmtime's structural
+    /// validation (malformed module, type mismatch, OOB section, etc.) —
+    /// the wasmtime trap classes that are NOT a budget exhaustion — OR
+    /// (b) the bytes are valid wasm but the module's exported `run`
+    /// entry does not fit the SANDBOX ABI.
+    ///
+    /// Class (b) is NOT new: this variant has always also covered
+    /// "module has no exported `run` function" plus store/linker setup
+    /// failures (`set_fuel`, host-fn registration), none of which are
+    /// wasmtime-side structural validation. The wording is widened here
+    /// so the record stops understating the variant's real domain, and
+    /// to name the return-ABI arm: a `run` export whose RESULT TYPE the
+    /// ABI cannot encode — `v128` (wasm SIMD) or any reference type — is
+    /// REJECTED with this code rather than being encoded as a zero
+    /// placeholder.
     SandboxModuleInvalid,
     /// SANDBOX nested-dispatch denied. D19-RESOLVED rename from
     /// `E_SANDBOX_REENTRANCY_DENIED` per wsa-7 + r1-security convergence:
@@ -679,7 +696,8 @@ pub enum ErrorCode {
     /// thin-client device-attestation auth boundary at G14-D
     /// wave-5a). Surfaces at
     /// `crates/benten-engine/src/thin_client.rs::DidKeyedSession::establish_session`
-    /// per `docs/admin-ui-v0-threat-model.md` §T2 defense 1 + br-r1-1.
+    /// per `.addl/_archive/phase-4-foundation/admin-ui-v0-threat-model.md`
+    /// §T2 defense 1 + br-r1-1.
     /// Routes to `ON_DENIED`.
     ThinClientHandshakeInvalid,
     /// Phase-4-Foundation G24-F wave: DID-keyed handshake replayed a
@@ -699,7 +717,8 @@ pub enum ErrorCode {
     /// Family F1 gap #2 closure — token-leak attack class). Surfaces
     /// at
     /// `crates/benten-engine/src/thin_client.rs::DidKeyedSession::resolve`
-    /// + `establish_session` per `docs/admin-ui-v0-threat-model.md`
+    /// + `establish_session` per
+    /// `.addl/_archive/phase-4-foundation/admin-ui-v0-threat-model.md`
     /// §T2 defense 3 + sec-4f-r1-5. Routes to `ON_DENIED`.
     ThinClientOriginMismatch,
     /// Phase-4-Foundation G24-F wave: session token's wallclock
@@ -1249,6 +1268,43 @@ pub enum ErrorCode {
     /// reject path) + the `synthesize_inline_tiny_cbor_for_test`
     /// fixture exercising it.
     DropBundleMode3InlineRejected,
+    /// Phase 4-Meta-Core (Drop bundle envelope-issuer anchoring, F-INJ-2):
+    /// the bundle's `issuer_verifying_key` (the key that signed the
+    /// otherwise-hollow envelope-sig, an attacker-controlled header field
+    /// anchored to nothing on its own) did NOT match the authoritative
+    /// issuer of the `AuthorizationGrant` the recipient trusts
+    /// (`auth_grant.issuer_verifying_key`, cryptographically self-bound via
+    /// the 7-segment binding-message). Surfaces at
+    /// `benten_drop::bundle::DropBundle::consume_offline` AFTER the grant
+    /// binding verifies — closing the strip attack where an attacker
+    /// re-authors the header, mints a fresh keypair, re-signs the envelope
+    /// message, and overwrites `issuer_verifying_key` (a signature-by-
+    /// nobody). This is a verify-time anchor check only: no wire byte /
+    /// CBOR field / golden vector changes.
+    DropBundleEnvelopeIssuerMismatch,
+
+    // ----- Phase 4-Meta-Core GAP-KDB Shape-B — recipient-binding closure (1 code) -----
+    //
+    /// Phase 4-Meta-Core (GAP-KDB Shape-B recipient-binding closure, Inv-23):
+    /// a Layer-C Drop seal was refused because the recipient KEM key is NOT
+    /// committed by its audience `did:benten` — the audience DID's key-set
+    /// document did not hash to the DID's committed CID (a BLAKE3-256
+    /// 2nd-preimage), so no `RecipientBinding` could be constructed and the
+    /// KEM key an attacker tried to substitute is rejected fail-closed. The
+    /// live typed-reject arm is `did:benten` resolve_kem
+    /// (`benten_id::did::Did::resolve_kem` → `DidError::{NoKemCommitment,
+    /// KeysetCommitmentMismatch, …}`) consumed by
+    /// `benten_drop::layer_c::RecipientBinding::resolve`. Consistent with the
+    /// sibling reserved Drop codes (`DropBundleEnvelopeIssuerMismatch`), this
+    /// `benten_errors::ErrorCode` catalog surface is RESERVED — the
+    /// boundary-lift into the engine-wide catalog lands at the G-CORE-9
+    /// v1-interface freeze when the outbound-Drop API surface stabilizes; the
+    /// drift-detector `reachability: ignore` annotation on the catalog row
+    /// names this reservation. This is a construction-side guarantee (the
+    /// substitutable `(recipient_pub, audience_did)` seal API is DELETED), so
+    /// the typed reject IS the defense; no wire byte / CBOR field / golden
+    /// vector changes.
+    RecipientKemNotCommitted,
 
     // ----- Phase 4-Meta-Core G-CORE-8 — security-surface lock (4 codes) -----
     //
@@ -1482,8 +1538,8 @@ pub enum ErrorCode {
 /// firing-codes list we keep extending", which invited mis-extension. The
 /// scope is *frozen at Phase-2a-close*; later phases' firing-site coverage
 /// is pinned by
-/// `crates/benten-errors/tests/stable_shape.rs::ALL_CATALOG_VARIANTS` +
-/// `catalog_variant_count_matches_enum`, not by appending here. This list
+/// `crates/benten-errors/catalog_roster.rs.in` (and the two length pins that
+/// consume it), not by appending here. This list
 /// only ever shrinks if a Phase-2a code is retired.
 pub const FIRING_CODES_AT_PHASE_2A_SNAPSHOT: &[ErrorCode] = &[
     ErrorCode::ExecStateTampered,
@@ -1786,6 +1842,8 @@ impl ErrorCode {
             ErrorCode::DropBundleEnvelopeSigInvalid => "E_DROP_BUNDLE_ENVELOPE_SIG_INVALID",
             ErrorCode::DropBundleVersionUnsupported => "E_DROP_BUNDLE_VERSION_UNSUPPORTED",
             ErrorCode::DropBundleMode3InlineRejected => "E_DROP_BUNDLE_MODE3_INLINE_REJECTED",
+            ErrorCode::DropBundleEnvelopeIssuerMismatch => "E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH",
+            ErrorCode::RecipientKemNotCommitted => "E_RECIPIENT_KEM_NOT_COMMITTED",
             // G-CORE-8 §4.36/§4.37/§4.23/§4.22 — single-line per drift-detect regex.
             #[rustfmt::skip]
             ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny => "E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY",
@@ -2288,6 +2346,12 @@ impl ErrorCode {
             ErrorCode::DropBundleEnvelopeSigInvalid => None,
             ErrorCode::DropBundleVersionUnsupported => None,
             ErrorCode::DropBundleMode3InlineRejected => None,
+            ErrorCode::DropBundleEnvelopeIssuerMismatch => None,
+            // GAP-KDB Shape-B — the substituted-KEM-key seal reject is a
+            // construction-side typed reject (Inv-23); re-routing through
+            // `ON_ERROR` would defeat the recipient-binding commitment the
+            // resolve_kem 2nd-preimage check exists to enforce.
+            ErrorCode::RecipientKemNotCommitted => None,
 
             // G-CORE-3e (Phase 4-Meta-Core) — per-request UCAN-blobs
             // protocol typed rejects. All three route to `ON_DENIED`
@@ -2667,6 +2731,8 @@ impl core::str::FromStr for ErrorCode {
             "E_DROP_BUNDLE_ENVELOPE_SIG_INVALID" => ErrorCode::DropBundleEnvelopeSigInvalid,
             "E_DROP_BUNDLE_VERSION_UNSUPPORTED" => ErrorCode::DropBundleVersionUnsupported,
             "E_DROP_BUNDLE_MODE3_INLINE_REJECTED" => ErrorCode::DropBundleMode3InlineRejected,
+            "E_DROP_BUNDLE_ENVELOPE_ISSUER_MISMATCH" => ErrorCode::DropBundleEnvelopeIssuerMismatch,
+            "E_RECIPIENT_KEM_NOT_COMMITTED" => ErrorCode::RecipientKemNotCommitted,
             // Phase 4-Meta-Core G-CORE-8 security-surface lock.
             "E_MANIFEST_ENVELOPE_RECHECK_UNRESOLVED_DENY" => {
                 ErrorCode::ManifestEnvelopeRecheckUnresolvedDeny
@@ -2726,5 +2792,99 @@ impl PartialEq<ErrorCode> for &str {
 impl PartialEq<&str> for ErrorCode {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Catalog-roster exhaustiveness pin (F-014)
+// ---------------------------------------------------------------------------
+
+/// The one place where "the catalog list covers the enum" is checked by the
+/// COMPILER rather than asserted at runtime.
+///
+/// This module exists because the check cannot live in `tests/`. An
+/// integration target is a downstream crate, and `ErrorCode` is
+/// `#[non_exhaustive]`, so every `match` over it out there is forced to carry
+/// a `_` arm. The deleted `catalog_variant_count_matches_enum`
+/// nevertheless advertised itself as an "exhaustive-match dual tripwire": it
+/// carried the mandatory `_ => false` and then "independently counted" by
+/// filtering `ALL_CATALOG_VARIANTS` — the list compared against itself.
+/// Proven inert by mutation (R6 round-#1 falsification sweep, 2026-07-27):
+/// adding a throwable variant with a catalog string and a routing class, and
+/// wiring `as_str` / `as_static_str` / `from_str` / `routed_edge_label` the way
+/// a developer minting a code does, left all 9 tests in that file PASSING,
+/// hard-coded `201` included.
+///
+/// Inside the defining crate `#[non_exhaustive]` is inert, so the `match`
+/// generated below has NO wildcard.
+#[cfg(test)]
+mod catalog_roster_pin {
+    extern crate std;
+
+    use super::ErrorCode;
+
+    /// Expands `catalog_roster.rs.in` into a slice AND a wildcard-free match.
+    ///
+    /// `tests/stable_shape.rs` defines its own `catalog_roster!` and includes
+    /// the SAME file to build `ALL_CATALOG_VARIANTS`, so the two sides cannot
+    /// hold different lists.
+    macro_rules! catalog_roster {
+        ($($variant:ident),+ $(,)?) => {
+            /// Every throwable catalog variant, in mint order.
+            const ROSTER: &[ErrorCode] = &[$(ErrorCode::$variant),+];
+
+            /// Classifies a code as catalog / not-catalog.
+            ///
+            /// The return value is almost beside the point — this function is
+            /// here so that the `match` below exists. It has no `_` arm, so a
+            /// variant added to `ErrorCode` and not to `catalog_roster.rs.in`
+            /// stops the build.
+            fn is_rostered(code: &ErrorCode) -> bool {
+                match code {
+                    // Forward-compat fallback, not a catalog code.
+                    ErrorCode::Unknown(_) => false,
+                    $(ErrorCode::$variant)|+ => true,
+                }
+            }
+        };
+    }
+
+    include!("../catalog_roster.rs.in");
+
+    /// MUTATION THAT MUST MAKE THIS FAIL (both arms were run, 2026-07-27):
+    ///
+    /// 1. Add `Foo` to `ErrorCode` and wire `as_str` / `as_static_str` /
+    ///    `from_str` / `routed_edge_label`, leaving `catalog_roster.rs.in`
+    ///    alone. `cargo nextest run -p benten-errors --lib` then stops with
+    ///    `error[E0004]: non-exhaustive patterns: &ErrorCode::Foo not
+    ///    covered`, pointing at `catalog_roster.rs.in`. With all four
+    ///    accessors wired this is the SOLE remaining compile error — i.e. it
+    ///    is this pin doing the work, not the accessors.
+    /// 2. Then add `Foo,` to `catalog_roster.rs.in`: `ROSTER.len()` becomes
+    ///    202 and this assertion fails, as does `variant_count_is_pinned` in
+    ///    `tests/stable_shape.rs`, because both expand from that one file.
+    ///
+    /// Bumping the number below without step 1 is not a way around it: the
+    /// count is `ROSTER.len()`, and `ROSTER` is generated from the same
+    /// tokens the match consumes.
+    #[test]
+    fn catalog_roster_length_is_pinned() {
+        assert_eq!(
+            ROSTER.len(),
+            201,
+            "catalog roster drift — update this pin, `variant_count_is_pinned` \
+             in tests/stable_shape.rs, docs/ERROR-CATALOG.md and \
+             packages/engine/src/errors.generated.ts in the SAME commit",
+        );
+    }
+
+    /// The `Unknown(String)` fallback is excluded from the roster, and a real
+    /// catalog code is included. This is the only behavioural claim the module
+    /// makes; the enforcement above is the compile step, not this assertion.
+    #[test]
+    fn unknown_fallback_is_not_a_catalog_code() {
+        let unknown = ErrorCode::Unknown(alloc::string::String::from("E_FROM_A_NEWER_PEER"));
+        assert!(!is_rostered(&unknown));
+        assert!(is_rostered(&ErrorCode::InvCycle));
     }
 }

@@ -24,12 +24,18 @@ use crate::error::core_err;
 
 /// Depth cap enforced while walking a JSON tree into `Value`.
 ///
-/// Each level of nested object/array counts as one unit of depth. Strictly
-/// shallower than the napi boundary's theoretical limit — B8 wires a harder
-/// `E_INPUT_LIMIT` check in its in-process-test surface; the Phase-1 class
-/// binding only needs a DoS tripwire so a pathological JS input doesn't
-/// blow the Rust stack.
-const JSON_MAX_DEPTH: usize = 128;
+/// Each level of nested object/array counts as one unit of depth.
+///
+/// DERIVED, never a literal. This was `128` while the canonical decoder
+/// (`benten_core::MAX_VALUE_DECODE_DEPTH`) stopped at 64, so a property bag
+/// nested 65..=128 deep was ACCEPTED on write, hashed, and persisted — and
+/// then could not be decoded on read. Silent write-side data loss: the
+/// boundary admitted a value it could never return.
+///
+/// Never accept what we cannot hand back. Deriving the cap from the decoder's
+/// own bound makes the two unable to drift apart again — the mismatch is now
+/// unrepresentable rather than merely fixed.
+const JSON_MAX_DEPTH: usize = benten_core::MAX_VALUE_DECODE_DEPTH;
 
 /// Map key count ceiling applied to every nested object in the JSON tree.
 const JSON_MAX_MAP_KEYS: usize = 10_000;
@@ -122,7 +128,13 @@ fn json_to_value(
     budget: &mut ByteBudget,
 ) -> napi::Result<Value> {
     if depth > JSON_MAX_DEPTH {
-        return Err(input_limit("value tree exceeds 128-level depth limit"));
+        // Message is DERIVED for the same reason the constant is: a literal here
+        // silently outlived the bound it described (it said 128 while the cap was
+        // already 64), which is the incomplete-sweep shape — fix the constant,
+        // leave the sentence that quotes it.
+        return Err(input_limit(&format!(
+            "value tree exceeds {JSON_MAX_DEPTH}-level depth limit"
+        )));
     }
     match v {
         serde_json::Value::Null => Ok(Value::Null),
@@ -344,6 +356,24 @@ pub(crate) fn value_to_json(v: &Value) -> serde_json::Value {
         }
         Value::List(items) => serde_json::Value::Array(items.iter().map(value_to_json).collect()),
         Value::Map(map) => value_map_to_json(map),
+        // `Value` is `#[non_exhaustive]`; a variant added in a later release
+        // lands here. It is deliberately NOT `null`: this is the language
+        // boundary, and mapping an unrecognised kind to `null` would hand a JS
+        // caller a value indistinguishable from a real `Value::Null` — a silent
+        // wrong answer at exactly the seam where the two languages stop
+        // agreeing. The sentinel object is self-describing and machine-
+        // detectable, so a consumer can assert on it rather than discover it as
+        // a missing field. It intentionally does NOT round-trip through
+        // `json_to_value`: a kind this build cannot represent must not be
+        // silently reconstructed as one it can.
+        _ => {
+            let mut obj = serde_json::Map::with_capacity(1);
+            obj.insert(
+                "__benten_unsupported_value_kind__".to_string(),
+                serde_json::Value::Bool(true),
+            );
+            serde_json::Value::Object(obj)
+        }
     }
 }
 
@@ -393,8 +423,37 @@ pub(crate) fn node_json_to_node(v: serde_json::Value) -> napi::Result<Node> {
     }
 }
 
+/// Upper bound on the CID *string* the JS side may hand across, in bytes.
+///
+/// A well-formed Benten CIDv1 base32 body is `CID_LEN * 8 / 5` = 58 chars,
+/// 59 with the `b` prefix, so 256 is generous. The bound matters because
+/// `base32_lower_nopad_decode` sizes its output buffer from the INPUT
+/// length (`(s.len() * 5).div_ceil(8)`): without it, a 100 MB string handed
+/// to any of the ~17 `parse_cid` call sites drives a ~62 MB allocation
+/// before a single structural byte is examined. META #629, the
+/// DoS-via-unbounded-decode class.
+///
+/// Mirrors the identical ceiling already inside
+/// `benten_core::Cid::from_str`, which this function does NOT go through
+/// (it decodes and calls `Cid::from_bytes` directly, so it never inherited
+/// the guard).
+///
+/// Purely additive: any string longer than this decodes to more than
+/// `CID_LEN` bytes and was already rejected by `Cid::from_bytes` as "wrong
+/// length". The accept-set is unchanged; only the cost of rejecting is.
+const CID_STRING_MAX_LEN: usize = 256;
+
 /// Parse a base32 CID string (multibase `b` prefix) back into a `Cid`.
 pub(crate) fn parse_cid(s: &str) -> napi::Result<benten_core::Cid> {
+    // MUTATION THAT MUST MAKE THIS FAIL: delete this block ->
+    // `parse_cid_bounds_the_string_before_decoding` below sees the generic
+    // base32/length message instead of the ceiling message and fails.
+    if s.len() > CID_STRING_MAX_LEN {
+        return Err(napi::Error::new(
+            Status::InvalidArg,
+            "E_INPUT_LIMIT: cid: string exceeds the 256-byte ceiling for a Benten CIDv1",
+        ));
+    }
     let stripped = s.strip_prefix('b').unwrap_or(s);
     let bytes = crate::base32_lower_nopad_decode(stripped).ok_or_else(|| {
         napi::Error::new(Status::InvalidArg, "E_INPUT_LIMIT: cid: invalid base32")
@@ -423,3 +482,38 @@ pub(crate) fn parse_actor_cid_or_derive(s: &str) -> benten_core::Cid {
     let digest: [u8; 32] = *blake3::hash(&material).as_bytes();
     benten_core::Cid::from_blake3_digest(digest)
 }
+
+// NOT-FALSIFIABLE, AND SAYING SO RATHER THAN FAKING IT (W2, 2026-07-29).
+//
+// The `CID_STRING_MAX_LEN` guard above shipped WITHOUT a would-fail-on-revert
+// test. The B8 patch proposed a `#[cfg(test)] mod tests` here with two arms
+// (over-ceiling refused on the ceiling message; a real CID still parses).
+// The integrator applied them and they DO NOT LINK:
+//
+//   Undefined symbols for architecture arm64:
+//     "_napi_delete_reference", referenced from:
+//       <napi::error::Error as core::ops::drop::Drop>::drop
+//     "_napi_reference_unref",  referenced from: (same)
+//   error: could not compile `benten-napi` (lib test)
+//
+// Any lib unit test that CALLS `parse_cid` pulls this object file into the
+// lib-test binary, which drags `parse_actor_cid_or_derive`'s drop glue for
+// `napi::Error`, whose symbols only exist inside a Node host process. At
+// `df0c8287` `cargo test -p benten-napi --lib --features test-helpers` is
+// 29/29 green precisely BECAUSE no lib test reaches napi-typed code.
+// `mem::forget` does not help — the drop glue arrives with the object file,
+// not with the call. This is not macOS-specific: `napi-sys` 3.2.1 declares
+// these as plain `extern "C"` on every non-msvc, non-wasm target
+// (`src/lib.rs:83-93`), so the required ubuntu `build+test` legs would fail
+// identically.
+//
+// The guard itself is kept: it is purely additive (any string over 256 bytes
+// decoded to more than `CID_LEN` and was already rejected by
+// `Cid::from_bytes`, so the accept-set is unchanged — only the cost of
+// rejecting is), and it closes a real META #629 vector across ~17 call sites.
+// But it is an UNPINNED defense of exactly the class this wave exists to
+// remove, and it is recorded as one instead of being dressed in a test that
+// cannot run. Closing it needs a seam that reaches `parse_cid` from a target
+// that links: either an rlib-mode arm (`node.rs` is `napi-export`-gated and
+// is not compiled in that mode today) or a Node-hosted vitest assertion on
+// the thrown `E_INPUT_LIMIT` message.

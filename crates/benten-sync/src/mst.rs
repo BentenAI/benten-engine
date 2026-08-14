@@ -451,6 +451,13 @@ impl MerkleProof {
     /// matches the published root. Used by the
     /// `mst_light_client_verification_against_content_addressed_root`
     /// test pin to assert tampered proofs are rejected.
+    ///
+    /// Gated off the frozen v1-beta public surface (R6 tail fold-in):
+    /// zero production callers — the three consumers are
+    /// `src/mst.rs` `mod tests`, `src/light_client.rs` `mod tests`, and
+    /// the `tests/light_client.rs` integration pin (the last is why the
+    /// `feature = "testing"` arm is required alongside `test`).
+    #[cfg(any(test, feature = "testing"))]
     #[must_use]
     pub fn with_tampered_node(&self) -> Self {
         let mut tampered = self.clone();
@@ -570,8 +577,16 @@ impl MstDiff {
 ///
 /// ## What "convergence" means
 ///
-/// After return, `mst_a.root_cid() == mst_b.root_cid()`. Both peers
-/// hold the union of each other's entries.
+/// After return, `mst_a.root_cid() == mst_b.root_cid()`, and both peers
+/// hold the union of each other's entries — **for EXCLUSIVE-KEY divergence
+/// only** (disjoint key sets, or shared keys mapping to the SAME CID). This
+/// layer's [`Mst::insert`] is a last-writer-wins BTreeMap overwrite, so a
+/// **same-key-different-CID** conflict is NOT resolved here: [`MstDiff::between`]
+/// surfaces it to BOTH sides, each peer overwrites its own value with the
+/// other's, and the roots stay divergent until the `MAX_ROUNDS` cap fires
+/// [`MstError::ConvergenceFailedExceededMaxRounds`]. Same-key-different-CID
+/// tie-breaking is the engine layer's job (HLC LWW at G16-B), NOT this
+/// anti-entropy backstop driver's.
 pub fn run_mst_diff_to_convergence(mst_a: &mut Mst, mst_b: &mut Mst) -> Result<usize, MstError> {
     let mut rounds = 0;
     // Hard cap on rounds defends against pathological inputs that
