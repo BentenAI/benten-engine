@@ -137,3 +137,70 @@ ordered build list — not a forward reference).
   (eventually) and marking the rows honestly now ("grammar reserved; STREAM-only at v1-beta")
   rather than deleting the design intent the spec correctly recorded.
 - Phase-1 E3, reopened and finished properly instead of marked closed unbuilt.
+
+## 7. Ben's proposal — dataflow AS nodes and edges (2026-08-13, OPEN)
+
+*"do we want to represent executions of workflows/handlers/subgraphs as nodes themselves with edges
+that get passed/added from step to step in that spirit of 'dataflow' is edges and nodes?"*
+
+**Recorded as a genuine fork against §2, not as an adoption.** §2's mechanism is `EvalContext` — a
+scoped binding stack, values living in a side-channel the evaluator threads. Ben's is
+**materialisation**: the execution becomes graph structure, and a later step reads an earlier
+step's output by *following an edge*.
+
+**They are not rivals; they are different layers, and that is the interesting part.** Binding gives
+an operand a NAME (`$result`); materialisation gives that name an ADDRESS. Compose them and
+`$result` resolves to *"traverse the RESULT edge from my execution node"* — at which point:
+
+- **dataflow** = follow an edge
+- **relative addressing** (§3.1 of the fit-gaps ledger) = follow an edge from your anchor
+- **aggregation** = fold the nodes an edge-set reaches
+
+**All three of the Ben-set trio become one mechanism.** That is the strongest argument for the
+proposal and it is an argument §2 alone cannot make.
+
+**Second argument, and two adopters asked for it independently:** provenance falls out for free. A
+materialised execution *is* the audit trail the museum's statutory obligations need, and the
+substrate the LLM runtime's verifiable-compute question was reaching for. Neither needs a separate
+feature.
+
+**Third: it is already half-present.** `StepResult` carries `output: Value`, and the evaluator
+already copies it into a trace record (`outputs: r.output.clone()`). Today that trace is ephemeral
+and unaddressable. The proposal is largely *promote the trace into the graph* — generalize, don't
+invent.
+
+**The honest objections, in the order they need answering:**
+
+1. **Cost.** A node mint per step is a hash plus a store write. On the museum's ~6 ms till line and
+   anything per-token, that may not be affordable. Likely resolution: materialisation is a MODE
+   (ephemeral by default, persisted when you want the trail), not a universal law — but that must
+   be measured, not assumed.
+2. **Do not mutate the handler.** "Edges added from step to step" must mint a SEPARATE execution
+   graph that *references* the handler subgraph. Adding edges to the handler would change its CID
+   mid-walk and collide with the immutability invariant. The distinction is code-vs-instance and it
+   has to be explicit in the design.
+3. **Where do executions live?** Zone, capability (who may read an execution?), retention, and
+   whether they replicate over sync. All unanswered, all consequential.
+4. **It does not remove the need for §2.** Something still has to resolve a name to an address at
+   step time; `EvalContext` is a built, unit-tested candidate for exactly that.
+
+**⚠️ THE FACT THAT CHANGES THE PRIORITY, whichever option wins.** VERIFIED at `875c3deb`:
+`EvalContext` is **fully built** — `with_input(Value)`, `push_scope`/`pop_scope`, `get`/`set`,
+`depth`, clock and suspension-store integration, and the binding names `$input` `$result` `$item`
+`$error` — and it is **production-reachable only via WAIT**. The evaluator's step loop never
+consults it. And `context_binding_snapshots` is **already in the frozen v1-beta wire envelope,
+always written empty**, so the freeze anticipated suspend-time binding persistence and it was never
+populated.
+
+So the gap that gates everything has its mechanism **built, unit-tested, public, and unwired** —
+the same shape as `get_by_property`, `read_view`, `put_edge`, the vault and `register_peer_did`.
+**Closing the dataflow gap may be a wiring job rather than a build**, and that is measurable in an
+afternoon.
+
+**Recommended next step — do NOT decide this in conversation.** Two cheap moves that inform it:
+**(a)** wire `EvalContext` into the step loop and measure what it actually closes (it either lights
+up several of the six §5d observations at once, or it does not, and either answer is decisive);
+**(b)** run the owed check on whether READ's accepted-property set is frozen CLOSED — because this
+proposal *needs* edge-following as an addressing mode, and that is the one part of it the tag could
+foreclose. This is ADDL-scale design; it wants the full pipeline, with §2 and §7 as the two
+candidate shapes.
