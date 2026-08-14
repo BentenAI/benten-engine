@@ -139,15 +139,34 @@ ignore = [
     # `crates/benten-eval/tests/exactly_one_wasmtime_engine_per_process.rs` —
     # adding a second construction site fails CI naming the file and line, with
     # the failure message pointing back at this entry.
-    # NOT patchable in place: patched ranges are >=24.0.12/<25, >=36.0.13/<37,
-    # >=46.0.2/<47, >=47.0.3 — there is NO fix in the 43.x line we pin, so the
-    # remediation is a 3-major bump (43 -> 46/47) of the wasm runtime. That bump
-    # is a real change to SANDBOX behaviour and belongs in a window where the
-    # conformance lanes can absorb a regression, NOT on the interface-freeze
-    # branch. Surfaced to Ben 2026-08-11; closure tracked at
-    # `docs/future/phase-4-backlog.md §3.6`. Remove this entry when the bump
-    # lands (the guard test above then becomes optional, not obsolete).
-    { id = "RUSTSEC-2026-0222", reason = "wasmtime store/type-index confusion between engines (LOW, AV:L/AC:H/PR:H/UI:R); UNREACHABLE — benten-eval holds ONE process-wide OnceLock<Engine> with exactly one Engine::new site, enforced by crates/benten-eval/tests/exactly_one_wasmtime_engine_per_process.rs; no patch exists in the pinned 43.x line (fixes are >=46.0.2 / >=36.0.13), so remediation is a 3-major runtime bump deferred off the freeze branch; closure tracked at docs/future/phase-4-backlog.md §3.6" },
+    # ⚠️ THREE CORRECTIONS 2026-08-13 (rules 14 + 15) — the entry below
+    # overstated on one axis, understated on another, and rested on a premise
+    # that has since been retracted.
+    #
+    # (1) "UNREACHABLE" is a SCOPE OVERCLAIM. It is unreachable in our own
+    #     binaries, and the `OnceLock` + mutation-proven guard genuinely enforce
+    #     that — this is not a false record. But `benten-eval` PUBLICLY EXPORTS
+    #     `shared_engine() -> &'static Engine` and
+    #     `module_for_bytes() -> Arc<Module>`, which is exactly the material the
+    #     advisory says to keep apart. A library consumer holding both can build
+    #     the second engine our guard test forbids us from building. The honest
+    #     scope is "unreachable in first-party code", not "unreachable".
+    # (2) "no patch exists in the pinned 43.x line" UNDERSTATES the situation.
+    #     43.x is an EOL non-LTS line receiving NO security backports at all.
+    #     VERIFIED against crates.io 2026-08-13: 43.0.2 shipped 2026-04-30 and
+    #     the 2026-07-31 coordinated security release shipped 46.0.2 and 47.0.3
+    #     — and NOTHING for 43, 44 or 45. The old wording reads "this one fix
+    #     missed us"; the truth is "this line is unmaintained." This advisory is
+    #     the first symptom, not the problem.
+    # (3) The deferral rationale — "belongs in a window where the conformance
+    #     lanes can absorb a regression, NOT on the interface-freeze branch" —
+    #     rested on the freeze being imminent. Ben retracted that premise
+    #     2026-08-13 ("I'm not worried about getting it done at a certain
+    #     date"), so the deferral no longer has a stated reason. Re-derived: the
+    #     decisive question is not effort but FREEZE-VISIBILITY, and the
+    #     freeze-visible item is the public-surface leak in (1) rather than the
+    #     version number. See `docs/future/phase-4-backlog.md` §3.6.
+    { id = "RUSTSEC-2026-0222", reason = "wasmtime store/type-index confusion between engines (LOW, AV:L/AC:H/PR:H/UI:R); unreachable IN FIRST-PARTY CODE — benten-eval holds ONE process-wide OnceLock<Engine> with exactly one Engine::new site, enforced by crates/benten-eval/tests/exactly_one_wasmtime_engine_per_process.rs; NOT claimed unreachable for library consumers, since shared_engine() and module_for_bytes() are public and a consumer can construct the second engine the guard forbids us; 43.x is an EOL non-LTS line receiving no security backports (43.0.2 = 2026-04-30; the 2026-07-31 drop shipped 46.0.2/47.0.3 and nothing for 43/44/45), so this is the first symptom of an unmaintained line rather than a single missed fix; closure tracked at docs/future/phase-4-backlog.md §3.6" },
 
     # RUSTSEC-2026-0247 / -0248 / -0251: `bitmaps`, `im`, `sized-chunks`
     # unmaintained advisories (informational — no exploit class; rust-sec flags

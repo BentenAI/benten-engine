@@ -318,6 +318,23 @@ uhlc = "0.2"
 # `clippy::duration_suboptimal_units` allow-directives planted across
 # the cap-policy / wallclock-refresh / subscribe-persist test fleet.
 # See `.github/workflows/msrv.yml` for the matching CI gate.
+#
+# ⚠️ THE RATIONALE ABOVE DEFEATS ITSELF, noted 2026-08-13. We declined wasmtime
+# 44 specifically to avoid an MSRV move 1.91 -> 1.92 — and then the SAME comment
+# block records wave-8e raising the floor to 1.95 anyway, for `Duration::from_mins`.
+# We paid the exact cost we were avoiding, for an unrelated convenience, and never
+# revisited the decision it invalidated. This is the same premise-retracted-but-
+# conclusion-retained shape as the freeze-proximity deferral in `deny.toml`; two
+# instances of it were found on one day, so treat it as a pattern to sweep for
+# rather than a one-off.
+#
+# ⚠️ 43.x IS AN EOL NON-LTS LINE. VERIFIED against crates.io 2026-08-13: 43.0.2
+# shipped 2026-04-30, and the 2026-07-31 coordinated security release shipped
+# 46.0.2 and 47.0.3 with NOTHING for 43, 44 or 45. We are not "a few versions
+# behind"; we are on a line that receives no security fixes. MSRV is no longer an
+# obstacle either — wasmtime 46 and 47 both declare 1.94.0, below our 1.95 floor.
+# The pin is not defended by this comment any more; it is only inertia.
+# Decision + full impact assessment: `docs/future/phase-4-backlog.md` §3.6.
 wasmtime = { version = "43.0.2", default-features = false, features = ["runtime", "cranelift", "std", "async"] }
 # `wat` — sibling crate to wasmtime; EXACT-version pin per Phase-3 G17-B
 # (phase-3-backlog §6.2 + r1-wsa-5 RECOMMENDATION + r4-r1-wsa-9

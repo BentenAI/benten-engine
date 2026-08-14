@@ -157,6 +157,72 @@ All four ignored in `deny.toml [advisories].ignore` **and** `supply-chain.yml` c
 > evaluate the CRDT dependency itself, rather than letting the row count grow silently. Recorded
 > rather than decided, per surface-arch-decisions-under-auth.
 
+### ⚠️ wasmtime — the real finding is not the advisory (full assessment 2026-08-13)
+
+Ben retracted the freeze-proximity premise, so the held bump was re-derived from scratch. The
+investigation found something larger than RUSTSEC-2026-0222.
+
+**FINDING 1 — wasmtime's INTERNAL module paths are in our frozen public API.** VERIFIED at
+`875c3deb`: `docs/public-api/benten-eval.txt` carries **eight** wasmtime lines across four distinct
+leaks — `shared_engine() -> &'static wasmtime::engine::Engine`, `module_for_bytes() ->
+Arc<wasmtime::runtime::module::Module>` (erroring with
+**`wasmtime_internal_core::error::error::Error`**), `impl wasmtime::runtime::limits::ResourceLimiter
+for SandboxResourceLimiter` with two methods returning `wasmtime_internal_core::error::Result<bool>`,
+and `map_call_error()` taking that internal error type by value. `benten-eval` has no
+`publish = false` and the baseline is a required-failing gate. **The freeze would not merely record
+which wasmtime we use — it would make a third party's internal module path part of our permanent
+adopter contract.**
+
+**MEASURED: sealing is free.** `git grep` over `crates/ bindings/ tools/ packages/` finds **zero
+real out-of-crate Rust callers** of any of the four. The two hits outside `benten-eval` are prose in
+doc comments (`benten-engine/src/engine.rs`, a test module header). The precedent exists — the
+`_for_test` sweep cfg-gated 70+ items and `CapabilityPolicy` was hard-sealed the same way.
+
+**★ The gate cannot catch this.** The verifier re-derived the 46 baseline and found every frozen
+path still present, with `ResourceLimiter` byte-identical. **The required drift check would most
+likely stay GREEN through a semver-breaking public-dependency change.** A green result here is the
+dangerous outcome, not the reassuring one — this decision cannot be delegated to CI.
+
+**FINDING 2 — 43.x is EOL, and the advisory is a symptom rather than the problem.** VERIFIED against
+crates.io: 43.0.2 shipped **2026-04-30**; the **2026-07-31** coordinated security release shipped
+**46.0.2 and 47.0.3 — and nothing for 43, 44 or 45.** We are not a few versions behind; we are on a
+line that receives no security fixes. Every future wasmtime advisory lands on us permanently.
+
+**FINDING 3 — the pin's own rationale defeats itself.** `Cargo.toml` says 43 was chosen over 44 to
+avoid an MSRV move 1.91 → 1.92, and the same comment block records wave-8e raising the floor to
+**1.95** anyway for `Duration::from_mins`. We paid the exact cost we were avoiding, for an unrelated
+reason, and never revisited the decision it invalidated. **MSRV is now a non-issue in the other
+direction:** wasmtime 46 and 47 both declare **1.94.0**, below our floor.
+
+**FINDING 4 — the accepted-module surface is unpinned.** `shared_engine()` sets exactly three knobs
+(`consume_fuel`, `epoch_interruption`, `max_wasm_stack`); a repo-wide grep for any `wasm_*` proposal
+toggle or NaN canonicalisation returns **zero**. So *which wasm modules our sandbox accepts* is
+whatever upstream's defaults happen to be, and it drifts on every bump — 47 turns GC and
+exception-handling on by default. Four `cfg.wasm_*(false)` lines make that set **our** decision,
+change no public signature, and dissolve the 46-vs-47 question. Not gate-detectable; it is the
+behavioural contract most deserving of an explicit pin before we freeze it.
+
+**Cost of the bump itself is small.** Across 44/45/46 the changelogs show **no removal, rename or
+signature change** on anything we use. Our entire call surface is 3 `use` lines, 7 types, 4 `Config`
+setters, 17 method calls — no WASI, no component model, no async API, no typed funcs. All 8 `Trap`
+variants we match still exist at 46.0.2, the enum is `#[non_exhaustive]`, and our match has a
+catch-all. *Not measured:* compile time, binary size, fuel-cost drift.
+
+**DECISION FOR BEN — three separable calls, in dependency order:**
+1. **Seal wasmtime out of `benten-eval`'s public surface.** ORCH strongly recommends yes. It is the
+   only genuinely pre-tag-or-never item, it is a narrowing with zero callers, and leaving it freezes
+   a third party's internal path into our contract forever.
+2. **Pin the accepted-wasm-feature set explicitly** (Finding 4). Recommended; no signature change.
+3. **Then the version bump, on its own schedule** — 46 vs 47 vs an LTS line. Once (1) lands this is
+   no longer freeze-visible, so it can take the time it needs. It is *not* optional forever, because
+   of Finding 2.
+
+**Corrected in the same pass (rules 14 + 15):** the `deny.toml` "UNREACHABLE" scope overclaim (we
+publicly export the Engine *and* an `Arc<Module>` it compiled — exactly the material the advisory
+says to keep apart, so the honest scope is "unreachable in first-party code"); the "no patch exists
+in the pinned line" understatement; the retracted freeze-proximity rationale; and the self-defeating
+MSRV note in `Cargo.toml`.
+
 **CodeQL false-positive posture — a FALSE-RECORD corrected 2026-08-13.** Two `critical`
 `rust/hard-coded-cryptographic-value` alerts fired on PR #1382 against Argon2id salt fixtures inside
 the `#[cfg(test)] mod tests` block of `crates/benten-crypto-suite/src/vault.rs`. Both are genuine
