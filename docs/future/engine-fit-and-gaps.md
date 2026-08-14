@@ -1030,11 +1030,43 @@ rides no patch, so CI can never gate it, and it drifts silently while being read
 Two adopters have now been misled by exactly this. Re-tracking these files is a publication call for
 Ben (§4.173 E) and it is no longer only a hygiene question.
 
-**Owed regardless of whether either adopter proceeds:** write ONE of the museum's invariants out as
-an actual subgraph, end to end. The ~119-of-159 figure that gates their adoption decision is
-**unvalidated** — no one has expressed a single rule in the real primitives, which is precisely how
-the input-binding gap survived two full analysis passes. `till_opening_count_matches_denomination_sum`
-is the cheapest candidate; it either confirms the number or finds the next missing joint.
+**DONE 2026-08-13 — and it came back against us on two counts neither analysis pass could see.**
+Full record `/tmp/invariant-subgraph/SYNTHESIS.md`; corrections propagated into the placed museum
+reply at its new §6.5a. Verdict: **~119 of 159 is optimistic, and the sentence we attached to it was
+simply wrong.**
+
+1. **The rule we picked is not one rule — its complexity class depends on a modelling decision the
+   adopter has not made.** VERIFIED in their own `rules.json`: `violations_sql` for
+   `till_opening_count_matches_denomination_sum` is a single-table predicate over `station_info`
+   (`starting_total <> 100*b100 + 50*b50 + … + 0.01*c1`) — **one row, twelve fixed columns, no join,
+   no `GROUP BY`.** That is what their "4,257 rows / 0 violations / genuinely exercised" warrant
+   attaches to. The `DenominationCount(...)` relation is their **§10.3 re-modelling**, which §10.3
+   itself says *cannot be checked against real rows* (zero live rows; the roll term comes from the
+   closing count, also zero). Modelled the source's way it is a single-node field predicate, inside
+   the ~119; modelled §10.3's way it is a cross-row aggregate, outside it. **Same rule, same
+   semantics, two different complexity classes.** So the census counted rule *shapes* as fixed when
+   they are a function of the migration's normalisation choices — and this adopter normalises
+   aggressively, which moves rules OUT of the cheap bucket. ~119 is an upper bound conditional on a
+   conservative data model, not a property of their rule set.
+2. **A handler cannot read an edge at all.** VERIFIED at `crates/benten-eval/src/host.rs`:
+   `PrimitiveHost` declares `put_edge` and `delete_edge` and has **no `edges_from` / `edges_to`**. A
+   subgraph can write the structure and never traverse it. `Engine::edges_from` is public host-side,
+   so host Rust is fine — but the "walking from the node you were handed" tier needs a **read-side
+   traversal that does not exist**, on top of binding.
+
+**The corrected headline: binding is NECESSARY for all of it and SUFFICIENT for none of it.** We had
+told the adopter "one engine feature, not three" and called it the most decision-useful sentence we
+owned. It was the most decision-useful sentence we owned *and it was wrong.*
+
+**What held, and it matters:** the fold itself works today — `reduce`, arithmetic and comparison all
+run in the shipped expression grammar through the real evaluator. **Aggregation was never the
+enforcement blocker**, which confirms rather than contradicts `ivm-aggregation.md`'s own conclusion.
+Everything that *feeds* the fold is what is blocked.
+
+**Consequence for the trio's ordering (§4.174).** Binding first is still right — nothing else is
+reachable without it — but relative addressing is not a nice-to-have second: **it is load-bearing
+for an entire rule family we had booked as binding-gated.** Aggregation's placement as third is
+confirmed by measurement rather than assumed.
 
 ## 6. Sources
 
