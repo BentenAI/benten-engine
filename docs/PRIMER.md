@@ -47,7 +47,7 @@ A few specific futures the project is reaching for, each made tractable by the u
 - **Communities without platforms.** A group can hold shared records, governance, and history collectively, with each member running an engine on their own machine and synchronizing peer-to-peer. No platform owns the data or controls the rules.
 - **Forkable applications.** A CMS, chat tool, or knowledge base is a few hundred handlers on top of the engine. Forking is cloning the relevant subgraph, editing the operation nodes, and registering the result under a new fingerprint; users can verify which fork they're running and switch between alternatives freely.
 - **Verifiable provenance.** Because every handler and every shared piece of content has a fingerprint and a signed history, recipients can independently verify what they received before acting on it — without needing to trust an intermediary.
-- **An economic layer.** Later phases extend the model to peer-to-peer compute and storage markets, with payments and contracts represented as graph operations and a price-stable token settling them.
+- **An economic layer.** Later phases extend the model to peer-to-peer compute and storage markets, with payments and contracts represented as graph operations.
 
 ## Status
 
