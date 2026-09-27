@@ -25,7 +25,7 @@ A Rust graph engine where **the application is just more graph**. Handlers aren'
 
 ## What it looks like
 
-> **Pre-publication state.** The repo is private and packages are not yet on npm; the `npx create-benten-app` flow below is the post-publication shape, not the current setup. To run anything today, clone the repo and follow the contributor setup in [`CONTRIBUTING.md`](CONTRIBUTING.md) — that's `cargo build --workspace && cargo nextest run --workspace`. Public packages (`@benten/engine`, `create-benten-app`) ship in Phase 8/9 alongside the OSS launch.
+> **Pre-publication state.** The source is public (MIT/Apache-2.0), but packages are not yet on npm; the `npx create-benten-app` flow below is the post-publication shape, not the current setup. To run anything today, clone the repo and follow the contributor setup in [`CONTRIBUTING.md`](CONTRIBUTING.md) — that's `cargo build --workspace && cargo nextest run --workspace`. Published packages (`@benten/engine`, `create-benten-app`) ship in Phase 8/9.
 
 ```sh
 npx create-benten-app my-app

@@ -17,7 +17,7 @@ Thanks for your interest. This repo is under active development; contributions a
 
 ## Setup
 
-The repo is private pre-OSS-launch (see `docs/FULL-ROADMAP.md` §Phase 8/9+); contributors need to request access before the `git clone` below resolves.
+The repo is public, so the `git clone` below works without requesting access. Packages are not yet published to npm; build from source as shown.
 
 ```sh
 git clone https://github.com/BentenAI/benten-engine.git
